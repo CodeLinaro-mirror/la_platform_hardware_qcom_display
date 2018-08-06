@@ -29,7 +29,6 @@
 
 #include <utils/utils.h>
 
-#include "fb/hw_info.h"
 #include "drm/hw_info_drm.h"
 
 #define __CLASS__ "HWInfoInterface"
@@ -38,21 +37,6 @@ namespace sdm {
 
 DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
   DisplayError error = kErrorNone;
-  if (GetDriverType() == DriverType::FB) {
-    HWInfoInterface *hw_info = new HWInfo();
-    if (hw_info) {
-      error = hw_info->Init();
-      if (error != kErrorNone) {
-        delete hw_info;
-        return error;
-      }
-      intfs->push_back(hw_info);
-    } else {
-      DLOGE("Failed allocating HWInfo");
-      error = kErrorCriticalResource;
-    }
-    return error;
-  }
 
   for (uint32_t i = 0; i < 16; i++) {
     HWInfoInterface *hw_info = new HWInfoDRM(i);
