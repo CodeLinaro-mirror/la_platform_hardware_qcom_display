@@ -436,6 +436,7 @@ struct HWPanelInfo {
   bool qsync_support = false;          // Specifies panel supports qsync feature or not.
   bool dyn_bitclk_support = false;     // Bit clk can be updated to avoid RF interference.
   std::vector<uint64_t> bitclk_rates;  // Supported bit clk levels.
+  uint32_t max_blendstages;           // Max blend stages by panel
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||

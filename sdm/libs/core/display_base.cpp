@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -160,6 +160,9 @@ DisplayError DisplayBase::Init() {
 
   if (property_value >= 0) {
     max_mixer_stages = std::min(UINT32(property_value), hw_resource_info_.num_blending_stages);
+  }
+  if (hw_panel_info_.max_blendstages > 0) {
+    max_mixer_stages = std::min(hw_panel_info_.max_blendstages, max_mixer_stages);
   }
   DisplayBase::SetMaxMixerStages(max_mixer_stages);
 

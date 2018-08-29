@@ -645,6 +645,7 @@ struct DRMConnectorInfo {
   uint32_t topology_control;
   bool dyn_bitclk_support;
   std::vector<uint8_t> edid;
+  uint32_t max_blendstages;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>
