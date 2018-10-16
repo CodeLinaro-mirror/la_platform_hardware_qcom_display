@@ -723,6 +723,10 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
                                       reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
           }
         }
+
+        sde_drm::DRMCscType csc_type = sde_drm::DRMCscType::kCscTypeMax;
+        SelectCscType(layer.input_buffer, &csc_type);
+        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type);
       }
     }
   }
@@ -873,6 +877,34 @@ void HWDeviceDRM::SetBlending(const LayerBlending &source, DRMBlendType *target)
 void HWDeviceDRM::SetSrcConfig(const LayerBuffer &input_buffer, uint32_t *config) {
   if (input_buffer.flags.interlace) {
     *config |= (0x01 << UINT32(DRMSrcConfig::DEINTERLACE));
+  }
+}
+
+void HWDeviceDRM::SelectCscType(const LayerBuffer &input_buffer, sde_drm::DRMCscType *type) {
+  if (type == NULL) {
+    return;
+  }
+
+  *type = sde_drm::DRMCscType::kCscTypeMax;
+  if (input_buffer.format < kFormatYCbCr420Planar) {
+    return;
+  }
+
+  switch (input_buffer.color_metadata.colorPrimaries) {
+    case ColorPrimaries_BT601_6_525:
+    case ColorPrimaries_BT601_6_625:
+      *type = ((input_buffer.color_metadata.range == Range_Full) ?
+              sde_drm::DRMCscType::kCscYuv2Rgb601FR : sde_drm::DRMCscType::kCscYuv2Rgb601L);
+      break;
+    case ColorPrimaries_BT709_5:
+      *type = sde_drm::DRMCscType::kCscYuv2Rgb709L;
+      break;
+    case ColorPrimaries_BT2020:
+      *type = ((input_buffer.color_metadata.range == Range_Full) ?
+              sde_drm::DRMCscType::kCscYuv2Rgb2020FR : sde_drm::DRMCscType::kCscYuv2Rgb2020L);
+      break;
+    default:
+      break;
   }
 }
 
