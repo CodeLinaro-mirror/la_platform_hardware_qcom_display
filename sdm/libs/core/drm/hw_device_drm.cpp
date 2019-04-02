@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1743,16 +1743,16 @@ void HWDeviceDRM::SelectCscType(const LayerBuffer &input_buffer, DRMCscType *typ
     return;
   }
 
-  switch (input_buffer.color_metadata.colorPrimaries) {
-    case ColorPrimaries_BT601_6_525:
-    case ColorPrimaries_BT601_6_625:
+  switch (input_buffer.color_metadata.matrixCoefficients) {
+    case MatrixCoEff_BT601_6_525:
+    case MatrixCoEff_BT601_6_625:
       *type = ((input_buffer.color_metadata.range == Range_Full) ?
                DRMCscType::kCscYuv2Rgb601FR : DRMCscType::kCscYuv2Rgb601L);
       break;
-    case ColorPrimaries_BT709_5:
+    case MatrixCoEff_BT709_5:
       *type = DRMCscType::kCscYuv2Rgb709L;
       break;
-    case ColorPrimaries_BT2020:
+    case MatrixCoEff_BT2020:
       *type = ((input_buffer.color_metadata.range == Range_Full) ?
                 DRMCscType::kCscYuv2Rgb2020FR : DRMCscType::kCscYuv2Rgb2020L);
       break;
