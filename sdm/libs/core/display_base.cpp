@@ -877,7 +877,13 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
 }
 
 DisplayError DisplayBase::SetColorModeById(int32_t color_mode_id) {
-  return color_mgr_->ColorMgrSetMode(color_mode_id);
+  for (const auto& it : color_mode_map_) {
+    if (it.second->id == color_mode_id) {
+      return SetColorMode(it.first);
+    }
+  }
+
+  return kErrorNotSupported;
 }
 
 DisplayError DisplayBase::SetColorModeInternal(const std::string &color_mode) {
@@ -1015,10 +1021,24 @@ DisplayError DisplayBase::GetDefaultColorMode(std::string *color_mode) {
 
 DisplayError DisplayBase::ApplyDefaultDisplayMode() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
-  if (color_mgr_)
-    return color_mgr_->ApplyDefaultDisplayMode();
-  else
-    return kErrorParameters;
+
+  if (!color_mgr_) {
+    return kErrorNotSupported;
+  }
+
+  DisplayError error = color_mgr_->ApplyDefaultDisplayMode();
+  if (error != kErrorNone) {
+    DLOGE("Failed to apply default color mode");
+    return error;
+  }
+
+  error = GetDefaultColorMode(&current_color_mode_);
+  if (error != kErrorNone) {
+    DLOGE("Failed to get default color mode, error:%d", error);
+    return error;
+  }
+
+  return kErrorNone;
 }
 
 DisplayError DisplayBase::SetCursorPosition(int x, int y) {
