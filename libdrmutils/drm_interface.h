@@ -407,9 +407,10 @@ class DRMAtomicReqInterface {
    * [input]: synchronous: Determines if the call should block until a h/w flip
    * [input]: user_data: A pointer of data structure which will be passed to each commit.
    *          Now only drmModeAtomicCommit use it.
+   * [input]: skip_planes: Determines if the call should skip to set plane state
    * [return]: Error code if the API fails, 0 on success.
    */
-  virtual int Commit(bool synchronous, void *user_data) = 0;
+  virtual int Commit(bool synchronous, void *user_data, bool skip_planes) = 0;
   /*
    * Validate the params set via Perform().
    * [return]: Error code if the API fails, 0 on success.
