@@ -16,6 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <cutils/properties.h>
 #include <errno.h>
@@ -1278,7 +1283,16 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
     } break;
     case kPanelDeadEvent:
     case kDisplayPowerResetEvent: {
-      validated_ = false;
+      // Mutex scope
+      {
+        SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
+        validated_ = false;
+      }
+      // TODO(user): Following scenario need to be addressed
+      // If panel or HW is in bad state for either ESD or HWR, there is no acquired lock between
+      // this scope and call to DisplayPowerReset.
+      // Prepare or commit could operate on the display since locker_[id_] is free and most likely
+      // result in a failure since ESD/HWR has been requested during this time period.
       if (event_handler_) {
         event_handler_->DisplayPowerReset();
       } else {
