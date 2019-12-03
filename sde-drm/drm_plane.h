@@ -30,7 +30,7 @@
 #ifndef __DRM_PLANE_H__
 #define __DRM_PLANE_H__
 
-#include <drm/sde_drm.h>
+#include <display/drm/sde_drm.h>
 #include <drm_interface.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
