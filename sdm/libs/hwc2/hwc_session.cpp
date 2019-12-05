@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -3559,6 +3559,7 @@ void HWCSession::NotifyClientStatus(bool connected) {
     }
     SCOPE_LOCK(locker_[i]);
     hwc_display_[i]->NotifyClientStatus(connected);
+    hwc_display_[i]->SetVsyncEnabled(HWC2::Vsync::Disable);
   }
 }
 
