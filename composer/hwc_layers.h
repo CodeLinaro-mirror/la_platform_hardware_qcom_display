@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -166,7 +166,6 @@ class HWCLayer {
   uint32_t GetUint32Color(const hwc_color_t &source);
   void GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec);
   DisplayError SetMetaData(const private_handle_t *pvt_handle, Layer *layer);
-  DisplayError SetIGC(IGC_t source, LayerIGC *target);
   uint32_t RoundToStandardFPS(float fps);
   void ValidateAndSetCSC(const private_handle_t *handle);
   void SetDirtyRegions(hwc_region_t surface_damage);
