@@ -1160,6 +1160,9 @@ HWC2::Error HWCDisplay::GetDisplayAttribute(hwc2_config_t config, HWC2::Attribut
     case HWC2::Attribute::DpiY:
       *out_value = INT32(variable_config.y_dpi * 1000.0f);
       break;
+    case HWC2::Attribute::ConfigGroup:
+      *out_value = GetDisplayConfigGroup(variable_config);
+      break;
     default:
       DLOGW("Spurious attribute type = %s", to_string(attribute).c_str());
       *out_value = -1;
@@ -2652,6 +2655,17 @@ void HWCDisplay::UpdateActiveConfig() {
 
 void HWCDisplay::SetTunneledLayer(bool enable) {
   has_tunneled_layer_ = enable;
+}
+
+int32_t HWCDisplay::GetDisplayConfigGroup(DisplayConfigGroupInfo variable_config) {
+  for (auto &config : variable_config_map_) {
+    DisplayConfigGroupInfo const &group_info = config.second;
+    if (group_info == variable_config) {
+      return INT32(config.first);
+    }
+  }
+
+  return -1;
 }
 
 }  // namespace sdm
