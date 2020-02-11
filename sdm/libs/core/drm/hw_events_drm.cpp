@@ -265,6 +265,7 @@ DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
 
   PopulateHWEventData(event_list);
 
+  std::lock_guard<std::mutex> lock(hw_events_mutex_);
   hw_events_drm_ = this;
   if (pthread_create(&event_thread_, NULL, &DisplayEventThread, this) < 0) {
     DLOGE("Failed to start %s, error = %s", event_thread_name_.c_str(), strerror(errno));
@@ -296,7 +297,9 @@ DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
 }
 
 DisplayError HWEventsDRM::Deinit() {
+  std::lock_guard<std::mutex> lock(hw_events_mutex_);
   exit_threads_ = true;
+  hw_events_drm_ = NULL;
   RegisterPanelDead(false);
   RegisterIdleNotify(false);
   RegisterIdlePowerCollapse(false);
@@ -424,6 +427,7 @@ void *HWEventsDRM::DisplayEventHandler() {
         case HWEvent::HW_RECOVERY:
         case HWEvent::HISTOGRAM:
           if (poll_fd.revents & (POLLIN | POLLPRI | POLLERR)) {
+            std::lock_guard<std::mutex> lock(hw_events_mutex_);
             (this->*(event_data_list_[i]).event_parser)(nullptr);
           }
           break;
@@ -669,10 +673,12 @@ void HWEventsDRM::HandlePanelDead(char *data) {
 
 void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
-  hw_events_drm_->vsync_handler_count_++;
   int64_t timestamp = (int64_t)(tv_sec)*1000000000 + (int64_t)(tv_usec)*1000;
   DTRACE_SCOPED();
-  hw_events_drm_->event_handler_->VSync(timestamp);
+  if (hw_events_drm_) {
+    hw_events_drm_->vsync_handler_count_++;
+    hw_events_drm_->event_handler_->VSync(timestamp);
+  }
 }
 
 void HWEventsDRM::HandleIdleTimeout(char *data) {
