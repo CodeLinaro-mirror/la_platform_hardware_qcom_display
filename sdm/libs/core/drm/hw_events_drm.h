@@ -146,6 +146,7 @@ class HWEventsDRM : public HWEventsInterface {
   bool disable_hw_recovery_ = false;
   bool enable_hist_interrupt_ = false;
   uint32_t hw_recovery_index_ = UINT32_MAX;
+  std::mutex hw_events_mutex_; // To protect hw_events_drm_
   static HWEventsDRM *hw_events_drm_;
 };
 
