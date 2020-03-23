@@ -27,6 +27,10 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
+
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #define DEBUG 0
 #include "QtiMapper4.h"
@@ -384,6 +388,7 @@ Return<void> QtiMapper::getReservedRegion(void *buffer, getReservedRegion_cb hid
   hidl_cb(err, reserved_region, reserved_size);
   return Void();
 }
+
 Error QtiMapper::DumpBufferMetadata(const private_handle_t *buffer, BufferDump *outBufferDump) {
   outBufferDump->metadataDump.resize(metadata_type_descriptions_.size());
   for (int i = 0; i < static_cast<int>(metadata_type_descriptions_.size()); i++) {
