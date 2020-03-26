@@ -40,6 +40,7 @@ AC_ARG_ENABLE([sdmhaldrm],
         enable_sdmhaldrm=no)
 
 AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
+AC_CHECK_HEADER(gbm_priv.h, [], [CPPFLAGS="$CPPFLAGS -DNOTUSE_GBM_PRIVH"])
 
 # Checks for programs.
 AC_PROG_CC

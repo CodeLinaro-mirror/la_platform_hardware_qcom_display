@@ -24,7 +24,9 @@
 #include "EGLImageBufferBase.h"
 #include "drm_master.h"
 #include <gbm.h>
+#ifndef NOTUSE_GBM_PRIVH
 #include <gbm_priv.h>
+#endif
 #include "glengine.h"
 
 using namespace drm_utils;

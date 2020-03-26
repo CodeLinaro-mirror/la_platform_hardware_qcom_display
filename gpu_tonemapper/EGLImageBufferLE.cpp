@@ -29,8 +29,10 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
   PFNEGLCREATEIMAGEKHRPROC create_image;
 
   create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC> (eglGetProcAddress("eglCreateImageKHR"));
+#ifndef NOTUSE_GBM_PRIVH
   bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
                      GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
+#endif
 
   /* TODO (user): to determine if attribute for secure/ protected conmtent is to be added */
   EGLint attribs[20];
@@ -83,8 +85,10 @@ EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info)
        fprintf(stderr, "EGLImageBufferLE=>sdm::gbm_ = %d\n", reinterpret_cast<intptr_t>(gbm_));
 
     this->eglImageID = create_eglImage(gbo_info);
+#ifndef NOTUSE_GBM_PRIVH
     this->width = gbo_info->width;
     this->height = gbo_info->height;
+#endif
 
     textureID = 0;
     renderbufferID = 0;

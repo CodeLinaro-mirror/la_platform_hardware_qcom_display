@@ -36,11 +36,17 @@ EGLImageBufferLE *EGLImageWrapperLE::wrap(void *buf_info)
   struct gbm_buf_info *src = reinterpret_cast<struct gbm_buf_info *>(buf_info);
   EGLImageBufferLE *result = 0;
 
+#ifndef NOTUSE_GBM_PRIVH
   std::map<int, EGLImageBufferLE *>::iterator it = eglImageBufferMap.find(src->fd);
+#else
+  std::map<int, EGLImageBufferLE *>::iterator it;
+#endif
 
   if (it == eglImageBufferMap.end()) {
     result = new EGLImageBufferLE(src);
+#ifndef NOTUSE_GBM_PRIVH
     eglImageBufferMap[src->fd] = result;
+#endif
   } else {
     result = it->second;
   }

@@ -27,7 +27,10 @@
 #include <GLES2/gl2ext.h>
 
 #include <gbm.h>
+
+#ifndef NOTUSE_GBM_PRIVH
 #include <gbm_priv.h>
+#endif
 
 #include <string.h>
 #include <assert.h>
