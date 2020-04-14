@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -193,7 +193,7 @@ class HWCDisplay : public DisplayEventHandler {
   // 0 : Success.
   virtual int GetFrameCaptureStatus() { return -EAGAIN; }
 
-  virtual DisplayError SetDetailEnhancerConfig(const DisplayDetailEnhancerData &de_data) {
+  virtual DisplayError SetHWDetailedEnhancerConfig(void *params) {
     return kErrorNotSupported;
   }
   virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer, int32_t acquire_fence,
