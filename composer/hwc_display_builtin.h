@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -98,6 +98,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, bool post_processed);
   virtual int GetFrameCaptureStatus() { return frame_capture_status_; }
   virtual DisplayError SetDetailEnhancerConfig(const DisplayDetailEnhancerData &de_data);
+  virtual DisplayError SetHWDetailedEnhancerConfig(void *params);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending);
   virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer, int32_t acquire_fence,
                                         bool post_processed_output, CWBClient client);
