@@ -26,6 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #define DEBUG 0
@@ -87,8 +90,14 @@ Return<void> QtiMapperExtensions::getCustomDimensions(void *buffer,
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     stride = hnd->width;
     height = hnd->height;
-    gralloc::GetCustomDimensions(hnd, &stride, &height);
-    err = Error::NONE;
+    int ret = gralloc::GetCustomDimensions(hnd, &stride, &height);
+    if (ret) {
+      ALOGW("%s: Error during GetCustomDimensions API call. "
+            "stride: %d, height: %d", __FUNCTION__, stride, height);
+      err = Error::BAD_BUFFER;
+    } else {
+      err = Error::NONE;
+    }
   }
   hidl_cb(err, stride, height);
   return Void();
@@ -111,10 +120,14 @@ Return<void> QtiMapperExtensions::calculateBufferAttributes(int32_t width, int32
                                                             int32_t format, uint64_t usage,
                                                             calculateBufferAttributes_cb hidl_cb) {
   unsigned int alignedw, alignedh;
+  auto err = Error::NONE;
   BufferInfo info(width, height, format, usage);
-  gralloc::GetAlignedWidthAndHeight(info, &alignedw, &alignedh);
+  int ret = gralloc::GetAlignedWidthAndHeight(info, &alignedw, &alignedh);
+  if (ret) {
+    err = Error::BAD_BUFFER;
+  }
   bool ubwc_enabled = gralloc::IsUBwcEnabled(format, usage);
-  hidl_cb(Error::NONE, alignedw, alignedh, ubwc_enabled);
+  hidl_cb(err, alignedw, alignedh, ubwc_enabled);
   return Void();
 }
 
@@ -351,7 +364,12 @@ Return<void> QtiMapperExtensions::getFormatLayout(int32_t format, uint64_t usage
   uint64_t size = 0;
   int custom_format = gralloc::GetImplDefinedFormat(usage, format);
   BufferInfo info(width, height, custom_format, usage);
-  gralloc::GetAlignedWidthAndHeight(info, &alignedw, &alignedh);
+  int ret = gralloc::GetAlignedWidthAndHeight(info, &alignedw, &alignedh);
+  if (ret) {
+    err = Error::BAD_BUFFER;
+    hidl_cb(err, size, plane_info);
+    return Void();
+  }
   size = gralloc::GetSize(info, alignedw, alignedh);
   gralloc::PlaneLayoutInfo plane_layout[8] = {};
   ALOGD_IF(DEBUG, "%s: Aligned width and height - wxh: %ux%u custom_format = %d", __FUNCTION__,
