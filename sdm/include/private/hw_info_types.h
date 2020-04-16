@@ -148,6 +148,7 @@ enum HWTopology {
   kQuadLMMerge,
   kQuadLMDSCMerge,
   kQuadLMMergeDSC,
+  kQuadLMDSC4HSMerge,
   kPPSplit,
 };
 
