@@ -16,6 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #ifndef __GR_BUF_MGR_H__
 #define __GR_BUF_MGR_H__
@@ -87,6 +90,8 @@ class BufferManager {
         : handle(h), ion_handle_main(ih_main), ion_handle_meta(ih_meta) {}
     void IncRef() { ++ref_count; }
     bool DecRef() { return --ref_count == 0; }
+    uint64_t reserved_size = 0;
+    void *reserved_region_ptr = nullptr;
   };
 
   Error FreeBuffer(std::shared_ptr<Buffer> buf);
