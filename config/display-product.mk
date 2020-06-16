@@ -156,11 +156,14 @@ ifeq ($(TARGET_USES_QMAA),true)
     endif
 endif
 
+# Enable power async mode
+PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=1
+
 # Soong Namespace
 SOONG_CONFIG_NAMESPACES += qtidisplay
 
 # Soong Keys
-SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 kernel_5_4 kernel_5_15
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -172,6 +175,8 @@ SOONG_CONFIG_qtidisplay_default := true
 SOONG_CONFIG_qtidisplay_var1 := false
 SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
+SOONG_CONFIG_qtidisplay_kernel_5_4 := false
+SOONG_CONFIG_qtidisplay_kernel_5_15 := false
 
 ifeq ($(call is-vendor-board-platform,QCOM),true)
     SOONG_CONFIG_qtidisplay_displayconfig_enabled := true
@@ -181,14 +186,31 @@ endif
 
 QMAA_ENABLED_HAL_MODULES += display
 ifeq ($(TARGET_USES_QMAA),true)
-ifeq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),true)
-PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.enable_null_display=0
-else
-TARGET_IS_HEADLESS := true
-PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.enable_null_display=1
+    ifeq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),true)
+        PRODUCT_PROPERTY_OVERRIDES += \
+            vendor.display.enable_null_display=0
+        #Modules that shouldn't be enabled in QMAA go here
+        PRODUCT_PACKAGES += libdrmutils
+        PRODUCT_PACKAGES += libsdedrm
+        PRODUCT_PACKAGES += libgpu_tonemapper
+    else
+    TARGET_IS_HEADLESS := true
+    SOONG_CONFIG_qtidisplay_headless := true
+    PRODUCT_PROPERTY_OVERRIDES += \
+        vendor.display.enable_null_display=1
+    endif
 endif
+
+ifneq ($(TARGET_USES_DRM_PP),true)
+    SOONG_CONFIG_qtidisplay_drmpp := false
+endif
+
+ifeq ($(TARGET_USES_5.4_KERNEL),true)
+    SOONG_CONFIG_qtidisplay_kernel_5_4 := true
+endif
+
+ifeq ($(TARGET_USES_5.15_KERNEL),true)
+    SOONG_CONFIG_qtidisplay_kernel_5_15 := true
 endif
 
 # Properties using default value:
