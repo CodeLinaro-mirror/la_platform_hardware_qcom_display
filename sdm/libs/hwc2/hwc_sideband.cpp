@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2019, 2020 The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -463,6 +463,19 @@ int32_t HWCSidebandStreamSession::DestroyLayer(hwc2_display_t display, hwc2_laye
 }
 
 int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) {
+  std::vector<hwc2_display_t> refresh_list;
+
+  UpdateSidebandStreamLocked(stm, &refresh_list);
+
+  for (auto display : refresh_list) {
+    hwc_session->Refresh(display);
+  }
+
+  return 0;
+}
+
+int32_t HWCSidebandStreamSession::UpdateSidebandStreamLocked(HWCSidebandStream * stm,
+                                    std::vector<hwc2_display_t> *refresh_list) {
   color_data_pack color_data_pack_;
   csc_mat csc_mat;
 
@@ -507,7 +520,7 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
 
   if (validateMask) {
     for (auto & display : stm->mDisplays) {
-      hwc_session->Refresh(display);
+      refresh_list->push_back(display);
     }
     return 0;
   }
@@ -523,7 +536,7 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
     int32_t retire_fence;
     status = hwc_session->hwc_display_[display]->SidebandStreamPresent(&retire_fence);
     if (status != HWC2::Error::None) {
-      hwc_session->Refresh(display);
+      refresh_list->push_back(display);
       continue;
     }
 
