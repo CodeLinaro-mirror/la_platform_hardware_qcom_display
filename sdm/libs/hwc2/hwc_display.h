@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -152,7 +152,7 @@ class HWCDisplay : public DisplayEventHandler {
   void BuildLayerStack(void);
   void BuildSolidFillStack(void);
   HWCLayer *GetHWCLayer(hwc2_layer_t layer);
-  void ResetValidation() { validated_.reset(); }
+  void ResetValidation() { validated_.reset(id_); }
   uint32_t GetGeometryChanges() { return geometry_changes_; }
 
   // HWC2 APIs
