@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018, 2020-2021 The Linux Foundation. All rights reserved.
  * Not a Contribution
  *
  * Copyright (C) 2010 The Android Open Source Project
@@ -1423,7 +1423,7 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
   // Reset to false for special cases below
   if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
     metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] = true;
-  } else {
+  } else if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
     metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] = true;
   }
 #endif
@@ -1600,7 +1600,7 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
 #ifdef METADATA_V2
       if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
         metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] = false;
-      } else {
+      } else if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
         metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] =
             false;
       }
