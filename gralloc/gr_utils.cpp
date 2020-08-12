@@ -26,6 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 
 #ifndef QMAA
 #include <media/msm_media_info.h>
@@ -1774,7 +1779,8 @@ void GetRGBPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int3
   if (HasAlphaComponent(format)) {
     plane_info->component = (PlaneComponent)(plane_info->component | PLANE_COMPONENT_A);
   }
-  plane_info->size = GetSize(info, width, height);
+  GetBufferSizeAndDimensions(info, &(plane_info->size), (unsigned int *) &width,
+                             (unsigned int *) &height);
   plane_info->step = GetBpp(format);
   plane_info->offset = GetRgbMetaSize(format, width, height, usage);
   plane_info->h_subsampling = 0;
