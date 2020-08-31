@@ -95,3 +95,8 @@ case "$target" in
     esac
     ;;
 esac
+case "$target" in
+    "monaco")
+    setprop vendor.gralloc.use_dma_buf_heaps 1
+    ;;
+esac
