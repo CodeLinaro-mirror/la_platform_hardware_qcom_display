@@ -218,6 +218,12 @@ int HWCSession::Init() {
   async_powermode_ = (value == 1);
   DLOGI("builtin_powermode_override: %d", async_powermode_);
 
+  value = 0;
+  if (Debug::Get()->GetProperty(DISABLE_VIRTUAL_DISPLAY, &value) == kErrorNone) {
+    disable_virtual_display_ = (value == 1);
+  }
+  DLOGI("DISABLE_VIRTUAL_DISPLAY: %d", disable_virtual_display_);
+
   InitSupportedDisplaySlots();
   // Create primary display here. Remaining builtin displays will be created after client has set
   // display indexes which may happen sometime before callback is registered.
@@ -563,7 +569,13 @@ uint32_t HWCSession::GetMaxVirtualDisplayCount(hwc2_device_t *device) {
     return HWC2_ERROR_BAD_PARAMETER;
   }
 
-  return 1;
+  auto *hwc_session = static_cast<HWCSession *>(device);
+  uint32_t virtual_display = 1;
+
+  if (hwc_session->disable_virtual_display_) {
+    virtual_display = 0;
+  }
+  return virtual_display;
 }
 
 static int32_t GetActiveConfig(hwc2_device_t *device, hwc2_display_t display,

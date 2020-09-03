@@ -448,6 +448,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   float set_min_lum_ = -1.0;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
   bool async_powermode_ = false;
+  bool disable_virtual_display_ = false;
   bool power_state_transition_[HWCCallbacks::kNumDisplays] = {};  // +1 to account for primary.
   std::bitset<HWCCallbacks::kNumDisplays> display_ready_;
 };
