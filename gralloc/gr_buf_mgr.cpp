@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018, 2021 The Linux Foundation. All rights reserved.
  * Not a Contribution
  *
  * Copyright (C) 2010 The Android Open Source Project
@@ -335,7 +335,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   ColorSpace_t colorSpace = (buffer_type == BUFFER_TYPE_VIDEO) ? ITU_R_601 : ITU_R_709;
   setMetaDataAndUnmap(hnd, UPDATE_COLOR_SPACE, reinterpret_cast<void *>(&colorSpace));
 
-  bool use_adreno_for_size = CanUseAdrenoForSize(buffer_type, usage);
+  bool use_adreno_for_size = CanUseAdrenoForSize(info);
   if (use_adreno_for_size) {
     setMetaDataAndUnmap(hnd, SET_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
   }

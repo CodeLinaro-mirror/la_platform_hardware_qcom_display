@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019, 2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -356,7 +356,7 @@ Return<void> QtiMapperExtensions::getFormatLayout(int32_t format, uint64_t usage
   gralloc::PlaneLayoutInfo plane_layout[8] = {};
   ALOGD_IF(DEBUG, "%s: Aligned width and height - wxh: %ux%u custom_format = %d", __FUNCTION__,
            alignedw, alignedh, custom_format);
-  if (gralloc::IsYuvFormat(custom_format)) {
+  if (gralloc::IsYuvFormat(custom_format) || gralloc::IsFSCFormat(custom_format)) {
     gralloc::GetYUVPlaneInfo(info, custom_format, alignedw, alignedh, flags, &plane_count,
                              plane_layout);
   } else if (gralloc::IsUncompressedRGBFormat(custom_format) ||

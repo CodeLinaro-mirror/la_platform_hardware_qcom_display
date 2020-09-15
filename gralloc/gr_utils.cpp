@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -165,6 +165,20 @@ bool IsCameraCustomFormat(int format) {
   return false;
 }
 
+bool IsFSCFormat (int format) {
+  switch (format) {
+    case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
+      return true;
+    case HAL_PIXEL_FORMAT_RGB101010_UBWC_FSC:
+      ALOGE("HAL_PIXEL_FORMAT_RGB101010_UBWC_FSC not supported");
+      return false;
+    default:
+      break;
+  }
+
+  return false;
+}
+
 uint32_t GetBppForUncompressedRGB(int format) {
   uint32_t bpp = 0;
   switch (format) {
@@ -291,6 +305,19 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
   int height = info.height;
   uint64_t usage = info.usage;
 
+  if (IsFSCFormat(format)) {
+    unsigned int venus_buffer_size = 0;
+    if (format == HAL_PIXEL_FORMAT_RGB888_UBWC_FSC) {
+      unsigned int y_size = MSM_MEDIA_ALIGN(alignedw * alignedh * 3, 4096);
+      unsigned int y_meta_scanline =  VENUS_Y_META_SCANLINES(COLOR_FMT_NV12_UBWC, height);
+      unsigned int y_meta_stride =  VENUS_Y_META_STRIDE(COLOR_FMT_NV12_UBWC, width);
+      unsigned int y_meta_size =  MSM_MEDIA_ALIGN(y_meta_stride * y_meta_scanline*3, 4096);
+      venus_buffer_size = y_size + y_meta_size;
+    }
+    size = venus_buffer_size * info.layer_count;
+    return size;
+  }
+
   if (!IsGPUFlagSupported(usage)) {
     ALOGE("Unsupported GPU usage flags present 0x%" PRIx64, usage);
     return 0;
@@ -402,8 +429,7 @@ int GetBufferSizeAndDimensions(const BufferInfo &info, unsigned int *size, unsig
 
 int GetBufferSizeAndDimensions(const BufferInfo &info, unsigned int *size, unsigned int *alignedw,
                                unsigned int *alignedh, GraphicsMetadata *graphics_metadata) {
-  int buffer_type = GetBufferType(info.format);
-  if (CanUseAdrenoForSize(buffer_type, info.usage)) {
+  if (CanUseAdrenoForSize(info)) {
     return GetGpuResourceSizeAndDimensions(info, size, alignedw, alignedh, graphics_metadata);
   } else {
     GetAlignedWidthAndHeight(info, alignedw, alignedh);
@@ -956,6 +982,24 @@ void GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   bool ubwc_enabled = IsUBwcEnabled(format, usage);
   int tile = ubwc_enabled;
 
+  if (IsFSCFormat(format)) {
+    unsigned int gpu_aligned_width = 0;
+    unsigned int gpu_aligned_height = 0;
+    if (AdrenoMemInfo::GetInstance()) {
+      AdrenoMemInfo::GetInstance()->AlignUnCompressedRGB(width, height, format, tile,
+                                                         &gpu_aligned_width, &gpu_aligned_height);
+    }
+    unsigned int venus_aligned_width = 0;
+    unsigned int venus_aligned_height = 0;
+    if (format == HAL_PIXEL_FORMAT_RGB888_UBWC_FSC) {
+      venus_aligned_width = VENUS_Y_STRIDE(COLOR_FMT_NV12_UBWC, gpu_aligned_width);
+      venus_aligned_height = VENUS_Y_SCANLINES(COLOR_FMT_NV12_UBWC, gpu_aligned_height);
+    }
+    *alignedw = venus_aligned_width;
+    *alignedh = venus_aligned_height;
+    return;
+  }
+
   // Use of aligned width and aligned height is to calculate the size of buffer,
   // but in case of camera custom format size is being calculated from given width
   // and given height.
@@ -1136,6 +1180,7 @@ int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4], uint32_t offset[4
       (*num_planes)++;
       break;
     case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+    case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
       *num_planes = 1;
       break;
     default:
@@ -1183,13 +1228,19 @@ int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
   return 0;
 }
 
-bool CanUseAdrenoForSize(int buffer_type, uint64_t usage) {
+bool CanUseAdrenoForSize(const BufferInfo &info) {
+  int buffer_type = GetBufferType(info.format);
+  uint64_t usage = info.usage;
   if (buffer_type == BUFFER_TYPE_VIDEO || !GetAdrenoSizeAPIStatus()) {
     return false;
   }
 
   if ((usage & BufferUsage::PROTECTED) && ((usage & BufferUsage::CAMERA_OUTPUT) ||
       (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY))) {
+    return false;
+  }
+
+  if (IsFSCFormat(info.format)) {
     return false;
   }
 
@@ -1579,6 +1630,28 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       plane_info[0].step = 1;
       plane_info[0].h_subsampling = 0;
       plane_info[0].v_subsampling = 0;
+      break;
+
+    case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
+      {
+        unsigned int y_size = MSM_MEDIA_ALIGN(width * height * 3, 4096);
+        unsigned int y_meta_scanline =  VENUS_Y_META_SCANLINES(COLOR_FMT_NV12_UBWC, height);
+        unsigned int y_meta_stride =  VENUS_Y_META_STRIDE(COLOR_FMT_NV12_UBWC, width);
+        unsigned int y_meta_size =  MSM_MEDIA_ALIGN(y_meta_stride * y_meta_scanline*3, 4096);
+        y_stride = width;
+        y_height = height * 3;
+        *plane_count = 1;
+        yOffset = y_meta_size;
+        plane_info[0].component = (PlaneComponent)PLANE_COMPONENT_Y;
+        plane_info[0].offset = (uint32_t)yOffset;
+        plane_info[0].stride = static_cast<int32_t>(UINT(width));
+        plane_info[0].stride_bytes = static_cast<int32_t>(y_stride); // TODO; ( check with driver)
+        plane_info[0].scanlines = static_cast<int32_t>(y_height);
+        plane_info[0].size = static_cast<uint32_t>(y_size);
+        plane_info[0].step = 1;
+        plane_info[0].h_subsampling = 0;
+        plane_info[0].v_subsampling = 0;
+      }
       break;
 
       // Unsupported formats
