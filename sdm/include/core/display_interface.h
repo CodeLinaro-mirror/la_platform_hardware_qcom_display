@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -184,6 +184,16 @@ enum FrameTriggerMode {
   kFrameTriggerMax,
 };
 
+enum FscRgbOrder {
+  kFscUnkown = 0,
+  kFscRgb,
+  kFscRbg,
+  kFscBgr,
+  kFscBrg,
+  kFscGbr,
+  kFscGrb,
+};
+
 /*! @brief This structure defines configuration for fixed properties of a display device.
 
   @sa DisplayInterface::GetConfig
@@ -202,6 +212,7 @@ struct DisplayConfigFixedInfo {
   float min_luminance = 0.0f;          //!< From Panel's blackness level
   bool partial_update = false;         //!< If display supports Partial Update.
   bool readback_supported = false;     //!< If display supports buffer readback.
+  FscRgbOrder fsc_rgb_order = kFscUnkown;  //!< FSC Panel's RGB order.
 };
 
 /*! @brief This structure defines configuration for variable properties of a display device.

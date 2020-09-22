@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -525,6 +525,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
   fixed_info->partial_update = hw_panel_info_.partial_update;
   fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+  fixed_info->fsc_rgb_order = hw_panel_info_.fsc_rgb_order;
 
   return kErrorNone;
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -1196,6 +1196,29 @@ Return<int32_t> HWCSession::registerQsyncCallback(const sp<IDisplayQsyncCallback
 
   return 0;
 }
+
+Return<void> HWCSession::getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
+                                              getFSCRGBOrder_cb _hidl_cb) {
+  int error = -EINVAL;
+  IDisplayConfig::RGBOrder fsc_rgb_order = IDisplayConfig::RGBOrder::FSC_UNKNOWN;
+  int disp_id = MapDisplayType(dpy);
+  int disp_idx = GetDisplayIndex(disp_id);
+  if (disp_idx != -1) {
+    HWCDisplay *hwc_display = hwc_display_[disp_idx];
+    if (!hwc_display) {
+      DLOGW("Display = %d is not connected.", disp_idx);
+      error = -ENODEV;
+    } else {
+      fsc_rgb_order = (IDisplayConfig::RGBOrder)hwc_display->GetFscRgbOrder();
+      error = kErrorNone;
+    }
+  }
+
+  _hidl_cb(error, fsc_rgb_order);
+
+  return Void();
+}
+
 #endif
 
 }  // namespace sdm

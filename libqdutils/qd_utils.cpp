@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018, 2021, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -268,6 +268,10 @@ const char *GetHALPixelFormatString(int format) {
     return "YCbCr_420_P010_VENUS";
   case HAL_PIXEL_FORMAT_RGBA_FP16:
     return "PIXEL_FORMAT_RGBA_FP16";
+  case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
+    return "PIXEL_FORMAT_RGB888_UBWC_FSC";
+  case HAL_PIXEL_FORMAT_RGB101010_UBWC_FSC:
+    return "PIXEL_FORMAT_RGB101010_UBWC_FSC";
   default:
     return "Unknown_format";
   }
