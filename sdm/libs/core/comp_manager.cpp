@@ -68,6 +68,11 @@ DisplayError CompManager::Init(HWInfoInterface *hw_info_intf,
   buffer_allocator_ = buffer_allocator;
   extension_intf_ = extension_intf;
 
+  HWScaleLutInfo lut_info = {};
+  if (resource_intf_->GetScaleLutConfig(&lut_info) == kErrorNone) {
+    hw_info_intf->SetScaleLutConfig(&lut_info);
+  }
+
   return error;
 }
 
@@ -538,10 +543,6 @@ DisplayError CompManager::SetMaxBandwidthMode(HWBwModes mode) {
   }
 
   return resource_intf_->SetMaxBandwidthMode(mode);
-}
-
-DisplayError CompManager::GetScaleLutConfig(HWScaleLutInfo *lut_info) {
-  return resource_intf_->GetScaleLutConfig(lut_info);
 }
 
 DisplayError CompManager::SetDetailEnhancerData(Handle display_ctx,

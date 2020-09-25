@@ -1917,25 +1917,6 @@ DisplayError HWDeviceDRM::SetS3DMode(HWS3DMode s3d_mode) {
   return kErrorNotSupported;
 }
 
-DisplayError HWDeviceDRM::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
-  sde_drm::DRMScalerLUTInfo drm_lut_info = {};
-  drm_lut_info.cir_lut = lut_info->cir_lut;
-  drm_lut_info.dir_lut = lut_info->dir_lut;
-  drm_lut_info.sep_lut = lut_info->sep_lut;
-  drm_lut_info.cir_lut_size = lut_info->cir_lut_size;
-  drm_lut_info.dir_lut_size = lut_info->dir_lut_size;
-  drm_lut_info.sep_lut_size = lut_info->sep_lut_size;
-  drm_mgr_intf_->SetScalerLUT(drm_lut_info);
-
-  return kErrorNone;
-}
-
-DisplayError HWDeviceDRM::UnsetScaleLutConfig() {
-  drm_mgr_intf_->UnsetScalerLUT();
-
-  return kErrorNone;
-}
-
 DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
   if (IsResolutionSwitchEnabled()) {
     return kErrorNotSupported;

@@ -1012,4 +1012,23 @@ DisplayError HWInfoDRM::SetPipeHandoff(uint32_t pipe_id) {
   }
 }
 
+DisplayError HWInfoDRM::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
+  sde_drm::DRMScalerLUTInfo drm_lut_info = {};
+  drm_lut_info.cir_lut = lut_info->cir_lut;
+  drm_lut_info.dir_lut = lut_info->dir_lut;
+  drm_lut_info.sep_lut = lut_info->sep_lut;
+  drm_lut_info.cir_lut_size = lut_info->cir_lut_size;
+  drm_lut_info.dir_lut_size = lut_info->dir_lut_size;
+  drm_lut_info.sep_lut_size = lut_info->sep_lut_size;
+  drm_mgr_intf_->SetScalerLUT(drm_lut_info);
+
+  return kErrorNone;
+}
+
+DisplayError HWInfoDRM::UnsetScaleLutConfig() {
+  drm_mgr_intf_->UnsetScalerLUT();
+
+  return kErrorNone;
+}
+
 }  // namespace sdm

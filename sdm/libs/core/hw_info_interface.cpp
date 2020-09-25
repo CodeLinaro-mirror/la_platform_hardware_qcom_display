@@ -88,6 +88,8 @@ DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
 }
 
 DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {
+  intf->UnsetScaleLutConfig();
+
   if (intf) {
     delete intf;
   }
