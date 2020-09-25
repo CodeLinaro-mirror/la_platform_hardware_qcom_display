@@ -172,6 +172,8 @@ class HWDeviceDRM : public HWInterface {
   class Registry {
    public:
     explicit Registry(BufferAllocator *buffer_allocator);
+    // Init master
+    void Init(Handle master) {master_ = master;}
     // Called on each Validate and Commit to map the handle_id to fb_id of each layer buffer.
     void Register(HWLayers *hw_layers);
     // Called on display disconnect to clear output buffer map and remove fb_ids.
@@ -192,6 +194,7 @@ class HWDeviceDRM : public HWInterface {
     std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> output_buffer_map_ {};
     BufferAllocator *buffer_allocator_ = {};
     uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
+    Handle master_ = nullptr;
   };
 
  protected:
