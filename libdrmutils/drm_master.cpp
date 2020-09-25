@@ -37,6 +37,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <string.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #ifdef __MIN_ANDROID_VER_T__
@@ -65,33 +66,70 @@ using std::fill;
 
 namespace drm_utils {
 
-DRMMaster *DRMMaster::s_instance = nullptr;
+std::map<uint32_t, DRMMaster*> DRMMaster::s_instance;
 mutex DRMMaster::s_lock;
 
-int DRMMaster::GetInstance(DRMMaster **master) {
+int DRMMaster::GetInstance(DRMMaster **master, uint32_t card) {
   lock_guard<mutex> obj(s_lock);
 
-  if (!s_instance) {
-    s_instance = new DRMMaster();
-    if (s_instance->Init() < 0) {
-      delete s_instance;
-      s_instance = nullptr;
+  auto iter = s_instance.find(card);
+  if (iter == s_instance.end()) {
+    DRMMaster *new_master = new DRMMaster();
+    if (new_master->Init(card) < 0) {
+      delete new_master;
       return -ENODEV;
     }
+    s_instance[card] = new_master;
+    *master = new_master;
+  } else {
+    *master = iter->second;
   }
 
-  *master = s_instance;
   return 0;
 }
 
-void DRMMaster::DestroyInstance() {
+void DRMMaster::DestroyInstance(uint32_t card) {
   lock_guard<mutex> obj(s_lock);
-  delete s_instance;
-  s_instance = nullptr;
+
+  auto iter = s_instance.find(card);
+  if (iter != s_instance.end()) {
+    delete iter->second;
+    s_instance.erase(iter);
+  }
 }
 
-int DRMMaster::Init() {
-  dev_fd_ = drmOpen("msm_drm", nullptr);
+int DRMMaster::Init(int card) {
+  if (card == 0) {
+    dev_fd_ = drmOpen("msm_drm", nullptr);
+  } else {
+    drmVersionPtr ver;
+    int fd;
+    int card_cnt = 0;
+
+    for (int i = 0; i < 16; i++) {
+      snprintf(path_, sizeof(path_), "/dev/dri/card%d", i);
+      fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+      if (fd < 0)
+        break;
+
+      ver = drmGetVersion(fd);
+      if (ver) {
+        bool match = !strcmp(ver->name, "msm_drm");
+        drmFreeVersion(ver);
+        if (match) {
+          if (card == card_cnt) {
+            dev_fd_ = fd;
+            card_ = card;
+            break;
+          }
+          card_cnt++;
+        }
+      }
+
+      close(fd);
+    }
+  }
+
   if (dev_fd_ < 0) {
     DRM_LOGE("drmOpen failed with error %d", dev_fd_);
     return -ENODEV;
@@ -162,6 +200,14 @@ bool DRMMaster::IsRmFbRefCounted() {
   return true;
 #endif
   return false;
+}
+
+void DRMMaster::CreateEventHandle(int *fd) {
+  if (card_ == 0) {
+    *fd = drmOpen("msm_drm", nullptr);
+  } else {
+    *fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+  }
 }
 
 }  // namespace drm_utils

@@ -31,6 +31,7 @@
 #define __DRM_MASTER_H__
 
 #include <mutex>
+#include <map>
 
 #include "drm_logger.h"
 
@@ -71,24 +72,32 @@ class DRMMaster {
    *   fd: Pointer to store master fd into
    */
   void GetHandle(int *fd) { *fd = dev_fd_; }
+  /* Create non-master DRM fd
+   * Input:
+   *   fd: Pointer to store non-master fd into
+   */
+  void CreateEventHandle(int *fd);
   /* Returns true if the ref counted version of rmfb is being used */
   bool IsRmFbRefCounted();
 
   /* Creates an instance of DRMMaster if it doesn't exist and initializes it. Threadsafe.
    * Input:
    *   master: Pointer to store a pointer to the instance
+   *   card: Card index, default is 0
    * Returns:
    *   -ENODEV if device cannot be opened or initilization fails
    */
-  static int GetInstance(DRMMaster **master);
-  static void DestroyInstance();
+  static int GetInstance(DRMMaster **master, uint32_t card = 0);
+  static void DestroyInstance(uint32_t card = 0);
 
  private:
   DRMMaster() {}
-  int Init();
+  int Init(int card);
 
   int dev_fd_ = -1;              // Master fd for DRM
-  static DRMMaster *s_instance;  // Singleton instance
+  uint32_t card_ = 0;            // Master card index
+  char path_[64];                // Path of master card
+  static std::map<uint32_t, DRMMaster*> s_instance;     // Singleton instance
   static std::mutex s_lock;
 };
 

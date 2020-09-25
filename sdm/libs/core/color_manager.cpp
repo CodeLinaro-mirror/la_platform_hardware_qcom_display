@@ -40,7 +40,7 @@ namespace sdm {
 DynLib ColorManagerProxy::color_lib_;
 CreateColorInterface ColorManagerProxy::create_intf_ = NULL;
 DestroyColorInterface ColorManagerProxy::destroy_intf_ = NULL;
-HWResourceInfo ColorManagerProxy::hw_res_info_;
+std::vector<HWResourceInfo> ColorManagerProxy::hw_res_info_;
 
 // Below two functions are part of concrete implementation for SDM core private
 // color_params.h
@@ -75,7 +75,7 @@ DisplayError PPFeaturesConfig::RetrieveNextFeature(PPFeatureInfo **feature) {
   return ret;
 }
 
-DisplayError ColorManagerProxy::Init(const HWResourceInfo &hw_res_info) {
+DisplayError ColorManagerProxy::Init(const std::vector<HWResourceInfo> &hw_res_info) {
   DisplayError error = kErrorNone;
 
   // Load color service library and retrieve its entry points.
@@ -130,7 +130,8 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
     if (error != kErrorNone) {
       DLOGW("Fail to get DSPP feature versions");
     } else {
-      hw_attr.Set(hw_res_info_, panel_info, attribute, versions);
+      uint32_t card_id = GET_CARD_ID(display_id);
+      hw_attr.Set(hw_res_info_[card_id], panel_info, attribute, versions);
       DLOGI("PAV2 version is versions = %d, version = %d ",
             hw_attr.version.version[kGlobalColorFeaturePaV2],
             versions.version[kGlobalColorFeaturePaV2]);
