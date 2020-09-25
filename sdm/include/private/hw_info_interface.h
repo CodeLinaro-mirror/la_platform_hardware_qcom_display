@@ -42,6 +42,8 @@ class HWInfoInterface {
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) = 0;
   virtual DisplayError GetPipesStatus(HWPipesStateInfo *hw_pipes_info, bool update) = 0;
   virtual DisplayError SetPipeHandoff(uint32_t pipe_id) = 0;
+  virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info) = 0;
+  virtual DisplayError UnsetScaleLutConfig() = 0;
 
  protected:
   virtual ~HWInfoInterface() { }

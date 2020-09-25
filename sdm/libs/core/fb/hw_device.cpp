@@ -1258,45 +1258,6 @@ DisplayError HWDevice::SetS3DMode(HWS3DMode s3d_mode) {
   return kErrorNotSupported;
 }
 
-DisplayError HWDevice::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
-  mdp_scale_luts_info mdp_lut_info = {};
-  mdp_set_cfg cfg = {};
-
-  if (!hw_resource_.has_qseed3) {
-    DLOGV_IF(kTagDriverConfig, "No support for QSEED3 luts");
-    return kErrorNone;
-  }
-
-  if (!lut_info->dir_lut_size && !lut_info->dir_lut && !lut_info->cir_lut_size &&
-      !lut_info->cir_lut && !lut_info->sep_lut_size && !lut_info->sep_lut) {
-      // HWSupports QSEED3, but LutInfo is invalid as scalar is disabled by property or
-      // its loading failed. Driver will use default settings/filter
-      return kErrorNone;
-  }
-
-  mdp_lut_info.dir_lut_size = lut_info->dir_lut_size;
-  mdp_lut_info.dir_lut = lut_info->dir_lut;
-  mdp_lut_info.cir_lut_size = lut_info->cir_lut_size;
-  mdp_lut_info.cir_lut = lut_info->cir_lut;
-  mdp_lut_info.sep_lut_size = lut_info->sep_lut_size;
-  mdp_lut_info.sep_lut = lut_info->sep_lut;
-
-  cfg.flags = MDP_QSEED3_LUT_CFG;
-  cfg.len = sizeof(mdp_scale_luts_info);
-  cfg.payload = reinterpret_cast<uint64_t>(&mdp_lut_info);
-
-  if (Sys::ioctl_(device_fd_, MSMFB_MDP_SET_CFG, &cfg) < 0) {
-    if (errno == ESHUTDOWN) {
-      DLOGI_IF(kTagDriverConfig, "Driver is processing shutdown sequence");
-      return kErrorShutDown;
-    }
-    IOCTL_LOGE(MSMFB_MDP_SET_CFG, device_type_);
-    return kErrorHardware;
-  }
-
-  return kErrorNone;
-}
-
 DisplayError HWDevice::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
   if (!hw_resource_.hw_dest_scalar_info.count) {
     return kErrorNotSupported;

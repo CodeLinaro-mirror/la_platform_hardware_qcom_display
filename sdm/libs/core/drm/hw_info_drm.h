@@ -50,6 +50,8 @@ class HWInfoDRM: public HWInfoInterface {
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
   virtual DisplayError GetPipesStatus(HWPipesStateInfo *hw_pipes_info, bool update);
   virtual DisplayError SetPipeHandoff(uint32_t pipe_id);
+  virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
+  virtual DisplayError UnsetScaleLutConfig();
 
  private:
   void Deinit();
