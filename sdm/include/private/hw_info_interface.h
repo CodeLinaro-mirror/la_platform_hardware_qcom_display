@@ -33,7 +33,7 @@ namespace sdm {
 
 class HWInfoInterface {
  public:
-  static DisplayError Create(HWInfoInterface **intf);
+  static DisplayError Create(std::vector<HWInfoInterface*> *intfs);
   static DisplayError Destroy(HWInfoInterface *intf);
   virtual DisplayError Init() = 0;
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;

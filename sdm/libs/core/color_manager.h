@@ -46,7 +46,7 @@ namespace sdm {
  */
 class ColorManagerProxy {
  public:
-  static DisplayError Init(const HWResourceInfo &hw_res_info);
+  static DisplayError Init(const std::vector<HWResourceInfo> &hw_res_info);
   static void Deinit();
 
   /* Create ColorManagerProxy for this display object, following things need to be happening
@@ -84,7 +84,7 @@ class ColorManagerProxy {
   static DynLib color_lib_;
   static CreateColorInterface create_intf_;
   static DestroyColorInterface destroy_intf_;
-  static HWResourceInfo hw_res_info_;
+  static std::vector<HWResourceInfo> hw_res_info_;
 
   int32_t display_id_;
   bool first_cycle_ = true;

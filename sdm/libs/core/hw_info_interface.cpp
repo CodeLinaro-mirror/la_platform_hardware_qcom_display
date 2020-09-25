@@ -36,31 +36,45 @@
 
 namespace sdm {
 
-DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
-  if (GetDriverType() == DriverType::FB) {
-    *intf = new HWInfo();
-  } else {
-    *intf = new HWInfoDRM();
-  }
-
+DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
   DisplayError error = kErrorNone;
-  if (*intf) {
-    error = (*intf)->Init();
-    if (error != kErrorNone) {
-      delete *intf;
-      *intf = nullptr;
+  if (GetDriverType() == DriverType::FB) {
+    HWInfoInterface *hw_info = new HWInfo();
+    if (hw_info) {
+      error = hw_info->Init();
+      if (error != kErrorNone) {
+        delete hw_info;
+        return error;
+      }
+      intfs->push_back(hw_info);
+    } else {
+      DLOGE("Failed allocating HWInfo");
+      error = kErrorCriticalResource;
     }
-  } else {
-    error = kErrorCriticalResource;
+    return error;
   }
 
-  return error;
+  for (uint32_t i = 0; i < 16; i++) {
+    HWInfoInterface *hw_info = new HWInfoDRM(i);
+    if (hw_info) {
+      error = hw_info->Init();
+      if (error != kErrorNone) {
+        delete hw_info;
+        return intfs->size() ? kErrorNone : error;
+      }
+      intfs->push_back(hw_info);
+    } else {
+      DLOGE("Failed allocating HWInfoDRM(%d)", i);
+      return kErrorCriticalResource;
+    }
+  }
+
+  return kErrorNone;
 }
 
 DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {
-  intf->UnsetScaleLutConfig();
-
   if (intf) {
+    intf->UnsetScaleLutConfig();
     delete intf;
   }
 
