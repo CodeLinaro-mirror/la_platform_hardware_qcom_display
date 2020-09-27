@@ -26,6 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 
 #ifndef QMAA
 #include <media/msm_media_info.h>
@@ -722,6 +727,19 @@ bool IsUBwcSupported(int format) {
   return false;
 }
 
+bool IsTileRendered(int format) {
+  switch (format) {
+    case HAL_PIXEL_FORMAT_DEPTH_16:
+    case HAL_PIXEL_FORMAT_DEPTH_24:
+    case HAL_PIXEL_FORMAT_DEPTH_24_STENCIL_8:
+    case HAL_PIXEL_FORMAT_DEPTH_32F:
+    case HAL_PIXEL_FORMAT_STENCIL_8:
+      return true;
+    default:
+      return false;
+  }
+}
+
 bool IsUBwcPISupported(int format, uint64_t usage) {
   // TODO(user): try and differentiate b/w mdp capability to support PI.
   if (!(usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_PI)) {
@@ -753,12 +771,14 @@ bool IsUBwcEnabled(int format, uint64_t usage) {
 
   // Allow UBWC, if an OpenGL client sets UBWC usage flag and GPU plus MDP
   // support the format. OR if a non-OpenGL client like Rotator, sets UBWC
-  // usage flag and MDP supports the format.
-  if (((usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) ||
+  // usage flag and MDP supports the format. UBWC usage flag is not set by
+  // App during buffer allocation via NDK API AHardwareBuffer_allocate for
+  // DEPTH/STENCIL8 formats, so skip the check for it.
+  if ((((usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) ||
        (usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_PI) ||
-       (usage & BufferUsage::COMPOSER_CLIENT_TARGET))
-        && IsUBwcSupported(format)) {
-    bool enable = true;
+       (usage & BufferUsage::COMPOSER_CLIENT_TARGET)) && IsUBwcSupported(format))
+       || IsTileRendered(format)) {
+      bool enable = true;
     // Query GPU for UBWC only if buffer is intended to be used by GPU.
     if ((usage & BufferUsage::GPU_TEXTURE) || (usage & BufferUsage::GPU_RENDER_TARGET)) {
       if (AdrenoMemInfo::GetInstance()) {
@@ -1214,12 +1234,17 @@ int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
     adreno_usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
   }
 
+  int tile_mode = is_ubwc_enabled;
+  if (IsTileRendered(info.format)) {
+    tile_mode = true;
+  }
+
   // Call adreno api for populating metadata blob
   // Layer count is for 2D/Cubemap arrays and depth is used for 3D slice
   // Using depth to pass layer_count here
   int ret = adreno_mem_info->AdrenoInitMemoryLayout(graphics_metadata->data, info.width,
                                                     info.height, info.layer_count, /* depth */
-                                                    info.format, 1, is_ubwc_enabled,
+                                                    info.format, 1, tile_mode,
                                                     adreno_usage, 1);
   if (ret != 0) {
     ALOGE("%s Graphics metadata init failed", __FUNCTION__);
@@ -1314,6 +1339,7 @@ uint64_t GetHandleFlags(int format, uint64_t usage) {
 
   if (IsUBwcEnabled(format, usage)) {
     priv_flags |= private_handle_t::PRIV_FLAGS_UBWC_ALIGNED;
+    priv_flags |= private_handle_t::PRIV_FLAGS_TILE_RENDERED;
     if (IsUBwcPISupported(format, usage)) {
       priv_flags |= private_handle_t::PRIV_FLAGS_UBWC_ALIGNED_PI;
     }
@@ -1330,6 +1356,10 @@ uint64_t GetHandleFlags(int format, uint64_t usage) {
 
   if (!UseUncached(format, usage)) {
     priv_flags |= private_handle_t::PRIV_FLAGS_CACHED;
+  }
+
+  if (IsTileRendered(format)) {
+    priv_flags |= private_handle_t::PRIV_FLAGS_TILE_RENDERED;
   }
 
   return priv_flags;
