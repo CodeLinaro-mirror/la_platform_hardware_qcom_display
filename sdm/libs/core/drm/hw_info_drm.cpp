@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -846,6 +846,10 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
     hw_info.is_connected = iter.second.is_connected ? 1 : 0;
     hw_info.is_primary = iter.second.is_primary ? 1 : 0;
     hw_info.is_wb_ubwc_supported = iter.second.is_wb_ubwc_supported;
+    if (iter.second.ext_bridge_hpd) {
+        hw_info.display_type = kPluggable;
+    }
+
     if (hw_info.display_id >= 0) {
       (*hw_displays_info)[hw_info.display_id] = hw_info;
     }
@@ -900,6 +904,20 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
         break;
       default:
         break;
+    }
+  }
+
+  sde_drm::DRMConnectorsInfo conns_info = {};
+  drm_err = drm_mgr_intf_->GetConnectorsInfo(&conns_info);
+  if (drm_err) {
+    DLOGE("DRM Driver get connector error %d while getting max displays supported!", drm_err);
+    return kErrorUndefined;
+  }
+
+  for(auto &iter:conns_info) {
+    if(iter.second.ext_bridge_hpd) {
+      max_displays_builtin--;
+      max_displays_tmds++;
     }
   }
 

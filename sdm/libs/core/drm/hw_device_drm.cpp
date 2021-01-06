@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -489,6 +489,16 @@ DisplayError HWDeviceDRM::Init() {
     drm_mgr_intf_->UnregisterDisplay(&token_);
     return kErrorHardware;
   }
+
+  // Port id format.
+  // Bit 7   --> Display type 0: Pluggable 1: BuiltIn X:Virtual.
+  // Bit 6   --> Pluggable: 0 for TMDS encoder, 1 for DPMST encoder.
+  //             Builtin Or Virtual: X
+  // Bit 5-0 --> Encoder index.
+  // Reset hw_port id for external bridge display. Set Bit 7 to 0, since
+  //             it was created as a pluggable dispaly.
+  if (connector_info_.ext_bridge_hpd)
+    token_.hw_port = (token_.hw_port & 0x7F);
 
   if (!connector_info_.is_connected || connector_info_.modes.empty()) {
     DLOGW("Device removal detected on connector id %u. Connector status %s and %zu modes.",
