@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -437,6 +437,10 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
     pipe_caps.inverse_pma = pipe_obj.second.inverse_pma;
     pipe_caps.dgm_csc_version = pipe_obj.second.dgm_csc_version;
     pipe_caps.support_handoff = pipe_obj.second.has_handoff;
+    if (pipe_obj.second.multirect_prop_mask & (1 << (int)sde_drm::DRMMultiRectMode::PARALLEL))
+      pipe_caps.multirect_cap_mask |= kMultiRectParallelMode;
+    if (pipe_obj.second.multirect_prop_mask & (1 << (int)sde_drm::DRMMultiRectMode::SERIAL))
+      pipe_caps.multirect_cap_mask |= kMultiRect;
     // disable src tonemap feature if its disabled using property.
     if (!disable_src_tonemap) {
       for (auto &it : pipe_obj.second.tonemap_lut_version_map) {
