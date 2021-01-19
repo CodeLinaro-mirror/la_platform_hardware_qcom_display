@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -944,19 +944,25 @@ int GetCustomDimensions(private_handle_t *hnd, int *stride, int *height) {
 void GetColorSpaceFromMetadata(private_handle_t *hnd, int *color_space) {
   ColorMetaData color_metadata;
   if (getMetaData(hnd, GET_COLOR_METADATA, &color_metadata) == 0) {
-    switch (color_metadata.colorPrimaries) {
-      case ColorPrimaries_BT709_5:
+
+    /* Check for matrix coefficient */
+    switch (color_metadata.matrixCoefficients) {
+      case MatrixCoEff_BT709_5:
         *color_space = HAL_CSC_ITU_R_709;
         break;
-      case ColorPrimaries_BT601_6_525:
-      case ColorPrimaries_BT601_6_625:
-        *color_space = ((color_metadata.range) ? HAL_CSC_ITU_R_601_FR : HAL_CSC_ITU_R_601);
+      case MatrixCoEff_BT601_6_525:
+      case MatrixCoEff_BT601_6_625:
+        *color_space = ((color_metadata.range) ?
+                        HAL_CSC_ITU_R_601_FR : HAL_CSC_ITU_R_601);
         break;
-      case ColorPrimaries_BT2020:
-        *color_space = (color_metadata.range) ? HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
+      case MatrixCoEff_BT2020:
+        *color_space = ((color_metadata.range) ?
+                        HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020);
         break;
       default:
-        ALOGE("Unknown Color Space = %d", color_metadata.colorPrimaries);
+        /* fallback to HAL_CSC_ITU_R_601 if matrix coefficients are unknown */
+        ALOGI("unknown matrixCoefficient, fallback to HAL_CSC_ITU_R_601\n");
+        *color_space = HAL_CSC_ITU_R_601;
         break;
     }
   } else if (getMetaData(hnd, GET_COLOR_SPACE, color_space) != 0) {
