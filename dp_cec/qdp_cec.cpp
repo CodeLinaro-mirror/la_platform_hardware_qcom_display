@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014, 2016-2017, 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014, 2016-2017, 2020-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -303,7 +303,11 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
     event.type = HDMI_EVENT_HOT_PLUG;
     event.dev = (hdmi_cec_device *) ctx;
     event.hotplug.connected = connected ? HDMI_CONNECTED : HDMI_NOT_CONNECTED;
-    ctx->callback.callback_func(&event, ctx->callback.callback_arg);
+    if (ctx->callback.callback_func) {
+        ctx->callback.callback_func(&event, ctx->callback.callback_arg);
+    } else {
+        ALOGW("HPD callback not registered!");
+    }
 }
 
 static void cec_register_event_callback(const struct hdmi_cec_device* dev,
