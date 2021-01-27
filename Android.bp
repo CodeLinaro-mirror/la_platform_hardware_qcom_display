@@ -96,7 +96,6 @@ subdirs = [
     "libqdutils",
     "libddebug",
     "libdrmutils",
-    "libmemtrack",
     "libhistogram",
     "liblight",
     "composer",
