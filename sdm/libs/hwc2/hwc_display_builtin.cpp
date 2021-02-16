@@ -180,6 +180,11 @@ int HWCDisplayBuiltIn::Init() {
     DLOGI("Enable POMS during Doze mode %" PRIu64 , id_);
   }
 
+  value = 0;
+  if (HWCDebugHandler::Get()->GetProperty(DISABLE_COLOR_TRANSFORMATION, &value) == kErrorNone) {
+    disable_color_transformation_ = (value == 1);
+  }
+
   int vsyncs = 0;
   HWCDebugHandler::Get()->GetProperty(DEFER_FPS_FRAME_COUNT, &vsyncs);
   if (vsyncs > 0) {
@@ -471,6 +476,11 @@ HWC2::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
                                                  android_color_transform_t hint) {
   if (!matrix) {
     return HWC2::Error::BadParameter;
+  }
+
+  if (disable_color_transformation_) {
+    color_tranform_failed_ = (HAL_COLOR_TRANSFORM_IDENTITY != hint);
+    return HWC2::Error::None;
   }
 
   auto status = color_mode_->SetColorTransform(matrix, hint);
