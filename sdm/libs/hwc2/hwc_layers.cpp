@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, 2021 The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <qdMetaData.h>
 
+#include "hwc_debugger.h"
 #include "hwc_layers.h"
 #ifndef USE_GRALLOC1
 #include <gr.h>
@@ -171,9 +172,11 @@ bool GetSDMColorSpace(const int32_t &dataspace, ColorMetaData *color_metadata) {
 HWCLayer::HWCLayer(hwc2_display_t display_id, HWCBufferAllocator *buf_allocator)
   : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
   layer_ = new Layer();
+  int n;
   // Fences are deferred, so the first time this layer is presented, return -1
   // TODO(user): Verify that fences are properly obtained on suspend/resume
   release_fences_.push(-1);
+  HWCLayer::value = HWCDebugHandler::Get()->GetProperty("SOURCE_OINT_PROP", &n);
 }
 
 HWCLayer::~HWCLayer() {
@@ -411,11 +414,17 @@ HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
 
 HWC2::Error HWCLayer::SetLayerSourceCrop(hwc_frect_t crop) {
   LayerRect src_rect = {};
+  if (HWCLayer::value) {
+	crop.left = floorf(crop.left);
+	crop.top = floorf(crop.top);
+	crop.right = floorf(crop.right);
+	crop.bottom = floorf(crop.bottom);
+  }
   SetRect(crop, &src_rect);
-  non_integral_source_crop_ = ((crop.left != roundf(crop.left)) ||
-                              (crop.top != roundf(crop.top)) ||
-                              (crop.right != roundf(crop.right)) ||
-                              (crop.bottom != roundf(crop.bottom)));
+  non_integral_source_crop_ = ((crop.left != floorf(crop.left)) ||
+                              (crop.top != floorf(crop.top)) ||
+                              (crop.right != floorf(crop.right)) ||
+                              (crop.bottom != floorf(crop.bottom)));
   if (non_integral_source_crop_) {
     DLOGV_IF(kTagClient, "Crop: LRTB %f %f %f %f", crop.left, crop.top, crop.right, crop.bottom);
   }
