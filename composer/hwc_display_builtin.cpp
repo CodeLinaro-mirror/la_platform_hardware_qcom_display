@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -306,7 +306,6 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   }
 
   status = PrepareLayerStack(out_num_types, out_num_requests);
-  SetCpuPerfHintLargeCompCycle();
   pending_commit_ = true;
   return status;
 }
@@ -471,6 +470,10 @@ HWC2::Error HWCDisplayBuiltIn::Present(shared_ptr<Fence> *out_retire_fence) {
     // Subsequent commits have to be normal. Reset state.
     commit_state_ = kNormalCommit;
     validate_state_ = kSkipValidate;
+    if (revalidate_pending_) {
+      validated_ = false;
+      revalidate_pending_ = false;
+    }
   } else {
     CacheAvrStatus();
     DisplayConfigFixedInfo fixed_info = {};
