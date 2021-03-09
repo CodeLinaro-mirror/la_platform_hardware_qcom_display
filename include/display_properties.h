@@ -134,4 +134,5 @@
 #define ENABLE_POMS_DURING_DOZE              DISPLAY_PROP("enable_poms_during_doze")
 
 #define DISABLE_VIRTUAL_DISPLAY              DISPLAY_PROP("disable_virtual_display")
+#define DISABLE_COLOR_TRANSFORMATION         DISPLAY_PROP("disable_color_transformation")
 #endif  // __DISPLAY_PROPERTIES_H__
