@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -21,7 +21,7 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.16/IDisplayConfig.h>
+#include <vendor/display/config/1.17/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
@@ -55,7 +55,7 @@
 namespace sdm {
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_16::IDisplayConfig;
+using vendor::display::config::V1_17::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -440,6 +440,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<bool> isRotatorSupportedFormat(int hal_format, bool ubwc) override;
   Return<int32_t> registerQsyncCallback(const sp<IDisplayQsyncCallback> &callback) override;
   Return<int32_t> allowIdleFallback() override;
+  Return<void> getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
+                              getFSCRGBOrder_cb _hidl_cb) override;
+
 #endif
 
   // QClient methods

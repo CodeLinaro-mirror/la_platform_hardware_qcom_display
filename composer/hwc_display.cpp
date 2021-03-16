@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -531,6 +531,7 @@ int HWCDisplay::Init() {
   display_intf_->GetConfig(&fixed_info);
   is_cmd_mode_ = fixed_info.is_cmdmode;
   partial_update_enabled_ = fixed_info.partial_update || (!fixed_info.is_cmdmode);
+  fsc_rgb_order_ = (sdm::HWCDisplay::FscRgbOrder)fixed_info.fsc_rgb_order;
   client_target_->SetPartialUpdate(partial_update_enabled_);
 
   int disable_fast_path = 0;

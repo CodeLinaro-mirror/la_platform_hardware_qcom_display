@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -735,6 +735,12 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
         format = kFormatYCbCr420P010Ubwc;
         break;
+      case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
+        format = kFormatRGB888UbwcFsc;
+        break;
+      case HAL_PIXEL_FORMAT_RGB101010_UBWC_FSC:
+        format = kFormatRGB101010UbwcFsc;
+        break;
       default:
         DLOGW("Unsupported format type for UBWC %s", qdutils::GetHALPixelFormatString(source));
         return kFormatInvalid;
@@ -836,6 +842,12 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       break;
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
       format = kFormatYCbCr420P010Venus;
+      break;
+    case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
+      format = kFormatRGB888UbwcFsc;
+      break;
+    case HAL_PIXEL_FORMAT_RGB101010_UBWC_FSC:
+      format = kFormatRGB101010UbwcFsc;
       break;
     case HAL_PIXEL_FORMAT_RGBA_FP16:
       format = kFormatInvalid;

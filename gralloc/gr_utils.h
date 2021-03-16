@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2016,2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2016, 2018-2021, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -128,6 +128,7 @@ struct PlaneLayoutInfo {
 bool IsYuvFormat(int format);
 bool IsCompressedRGBFormat(int format);
 bool IsUncompressedRGBFormat(int format);
+bool IsFSCFormat (int format);
 uint32_t GetBppForUncompressedRGB(int format);
 bool CpuCanAccess(uint64_t usage);
 bool CpuCanRead(uint64_t usage);
@@ -175,7 +176,7 @@ uint32_t GetDataAlignment(int format, uint64_t usage);
 int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
                                     unsigned int *alignedw, unsigned int *alignedh,
                                     GraphicsMetadata *graphics_metadata);
-bool CanUseAdrenoForSize(int buffer_type, uint64_t usage);
+bool CanUseAdrenoForSize(const BufferInfo &info);
 bool GetAdrenoSizeAPIStatus();
 bool UseUncached(int format, uint64_t usage);
 uint64_t GetHandleFlags(int format, uint64_t usage);

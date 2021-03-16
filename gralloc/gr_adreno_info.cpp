@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -107,8 +107,12 @@ void AdrenoMemInfo::AlignUnCompressedRGB(int width, int height, int format, int 
 
   int bpp = 4;
   switch (format) {
+    case HAL_PIXEL_FORMAT_RGB101010_UBWC_FSC:
+      bpp = 6;
+      break;
     case HAL_PIXEL_FORMAT_RGB_888:
     case HAL_PIXEL_FORMAT_BGR_888:
+    case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
       bpp = 3;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
@@ -291,6 +295,10 @@ ADRENOPIXELFORMAT AdrenoMemInfo::GetGpuPixelFormat(int hal_format) {
       return ADRENO_PIXELFORMAT_ASTC_12X12;
     case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
       return ADRENO_PIXELFORMAT_ASTC_12X12_SRGB;
+    case HAL_PIXEL_FORMAT_RGB888_UBWC_FSC:
+      return ADRENO_PIXELFORMAT_NV12_Y;
+    case HAL_PIXEL_FORMAT_RGB101010_UBWC_FSC:
+      return ADRENO_PIXELFORMAT_P010_Y;
     default:
       ALOGE("%s: No map for format: 0x%x", __FUNCTION__, hal_format);
       break;

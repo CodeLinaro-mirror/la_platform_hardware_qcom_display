@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -506,6 +506,7 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   const string qsync_support = "qsync support=";
   const string wb_ubwc = "wb_ubwc";
   const string dyn_bitclk_support = "dyn bitclk support=";
+  const string fsc_rgb_color_order = "fsc rgb color order=";
 
   while (std::getline(stream, line)) {
     if (line.find(pixel_formats) != string::npos) {
@@ -537,6 +538,20 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
       info->is_wb_ubwc_supported = true;
     } else if (line.find(dyn_bitclk_support) != string::npos) {
       info->dyn_bitclk_support = (string(line, dyn_bitclk_support.length()) == "true");
+    } else if (line.find(fsc_rgb_color_order) != string::npos) {
+      if (string(line, fsc_rgb_color_order.length()) == "fsc_rgb") {
+        info->fsc_rgb_color_order = DRMFscRgbOrder::FSC_RGB;
+      } else if (string(line, fsc_rgb_color_order.length()) == "fsc_rbg") {
+        info->fsc_rgb_color_order = DRMFscRgbOrder::FSC_RBG;
+      } else if (string(line, fsc_rgb_color_order.length()) == "fsc_bgr") {
+        info->fsc_rgb_color_order = DRMFscRgbOrder::FSC_BGR;
+      } else if (string(line, fsc_rgb_color_order.length()) == "fsc_brg") {
+        info->fsc_rgb_color_order = DRMFscRgbOrder::FSC_BRG;
+      } else if (string(line, fsc_rgb_color_order.length()) == "fsc_gbr") {
+        info->fsc_rgb_color_order = DRMFscRgbOrder::FSC_GBR;
+      } else if (string(line, fsc_rgb_color_order.length()) == "fsc_grb") {
+        info->fsc_rgb_color_order = DRMFscRgbOrder::FSC_GRB;
+      }
     }
   }
 

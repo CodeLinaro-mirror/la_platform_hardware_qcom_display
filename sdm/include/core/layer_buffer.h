@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014, 2016-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014, 2016-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -84,6 +84,8 @@ enum LayerBufferFormat {
   kFormatRGBA1010102Ubwc,  //!< UBWC aligned RGBA1010102 format
   kFormatRGBX1010102Ubwc,  //!< UBWC aligned RGBX1010102 format
   kFormatRGB101010,     // 10-bits Red, Green, Blue, interleaved in RGB order. No Alpha.
+  kFormatRGB888UbwcFsc,  //!< 8-bits Red, Green, Blue, No Alpha. UBWC aligned FSC format.
+  kFormatRGB101010UbwcFsc,  //!< 10-bits Red, Green, Blue, No Alpha. UBWC aligned FSC format.
 
   /* All YUV-Planar formats, Any new format will be added towards end of this group to maintain
      backward compatibility.

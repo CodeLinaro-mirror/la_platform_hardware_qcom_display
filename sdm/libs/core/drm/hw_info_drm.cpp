@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -63,6 +63,10 @@
 #ifndef DRM_FORMAT_MOD_QCOM_TIGHT
 #define DRM_FORMAT_MOD_QCOM_TIGHT fourcc_mod_code(QCOM, 0x4)
 #endif
+#ifndef DRM_FORMAT_MOD_QCOM_FSC_TILE
+#define DRM_FORMAT_MOD_QCOM_FSC_TILE fourcc_mod_code(QCOM, 0x10)
+#endif
+
 
 #define __CLASS__ "HWInfoDRM"
 
@@ -725,7 +729,12 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
       fmts.push_back(kFormatRGBA4444);
       break;
     case DRM_FORMAT_BGR888:
-      fmts.push_back(kFormatRGB888);
+      if (drm_format_modifier == DRM_FORMAT_MOD_QCOM_FSC_TILE) {
+        fmts.push_back(kFormatRGB888UbwcFsc);
+      } else {
+        fmts.push_back(kFormatRGB888);
+      }
+      //TODO(user): 10bit RGB FSC formats are not supported.
       break;
     case DRM_FORMAT_RGB888:
       fmts.push_back(kFormatBGR888);

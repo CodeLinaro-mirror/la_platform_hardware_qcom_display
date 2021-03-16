@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -620,6 +620,16 @@ struct DRMModeInfo {
   uint32_t transfer_time_us;
 };
 
+enum DRMFscRgbOrder {
+  FSC_UNKNOWN = 0,
+  FSC_RGB,
+  FSC_RBG,
+  FSC_BGR,
+  FSC_BRG,
+  FSC_GBR,
+  FSC_GRB,
+};
+
 /* Per Connector Info*/
 struct DRMConnectorInfo {
   uint32_t mmWidth;
@@ -647,6 +657,7 @@ struct DRMConnectorInfo {
   bool dyn_bitclk_support;
   std::vector<uint8_t> edid;
   uint32_t supported_colorspaces;
+  DRMFscRgbOrder fsc_rgb_color_order;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>

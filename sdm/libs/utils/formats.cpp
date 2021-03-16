@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2016-2018, 2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -43,6 +43,8 @@ bool IsUBWCFormat(LayerBufferFormat format) {
   case kFormatRGBX1010102Ubwc:
   case kFormatYCbCr420TP10Ubwc:
   case kFormatYCbCr420P010Ubwc:
+  case kFormatRGB888UbwcFsc:
+  case kFormatRGB101010UbwcFsc:
     return true;
   default:
     return false;
@@ -65,6 +67,7 @@ bool Is10BitFormat(LayerBufferFormat format) {
   case kFormatYCbCr420TP10Ubwc:
   case kFormatYCbCr420P010Ubwc:
   case kFormatYCbCr420P010Venus:
+  case kFormatRGB101010UbwcFsc:
     return true;
   default:
     return false;
@@ -119,6 +122,8 @@ const char *GetFormatString(const LayerBufferFormat &format) {
   case kFormatYCbCr420P010Venus:        return "Y_CBCR_420_P010_VENUS";
   case kFormatYCbCr420TP10Tile:         return "Y_CBCR_420_TP10_TILED";
   case kFormatYCbCr420P010Tile:         return "Y_CBCR_420_P010_TILED";
+  case kFormatRGB888UbwcFsc:            return "RGB_888_UBWC_FSC";
+  case kFormatRGB101010UbwcFsc:         return "RGB_101010_UBWC_FSC";
   default:                              return "UNKNOWN";
   }
 }
@@ -139,6 +144,8 @@ BufferLayout GetBufferLayout(LayerBufferFormat format) {
 float GetBufferFormatBpp(LayerBufferFormat format) {
   float bpp = 0.0f;
   switch (format) {
+    case kFormatRGB101010UbwcFsc:
+      return 6.0f;
     case kFormatARGB8888:
     case kFormatRGBA8888:
     case kFormatBGRA8888:
@@ -164,6 +171,7 @@ float GetBufferFormatBpp(LayerBufferFormat format) {
     case kFormatYCbCr420P010Ubwc:
     case kFormatYCbCr420P010Venus:
     case kFormatYCbCr420P010Tile:
+    case kFormatRGB888UbwcFsc:
       return 3.0f;
     case kFormatRGB565:
     case kFormatBGR565:

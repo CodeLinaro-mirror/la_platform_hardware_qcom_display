@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -76,6 +76,9 @@
 #endif
 #ifndef DRM_FORMAT_MOD_QCOM_TIGHT
 #define DRM_FORMAT_MOD_QCOM_TIGHT fourcc_mod_code(QCOM, 0x4)
+#endif
+#ifndef DRM_FORMAT_MOD_QCOM_FSC_TILE
+#define DRM_FORMAT_MOD_QCOM_FSC_TILE fourcc_mod_code(QCOM, 0x10)
 #endif
 
 using std::string;
@@ -258,6 +261,16 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
     case kFormatYCrCb420PlanarStride16:
       *drm_format = DRM_FORMAT_YVU420;
       break;
+    case kFormatRGB888UbwcFsc:
+      *drm_format = DRM_FORMAT_BGR888;
+      // DRM_FORMAT_MOD_QCOM_FSC_TILE implies UBWC
+      *drm_format_modifier = DRM_FORMAT_MOD_QCOM_FSC_TILE;
+      break;
+    case kFormatRGB101010UbwcFsc:
+      *drm_format = DRM_FORMAT_NV12;
+      // DRM_FORMAT_MOD_QCOM_FSC_TILE implies UBWC
+      *drm_format_modifier = DRM_FORMAT_MOD_QCOM_FSC_TILE;
+      break;
     default:
       DLOGW("Unsupported format %s", GetFormatString(format));
   }
@@ -340,6 +353,11 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id
   buf_info.format = buffer.format;
   GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier);
   buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset, &layout.num_planes);
+  if (layout.drm_format == DRM_FORMAT_BGR888 &&
+      layout.drm_format_modifier == DRM_FORMAT_MOD_QCOM_FSC_TILE) {
+    // RGB formats require stride to be 3*bpp.
+    layout.stride[0] = layout.stride[0] * 3;
+  }
   ret = master->CreateFbId(layout, fb_id);
   if (ret < 0) {
     DLOGE("CreateFbId failed. width %d, height %d, format: %s, stride %u, error %d",
@@ -724,6 +742,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.primaries.blue[0] = connector_info_.panel_hdr_prop.display_primaries[6];
   hw_panel_info_.primaries.blue[1] = connector_info_.panel_hdr_prop.display_primaries[7];
   hw_panel_info_.dyn_bitclk_support = connector_info_.dyn_bitclk_support;
+  hw_panel_info_.fsc_rgb_order = (sdm::FscRgbOrder)connector_info_.fsc_rgb_color_order;
 
   // no supprt for 90 rotation only flips or 180 supported
   hw_panel_info_.panel_orientation.rotation = 0;
