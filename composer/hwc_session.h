@@ -588,7 +588,7 @@ class HWCSession : public HWCUEvent,
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = nullptr;
   HWCSocketHandler socket_handler_;
-  bool hdmi_is_primary_ = false;
+  bool null_display_active_ = false;
   bool is_composer_up_ = false;
   std::mutex mutex_lum_;
   static bool pending_power_mode_[HWCCallbacks::kNumDisplays];

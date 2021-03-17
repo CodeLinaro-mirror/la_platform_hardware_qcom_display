@@ -28,9 +28,9 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -85,6 +85,11 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   display_null_.SetFrameBufferConfig(config);
   num_configs_ = 1;
   display_intf_ = &display_null_;
+  client_target_ = new HWCLayer(id_, buffer_allocator_);
+  current_refresh_rate_ = max_refresh_rate_ = 60;
+  hwc_config_map_.resize(num_configs_);
+  variable_config_map_[0] = config;
+  hwc_config_map_.at(0) = 0;
 }
 
 HWC3::Error HWCDisplayDummy::GetActiveConfig(Config *out_config) {
