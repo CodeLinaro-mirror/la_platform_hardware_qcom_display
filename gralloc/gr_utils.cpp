@@ -1036,7 +1036,8 @@ void GetColorSpaceFromMetadata(private_handle_t *hnd, int *color_space) {
     /* Check for matrix coefficient */
     switch (color_metadata.matrixCoefficients) {
       case MatrixCoEff_BT709_5:
-        *color_space = HAL_CSC_ITU_R_709;
+        *color_space = ((color_metadata.range) ?
+                        HAL_CSC_ITU_R_709_FR : HAL_CSC_ITU_R_709);
         break;
       case MatrixCoEff_BT601_6_525:
       case MatrixCoEff_BT601_6_625:
