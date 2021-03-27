@@ -66,6 +66,8 @@ DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
   extension_intf_ = extension_intf;
   sync_handler_ = buffer_sync_handler;
 
+  DebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac_);
+
   return error;
 }
 
@@ -158,6 +160,11 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
   // resources for the added display is configured properly.
   if (!display_comp_ctx->is_primary_panel) {
     max_sde_ext_layers_ = UINT32(Debug::GetExtMaxlayers());
+  }
+
+  if (enable_wb_cac_) {
+    // To allow full MDP on WB, if cac prop is enabled allow all layers.
+    max_sde_ext_layers_ = max_layers_;
   }
 
   DLOGV_IF(kTagCompManager, "Registered displays [%s], display %d-%d",

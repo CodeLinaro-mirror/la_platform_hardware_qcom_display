@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -67,7 +68,6 @@ class HWPeripheralDRM : public HWDeviceDRM {
   virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
   virtual DisplayError TeardownConcurrentWriteback(void);
-  virtual DisplayError SetFrameTrigger(FrameTriggerMode mode);
   virtual DisplayError SetPanelBrightness(int level);
   virtual DisplayError GetPanelBrightness(int *level);
   virtual void GetHWPanelMaxBrightness();

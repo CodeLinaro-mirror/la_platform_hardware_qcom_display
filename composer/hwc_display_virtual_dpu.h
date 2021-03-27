@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -47,7 +48,7 @@ class HWCDisplayVirtualDPU : public HWCDisplayVirtual {
 
  private:
   int SetConfig(uint32_t width, uint32_t height);
-
+  int32_t enable_wb_cac_ = 0;
   float min_lum_ = 0.0f;
   float max_lum_ = 0.0f;
 };

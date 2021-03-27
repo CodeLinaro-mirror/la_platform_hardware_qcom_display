@@ -109,6 +109,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
     kHotPlugEvent,
   };
 
+  hwc2_display_t wb_display_;
+
   HWCSession();
   int Init();
   int Deinit();
@@ -172,6 +174,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   // HWC2 Functions that require a concrete implementation in hwc session
   // and hence need to be member functions
   static HWCSession *GetInstance();
+  HWCDisplay *GetDisplay(hwc2_display_t display);
   void GetCapabilities(uint32_t *outCount, int32_t *outCapabilities);
   void Dump(uint32_t *out_size, char *out_buffer);
 

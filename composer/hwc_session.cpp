@@ -3360,6 +3360,10 @@ android::status_t HWCSession::SetIdlePC(const android::Parcel *input_parcel) {
   return static_cast<android::status_t>(IdlePowerCollapse(enable, synchronous));
 }
 
+HWCDisplay *HWCSession::GetDisplay(hwc2_display_t display) {
+  return hwc_display_[display];
+}
+
 hwc2_display_t HWCSession::GetActiveBuiltinDisplay() {
   hwc2_display_t active_display = HWCCallbacks::kNumDisplays;
   // Get first active display among primary and built-in displays.
@@ -3402,6 +3406,10 @@ int32_t HWCSession::SetDisplayBrightnessScale(const android::Parcel *input_parce
 
 int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
   auto display = input_parcel->readInt32();
+  if (display != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
   bool enable = (input_parcel->readInt32() == 1);
   float red_offset = static_cast<float>(input_parcel->readDouble());
   float green_offset = static_cast<float>(input_parcel->readDouble());
@@ -3409,8 +3417,9 @@ int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
 
   DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
   int32_t err = -1;
-  if (hwc_display_[display]) {
-    err = hwc_display_[display]->SetCAC(enable, red_offset, green_offset, blue_offset);
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+    err = hwc_display_[HWC_DISPLAY_PRIMARY]->SetCAC(enable, red_offset, green_offset, blue_offset);
   }
 
   return INT32(err);

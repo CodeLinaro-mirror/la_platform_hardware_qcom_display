@@ -780,7 +780,8 @@ std::string DisplayBase::Dump() {
   LayerBuffer *out_buffer = hw_layers_.info.stack->output_buffer;
   if (out_buffer) {
     os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
+       << " format: " << GetFormatString(out_buffer->format) << " buffer_id:" << std::hex << "0x" <<
+       out_buffer->buffer_id;
   }
   HWLayersInfo &layer_info = hw_layers_.info;
   for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {

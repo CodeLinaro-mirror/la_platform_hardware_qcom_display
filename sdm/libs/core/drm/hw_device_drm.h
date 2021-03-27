@@ -128,7 +128,7 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError GetDynamicDSIClock(uint64_t *bit_clk_rate);
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data);
-  virtual DisplayError SetFrameTrigger(FrameTriggerMode mode) { return kErrorNotSupported; }
+  virtual DisplayError SetFrameTrigger(FrameTriggerMode mode);
   virtual DisplayError SetBLScale(uint32_t level) { return kErrorNotSupported; }
   virtual DisplayError GetPanelBrightnessBasePath(std::string *base_path) {
     return kErrorNotSupported;

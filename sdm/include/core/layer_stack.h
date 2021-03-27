@@ -462,6 +462,10 @@ struct LayerStack {
   PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
 
   uint64_t elapse_timestamp = 0;       //!< system time until which display commit needs to be held
+
+  LayerRect frame_split = {};          //!< Specifies if frame to be split left/right (portrait) or
+                                       //!< top/bottom (landscape).
+                                       //!< Mainly used for CAC split, T/B or L/R split frame.
 };
 
 }  // namespace sdm
