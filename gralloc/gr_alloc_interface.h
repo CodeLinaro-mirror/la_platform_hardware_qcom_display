@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -67,6 +67,7 @@
 #define __GR_ALLOC_INTERFACE_H__
 
 #include <string>
+#include <vector>
 
 #include "QtiGrallocMetadata.h"
 
@@ -85,6 +86,7 @@ struct AllocData {
   bool uncached = false;
   unsigned int flags = 0x0;
   std::string heap_name = "";
+  std::vector<std::string> vm_names;
   unsigned int alloc_type = 0x0;
 };
 
@@ -156,24 +158,25 @@ class AllocInterface {
 
   /*! @brief Method to allocate secure buffer
 
-    @param[in] fd - fd of the secure buffer
+    @param[out]  data - \link AllocData \endlink
 
     @return Returns 0 on success otherwise errno
   */
-  virtual int SecureMemPerms(int fd);
+  virtual int SecureMemPerms(AllocData *data);
 
   /*! @brief Method to get heap info
 
     @param[in] usage - Buffer usage mask
-    @param[out] ion_heap_name - Corresponding name of ion heap
-    @param[out] alloc_type
-    @param[out] ion_flags - Ion flags to specify desired heap allocation configuration
-    @param[out] sec_flag - flag to set whether secure allocation is needed
     @param[in]  sensor_flag - flag to set system heap for sensor use
+    @param[out] heap_name - Corresponding name of heap
+    @param[out] vm_names = Corresponding vector of names of vm to hyp assign in secure use case
+    @param[out] alloc_type
+    @param[out] flags - flags to specify desired heap allocation configuration
 
   */
-  virtual void GetHeapInfo(uint64_t usage, std::string *ion_heap_name, unsigned int *alloc_type,
-                           unsigned int *ion_flags, bool *sec_flag, bool *sensor_flag);
+  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *heap_name,
+                           std::vector<std::string> *vm_names, unsigned int *alloc_type,
+                           unsigned int *flags);
 
  protected:
   virtual ~AllocInterface() {}
