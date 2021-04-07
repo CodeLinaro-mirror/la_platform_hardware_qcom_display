@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -269,7 +269,7 @@ int HWCDisplay::Init() {
     return -EINVAL;
   }
 
-  validated_.reset();
+  validated_.reset(id_);
 
   int property_swap_interval = 1;
   HWCDebugHandler::Get()->GetProperty("debug.egl.swapinterval", &property_swap_interval);
@@ -316,7 +316,7 @@ HWC2::Error HWCDisplay::CreateLayer(hwc2_layer_t *out_layer_id) {
   layer_map_.emplace(std::make_pair(layer->GetId(), layer));
   *out_layer_id = layer->GetId();
   geometry_changes_ |= GeometryChanges::kAdded;
-  validated_.reset();
+  validated_.reset(id_);
   return HWC2::Error::None;
 }
 
@@ -348,7 +348,7 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
   }
 
   geometry_changes_ |= GeometryChanges::kRemoved;
-  validated_.reset();
+  validated_.reset(id_);
   return HWC2::Error::None;
 }
 
@@ -594,7 +594,7 @@ HWC2::Error HWCDisplay::SetPowerMode(HWC2::PowerMode mode) {
 
   DisplayError error = display_intf_->SetDisplayState(state);
 
-  validated_.reset();
+  validated_.reset(id_);
 
   if (error == kErrorNone) {
     flush_on_error_ = flush_on_error;
@@ -757,7 +757,7 @@ HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
     return HWC2::Error::BadConfig;
   }
   // We have only one config right now - do nothing
-  validated_.reset();
+  validated_.reset(id_);
   return HWC2::Error::None;
 }
 
@@ -771,7 +771,7 @@ void HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type
   dump_input_layers_ = ((bit_mask_layer_type & (1 << INPUT_LAYER_DUMP)) != 0);
 
   DLOGI("num_frame_dump %d, input_layer_dump_enable %d", dump_frame_count_, dump_input_layers_);
-  validated_.reset();
+  validated_.reset(id_);
 }
 
 HWC2::PowerMode HWCDisplay::GetLastPowerMode() {
@@ -817,7 +817,7 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
   switch (event) {
     case kIdleTimeout:
     case kThermalEvent:
-      validated_.reset();
+      validated_.reset(id_);
       break;
     default:
       DLOGW("Unknown event: %d", event);
@@ -1053,7 +1053,7 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
   // Do no call flush on errors, if a successful buffer is never submitted.
   if (flush_ && flush_on_error_) {
     display_intf_->Flush();
-    validated_.reset();
+    validated_.reset(id_);
   }
 
   // TODO(user): No way to set the client target release fence on SF
@@ -1123,7 +1123,7 @@ DisplayError HWCDisplay::SetMaxMixerStages(uint32_t max_mixer_stages) {
 
   if (display_intf_) {
     error = display_intf_->SetMaxMixerStages(max_mixer_stages);
-    validated_.reset();
+    validated_.reset(id_);
   }
 
   return error;
@@ -1491,7 +1491,7 @@ int HWCDisplay::SetDisplayStatus(DisplayStatus display_status) {
 
   if (display_status == kDisplayStatusResume || display_status == kDisplayStatusPause) {
     callbacks_->Refresh(HWC_DISPLAY_PRIMARY);
-    validated_.reset();
+    validated_.reset(id_);
   }
 
   return status;
@@ -1538,7 +1538,7 @@ int HWCDisplay::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
     return -1;
   }
 
-  validated_.reset();
+  validated_.reset(id_);
   return 0;
 }
 
@@ -1567,7 +1567,7 @@ int HWCDisplay::SetPanelBrightness(int level) {
   int ret = 0;
   if (display_intf_) {
     ret = display_intf_->SetPanelBrightness(level);
-    validated_.reset();
+    validated_.reset(id_);
   } else {
     ret = -EINVAL;
   }
@@ -1582,7 +1582,7 @@ int HWCDisplay::GetPanelBrightness(int *level) {
 int HWCDisplay::ToggleScreenUpdates(bool enable) {
   display_paused_ = enable ? false : true;
   callbacks_->Refresh(HWC_DISPLAY_PRIMARY);
-  validated_.reset();
+  validated_.reset(id_);
   return 0;
 }
 
@@ -1681,7 +1681,7 @@ void HWCDisplay::SetSecureDisplay(bool secure_display_active) {
 
 int HWCDisplay::SetActiveDisplayConfig(uint32_t config) {
   int status = (display_intf_->SetActiveConfig(config) == kErrorNone) ? 0 : -1;
-  validated_.reset();
+  validated_.reset(id_);
   return status;
 }
 
