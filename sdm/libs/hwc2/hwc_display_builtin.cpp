@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -310,7 +310,7 @@ bool HWCDisplayBuiltIn::CanSkipCommit() {
   // 4. This display is not source of vsync.
   bool buffers_latched = false;
   for (auto &hwc_layer : layer_set_) {
-    buffers_latched |= hwc_layer->BufferLatched();
+    buffers_latched |= (bool)hwc_layer->BufferLatched();
     hwc_layer->ResetBufferFlip();
   }
 
