@@ -1192,7 +1192,7 @@ int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
   if (!is_ubwc_enabled) {
     adreno_usage &= ~(GRALLOC_USAGE_PRIVATE_ALLOC_UBWC);
   } else {
-    adreno_usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+    adreno_usage |= (uint64_t)GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
   }
 
   // Call adreno api for populating metadata blob
