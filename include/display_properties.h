@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018 - 2020 The Linux Foundation. All rights reserved.
+* Copyright (c) 2018 - 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -131,5 +131,6 @@
 #define ENABLE_FORCE_SPLIT                   DISPLAY_PROP("enable_force_split")
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
 #define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
+#define FLUSH_ON_LAYERSET_EMPTY              DISPLAY_PROP("flush_on_layer_set_empty")
 
 #endif  // __DISPLAY_PROPERTIES_H__

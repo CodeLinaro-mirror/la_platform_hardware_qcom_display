@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -263,8 +263,9 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   }
 
   if (layer_set_.empty()) {
-    // Avoid flush for Command mode panel.
-    flush_ = !client_connected_;
+    // Avoid flush for Command mode panel. Also Flush if the property
+    // flush_on_layerset_empty_ is set.
+    flush_ = (flush_on_layerset_empty_ && GetGeometryChanges()) || !client_connected_;
     validated_ = true;
     return status;
   }
