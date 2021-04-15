@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, 2021 The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -534,6 +534,8 @@ int HWCDisplay::Init() {
   if (needs_blit_ && blit_enabled) {
     // TODO(user): Add blit engine when needed
   }
+
+  HWCDebugHandler::Get()->GetProperty(FLUSH_ON_LAYERSET_EMPTY, &flush_on_layerset_empty_);
 
   error = display_intf_->GetNumVariableInfoConfigs(&num_configs_);
   if (error != kErrorNone) {

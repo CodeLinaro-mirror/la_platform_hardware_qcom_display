@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, 2021 The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -419,6 +419,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool client_connected_ = true;
   DisplayValidateState validate_state_ = kNormalValidate;
   DisplayCommitState commit_state_ = kNormalCommit;
+  int flush_on_layerset_empty_ = 0;
 
  private:
   void DumpInputBuffers(void);
