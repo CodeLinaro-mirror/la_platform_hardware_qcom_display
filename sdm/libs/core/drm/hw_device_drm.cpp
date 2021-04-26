@@ -1388,7 +1388,7 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
     }
   }
 
-  if (bit_clk_rate_) {
+  if (bit_clk_rate_ && !pending_doze_) {
     for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
       if ((current_mode.vdisplay == connector_info_.modes[mode_index].mode.vdisplay) &&
           (current_mode.hdisplay == connector_info_.modes[mode_index].mode.hdisplay) &&
@@ -1618,7 +1618,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
     vrefresh_ = 0;
   }
 
-  if (bit_clk_rate_) {
+  if (bit_clk_rate_ && !pending_doze_) {
     // Update current mode index if bit clk rate is changed.
     drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
     for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
