@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019, 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -36,19 +36,20 @@
 // TODO(user): recheck on this header inclusion
 #include <hardware/hwcomposer2.h>
 #include <log/log.h>
-#include <vendor/qti/hardware/display/composer/3.0/IQtiComposer.h>
-
+#include <vendor/qti/hardware/display/composer/3.1/IQtiComposer.h>
 #include <unordered_set>
+#include "DisplayConfigAIDL.h"
 
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V3_0 {
+namespace V3_1 {
 namespace implementation {
 
-using ::vendor::qti::hardware::display::composer::V3_0::IQtiComposer;
+using ::vendor::qti::hardware::display::composer::V3_1::IQtiComposer;
+using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 
 class QtiComposer : public IQtiComposer {
  public:
@@ -65,18 +66,22 @@ class QtiComposer : public IQtiComposer {
   // Methods from ::android::hardware::graphics::composer::V2_4::IComposer follow.
   Return<void> createClient_2_4(createClient_2_4_cb _hidl_cb) override;
 
+  // Methods from ::android::hardware::graphics::composer::V3_1::IComposer follow.
+  Return<void> createClient_3_1(createClient_3_1_cb _hidl_cb) override;
+
   // Methods from ::android::hidl::base::V1_0::IBase follow.
 
   static QtiComposer *initialize();
 
  private:
     HWCSession *hwc_session_ = nullptr;
+    DisplayConfigAIDL* display_config_aidl_ = nullptr;
 };
 
 extern "C" IQtiComposer* HIDL_FETCH_IQtiComposer(const char* name);
 
 }  // namespace implementation
-}  // namespace V3_0
+}  // namespace V3_1
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware

@@ -64,12 +64,14 @@ class DisplayNull : public DisplayInterface {
   virtual bool CheckResourceState() { return false; }
   virtual string Dump() { return ""; }
   virtual bool IsSupportSsppTonemap() { return false; }
-  virtual bool CanSkipValidate() { return true; }
   virtual bool GameEnhanceSupported() { return false; }
   virtual bool HasDemura() { return false; }
   virtual void CheckMMRMState() { }
+  virtual bool IsValidated() { return true; }
+  virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) { return kErrorNotSupported; }
 
   MAKE_NO_OP(CommitOrPrepare(LayerStack *))
+  MAKE_NO_OP(PrePrepare(LayerStack *))
   MAKE_NO_OP(Commit(LayerStack *))
   MAKE_NO_OP(GetDisplayState(DisplayState *))
   MAKE_NO_OP(SetDisplayState(DisplayState, bool, shared_ptr<Fence> *))
@@ -129,7 +131,10 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(SetStcColorMode(const snapdragoncolor::ColorMode &))
   MAKE_NO_OP(ClearLUTs())
   MAKE_NO_OP(IsSupportedOnDisplay(SupportedDisplayFeature feature, uint32_t *supported))
+  MAKE_NO_OP(GetCwbBufferResolution(CwbTapPoint, uint32_t *, uint32_t *))
   MAKE_NO_OP(NotifyDisplayCalibrationMode(bool))
+  MAKE_NO_OP(GetOutputBufferAcquireFence(shared_ptr<Fence> *))
+  MAKE_NO_OP(DestroyLayer())
 
  protected:
   DisplayConfigVariableInfo default_variable_config_ = {};

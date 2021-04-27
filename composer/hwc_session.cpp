@@ -150,7 +150,7 @@ HWCSession::HWCSession() : cwb_(this) {}
 HWCSession *HWCSession::GetInstance() {
   // executed only once for the very first call.
   // GetInstance called multiple times from Composer and ComposerClient
-  static HWCSession *hwc_session = new HWCSession();
+  static HWCSession *hwc_session = ::new HWCSession();
   return hwc_session;
 }
 
@@ -816,40 +816,42 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, shared_ptr<Fence> *ou
       status = HWC2::Error::None;
     } else {
       hwc_display_[target_display]->ProcessActiveConfigChange();
-      status = PresentDisplayInternal(target_display);
+      status = hwc_display_[target_display]->Present(out_retire_fence);
       if (status == HWC2::Error::None) {
-        // Check if hwc's refresh trigger is getting exercised.
-        if (callbacks_.NeedsRefresh(display)) {
-          hwc_display_[target_display]->SetPendingRefresh();
-          callbacks_.ResetRefresh(display);
-        }
-        status = hwc_display_[target_display]->Present(out_retire_fence);
-        if (status == HWC2::Error::None) {
-          PerformQsyncCallback(target_display);
-          PerformIdleStatusCallback(target_display);
-          Locker::ScopeLock tui_lock(tui_locker_[target_display]);
-          if (tui_transition_pending_[target_display]) {
-            tui_transition_pending_[target_display] = false;
-            tui_transition_error_[target_display] = 0;
-            tui_locker_[target_display].Broadcast();
-          }
-        }
+        PostCommitLocked(target_display);
       }
     }
   }
 
   if (status != HWC2::Error::None && status != HWC2::Error::NotValidated) {
-    Locker::ScopeLock tui_lock(tui_locker_[target_display]);
-    if (tui_transition_pending_[target_display]) {
-      tui_transition_pending_[target_display] = false;
-      tui_transition_error_[target_display] = -ENODEV;
-      tui_locker_[target_display].Broadcast();
-    }
-    SEQUENCE_CANCEL_SCOPE_LOCK(locker_[target_display]);
+    CancelTUILock(target_display);
   }
 
-  HandlePendingPowerMode(display, *out_retire_fence);
-  HandlePendingHotplug(display, *out_retire_fence);
+  PostCommitUnlocked(target_display, *out_retire_fence, status);
+
+  return INT32(status);
+}
+
+void HWCSession::PostCommitLocked(hwc2_display_t display) {
+  // Check if hwc's refresh trigger is getting exercised.
+  if (callbacks_.NeedsRefresh(display)) {
+    hwc_display_[display]->SetPendingRefresh();
+    callbacks_.ResetRefresh(display);
+  }
+  PerformQsyncCallback(display);
+  PerformIdleStatusCallback(display);
+  Locker::ScopeLock tui_lock(tui_locker_[display]);
+  if (tui_transition_pending_[display]) {
+    tui_transition_pending_[display] = false;
+    tui_transition_error_[display] = 0;
+    tui_locker_[display].Broadcast();
+  }
+}
+
+void HWCSession::PostCommitUnlocked(hwc2_display_t display, const shared_ptr<Fence> &retire_fence,
+                                    HWC2::Error status) {
+  HandlePendingPowerMode(display, retire_fence);
+  HandlePendingHotplug(display, retire_fence);
   HandlePendingRefresh();
   if (status != HWC2::Error::NotValidated) {
     cwb_.PresentDisplayDone(display);
@@ -860,8 +862,6 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, shared_ptr<Fence> *ou
     resource_ready_ = true;
     hotplug_cv_.notify_one();
   }
-
-  return INT32(status);
 }
 
 void HWCSession::HandlePendingRefresh() {
@@ -957,8 +957,6 @@ void HWCSession::RegisterCallback(int32_t descriptor, hwc2_callback_data_t callb
     hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(0,0);
     is_idle_time_up_ = false;
   }
-
-  need_invalidate_ = false;
 }
 
 int32_t HWCSession::SetActiveConfig(hwc2_display_t display, hwc2_config_t config) {
@@ -969,6 +967,13 @@ int32_t HWCSession::SetClientTarget(hwc2_display_t display, buffer_handle_t targ
                                     const shared_ptr<Fence> acquire_fence, int32_t dataspace,
                                     hwc_region_t damage) {
   return CallDisplayFunction(display, &HWCDisplay::SetClientTarget, target, acquire_fence,
+                             dataspace, damage);
+}
+
+int32_t HWCSession::SetClientTarget_3_1(hwc2_display_t display, buffer_handle_t target,
+                                        const shared_ptr<Fence> acquire_fence, int32_t dataspace,
+                                        hwc_region_t damage) {
+  return CallDisplayFunction(display, &HWCDisplay::SetClientTarget_3_1, target, acquire_fence,
                              dataspace, damage);
 }
 
@@ -1088,6 +1093,11 @@ int32_t HWCSession::SetLayerType(hwc2_display_t display, hwc2_layer_t layer,
   return CallDisplayFunction(display, &HWCDisplay::SetLayerType, layer, type);
 }
 
+int32_t HWCSession::SetLayerFlag(hwc2_display_t display, hwc2_layer_t layer,
+                                 IQtiComposerClient::LayerFlag flag) {
+   return CallLayerFunction(display, layer, &HWCLayer::SetLayerFlag, flag);
+}
+
 int32_t HWCSession::SetLayerColorTransform(hwc2_display_t display, hwc2_layer_t layer,
                                            const float *matrix) {
   return CallLayerFunction(display, layer, &HWCLayer::SetLayerColorTransform, matrix);
@@ -1158,26 +1168,10 @@ int32_t HWCSession::SetPowerMode(hwc2_display_t display, int32_t int_mode) {
 
   bool override_mode = async_powermode_ && display_ready_.test(UINT32(display));
   if (!override_mode) {
-    hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
-    bool needs_validation = false;
-    {
-      SEQUENCE_WAIT_SCOPE_LOCK(locker_[display]);
-      if (hwc_display_[display]) {
-        needs_validation = (hwc_display_[display]->GetCurrentPowerMode() == HWC2::PowerMode::Off &&
-                            mode != HWC2::PowerMode::Off && display != active_builtin_disp_id &&
-                            active_builtin_disp_id < HWCCallbacks::kNumDisplays);
-      }
-    }
     auto error = CallDisplayFunction(display, &HWCDisplay::SetPowerMode, mode,
                                      false /* teardown */);
     if (INT32(error) != HWC2_ERROR_NONE) {
       return INT32(error);
-    }
-    // if all the resources are occupied by the active builtin display, it needs revalidation
-    // to relinquish it resources to other display
-    if (needs_validation) {
-      SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
-      hwc_display_[active_builtin_disp_id]->ResetValidation();
     }
   } else {
     Locker::ScopeLock lock_disp(locker_[display]);
@@ -1242,55 +1236,14 @@ int32_t HWCSession::GetDozeSupport(hwc2_display_t display, int32_t *out_support)
   return HWC2_ERROR_NONE;
 }
 
-int32_t HWCSession::ValidateDisplay(hwc2_display_t display, uint32_t *out_num_types,
-                                    uint32_t *out_num_requests) {
-  //  out_num_types and out_num_requests will be non-NULL
-
-  if (display >= HWCCallbacks::kNumDisplays) {
-    return HWC2_ERROR_BAD_DISPLAY;
+void HWCSession::CancelTUILock(hwc2_display_t display) {
+  Locker::ScopeLock tui_lock(tui_locker_[display]);
+  if (tui_transition_pending_[display]) {
+    tui_transition_pending_[display] = false;
+    tui_transition_error_[display] = -ENODEV;
+    tui_locker_[display].Broadcast();
   }
-
-  hwc2_display_t target_display = display;
-
-  {
-    SCOPE_LOCK(power_state_[display]);
-    if (power_state_transition_[display]) {
-      // Route all interactions with client to dummy display.
-      target_display = map_hwc_display_.find(display)->second;
-    }
-  }
-  DTRACE_SCOPED();
-  // TODO(user): Handle secure session, handle QDCM solid fill
-  auto status = HWC2::Error::BadDisplay;
-  HandleSecureSession();
-  {
-    SEQUENCE_ENTRY_SCOPE_LOCK(locker_[target_display]);
-    if (pending_power_mode_[display]) {
-      status = HWC2::Error::None;
-    } else if (hwc_display_[target_display]) {
-      hwc_display_[target_display]->ProcessActiveConfigChange();
-      hwc_display_[target_display]->SetFastPathComposition(false);
-      status = ValidateDisplayInternal(target_display, out_num_types, out_num_requests);
-    }
-  }
-
-  // Sequence locking currently begins on Validate, so cancel the sequence lock on failures
-  if (status != HWC2::Error::None && status != HWC2::Error::HasChanges) {
-    Locker::ScopeLock tui_lock(tui_locker_[target_display]);
-    if (tui_transition_pending_[target_display]) {
-      tui_transition_pending_[target_display] = false;
-      tui_transition_error_[target_display] = -ENODEV;
-      tui_locker_[target_display].Broadcast();
-    }
-    SEQUENCE_CANCEL_SCOPE_LOCK(locker_[target_display]);
-  }
-
-  if (display != target_display) {
-    // Validate done on a dummy display. Assume present is complete.
-    SEQUENCE_EXIT_SCOPE_LOCK(locker_[target_display]);
-  }
-
-  return INT32(status);
+  SEQUENCE_CANCEL_SCOPE_LOCK(locker_[display]);
 }
 
 HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height, int32_t *format,
@@ -1352,12 +1305,6 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
       map_info.sdm_id = display_id;
       break;
     }
-  }
-
-  // Active builtin display needs revalidation
-  if (!async_vds_creation_ && active_builtin_disp_id < HWCCallbacks::kNumRealDisplays) {
-    SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
-    hwc_display_[active_builtin_disp_id]->ResetValidation();
   }
 
   return HWC2::Error::None;
@@ -1921,8 +1868,6 @@ android::status_t HWCSession::SetFrameDumpConfig(const android::Parcel *input_pa
   uint32_t frame_dump_count = UINT32(input_parcel->readInt32());
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t bit_mask_layer_type = UINT32(input_parcel->readInt32());
-  int32_t output_format = HAL_PIXEL_FORMAT_RGB_888;
-  bool post_processed = true;
 
   // Output buffer dump is not supported, if External or Virtual display is present.
   bool output_buffer_dump = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
@@ -1936,14 +1881,35 @@ android::status_t HWCSession::SetFrameDumpConfig(const android::Parcel *input_pa
     }
   }
 
-  // Read optional user preferences: output_format and post_processed.
+  // Read optional user preferences: output_format, tap_point, pu_in_cwb_roi, cwb_roi.
+  int32_t output_format = HAL_PIXEL_FORMAT_RGB_888;
+  CwbConfig cwb_config = {};
+
   if (input_parcel->dataPosition() != input_parcel->dataSize()) {
     // HAL Pixel Format for output buffer
     output_format = input_parcel->readInt32();
   }
   if (input_parcel->dataPosition() != input_parcel->dataSize()) {
-    // Option to dump Layer Mixer output (0) or DSPP output (1)
-    post_processed = (input_parcel->readInt32() != 0);
+    // Option to dump Layer Mixer output (0) or DSPP output (1) or Demura  output (2)
+    cwb_config.tap_point = static_cast<CwbTapPoint>(input_parcel->readInt32());
+  }
+  if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+    // Option to include PU ROI in CWB ROI
+    cwb_config.pu_as_cwb_roi = static_cast<bool>(input_parcel->readInt32());
+  }
+
+  LayerRect &cwb_roi = cwb_config.cwb_roi;
+  if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+    cwb_roi.left = static_cast<float>(input_parcel->readInt32());
+  }
+  if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+    cwb_roi.top = static_cast<float>(input_parcel->readInt32());
+  }
+  if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+    cwb_roi.right = static_cast<float>(input_parcel->readInt32());
+  }
+  if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+    cwb_roi.bottom = static_cast<float>(input_parcel->readInt32());
   }
 
   android::status_t status = 0;
@@ -1965,7 +1931,7 @@ android::status_t HWCSession::SetFrameDumpConfig(const android::Parcel *input_pa
     }
 
     HWC2::Error error = hwc_display->SetFrameDumpConfig(frame_dump_count, bit_mask_layer_type,
-                                                        output_format, post_processed);
+                                                        output_format, cwb_config);
     if (error != HWC2::Error::None) {
       status = (HWC2::Error::NoResources == error) ? -ENOMEM : -EINVAL;
     }
@@ -2382,9 +2348,6 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
   HWCColorManager::MarshallStructIntoParcel(resp_payload, output_parcel);
   req_payload.DestroyPayload();
   resp_payload.DestroyPayload();
-
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_[display_id]);
-  hwc_display_[display_id]->ResetValidation();
 
   return ret;
 }
@@ -3081,46 +3044,6 @@ void HWCSession::DestroyNonPluggableDisplay(DisplayMapInfo *map_info) {
     map_info->Reset();
 }
 
-HWC2::Error HWCSession::ValidateDisplayInternal(hwc2_display_t display, uint32_t *out_num_types,
-                                                uint32_t *out_num_requests) {
-  HWCDisplay *hwc_display = hwc_display_[display];
-
-  DTRACE_SCOPED();
-  if (hwc_display->IsInternalValidateState()) {
-    // Internal Validation has already been done on display, get the Output params.
-    return hwc_display->PresentAndOrGetValidateDisplayOutput(out_num_types, out_num_requests);
-  }
-
-  if (display == HWC_DISPLAY_PRIMARY) {
-    // TODO(user): This can be moved to HWCDisplayPrimary
-    if (need_invalidate_) {
-      callbacks_.Refresh(display);
-      need_invalidate_ = false;
-    }
-  }
-
-  return hwc_display->Validate(out_num_types, out_num_requests);
-}
-
-HWC2::Error HWCSession::PresentDisplayInternal(hwc2_display_t display) {
-  HWCDisplay *hwc_display = hwc_display_[display];
-
-  DTRACE_SCOPED();
-  // If display is in Skip-Validate state and Validate cannot be skipped, do Internal
-  // Validation to optimize for the frames which don't require the Client composition.
-  if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
-    uint32_t out_num_types = 0, out_num_requests = 0;
-    hwc_display->SetFastPathComposition(true);
-    HWC2::Error error = ValidateDisplayInternal(display, &out_num_types, &out_num_requests);
-    if ((error != HWC2::Error::None) || hwc_display->HWCClientNeedsValidate()) {
-      hwc_display->SetValidationState(HWCDisplay::kInternalValidate);
-      hwc_display->SetFastPathComposition(false);
-      return HWC2::Error::NotValidated;
-    }
-  }
-  return HWC2::Error::None;
-}
-
 void HWCSession::DisplayPowerReset() {
   // Acquire lock on all displays.
   for (hwc2_display_t display = HWC_DISPLAY_PRIMARY;
@@ -3385,8 +3308,10 @@ int32_t HWCSession::SetReadbackBuffer(hwc2_display_t display, const native_handl
     return HWC2_ERROR_UNSUPPORTED;
   }
 
+  CwbConfig cwb_config = {}; /* SF uses LM tappoint*/
+
   return CallDisplayFunction(display, &HWCDisplay::SetReadbackBuffer, buffer, acquire_fence,
-                             false, kCWBClientComposer);
+                             cwb_config, kCWBClientComposer);
 }
 
 int32_t HWCSession::GetReadbackBufferFence(hwc2_display_t display,
@@ -3621,13 +3546,6 @@ void HWCSession::WaitForResources(bool wait_for_resources, hwc2_display_t active
       if (power_state_transition_[target_display]) {
         // Route all interactions with client to dummy display.
         target_display = map_hwc_display_.find(target_display)->second;
-      }
-    }
-    {
-      SEQUENCE_WAIT_SCOPE_LOCK(locker_[target_display]);
-      auto &hwc_display = hwc_display_[target_display];
-      if (hwc_display && hwc_display->GetCurrentPowerMode() != HWC2::PowerMode::Off) {
-        hwc_display->ResetValidation();
       }
     }
   }
@@ -3927,6 +3845,48 @@ HWC2::Error HWCSession::TeardownConcurrentWriteback(hwc2_display_t display) {
     return HWC2::Error::NoResources;
   }
   return HWC2::Error::None;
+}
+
+HWC2::Error HWCSession::CommitOrPrepare(hwc2_display_t display, bool validate_only,
+                                        shared_ptr<Fence> *out_retire_fence,
+                                        uint32_t *out_num_types, uint32_t *out_num_requests,
+                                        bool *needs_commit) {
+  if (display >= HWCCallbacks::kNumDisplays) {
+    return HWC2::Error::BadDisplay;
+  }
+
+  {
+    // ToDo: add support for async power mode.
+    Locker::ScopeLock lock_d(locker_[display]);
+    if (!hwc_display_[display]) {
+      return HWC2::Error::BadDisplay;
+    }
+    if (pending_power_mode_[display]) {
+      return HWC2::Error::None;
+    }
+  }
+
+  HandleSecureSession();
+  auto status = HWC2::Error::None;
+  {
+    Locker::ScopeLock lock_d(locker_[display]);
+    hwc_display_[display]->ProcessActiveConfigChange();
+    status = hwc_display_[display]->CommitOrPrepare(validate_only, out_retire_fence, out_num_types,
+                                                    out_num_requests, needs_commit);
+    PostCommitLocked(display);
+  }
+  PostCommitUnlocked(display, *out_retire_fence, status);
+  return status;
+}
+
+HWC2::Error HWCSession::TryDrawMethod(hwc2_display_t display,
+                                      IQtiComposerClient::DrawMethod drawMethod) {
+  Locker::ScopeLock lock_d(locker_[display]);
+  if (!hwc_display_[display]) {
+    return HWC2::Error::BadDisplay;
+  }
+
+  return hwc_display_[display]->TryDrawMethod(drawMethod);
 }
 
 }  // namespace sdm

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -78,7 +78,6 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
                     HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
   virtual int Init();
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
   virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
   virtual HWC2::Error CommitLayerStack();
   virtual HWC2::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
@@ -96,15 +95,15 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
                                   bool *power_on_pending, bool is_active_secure_display);
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms, uint32_t inactive_ms);
   virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
-                                         int32_t format, bool post_processed);
-  virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, bool post_processed);
+                                         int32_t format, const CwbConfig &cwb_config);
+  virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, const CwbConfig &cwb_config);
   virtual int GetFrameCaptureStatus() { return frame_capture_status_; }
   virtual DisplayError SetDetailEnhancerConfig(const DisplayDetailEnhancerData &de_data);
   virtual DisplayError SetHWDetailedEnhancerConfig(void *params);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending);
   virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer,
-                                        shared_ptr<Fence> acquire_fence,
-                                        bool post_processed_output, CWBClient client);
+                                        shared_ptr<Fence> acquire_fence, CwbConfig cwb_config,
+                                        CWBClient client);
   virtual HWC2::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence);
   virtual HWC2::Error SetQSyncMode(QSyncMode qsync_mode);
   virtual DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous);
@@ -119,9 +118,6 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual HWC2::Error GetPanelBrightness(float *brightness);
   virtual HWC2::Error GetPanelMaxBrightness(uint32_t *max_brightness_level);
   virtual DisplayError TeardownConcurrentWriteback(bool *needs_refresh);
-  virtual void SetFastPathComposition(bool enable) {
-    fast_path_composition_ = enable && !readback_buffer_queued_;
-  }
   virtual HWC2::Error SetFrameTriggerMode(uint32_t mode);
   virtual HWC2::Error SetBLScale(uint32_t level);
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
@@ -148,11 +144,14 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual bool IsDisplayIdle();
   virtual bool HasReadBackBufferSupport();
   virtual HWC2::Error NotifyDisplayCalibrationMode(bool in_calibration);
-  virtual HWC2::Error PresentAndOrGetValidateDisplayOutput(uint32_t *out_num_types,
-                                                           uint32_t *out_num_requests);
+  virtual HWC2::Error CommitOrPrepare(bool validate_only, shared_ptr<Fence> *out_retire_fence,
+                                      uint32_t *out_num_types, uint32_t *out_num_requests,
+                                      bool *needs_commit);
+  virtual HWC2::Error PreValidateDisplay(bool *exit_validate);
+  virtual HWC2::Error PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence);
 
  private:
-  HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
+  HWCDisplayBuiltIn(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                     qService::QService *qservice, hwc2_display_t id, int32_t sdm_id);
   void SetMetaDataRefreshRateFlag(bool enable);
@@ -177,24 +176,25 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   void CacheAvrStatus();
   void PostCommitStitchLayers();
   void SetCpuPerfHintLargeCompCycle();
-  void SetPartialUpdate(DisplayConfigFixedInfo fixed_info);
   void ValidateUiScaling();
   void ConfigureCwbAtLm(uint32_t *x_pixels, uint32_t *y_pixels);
   void EnablePartialUpdate();
   uint32_t GetUpdatingAppLayersCount();
+  int ValidateFrameCaptureConfig(const BufferInfo &output_buffer_info,
+                                 const CwbTapPoint &cwb_tappoint);
 
   // SyncTask methods.
   void OnTask(const LayerStitchTaskCode &task_code,
               SyncTask<LayerStitchTaskCode>::TaskContext *task_context);
 
   const int kPerfHintLargeCompCycle = 0x00001097;
-  BufferAllocator *buffer_allocator_ = nullptr;
+  HWCBufferAllocator *buffer_allocator_ = nullptr;
   CPUHint *cpu_hint_ = nullptr;
   CWBClient cwb_client_ = kCWBClientNone;
 
   // Builtin readback buffer configuration
   LayerBuffer output_buffer_ = {};
-  bool post_processed_output_ = false;
+  CwbConfig cwb_config_ = {};
   bool readback_buffer_queued_ = false;
   bool readback_configured_ = false;
 
@@ -227,7 +227,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool vndservice_sampling_vote = false;
   int perf_hint_window_ = 0;
   int perf_hint_large_comp_cycle_ = 0;
-  bool force_reset_validate_ = false;
+  bool force_reset_lut_ = false;
   bool disable_dyn_fps_ = false;
   bool enable_round_corner_ = false;
   bool enhance_idle_time_ = false;

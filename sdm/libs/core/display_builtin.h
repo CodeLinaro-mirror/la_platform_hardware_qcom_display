@@ -111,9 +111,9 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError Init() override;
   DisplayError Deinit() override;
   DisplayError Prepare(LayerStack *layer_stack) override;
-  DisplayError Commit(LayerStack *layer_stack) override;
   DisplayError ControlPartialUpdate(bool enable, uint32_t *pending) override;
   DisplayError DisablePartialUpdateOneFrame() override;
+  DisplayError DisablePartialUpdateOneFrameInternal() override;
   DisplayError SetDisplayState(DisplayState state, bool teardown,
                                shared_ptr<Fence> *release_fence) override;
   void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) override;
@@ -143,6 +143,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   bool HasDemura() override { return demura_intended_; }
   std::string Dump() override;
   DisplayError GetConfig(DisplayConfigFixedInfo *fixed_info) override;
+  DisplayError PrePrepare(LayerStack *layer_stack) override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;
@@ -158,6 +159,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError ClearLUTs() override;
   void Histogram(int histogram_fd, uint32_t blob_id) override;
   void HandleBacklightEvent(float brightness_level) override;
+  void HandlePowerEvent() override;
 
   // Implement the DppsPropIntf
   DisplayError DppsProcessOps(enum DppsOps op, void *payload, size_t size) override;
@@ -165,6 +167,10 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError SetActiveConfig(uint32_t index) override;
   DisplayError ReconfigureDisplay() override;
   DisplayError CreatePanelfeatures();
+  DisplayError CommitLocked(LayerStack *layer_stack) override;
+  DisplayError SetUpCommit(LayerStack *layer_stack) override;
+  DisplayError PostCommit(HWLayersInfo *hw_layers_info) override;
+  DisplayError GetQsyncFps(uint32_t *qsync_fps) override;
 
  private:
   bool CanCompareFrameROI(LayerStack *layer_stack);
@@ -179,13 +185,18 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError SetupDemuraLayer();
   DisplayError BuildLayerStackStats(LayerStack *layer_stack) override;
   void UpdateDisplayModeParams();
-  void HandleQsyncPostCommit(LayerStack *layer_stack);
+  void HandleQsyncPostCommit();
   void UpdateQsyncMode();
   void SetVsyncStatus(bool enable);
   void SendBacklight();
   void SendDisplayConfigs();
   bool CanLowerFps(bool idle_screen);
   int SetDemuraIntfStatus(bool enable);
+  DisplayError HandleSPR();
+  void CacheFrameROI();
+  void PreCommit(LayerStack *layer_stack);
+  DisplayError ControlPartialUpdateLocked(bool enable, uint32_t *pending);
+  DisplayError SetDppsFeatureLocked(void *payload, size_t size);
 
   const uint32_t kPuTimeOutMs = 1000;
   std::vector<HWEvent> event_list_;
@@ -206,7 +217,6 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   LayerRect right_frame_roi_ = {};
   Locker dpps_pu_lock_;
   bool dpps_pu_nofiy_pending_ = false;
-  shared_ptr<Fence> previous_retire_fence_ = nullptr;
   enum class SamplingState { Off, On } samplingState = SamplingState::Off;
   DisplayError setColorSamplingState(SamplingState state);
 
@@ -230,6 +240,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   std::unique_ptr<DemuraIntf> demura_ = nullptr;
   Layer demura_layer_ = {};
   bool demura_intended_ = false;
+  bool pending_color_space_ = false;
+  HWDisplayMode last_panel_mode_ = kModeDefault;
 };
 
 }  // namespace sdm

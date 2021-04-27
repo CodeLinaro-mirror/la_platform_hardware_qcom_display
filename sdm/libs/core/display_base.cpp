@@ -76,13 +76,13 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
   lock_guard<recursive_mutex> client_lock(disp_mutex_.client_mutex);
 
   // Start commit worker thread and wait for thread response.
-  DLOGI("Starting commit thread");
+  DLOGI("Starting commit thread for display: %d", display_type);
 
   std::thread commit_thread(&DisplayBase::CommitThread, this);
   disp_mutex_.client_cv.wait(disp_mutex_.client_mutex);
   commit_thread_.swap(commit_thread);
 
-  DLOGI("Commit thread started");
+  DLOGI("Commit thread started for display: %d", display_type);
 }
 
 DisplayBase::DisplayBase(int32_t display_id, DisplayType display_type,
@@ -200,6 +200,9 @@ DisplayError DisplayBase::Init() {
 
   SetupPanelFeatureFactory();
 
+  // Assume unified draw is supported.
+  unified_draw_supported_ = true;
+
   return kErrorNone;
 
 CleanupOnError:
@@ -226,6 +229,7 @@ DisplayError DisplayBase::Deinit() {
     rc_core_->Deinit();
     rc_panel_feature_init_ = false;
   }
+  CloseFd(&cached_framebuffer_.planes[0].fd);
   return kErrorNone;
 }
 
@@ -303,6 +307,87 @@ DisplayError DisplayBase::SetupRC() {
 
   rc_panel_feature_init_ = true;
   return kErrorNone;
+}
+
+DisplayError DisplayBase::GetCwbBufferResolution(CwbTapPoint cwb_tappoint, uint32_t *x_pixels,
+                                                 uint32_t *y_pixels) {
+  DisplayError error = kErrorNotSupported;
+  DisplayConfigVariableInfo display_config;
+
+  if (cwb_tappoint == CwbTapPoint::kDsppTapPoint || cwb_tappoint == CwbTapPoint::kDemuraTapPoint) {
+    // To dump post-processed (DSPP) output for CWB, use Panel resolution.
+    uint32_t active_index = 0;
+    error = GetActiveConfig(&active_index);
+    if (error == kErrorNone) {
+      error = GetRealConfig(active_index, &display_config);
+      if (error == kErrorNone) {
+        *x_pixels = display_config.x_pixels;
+        *y_pixels = display_config.y_pixels;
+      }
+    }
+  } else if (cwb_tappoint == CwbTapPoint::kLmTapPoint) {
+    // To dump Layer Mixer output for CWB, use FrameBuffer or Mixer resolution.
+    uint32_t dest_scalar_enabled = 0;
+    IsSupportedOnDisplay(kDestinationScalar, &dest_scalar_enabled);
+
+    if (dest_scalar_enabled) {
+      error = GetMixerResolution(x_pixels, y_pixels);
+    } else {
+      error = GetFrameBufferConfig(&display_config);
+      if (error == kErrorNone) {
+        *x_pixels = display_config.x_pixels;
+        *y_pixels = display_config.y_pixels;
+      }
+    }
+  }
+  return error;
+}
+
+DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
+  DisplayError error = kErrorNone;
+  if (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer) {  // CWB requested
+    if (!cwb_config_) {  // Instantiate cwb_config_ if cwb was not enabled in previous draw cycle.
+      cwb_config_ = new CwbConfig;
+    }
+    *cwb_config_ = {};  // Reset cwb_config_ so as to set it to new cwb config passed by the client
+
+    if (layer_stack->cwb_config == NULL) {
+      // If Cwb client doesn't set Cwb config in LayerStack.cwb_config, then we consider full frame
+      // ROI and recognize tppt. from post-processed flag (demura tappoint is not suopported then).
+
+      // set tappoint based on post-processed flag.
+      cwb_config_->tap_point = (layer_stack->flags.post_processed_output)
+                                   ? CwbTapPoint::kDsppTapPoint
+                                   : CwbTapPoint::kLmTapPoint;
+
+      uint32_t buffer_width = 0, buffer_height = 0;
+      error = GetCwbBufferResolution(cwb_config_->tap_point, &buffer_width, &buffer_height);
+      if (error != kErrorNone) {
+        DLOGE("GetCwbBufferResolution failed for tap_point = %d .", cwb_config_->tap_point);
+        return error;
+      }
+
+      // Setting full frame ROI
+      cwb_config_->cwb_full_rect = LayerRect(0.0f, 0.0f, FLOAT(buffer_width), FLOAT(buffer_height));
+      DLOGW("Layerstack.cwb_config isn't set by CWB client. Thus, falling back to Full frame ROI.");
+      cwb_config_->cwb_roi = cwb_config_->cwb_full_rect;
+    } else {  // Cwb client has set the cwb config in LayerStack.cwb_config .
+      *cwb_config_ = *(layer_stack->cwb_config);
+    }
+
+    disp_layer_stack_.info.hw_cwb_config = cwb_config_;
+    error = ValidateCwbConfigInfo(disp_layer_stack_.info.hw_cwb_config,
+                                  layer_stack->output_buffer->format);
+    if (error != kErrorNone) {
+      DLOGE("CWB_config validation failed.");
+      return error;
+    }
+  } else if (cwb_config_) {  // CWB isn't requested in the current draw cycle.
+    // Check and release cwb_config_ if it was instantiated in the previous draw cycle.
+    delete cwb_config_;
+    cwb_config_ = NULL;
+  }
+  return error;
 }
 
 DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
@@ -394,20 +479,36 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
   return kErrorNone;
 }
 
+DisplayError DisplayBase::PrePrepare(LayerStack *layer_stack) {
+  DTRACE_SCOPED();
+  ClientLock lock(disp_mutex_);
+  disp_layer_stack_.stack = layer_stack;
+  layer_stack->needs_validate = !validated_ || needs_validate_;
+  if (!layer_stack->needs_validate) {
+    // Check for validation in case of new display connected, other displays exiting off state etc.
+    bool needs_validate = false;
+    comp_manager_->NeedsValidate(display_comp_ctx_, &needs_validate);
+    layer_stack->needs_validate = needs_validate;
+  }
+
+  return comp_manager_->PrePrepare(display_comp_ctx_, &disp_layer_stack_);
+}
+
 DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
   needs_validate_ = true;
+
+  if (!layer_stack) {
+    return kErrorParameters;
+  }
+
   disp_layer_stack_.info.output_buffer = layer_stack->output_buffer;
 
   DTRACE_SCOPED();
   // Allow prepare as pending doze/pending_power_on is handled as a part of draw cycle
   if (!active_ && (pending_power_state_ == kPowerStateNone)) {
     return kErrorPermission;
-  }
-
-  if (!layer_stack) {
-    return kErrorParameters;
   }
 
   DLOGI_IF(kTagDisplay, "Entering Prepare for display: %d-%d", display_id_, display_type_);
@@ -429,11 +530,20 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   }
 
   if (color_mgr_) {
-    color_mgr_->PrePrepare(&disp_layer_stack_);
+    color_mgr_->PrePrepare();
+    // apply pending DE config
+    PPPendingParams pending_action;
+    PPDisplayAPIPayload req_payload;
+    pending_action.action = kGetDetailedEnhancerData;
+    pending_action.params = NULL;
+    error = color_mgr_->ColorSVCRequestRoute(req_payload, NULL, &pending_action);
+    if (!error && pending_action.action == kConfigureDetailedEnhancer) {
+      error = SetHWDetailedEnhancerConfig(pending_action.params);
+    }
   }
 
   if (color_mgr_ && color_mgr_->NeedsPartialUpdateDisable()) {
-    DisablePartialUpdateOneFrame();
+    DisablePartialUpdateOneFrameInternal();
   }
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
@@ -447,8 +557,6 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   comp_manager_->GenerateROI(display_comp_ctx_, &disp_layer_stack_);
   rc_pu_flag_status_ = disp_layer_stack_.info.rc_pu_flag_status;
 
-  comp_manager_->PrePrepare(display_comp_ctx_, &disp_layer_stack_);
-
   CheckMMRMState();
 
   while (true) {
@@ -457,16 +565,14 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
       break;
     }
 
-    if (layer_stack->flags.fast_path && disp_layer_stack_.info.fast_path_composition) {
-      // In Fast Path, driver validation happens in COMMIT Phase.
-      DLOGI_IF(kTagDisplay, "Draw cycle qualifies for Fast Path!");
-      needs_validate_ = false;
-      break;
+    // Trigger validate only if needed.
+    if (disp_layer_stack_.info.do_hw_validate) {
+      error = hw_intf_->Validate(&disp_layer_stack_.info);
     }
 
-    error = hw_intf_->Validate(&disp_layer_stack_.info);
     if (error == kErrorNone) {
       // Strategy is successful now, wait for Commit().
+      validated_ = true;
       needs_validate_ = false;
       break;
     }
@@ -481,7 +587,10 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   comp_manager_->PostPrepare(display_comp_ctx_, &disp_layer_stack_);
 
+  CacheDisplayComposition();
+
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
+
   return error;
 }
 
@@ -554,28 +663,48 @@ void DisplayBase::SetRCData(LayerStack *layer_stack) {
 DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
+  // Perform prepare
+  error = Prepare(layer_stack);
+  if (error != kErrorNone) {
+    DLOGE("Prepare failed: %d", error);
+    return error;
+  }
 
-  // Perform task here and set error status.
-  error = kErrorNone;
+  // Trigger commit based on draw outcome.
+  bool async_commit = disp_layer_stack_.info.trigger_async_commit;
+  DLOGV_IF(kTagDisplay, "Trigger async commit: %d", async_commit);
+  if (async_commit) {
+    // Copy layer stack attributes needed for commit.
+    error = SetUpCommit(layer_stack);
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  if (error == kErrorNone) {
+    // Async thread should not access layer stack.
+    // Reset layer stack pointer.
+    disp_layer_stack_.stack = nullptr;
+
     // Notify worker to do hw commit.
     lock.NotifyWorker();
   }
 
-  return error;
+  return async_commit ? kErrorNone : kErrorNeedsCommit;
 }
 
 void DisplayBase::HandleAsyncCommit() {
   // Do not acquire mutexes here.
   // Perform hw commit here.
+  PerformHwCommit(&disp_layer_stack_.info);
 }
 
 void DisplayBase::CommitThread() {
-  DLOGI("Commit thread entered.");
-
   // Acquire worker mutex and wait for events.
   lock_guard<recursive_mutex> worker_lock(disp_mutex_.worker_mutex);
+
+  DLOGI("Commit thread entered. %d-%d", display_id_, display_type_);
+
+  // Commit thread need to run with real time priority ie; similar to composer thread.
+  SetRealTimePriority();
 
   // Notify client thread that the thread has started listening to events.
   {
@@ -605,9 +734,13 @@ void DisplayBase::CommitThread() {
   }
 }
 
-DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
-  ClientLock lock(disp_mutex_);
+DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
+
+  if (!layer_stack) {
+    return kErrorParameters;
+  }
+
   disp_layer_stack_.info.output_buffer = layer_stack->output_buffer;
 
   if (rc_panel_feature_init_) {
@@ -633,7 +766,7 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
      DLOGW("Failed to set the data on driver for display: %d-%d, Error: %d, status: %d",
            display_id_, display_type_, ret, (*mask_status).rc_mask_state);
       if ((*mask_status).rc_mask_state == kStatusRcMaskStackHandled) {
-        needs_validate_ = true;
+        validated_ = false;
         DLOGW("Need to call Corresponding prepare to handle the mask layers %d %d.",
               display_id_, display_type_);
         for (auto &layer : layer_stack->layers) {
@@ -641,6 +774,7 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
             layer->request.flags.rc = false;
           }
         }
+        validated_ = false;
         return kErrorNotValidated;
       }
     } else {
@@ -648,12 +782,12 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
                (*mask_status).rc_mask_state, rc_pu_flag_status_);
       if ((*mask_status).rc_pu_full_roi) {
         if (rc_pu_flag_status_ && rc_pu_flag_status_ != SDE_HW_PU_USECASE) {
-          needs_validate_ = true;
+          validated_ = false;
           return kErrorNotValidated;
         }
       }
       if ((*mask_status).rc_mask_state == kStatusRcMaskStackDirty) {
-        needs_validate_ = true;
+        validated_ = false;
         DLOGI_IF(kTagDisplay, "Mask is ready for display %d-%d, call Corresponding Prepare()",
                  display_id_, display_type_);
         return kErrorNotValidated;
@@ -661,19 +795,24 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
     }
   }
 
-  // Allow commit as pending doze/pending_power_on is handled as a part of draw cycle
-  if (!active_ && (pending_power_state_ == kPowerStateNone)) {
-    needs_validate_ = true;
-    return kErrorPermission;
+  disp_layer_stack_.info.retire_fence_offset = (draw_method_ != kDrawDefault) &&
+                                               (display_type_ != kVirtual) ? 1 : 0;
+  // Regiser for power events on first cycle in unified draw.
+  if (first_cycle_ && (draw_method_ != kDrawDefault) && (display_type_ != kVirtual)) {
+    DLOGI("Registering for power events");
+    hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
   }
 
-  if (!layer_stack) {
-    return kErrorParameters;
+  // Allow commit as pending doze/pending_power_on is handled as a part of draw cycle
+  if (!active_ && (pending_power_state_ == kPowerStateNone)) {
+    validated_ = false;
+    return kErrorPermission;
   }
 
   if (needs_validate_) {
     DLOGE("Commit: Corresponding Prepare() is not called for display %d-%d", display_id_,
           display_type_);
+    validated_ = false;
     return kErrorNotValidated;
   }
 
@@ -693,29 +832,102 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
     DLOGW("ColorManager::Commit(...) isn't working");
   }
 
-  error = hw_intf_->Commit(&disp_layer_stack_.info);
+  return error;
+}
+
+DisplayError DisplayBase::PerformCommit(HWLayersInfo *hw_layers_info) {
+  DisplayError error = hw_intf_->Commit(hw_layers_info);
   if (error != kErrorNone) {
-    if (layer_stack->flags.fast_path && disp_layer_stack_.info.fast_path_composition) {
-      // If COMMIT fails on the Fast Path, set Safe Mode.
-      DLOGE("COMMIT failed in Fast Path, set Safe Mode!");
-      comp_manager_->SetSafeMode(true);
-      error = kErrorNotValidated;
-    }
+    DLOGE("COMMIT failed: %d ", error);
+  }
+
+  return error;
+}
+
+DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
+  ClientLock lock(disp_mutex_);
+
+  if (draw_method_ == kDrawDefault) {
+    return CommitLocked(layer_stack);
+  }
+
+  // Copy layer stack attributes needed for commit.
+  DisplayError error = SetUpCommit(layer_stack);
+  if (error != kErrorNone) {
     return error;
   }
 
+  // Async thread should not aceess layer stack.
+  // Reset layer stack pointer.
+  disp_layer_stack_.stack = nullptr;
+
+  // Trigger async commit.
+  lock.NotifyWorker();
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBase::CommitLocked(LayerStack *layer_stack) {
+  DisplayError error = SetUpCommit(layer_stack);
+  if (error != kErrorNone) {
+    DLOGW("SetUpCommit failed %d", error);
+    return error;
+  }
+
+  error = PerformHwCommit(&disp_layer_stack_.info);
+  if (error != kErrorNone) {
+    DLOGE("HwCommit failed %d", error);
+  }
+
+  return error;
+}
+
+DisplayError DisplayBase::PerformHwCommit(HWLayersInfo *hw_layers_info) {
+  DisplayError error = PerformCommit(hw_layers_info);
+  if (error != kErrorNone) {
+    DLOGE("Commit IOCTL failed %d", error);
+    CleanupOnError();
+    DLOGI("Triggering flush to release fences");
+    DisplayError flush_err = FlushLocked(nullptr);
+    if (flush_err != kErrorNone) {
+      DLOGE("flush_err: %d", flush_err);
+      return flush_err;
+    }
+  }
+
+  error = PostCommit(hw_layers_info);
+  if (error != kErrorNone) {
+    DLOGE("Post Commit failed %d", error);
+    return error;
+  }
+
+  DLOGI_IF(kTagDisplay, "Exiting commit for display: %d-%d", display_id_, display_type_);
+
+  return kErrorNone;
+}
+
+void DisplayBase::CleanupOnError() {
+  // Buffer Fd's are duped for async thread operation.
+  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
+    CloseFd(&hw_layer.input_buffer.planes[0].fd);
+  }
+}
+
+DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
+  // Store retire fence to track commit start.
+  CacheRetireFence();
   if (secure_event_ == kSecureDisplayEnd || secure_event_ == kTUITransitionEnd ||
       secure_event_ == kTUITransitionUnPrepare) {
     secure_event_ = kSecureEventMax;
   }
 
-  PostCommitLayerParams(layer_stack);
+  PostCommitLayerParams();
 
   if (partial_update_control_) {
     comp_manager_->ControlPartialUpdate(display_comp_ctx_, true /* enable */);
   }
 
-  error = comp_manager_->PostCommit(display_comp_ctx_, &disp_layer_stack_);
+  DisplayError error = comp_manager_->PostCommit(display_comp_ctx_, &disp_layer_stack_);
   if (error != kErrorNone) {
     return error;
   }
@@ -723,29 +935,75 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
   // Stop dropping vsync when first commit is received after idle fallback.
   drop_hw_vsync_ = false;
 
-  // Reset pending power state if any after the commit
-  error = ResetPendingPowerState(layer_stack->retire_fence);
+  // Reset pending power state if any after the commit.
+  error = ResetPendingPowerState(retire_fence_);
   if (error != kErrorNone) {
     return error;
   }
 
   // Handle pending vsync enable if any after the commit
-  error = HandlePendingVSyncEnable(layer_stack->retire_fence);
+  error = HandlePendingVSyncEnable(retire_fence_);
   if (error != kErrorNone) {
     return error;
   }
 
   comp_manager_->SetSafeMode(false);
 
-  DLOGI_IF(kTagDisplay, "Exiting commit for display: %d-%d", display_id_, display_type_);
+  CacheFrameBuffer();
+
+  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
+    CloseFd(&hw_layer.input_buffer.planes[0].fd);
+  }
+
+  first_cycle_ = false;
 
   return error;
 }
 
+void DisplayBase::CacheFrameBuffer() {
+  if (draw_method_ != kDrawUnifiedWithGPUTarget) {
+    return;
+  }
+
+  if (!gpu_comp_frame_) {
+    return;
+  }
+
+  // Close current fd.
+  CloseFd(&cached_framebuffer_.planes[0].fd);
+  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
+    if (hw_layer.composition == kCompositionGPUTarget) {
+      cached_framebuffer_ = hw_layer.input_buffer;
+      break;
+    }
+  }
+
+  // Replace buffer fd with duped fd.
+  int new_fd = Sys::dup_(cached_framebuffer_.planes[0].fd);
+  cached_framebuffer_.planes[0].fd = new_fd;
+}
+
+void DisplayBase::CacheDisplayComposition() {
+  // Bail out if GPU composed layers aren't present.
+  gpu_comp_frame_ = false;
+  for (auto &layer : disp_layer_stack_.stack->layers) {
+    if (layer->composition == kCompositionGPU) {
+      gpu_comp_frame_ = true;
+      break;
+    }
+  }
+}
+
 DisplayError DisplayBase::Flush(LayerStack *layer_stack) {
   ClientLock lock(disp_mutex_);
+
+  return FlushLocked(layer_stack);
+}
+
+DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
 
+  validated_ = false;
   if (!active_) {
     return kErrorPermission;
   }
@@ -754,11 +1012,14 @@ DisplayError DisplayBase::Flush(LayerStack *layer_stack) {
   error = hw_intf_->Flush(&disp_layer_stack_.info);
   if (error == kErrorNone) {
     comp_manager_->Purge(display_comp_ctx_);
+    validated_ = false;
     needs_validate_ = true;
   } else {
     DLOGW("Unable to flush display %d-%d", display_id_, display_type_);
   }
-  layer_stack->retire_fence = disp_layer_stack_.info.retire_fence;
+  if (layer_stack) {
+    layer_stack->retire_fence = disp_layer_stack_.info.retire_fence;
+  }
 
   return error;
 }
@@ -822,6 +1083,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
   fixed_info->partial_update = hw_panel_info_.partial_update;
   fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+  fixed_info->supports_unified_draw = unified_draw_supported_;
 
   return kErrorNone;
 }
@@ -856,7 +1118,7 @@ DisplayError DisplayBase::GetVSyncState(bool *enabled) {
 DisplayError DisplayBase::SetDrawMethod(DisplayDrawMethod draw_method) {
   ClientLock lock(disp_mutex_);
   if (draw_method_set_ || !first_cycle_) {
-    DLOGE("Draw method set = %d or commits already started: %d", draw_method_, !first_cycle_);
+    DLOGW("Draw method set = %d or commits already started: %d", draw_method_, !first_cycle_);
     return kErrorNotSupported;
   }
 
@@ -882,6 +1144,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     return kErrorNone;
   }
 
+  validated_ = false;
   // If vsync is enabled, disable vsync before power off/Doze suspend
   if (vsync_enable_ && (state == kStateOff || state == kStateDozeSuspend)) {
     error = SetVSyncState(false /* enable */);
@@ -890,10 +1153,14 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     }
   }
 
+  // Mark start of power state transition.
+  transition_done_ = false;
+  SyncPoints sync_points = {};
+
   switch (state) {
   case kStateOff:
     disp_layer_stack_.info.hw_layers.clear();
-    error = hw_intf_->PowerOff(teardown);
+    error = hw_intf_->PowerOff(teardown, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateOff;
@@ -909,7 +1176,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateOn:
-    error = hw_intf_->PowerOn(cached_qos_data_, release_fence);
+    error = hw_intf_->PowerOn(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateOn;
@@ -933,7 +1200,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateDoze:
-    error = hw_intf_->Doze(cached_qos_data_, release_fence);
+    error = hw_intf_->Doze(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDoze;
@@ -948,7 +1215,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateDozeSuspend:
-    error = hw_intf_->DozeSuspend(cached_qos_data_, release_fence);
+    error = hw_intf_->DozeSuspend(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDozeSuspend;
@@ -966,7 +1233,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateStandby:
-    error = hw_intf_->Standby();
+    error = hw_intf_->Standby(&sync_points);
     break;
 
   default:
@@ -974,12 +1241,19 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     return kErrorParameters;
   }
 
+  if ((pending_power_state_ == kPowerStateNone) && !first_cycle_) {
+    CacheRetireFence();
+    SyncPoints sync = {};
+    sync.retire_fence = retire_fence_;
+    WaitForCompletion(&sync);
+  }
+
   error = ReconfigureDisplay();
   if (error != kErrorNone) {
     return error;
   }
 
-  DisablePartialUpdateOneFrame();
+  DisablePartialUpdateOneFrameInternal();
 
   if (error == kErrorNone) {
     if (pending_power_state_ == kPowerStateNone) {
@@ -994,11 +1268,14 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
         HandlePendingVSyncEnable(nullptr /* retire fence */);
       }
     }
-    comp_manager_->SetDisplayState(display_comp_ctx_, state,
-                            release_fence ? *release_fence : nullptr);
+    comp_manager_->SetDisplayState(display_comp_ctx_, state, sync_points);
   }
   DLOGI("active %d-%d state %d-%d pending_power_state_ %d", active, active_, state, state_,
         pending_power_state_);
+
+  if (release_fence) {
+    *release_fence = sync_points.release_fence;
+  }
 
   return error;
 }
@@ -1008,6 +1285,7 @@ DisplayError DisplayBase::SetActiveConfig(uint32_t index) {
   DisplayError error = kErrorNone;
   uint32_t active_index = 0;
 
+  validated_ = false;
   hw_intf_->GetActiveConfig(&active_index);
 
   if (active_index == index) {
@@ -1031,6 +1309,7 @@ DisplayError DisplayBase::SetActiveConfig(uint32_t index) {
 DisplayError DisplayBase::SetMaxMixerStages(uint32_t max_mixer_stages) {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
+  validated_ = false;
 
   error = comp_manager_->SetMaxMixerStages(display_comp_ctx_, max_mixer_stages);
 
@@ -1104,17 +1383,14 @@ std::string DisplayBase::Dump() {
     os << "\n";
   }
 
-  uint32_t num_hw_layers = 0;
-  if (disp_layer_stack_.stack) {
-    num_hw_layers = UINT32(disp_layer_stack_.info.hw_layers.size());
-  }
+  uint32_t num_hw_layers = UINT32(disp_layer_stack_.info.hw_layers.size());
 
   if (num_hw_layers == 0) {
     os << "\nNo hardware layers programmed";
     return os.str();
   }
 
-  LayerBuffer *out_buffer = disp_layer_stack_.stack->output_buffer;
+  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
   if (out_buffer) {
     os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
        << " format: " << GetFormatString(out_buffer->format);
@@ -1149,15 +1425,13 @@ std::string DisplayBase::Dump() {
 
   for (uint32_t i = 0; i < num_hw_layers; i++) {
     uint32_t layer_index = disp_layer_stack_.info.index.at(i);
-    // sdm-layer from client layer stack
-    Layer *sdm_layer = disp_layer_stack_.stack->layers.at(layer_index);
     // hw-layer from hw layers info
     Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
     LayerBuffer *input_buffer = &hw_layer.input_buffer;
     HWLayerConfig &layer_config = disp_layer_stack_.info.config[i];
     HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
 
-    const char *comp_type = GetName(sdm_layer->composition);
+    const char *comp_type = GetName(hw_layer.composition);
     const char *buffer_format = GetFormatString(input_buffer->format);
     const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
     const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
@@ -1383,6 +1657,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
 }
 
 DisplayError DisplayBase::SetColorModeById(int32_t color_mode_id) {
+  validated_ = false;
   for (auto it : color_mode_map_) {
     if (it.second->id == color_mode_id) {
       return SetColorMode(it.first);
@@ -1485,7 +1760,8 @@ DisplayError DisplayBase::SetColorTransform(const uint32_t length, const double 
   if (error) {
     return error;
   }
-  DisablePartialUpdateOneFrame();
+  validated_ = false;
+  DisablePartialUpdateOneFrameInternal();
   return kErrorNone;
 }
 
@@ -1548,6 +1824,85 @@ DisplayError DisplayBase::ApplyDefaultDisplayMode() {
   return kErrorNone;
 }
 
+bool DisplayBase::IsValidCwbRoi(const LayerRect &roi, const LayerRect &full_frame) {
+  bool is_valid = true;
+  if (!IsValid(roi) || roi.left < 0 || roi.top < 0 || roi.right < 0 || roi.bottom < 0) {
+    is_valid = false;
+  } else if (roi.top < full_frame.top || roi.top >= full_frame.bottom ||
+             roi.bottom <= full_frame.top || roi.bottom > full_frame.bottom) {
+    is_valid = false;
+  } else if (roi.left < full_frame.left || roi.left >= full_frame.right ||
+             roi.right <= full_frame.left || roi.right > full_frame.right) {
+    is_valid = false;
+  }
+  return is_valid;
+}
+
+DisplayError DisplayBase::ValidateCwbConfigInfo(CwbConfig *cwb_config,
+                                                const LayerBufferFormat &format) {
+  CwbTapPoint &tap_point = cwb_config->tap_point;
+  if (tap_point < CwbTapPoint::kLmTapPoint || tap_point > CwbTapPoint::kDemuraTapPoint) {
+    DLOGE("Invalid CWB tappoint. %d ", tap_point);
+    return kErrorParameters;
+  } else if (tap_point == CwbTapPoint::kDemuraTapPoint) {
+    // Check whether demura tap-point is supported for CWB.
+    uint32_t demura_tappoint_supported = 0;
+    IsSupportedOnDisplay(kCwbDemuraTapPoint, &demura_tappoint_supported);
+    if (!demura_tappoint_supported) {
+      DLOGW("Demura tap-point is not supported for CWB. Falling back to DSPP tap-point.");
+      tap_point = CwbTapPoint::kDsppTapPoint;
+    }
+  }
+
+  LayerRect &roi = cwb_config->cwb_roi;
+  LayerRect &full_frame = cwb_config->cwb_full_rect;
+  uint32_t cwb_roi_supported = 0;  // Check whether CWB ROI is supported.
+  IsSupportedOnDisplay(kCwbCrop, &cwb_roi_supported);
+  if (!cwb_roi_supported) {
+    roi = full_frame;
+    return kErrorNone;  // below checks are not needed if CWB ROI isn't supported.
+  }
+
+  if (!IsRgbFormat(format)) {  // CWB ROI is supported only on RGB color formats. Thus, in-case of
+    // other color formats, fallback to Full frame ROI.
+    DLOGW("CWB ROI is not suopported on color format : %s , thus falling back to Full frame ROI.",
+          GetFormatString(format));
+    roi = full_frame;
+  }
+
+  bool &pu_as_cwb_roi = cwb_config->pu_as_cwb_roi;
+  bool is_valid_cwb_roi = IsValidCwbRoi(roi, full_frame);
+  if (is_valid_cwb_roi && !pu_as_cwb_roi) {
+    // If client passed valid ROI and PU ROI not to be included in CWB ROI, then
+    // make Client ROI's (width * height) as 256B aligned.
+    int cwb_alignment_factor = GetCwbAlignmentFactor(format);
+    if (!cwb_alignment_factor) {
+      DLOGE("Output buffer has invalid color format.");
+      return kErrorParameters;
+    }
+    ApplyCwbRoiRestrictions(roi, full_frame, cwb_alignment_factor);
+  }
+
+  // For cmd mode : Incase CWB Client sets cwb_config.pu_as_cwb_roi as true, then PU ROI would be
+  // included in CWB ROI. Incase client passes invalid ROI, only PU ROI generated from dirty rects
+  // of app layers would be taken as CWB ROI. Incase client passes valid ROI, then union of PU ROI
+  // and client's ROI would be taken as CWB ROI.
+  // For video mode : PU ROI would be full frame rect. If either pu_as_cwb_roi is true or client
+  // passes invalid ROI, then CWB ROI would also be set as full frame. Incase pu_as_cwb_roi is
+  // False and client passes a valid ROI, then the client's ROI would be set as CWB ROI.
+  if (pu_as_cwb_roi) {
+    DLOGI_IF(kTagDisplay, "PU ROI would be included in CWB ROI.");
+  } else if (!is_valid_cwb_roi) {
+    DLOGI_IF(kTagDisplay, "Client provided invalid ROI. Going for Full frame CWB.");
+    roi = full_frame;
+  }
+
+  DLOGI_IF(kTagDisplay, "Cwb_config: tap_point %d, CWB ROI Rect(%f %f %f %f), PU_as_CWB_ROI %d",
+           tap_point, roi.left, roi.top, roi.right, roi.bottom, pu_as_cwb_roi);
+
+  return kErrorNone;
+}
+
 DisplayError DisplayBase::SetCursorPosition(int x, int y) {
   ClientLock lock(disp_mutex_);
   if (state_ != kStateOn) {
@@ -1586,9 +1941,9 @@ DisplayError DisplayBase::HandlePendingVSyncEnable(const shared_ptr<Fence> &reti
   if (vsync_enable_pending_) {
     // Retire fence signalling confirms that CRTC enabled, hence wait for retire fence before
     // we enable vsync
-    Fence::Wait(retire_fence);
+    Fence::Wait(retire_fence_);
 
-    DisplayError error = SetVSyncState(true /* enable */);
+    DisplayError error = SetVSyncStateLocked(true /* enable */);
     if (error != kErrorNone) {
       return error;
     }
@@ -1600,6 +1955,10 @@ DisplayError DisplayBase::HandlePendingVSyncEnable(const shared_ptr<Fence> &reti
 DisplayError DisplayBase::SetVSyncState(bool enable) {
   ClientLock lock(disp_mutex_);
 
+  return SetVSyncStateLocked(enable);
+}
+
+DisplayError DisplayBase::SetVSyncStateLocked(bool enable) {
   if ((state_ == kStateOff || secure_event_ != kSecureEventMax) && enable) {
     DLOGW("Can't enable vsync when display %d-%d is powered off or SecureDisplay/TUI in progress",
           display_id_, display_type_);
@@ -1680,7 +2039,7 @@ DisplayError DisplayBase::ReconfigureDisplay() {
   }
 
   if (disble_pu) {
-    DisablePartialUpdateOneFrame();
+    DisablePartialUpdateOneFrameInternal();
   }
 
   display_attributes_ = display_attributes;
@@ -1696,6 +2055,7 @@ DisplayError DisplayBase::ReconfigureDisplay() {
 DisplayError DisplayBase::SetMixerResolution(uint32_t width, uint32_t height) {
   ClientLock lock(disp_mutex_);
 
+  validated_ = false;
   DisplayError error = ReconfigureMixer(width, height);
   if (error != kErrorNone) {
     return error;
@@ -1919,6 +2279,7 @@ DisplayError DisplayBase::GetFrameBufferConfig(DisplayConfigVariableInfo *variab
 
 DisplayError DisplayBase::SetDetailEnhancerData(const DisplayDetailEnhancerData &de_data) {
   ClientLock lock(disp_mutex_);
+  validated_ = false;
   DisplayError error = comp_manager_->SetDetailEnhancerData(display_comp_ctx_, de_data);
   if (error != kErrorNone) {
     return error;
@@ -1973,6 +2334,10 @@ DisplayError DisplayBase::GetDisplayType(DisplayType *display_type) {
 bool DisplayBase::IsPrimaryDisplay() {
   ClientLock lock(disp_mutex_);
 
+  return IsPrimaryDisplayLocked();
+}
+
+bool DisplayBase::IsPrimaryDisplayLocked() {
   return hw_panel_info_.is_primary_panel;
 }
 
@@ -1983,6 +2348,11 @@ DisplayError DisplayBase::SetCompositionState(LayerComposition composition_type,
 }
 
 void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
+  if (!layer_stack) {
+    DLOGW("Invalid layer stack found");
+    return;
+  }
+
   // Copy the acquire fence from clients layers  to HWLayers
   uint32_t hw_layers_count = UINT32(disp_layer_stack_.info.hw_layers.size());
 
@@ -1991,12 +2361,13 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
     Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
     Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
 
-    hw_layer.input_buffer.planes[0].fd = sdm_layer->input_buffer.planes[0].fd;
+    hw_layer.input_buffer.planes[0].fd = Sys::dup_(sdm_layer->input_buffer.planes[0].fd);
     hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
     hw_layer.input_buffer.planes[0].stride = sdm_layer->input_buffer.planes[0].stride;
     hw_layer.input_buffer.size = sdm_layer->input_buffer.size;
     hw_layer.input_buffer.acquire_fence = sdm_layer->input_buffer.acquire_fence;
     hw_layer.input_buffer.handle_id = sdm_layer->input_buffer.handle_id;
+    // All app buffer handles are set prior to prepare.
     // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
     // secure display flags are also updated during SetClientTarget() called between validate and
     // commit. Need to revist this and update it accordingly for FBT layer.
@@ -2011,6 +2382,8 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
     }
   }
 
+  UpdateFrameBuffer();
+
   if (layer_stack->elapse_timestamp) {
     disp_layer_stack_.info.elapse_timestamp = layer_stack->elapse_timestamp;
   }
@@ -2018,34 +2391,39 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   return;
 }
 
-void DisplayBase::PostCommitLayerParams(LayerStack *layer_stack) {
-  // Copy the release fence from HWLayers to clients layers
-    uint32_t hw_layers_count = UINT32(disp_layer_stack_.info.hw_layers.size());
+void DisplayBase::UpdateFrameBuffer() {
+  if (draw_method_ != kDrawUnifiedWithGPUTarget) {
+    return;
+  }
 
-  std::vector<uint32_t> fence_dup_flag;
-
-  for (uint32_t i = 0; i < hw_layers_count; i++) {
-    uint32_t sdm_layer_index = disp_layer_stack_.info.index.at(i);
-    Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
-
-    // Copy the release fence only once for a SDM Layer.
-    // In S3D use case, two hw layers can share the same input buffer, So make sure to merge the
-    // output fence fd and assign it to layer's input buffer release fence fd.
-    if (std::find(fence_dup_flag.begin(), fence_dup_flag.end(), sdm_layer_index) ==
-        fence_dup_flag.end()) {
-      sdm_layer->input_buffer.release_fence = hw_layer.input_buffer.release_fence;
-      fence_dup_flag.push_back(sdm_layer_index);
-    } else {
-      sdm_layer->input_buffer.release_fence = Fence::Merge(
-              hw_layer.input_buffer.release_fence, sdm_layer->input_buffer.release_fence);
+  bool client_target_present = false;
+  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
+    if (hw_layer.composition == kCompositionGPUTarget) {
+      client_target_present = true;
+      break;
     }
   }
 
-  cached_qos_data_ = disp_layer_stack_.info.qos_data;
-  layer_stack->retire_fence = disp_layer_stack_.info.retire_fence;
+  bool need_cached_fb = !gpu_comp_frame_ && client_target_present;
+  if (!need_cached_fb) {
+    return;
+  }
 
-  return;
+  uint32_t hw_layers_count = disp_layer_stack_.info.hw_layers.size();
+  for (uint32_t i = 0; i < hw_layers_count; i++) {
+    uint32_t sdm_layer_index = disp_layer_stack_.info.index.at(i);
+    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
+    if (disp_layer_stack_.info.gpu_target_index == sdm_layer_index) {
+      // Update GPU target buffer with cached fd.
+      CloseFd(&hw_layer.input_buffer.planes[0].fd);
+      hw_layer.input_buffer = cached_framebuffer_;
+      hw_layer.input_buffer.planes[0].fd = Sys::dup_(hw_layer.input_buffer.planes[0].fd);
+    }
+  }
+}
+
+void DisplayBase::PostCommitLayerParams() {
+  cached_qos_data_ = disp_layer_stack_.info.qos_data;
 }
 
 DisplayError DisplayBase::InitializeColorModes() {
@@ -2320,6 +2698,10 @@ void DisplayBase::HwRecovery(const HWRecoveryEvent sdm_event_code) {
         DLOGI("display = %d attempting to start display power reset", display_type_);
         if (StartDisplayPowerReset()) {
           DLOGI("display = %d allowed to start display power reset", display_type_);
+          {
+            ClientLock lock(disp_mutex_);
+            validated_ = false;
+          }
           event_handler_->HandleEvent(kDisplayPowerResetEvent);
           EndDisplayPowerReset();
           DLOGI("display = %d has finished display power reset", display_type_);
@@ -2327,6 +2709,10 @@ void DisplayBase::HwRecovery(const HWRecoveryEvent sdm_event_code) {
         }
       }
 #else
+      {
+        ClientLock lock(disp_mutex_);
+        validated_ = false;
+      }
       event_handler_->HandleEvent(kDisplayPowerResetEvent);
 #endif
       break;
@@ -2335,11 +2721,19 @@ void DisplayBase::HwRecovery(const HWRecoveryEvent sdm_event_code) {
       DLOGI("display = %d attempting to start display power reset", display_type_);
       if (StartDisplayPowerReset()) {
         DLOGI("display = %d allowed to start display power reset", display_type_);
+        {
+          ClientLock lock(disp_mutex_);
+          validated_ = false;
+        }
         event_handler_->HandleEvent(kDisplayPowerResetEvent);
         EndDisplayPowerReset();
         DLOGI("display = %d has finished display power reset", display_type_);
       }
 #else
+      {
+        ClientLock lock(disp_mutex_);
+        validated_ = false;
+      }
       event_handler_->HandleEvent(kDisplayPowerResetEvent);
 #endif
       break;
@@ -2440,31 +2834,17 @@ bool DisplayBase::IsHdrMode(const AttrVal &attr) {
   return false;
 }
 
-bool DisplayBase::CanSkipValidate() {
-  bool needs_buffer_swap = false;
-  bool skip_validate = comp_manager_->CanSkipValidate(display_comp_ctx_, &needs_buffer_swap);
-
-  if (needs_buffer_swap) {
-    disp_layer_stack_.info.updates_mask.set(kSwapBuffers);
-    DisplayError error = comp_manager_->SwapBuffers(display_comp_ctx_);
-    if (error != kErrorNone) {
-      // Buffers couldn't be swapped.
-      skip_validate = false;
-    }
-  }
-
-  return skip_validate;
-}
-
 DisplayError DisplayBase::ResetPendingPowerState(const shared_ptr<Fence> &retire_fence) {
   if (pending_power_state_ != kPowerStateNone) {
     // Retire fence signalling confirms that CRTC enabled, hence wait for retire fence before
     // we enable vsync
-    Fence::Wait(retire_fence);
+    SyncPoints sync_points = {};
+    sync_points.retire_fence = retire_fence;
+    WaitForCompletion(&sync_points);
 
     DisplayState pending_state;
     GetPendingDisplayState(&pending_state);
-    if (IsPrimaryDisplay() &&
+    if (IsPrimaryDisplayLocked() &&
      (pending_power_state_ != kPowerStateOff)) {
       primary_active_ = true;
     } else {
@@ -2539,11 +2919,23 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
   switch (feature) {
     case kSupportedModeSwitch: {
       ClientLock lock(disp_mutex_);
-      error = hw_intf_->GetSupportedModeSwitch(supported);
+      error = hw_intf_->GetFeatureSupportStatus(kAllowedModeSwitch, supported);
       break;
     }
     case kDestinationScalar:
       *supported = custom_mixer_resolution_;
+      break;
+    case kCwbDemuraTapPoint: {
+      std::vector<CwbTapPoint> &tappoints = hw_resource_info_.tap_points;
+      *supported = UINT32(std::find(tappoints.begin(), tappoints.end(),
+                                    CwbTapPoint::kDemuraTapPoint) != tappoints.end());
+      break;
+    }
+    case kCwbCrop:
+      error = hw_intf_->GetFeatureSupportStatus(kHasCwbCrop, supported);
+      break;
+    case kDedicatedCwb:
+      error = hw_intf_->GetFeatureSupportStatus(kHasDedicatedCwb, supported);
       break;
     default:
       DLOGW("Feature:%d is not present for display %d:%d", feature, display_id_, display_type_);
@@ -2601,7 +2993,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
       vsync_enable_pending_ = true;
     }
     *needs_refresh = (hw_panel_info_.mode == kModeCommand);
-    DisablePartialUpdateOneFrame();
+    DisablePartialUpdateOneFrameInternal();
     err = hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, true);
     if (err != kErrorNone) {
       return err;
@@ -2637,7 +3029,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
         *needs_refresh = false;
       }
     }
-    DisablePartialUpdateOneFrame();
+    DisablePartialUpdateOneFrameInternal();
     err = hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, false);
     if (err != kErrorNone) {
       return err;
@@ -2658,14 +3050,26 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
   return kErrorNone;
 }
 
+DisplayError DisplayBase::GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence) {
+  ClientLock lock(disp_mutex_);
+  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
+  if (out_buffer == nullptr) {
+    return kErrorNotSupported;
+  }
+
+  *out_fence = out_buffer->release_fence;
+
+  return kErrorNone;
+}
+
 DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
   ClientLock lock(disp_mutex_);
+  validated_ = false;
   return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
 }
 
 void DisplayBase::CheckMMRMState() {
   ClientLock lock(disp_mutex_);
-
   if (!mmrm_updated_) {
     return;
   }
@@ -2718,7 +3122,143 @@ void DisplayBase::MMRMEvent(uint32_t clk) {
   DLOGV("MMRM state has been updated");
 
   // Invalidate to retrigger clk calculation
-  event_handler_->HandleEvent(kInvalidateDisplay);
+  validated_ = false;
+  event_handler_->Refresh();
+}
+
+void DisplayBase::WaitForCompletion(SyncPoints *sync_points) {
+  DTRACE_SCOPED();
+  // Wait on current retire fence.
+  if (draw_method_ == kDrawDefault || display_type_ == kVirtual) {
+    Fence::Wait(sync_points->retire_fence);
+    return;
+  }
+
+  // Wait for CRTC power event on first cycle.
+  if (first_cycle_) {
+    std::unique_lock<std::mutex> lck(power_mutex_);
+    while (!transition_done_) {
+      cv_.wait(lck);
+    }
+
+    // Unregister power events.
+    hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, false);
+    return;
+  }
+
+  // For displays in unified draw, wait on cached retire fence in steady state.
+  shared_ptr<Fence> retire_fence = sync_points->retire_fence;
+  Fence::Wait(retire_fence, kPowerStateTimeout);
+}
+
+void DisplayBase::ProcessPowerEvent() {
+  DTRACE_SCOPED();
+  std::unique_lock<std::mutex> lck(power_mutex_);
+  transition_done_ = true;
+  cv_.notify_one();
+}
+
+void DisplayBase::CacheRetireFence() {
+  if (draw_method_ == kDrawDefault) {
+    retire_fence_ = disp_layer_stack_.info.retire_fence;
+  } else {
+    // For displays in unified draw, wait on cached retire fence in steady state.
+    comp_manager_->GetRetireFence(display_comp_ctx_, &retire_fence_);
+  }
+}
+
+DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
+  DisplayError err = kErrorNone;
+  DisplayDetailEnhancerData de_data;
+
+  PPDETuningCfgData *de_tuning_cfg_data = reinterpret_cast<PPDETuningCfgData*>(params);
+  if (de_tuning_cfg_data->cfg_pending) {
+    if (!de_tuning_cfg_data->cfg_en) {
+      de_data.enable = 0;
+      DLOGV_IF(kTagQDCM, "Disable DE config");
+    } else {
+      de_data.override_flags = kOverrideDEEnable;
+      de_data.enable = 1;
+
+      DLOGV_IF(kTagQDCM, "Enable DE: flags %u, sharp_factor %d, thr_quiet %d, thr_dieout %d, "
+        "thr_low %d, thr_high %d, clip %d, quality %d, content_type %d, de_blend %d",
+        de_tuning_cfg_data->params.flags, de_tuning_cfg_data->params.sharp_factor,
+        de_tuning_cfg_data->params.thr_quiet, de_tuning_cfg_data->params.thr_dieout,
+        de_tuning_cfg_data->params.thr_low, de_tuning_cfg_data->params.thr_high,
+        de_tuning_cfg_data->params.clip, de_tuning_cfg_data->params.quality,
+        de_tuning_cfg_data->params.content_type, de_tuning_cfg_data->params.de_blend);
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagSharpFactor) {
+        de_data.override_flags |= kOverrideDESharpen1;
+        de_data.sharp_factor = de_tuning_cfg_data->params.sharp_factor;
+      }
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagClip) {
+        de_data.override_flags |= kOverrideDEClip;
+        de_data.clip = de_tuning_cfg_data->params.clip;
+      }
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagThrQuiet) {
+        de_data.override_flags |= kOverrideDEThrQuiet;
+        de_data.thr_quiet = de_tuning_cfg_data->params.thr_quiet;
+      }
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagThrDieout) {
+        de_data.override_flags |= kOverrideDEThrDieout;
+        de_data.thr_dieout = de_tuning_cfg_data->params.thr_dieout;
+      }
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagThrLow) {
+        de_data.override_flags |= kOverrideDEThrLow;
+        de_data.thr_low = de_tuning_cfg_data->params.thr_low;
+      }
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagThrHigh) {
+        de_data.override_flags |= kOverrideDEThrHigh;
+        de_data.thr_high = de_tuning_cfg_data->params.thr_high;
+      }
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagContentQualLevel) {
+        switch (de_tuning_cfg_data->params.quality) {
+          case kDeContentQualLow:
+            de_data.quality_level = kContentQualityLow;
+            break;
+          case kDeContentQualMedium:
+            de_data.quality_level = kContentQualityMedium;
+            break;
+          case kDeContentQualHigh:
+            de_data.quality_level = kContentQualityHigh;
+            break;
+          case kDeContentQualUnknown:
+          default:
+            de_data.quality_level = kContentQualityUnknown;
+            break;
+        }
+      }
+
+      if (de_tuning_cfg_data->params.flags & kDeTuningFlagDeBlend) {
+        de_data.override_flags |= kOverrideDEBlend;
+        de_data.de_blend = de_tuning_cfg_data->params.de_blend;
+      }
+    }
+
+    err = comp_manager_->SetDetailEnhancerData(display_comp_ctx_, de_data);
+    if (err != kErrorNone) {
+      DLOGW("SetDetailEnhancerConfig failed. err = %d", err);
+      return err;
+    }
+    // TODO(user): Temporary changes, to be removed when DRM driver supports
+    // Partial update with Destination scaler enabled.
+    if (de_data.enable) {
+      disable_pu_on_dest_scaler_ = true;
+    } else {
+      SetPUonDestScaler();
+    }
+
+    de_tuning_cfg_data->cfg_pending = false;
+  }
+
+  return err;
 }
 
 }  // namespace sdm

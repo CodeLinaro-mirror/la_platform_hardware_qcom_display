@@ -64,8 +64,8 @@ static inline unsigned int MMM_COLOR_FMT_RGB_STRIDE_IN_PIXELS(unsigned int color
   if (!(color_fmt & (MMM_COLOR_FMT_RGBA8888 | MMM_COLOR_FMT_RGBA8888_UBWC)) || !width) {
     return stride;
   }
-  stride = MMM_COLOR_FMT_RGB_STRIDE(color_fmt, width / bpp);
-  return stride;
+  stride = MMM_COLOR_FMT_RGB_STRIDE(color_fmt, width);
+  return (stride / bpp);
 }
 #endif
 
@@ -896,8 +896,6 @@ void GetYuvUBwcWidthAndHeight(int width, int height, int format, unsigned int *a
 #endif
     default:
       ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__, format);
-      *aligned_w = 0;
-      *aligned_h = 0;
       break;
   }
 }
@@ -1082,6 +1080,8 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   int width = info.width;
   int height = info.height;
   int format = info.format;
+  *alignedw = width;
+  *alignedh = height;
   uint64_t usage = info.usage;
   if (width < 1 || height < 1) {
     *alignedw = 0;
@@ -1333,10 +1333,10 @@ int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4], uint32_t offset[4
 int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
                                     unsigned int *alignedw, unsigned int *alignedh,
                                     GraphicsMetadata *graphics_metadata) {
-  // Maintain original w/h for buffer consumed solely by GPU or CPU as its derived from the
-  // gfx metadata for gfx consumption.
-  *alignedw = info.width;
-  *alignedh = info.height;
+  int err = GetAlignedWidthAndHeight(info, alignedw, alignedh);
+  if (err) {
+    return err;
+  }
 
   AdrenoMemInfo* adreno_mem_info = AdrenoMemInfo::GetInstance();
   graphics_metadata->size = adreno_mem_info->AdrenoGetMetadataBlobSize();

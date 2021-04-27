@@ -69,6 +69,17 @@ HWC2::Error HWCDisplayVirtual::Present(shared_ptr<Fence> *out_retire_fence) {
   return HWC2::Error::None;
 }
 
+HWC2::Error HWCDisplayVirtual::PreValidateDisplay(bool *exit_validate) {
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayVirtual::CommitOrPrepare(bool validate_only,
+                                               shared_ptr<Fence> *out_retire_fence,
+                                               uint32_t *out_num_types,
+                                               uint32_t *out_num_requests, bool *needs_commit) {
+  return HWC2::Error::None;
+}
+
 HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
   if (dump_frame_count_ && !flush_ && dump_output_layer_) {
     if (output_handle_) {
@@ -76,7 +87,7 @@ HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
       const native_handle_t *output_handle =
           reinterpret_cast<const native_handle_t *>(output_buffer_.buffer_id);
       void *base_ptr = NULL;
-      int error = buffer_allocator_->MapBuffer(output_handle, nullptr, base_ptr);
+      int error = buffer_allocator_->MapBuffer(output_handle, nullptr, &base_ptr);
       if (error != 0) {
         DLOGE("Failed to map output buffer, error = %d", error);
         return HWC2::Error::BadParameter;
@@ -162,8 +173,8 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
 }
 
 HWC2::Error HWCDisplayVirtual::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
-                                                  int32_t format, bool post_processed) {
-  HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, post_processed);
+                                                  int32_t format, const CwbConfig &cwb_config) {
+  HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, cwb_config);
   dump_output_layer_ = ((bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP)) != 0);
 
   DLOGI("output_layer_dump_enable %d", dump_output_layer_);

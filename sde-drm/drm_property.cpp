@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -82,6 +82,7 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "dim_layer_v1") { return DRMProperty::DIM_STAGES_V1; }
   if (name == "idle_time") { return DRMProperty::IDLE_TIME; }
   if (name == "RETIRE_FENCE") { return DRMProperty::RETIRE_FENCE; }
+  if (name == "RETIRE_FENCE_OFFSET") { return DRMProperty::RETIRE_FENCE_OFFSET; }
   if (name == "DST_X") { return DRMProperty::DST_X; }
   if (name == "DST_Y") { return DRMProperty::DST_Y; }
   if (name == "DST_W") { return DRMProperty::DST_W; }
@@ -172,6 +173,7 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "SDE_DEMURA_INIT_CFG_V1") { return DRMProperty::DEMURA_INIT_CFG_V1; }
   if (name == "DEMURA_PANEL_ID") { return DRMProperty::DEMURA_PANEL_ID; }
   if (name == "SDE_DEMURA_BOOT_PLANE_V1") { return DRMProperty::DEMURA_BOOT_PLANE_V1; }
+  if (name == "dyn_bit_clk") { return DRMProperty::DYN_BIT_CLK; }
 
   return DRMProperty::INVALID;
 }

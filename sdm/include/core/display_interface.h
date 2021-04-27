@@ -149,7 +149,6 @@ enum DisplayEvent {
   kIdlePowerCollapse,       // Event triggered by Idle Power Collapse.
   kPanelDeadEvent,          // Event triggered by ESD.
   kDisplayPowerResetEvent,  // Event triggered by Hardware Recovery.
-  kInvalidateDisplay,       // Event triggered by DrawCycle thread to Invalidate display.
   kSyncInvalidateDisplay,   // Event triggered by Non-DrawCycle threads to Invalidate display.
   kPostIdleTimeout,         // Event triggered after entering idle.
 };
@@ -323,6 +322,9 @@ struct DisplayDetailEnhancerData {
 enum SupportedDisplayFeature {
   kSupportedModeSwitch,
   kDestinationScalar,
+  kCwbDemuraTapPoint,
+  kCwbCrop,
+  kDedicatedCwb,
 };
 
 /*! @brief Display device event handler implemented by the client.
@@ -629,6 +631,16 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError DisablePartialUpdateOneFrame() = 0;
+
+  /*! @brief Method to get unaligned dimensions of output buffer.
+
+    @param[in] CWB tap-point set by client.
+    @param[out] unaligned width and height of output buffer.
+
+    @return \link void \endlink
+  */
+  virtual DisplayError GetCwbBufferResolution(CwbTapPoint cwb_tappoint, uint32_t *x_pixels,
+                                              uint32_t *y_pixels) = 0;
 
   /*! @brief Method to set the mode of the primary display.
 
@@ -1015,12 +1027,6 @@ class DisplayInterface {
   */
   virtual DisplayError SetPanelLuminanceAttributes(float min_lum, float max_lum) = 0;
 
-  /*! @brief Method to query if there is a need to validate.
-
-      @return \link boolean \endlink
-  */
-  virtual bool CanSkipValidate() = 0;
-
   /*! @brief Method to set display backlight scale ratio.
 
     @param[in] backlight scale ratio.
@@ -1091,6 +1097,34 @@ class DisplayInterface {
     @return \link bool \endlink
   */
   virtual bool HasDemura() = 0;
+
+  /*! @brief Method to retrieve output buffer acquire fence.
+
+    @param[out] output buffer acquire fence.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence) = 0;
+
+  /*! @brief Method to get validation state.
+
+    @return \link bool \endlink
+  */
+  virtual bool IsValidated() = 0;
+
+  /*! @brief Method to destroy layer.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError DestroyLayer() = 0;
+
+  /*! @brief Method to Get the qsync fps from connector node
+
+    @param[out] value of qsync fps
+
+    @return \link void \endlink
+  */
+  virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

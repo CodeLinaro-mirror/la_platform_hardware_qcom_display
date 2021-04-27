@@ -57,7 +57,7 @@ class CompManager {
                                   const HWMixerAttributes &mixer_attributes,
                                   const DisplayConfigVariableInfo &fb_config,
                                   HWQosData *qos_data);
-  void PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
+  DisplayError PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Commit(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError PostPrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
@@ -73,8 +73,7 @@ class CompManager {
   DisplayError ValidateScaling(const LayerRect &crop, const LayerRect &dst, bool rotate90);
   DisplayError ValidateAndSetCursorPosition(Handle display_ctx, DispLayerStack *disp_layer_stack,
                                             int x, int y);
-  bool SetDisplayState(Handle display_ctx, DisplayState state,
-                       const shared_ptr<Fence> &sync_handle);
+  bool SetDisplayState(Handle display_ctx, DisplayState state, const SyncPoints &sync_points);
   DisplayError SetMaxBandwidthMode(HWBwModes mode);
   DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
   DisplayError SetDetailEnhancerData(Handle display_ctx, const DisplayDetailEnhancerData &de_data);
@@ -86,7 +85,6 @@ class CompManager {
   DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
   void HandleSecureEvent(Handle display_ctx, SecureEvent secure_event);
   void SetSafeMode(bool enable) { safe_mode_ = enable; }
-  bool CanSkipValidate(Handle display_ctx, bool *needs_buffer_swap);
   bool IsSafeMode() { return safe_mode_; }
   void GenerateROI(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError CheckEnforceSplit(Handle comp_handle, uint32_t new_refresh_rate);
@@ -94,7 +92,6 @@ class CompManager {
   bool CheckResourceState(Handle display_ctx);
   bool IsRotatorSupportedFormat(LayerBufferFormat format);
   DisplayError SetDrawMethod(Handle display_ctx, const DisplayDrawMethod &draw_method);
-  DisplayError SwapBuffers(Handle display_ctx);
   DisplayError FreeDemuraFetchResources(Handle display_ctx);
   DisplayError GetDemuraFetchResourceCount(std::map<uint32_t, uint8_t> *fetch_resource_cnt);
   DisplayError ReserveDemuraFetchResources(const uint32_t &display_id,
@@ -109,6 +106,8 @@ class CompManager {
     return display_demura_status_[display_id];
   }
   DisplayError SetMaxSDEClk(uint32_t clk);
+  void GetRetireFence(Handle display_ctx, shared_ptr<Fence> *retire_fence);
+  void NeedsValidate(Handle display_ctx, bool *needs_validate);
 
  private:
   static const int kMaxThermalLevel = 3;

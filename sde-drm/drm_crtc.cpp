@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -64,6 +64,7 @@ static uint8_t SECURE_ONLY = 1;
 // CWB Capture Modes
 static uint8_t CAPTURE_MIXER_OUT = 0;
 static uint8_t CAPTURE_DSPP_OUT = 1;
+static uint8_t CAPTURE_DEMURA_OUT = 2;
 
 // Idle PC states
 static uint8_t IDLE_PC_STATE_NONE = 0;
@@ -94,15 +95,21 @@ static void PopulateSecurityLevels(drmModePropertyRes *prop) {
   }
 }
 
-static void PopulateCWbCaptureModes(drmModePropertyRes *prop) {
+static void PopulateCWbCaptureModes(drmModePropertyRes *prop,
+                                    std::vector<DRMCWbCaptureMode> *tap_points) {
   static bool capture_modes_populated = false;
   if (!capture_modes_populated) {
     for (auto i = 0; i < prop->count_enums; i++) {
       string enum_name(prop->enums[i].name);
       if (enum_name == "capture_mixer_out") {
         CAPTURE_MIXER_OUT = prop->enums[i].value;
+        tap_points->push_back(DRMCWbCaptureMode::MIXER_OUT);
       } else if (enum_name == "capture_pp_out") {
         CAPTURE_DSPP_OUT = prop->enums[i].value;
+        tap_points->push_back(DRMCWbCaptureMode::DSPP_OUT);
+      } else if (enum_name == "capture_demura_out") {
+        CAPTURE_DEMURA_OUT = prop->enums[i].value;
+        tap_points->push_back(DRMCWbCaptureMode::DEMURA_OUT);
       }
     }
     capture_modes_populated = true;
@@ -344,7 +351,7 @@ void DRMCrtc::ParseProperties() {
 
     if (prop_enum == DRMProperty::CAPTURE_MODE) {
       crtc_info_.concurrent_writeback = true;
-      PopulateCWbCaptureModes(info);
+      PopulateCWbCaptureModes(info, &crtc_info_.tap_points);
     }
 
     if (prop_enum == DRMProperty::IDLE_PC_STATE) {
@@ -433,6 +440,7 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
   string rc_total_mem_size = "rc_mem_size=";
   string demura_count = "demura_count=";
   string dspp_count = "dspp_count=";
+  string skip_inline_rot_threshold="skip_inline_rot_threshold=";
 
   while (std::getline(stream, line)) {
     if (line.find(max_blendstages) != string::npos) {
@@ -558,6 +566,9 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
       crtc_info_.demura_count = std::stoi(string(line, demura_count.length()));
     } else if (line.find(dspp_count) != string::npos) {
       crtc_info_.dspp_count = std::stoi(string(line, dspp_count.length()));
+    } else if (line.find(skip_inline_rot_threshold) != string::npos) {
+      crtc_info_.skip_inline_rot_threshold =
+        std::stoi(string(line, skip_inline_rot_threshold.length()));
     }
   }
   drmModeFreePropertyBlob(blob);
@@ -785,6 +796,8 @@ void DRMCrtc::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       uint32_t cwb_capture_mode = CAPTURE_MIXER_OUT;
       if (capture_mode == (int)DRMCWbCaptureMode::DSPP_OUT) {
         cwb_capture_mode = CAPTURE_DSPP_OUT;
+      } else if (capture_mode == (int)DRMCWbCaptureMode::DEMURA_OUT) {
+        cwb_capture_mode = CAPTURE_DEMURA_OUT;
       }
       uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::CAPTURE_MODE);
       AddProperty(req, obj_id, prop_id, cwb_capture_mode, true /* cache */, tmp_prop_val_map_);

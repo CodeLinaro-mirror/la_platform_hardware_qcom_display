@@ -301,12 +301,18 @@ void CompManager::GenerateROI(Handle display_ctx, DispLayerStack *disp_layer_sta
   return disp_comp_ctx->strategy->GenerateROI(disp_layer_stack, disp_comp_ctx->pu_constraints);
 }
 
-void CompManager::PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack) {
+DisplayError CompManager::PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack) {
   SCOPE_LOCK(locker_);
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-  display_comp_ctx->strategy->Start(disp_layer_stack, &display_comp_ctx->max_strategies);
+  DisplayError error = display_comp_ctx->strategy->Start(disp_layer_stack,
+                                                         &display_comp_ctx->max_strategies);
   display_comp_ctx->remaining_strategies = display_comp_ctx->max_strategies;
+
+  // Select a composition strategy, and try to allocate resources for it.
+  resource_intf_->Start(display_comp_ctx->display_resource_ctx, disp_layer_stack->stack);
+
+  return error;
 }
 
 DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack) {
@@ -320,9 +326,6 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
   DisplayError error = kErrorUndefined;
 
   PrepareStrategyConstraints(display_ctx, disp_layer_stack);
-
-  // Select a composition strategy, and try to allocate resources for it.
-  resource_intf_->Start(display_resource_ctx);
 
   bool exit = false;
   uint32_t &count = display_comp_ctx->remaining_strategies;
@@ -349,10 +352,6 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
     return error;
   }
 
-  error = resource_intf_->Stop(display_resource_ctx, disp_layer_stack);
-  if (error != kErrorNone) {
-    DLOGE("Resource stop failed for display = %d", display_comp_ctx->display_type);
-  }
   return error;
 }
 
@@ -365,6 +364,11 @@ DisplayError CompManager::PostPrepare(Handle display_ctx, DispLayerStack *disp_l
   DisplayError error = kErrorNone;
 
   display_comp_ctx->strategy->Stop();
+
+  error = resource_intf_->Stop(display_resource_ctx, disp_layer_stack);
+  if (error != kErrorNone) {
+    DLOGE("Resource stop failed for display = %d", display_comp_ctx->display_type);
+  }
 
   error = resource_intf_->PostPrepare(display_resource_ctx, disp_layer_stack);
   if (error != kErrorNone) {
@@ -392,7 +396,7 @@ DisplayError CompManager::ReConfigure(Handle display_ctx, DispLayerStack *disp_l
   Handle &display_resource_ctx = display_comp_ctx->display_resource_ctx;
 
   DisplayError error = kErrorUndefined;
-  resource_intf_->Start(display_resource_ctx);
+  resource_intf_->Start(display_resource_ctx, disp_layer_stack->stack);
   error = resource_intf_->Prepare(display_resource_ctx, disp_layer_stack);
 
   if (error != kErrorNone) {
@@ -584,7 +588,7 @@ DisplayError CompManager::ControlDpps(bool enable) {
 }
 
 bool CompManager::SetDisplayState(Handle display_ctx, DisplayState state,
-                                  const shared_ptr<Fence> &sync_handle) {
+                                  const SyncPoints &sync_points) {
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
@@ -615,7 +619,7 @@ bool CompManager::SetDisplayState(Handle display_ctx, DisplayState state,
   bool inactive = (state == kStateOff) || (state == kStateDozeSuspend);
   UpdateStrategyConstraints(display_comp_ctx->is_primary_panel, inactive);
 
-  resource_intf_->UpdateSyncHandle(display_comp_ctx->display_resource_ctx, sync_handle);
+  resource_intf_->UpdateSyncHandle(display_comp_ctx->display_resource_ctx, sync_points);
 
   return true;
 }
@@ -680,13 +684,6 @@ void CompManager::UpdateStrategyConstraints(bool is_primary, bool disabled) {
   max_sde_builtin_layers_ = (disabled && (powered_on_displays_.size() <= 1)) ? kMaxSDELayers : 2;
 }
 
-bool CompManager::CanSkipValidate(Handle display_ctx, bool *needs_buffer_swap) {
-  DisplayCompositionContext *display_comp_ctx =
-      reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-
-  return display_comp_ctx->strategy->CanSkipValidate(needs_buffer_swap);
-}
-
 bool CompManager::CheckResourceState(Handle display_ctx) {
   SCOPE_LOCK(locker_);
   DisplayCompositionContext *display_comp_ctx =
@@ -715,14 +712,6 @@ bool CompManager::IsRotatorSupportedFormat(LayerBufferFormat format) {
   }
 
   return false;
-}
-
-DisplayError CompManager::SwapBuffers(Handle display_ctx) {
-  SCOPE_LOCK(locker_);
-  DisplayCompositionContext *display_comp_ctx =
-      reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-
-  return display_comp_ctx->strategy->SwapBuffers();
 }
 
 DisplayError CompManager::FreeDemuraFetchResources(Handle display_ctx) {
@@ -757,6 +746,27 @@ DisplayError CompManager::SetMaxSDEClk(uint32_t clk) {
   }
 
   return kErrorNotSupported;
+}
+
+void CompManager::GetRetireFence(Handle display_ctx, shared_ptr<Fence> *retire_fence) {
+  SCOPE_LOCK(locker_);
+  if (resource_intf_ == nullptr) {
+    return;
+  }
+
+  DisplayCompositionContext *display_comp_ctx =
+      reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+  resource_intf_->Perform(ResourceInterface::kCmdGetRetireFence,
+                          display_comp_ctx->display_resource_ctx, retire_fence);
+}
+
+void CompManager::NeedsValidate(Handle display_ctx, bool *needs_validate) {
+  SCOPE_LOCK(locker_);
+  if (resource_intf_ == nullptr) {
+    return;
+  }
+
+  resource_intf_->Perform(ResourceInterface::kCmdNeedsValidate, needs_validate);
 }
 
 }  // namespace sdm

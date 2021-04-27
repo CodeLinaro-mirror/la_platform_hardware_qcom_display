@@ -41,6 +41,7 @@
 #include "hwc_display_event_handler.h"
 #include "hwc_layers.h"
 #include "hwc_buffer_sync_handler.h"
+#include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
 
 using android::hardware::graphics::common::V1_2::ColorMode;
 using android::hardware::graphics::common::V1_1::Dataspace;
@@ -160,21 +161,10 @@ class HWCDisplay : public DisplayEventHandler {
     kDisplayStatusResume,      // Resume + PowerOn
   };
 
-  enum DisplayValidateState {
-    kNormalValidate,
-    kInternalValidate,
-    kSkipValidate,
-  };
-
   struct HWCLayerStack {
     HWCLayer *client_target = nullptr;                   // Also known as framebuffer target
     std::map<hwc2_layer_t, HWCLayer *> layer_map;        // Look up by Id - TODO
     std::multiset<HWCLayer *, SortLayersByZ> layer_set;  // Maintain a set sorted by Z
-  };
-
-  enum DisplayCommitState {
-    kNormalCommit,
-    kInternalCommit,
   };
 
   virtual ~HWCDisplay() {}
@@ -184,7 +174,7 @@ class HWCDisplay : public DisplayEventHandler {
   // Framebuffer configurations
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms, uint32_t inactive_ms);
   virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
-                                         int32_t format, bool post_processed);
+                                         int32_t format, const CwbConfig &cwb_config);
   virtual DisplayError SetMaxMixerStages(uint32_t max_mixer_stages);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending) {
     return kErrorNotSupported;
@@ -204,12 +194,14 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetPanelResolution(uint32_t *width, uint32_t *height);
   virtual void GetRealPanelResolution(uint32_t *width, uint32_t *height);
   virtual void Dump(std::ostringstream *os);
+  virtual int GetCwbBufferResolution(CwbTapPoint cwb_tappoint, uint32_t *x_pixels,
+                                     uint32_t *y_pixels);
   virtual DisplayError TeardownConcurrentWriteback(bool *needs_refresh);
 
   // Captures frame output in the buffer specified by output_buffer_info. The API is
   // non-blocking and the client is expected to check operation status later on.
   // Returns -1 if the input is invalid.
-  virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, bool post_processed) {
+  virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, const CwbConfig &cwb_config) {
     return -1;
   }
   // Returns the status of frame capture operation requested with FrameCaptureAsync().
@@ -222,8 +214,8 @@ class HWCDisplay : public DisplayEventHandler {
     return kErrorNotSupported;
   }
   virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer,
-                                        shared_ptr<Fence> acquire_fence,
-                                        bool post_processed_output, CWBClient client) {
+                                        shared_ptr<Fence> acquire_fence, CwbConfig cwb_config,
+                                        CWBClient client) {
     return HWC2::Error::Unsupported;
   }
   virtual HWC2::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence) {
@@ -276,12 +268,7 @@ class HWCDisplay : public DisplayEventHandler {
   void BuildLayerStack(void);
   void BuildSolidFillStack(void);
   HWCLayer *GetHWCLayer(hwc2_layer_t layer_id);
-  void ResetValidation() { validated_ = false; }
   uint32_t GetGeometryChanges() { return geometry_changes_; }
-  bool CanSkipValidate();
-  bool IsSkipValidateState() { return (validate_state_ == kSkipValidate); }
-  bool IsInternalValidateState() { return (validated_ && (validate_state_ == kInternalValidate)); }
-  void SetValidationState(DisplayValidateState state) { validate_state_ = state; }
   ColorMode GetCurrentColorMode() {
     return (color_mode_ ? color_mode_->GetCurrentColorMode() : ColorMode::SRGB);
   }
@@ -289,7 +276,6 @@ class HWCDisplay : public DisplayEventHandler {
     return (has_client_composition_ || layer_stack_.flags.single_buffered_layer_present);
   }
   bool CheckResourceState();
-  virtual void SetFastPathComposition(bool enable) { fast_path_composition_ = enable; }
   virtual HWC2::Error SetColorModeFromClientApi(int32_t color_mode_id) {
     return HWC2::Error::Unsupported;
   }
@@ -305,6 +291,8 @@ class HWCDisplay : public DisplayEventHandler {
   }
   virtual HWC2::Error SetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
                                       int32_t dataspace, hwc_region_t damage);
+  virtual HWC2::Error SetClientTarget_3_1(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
+                                          int32_t dataspace, hwc_region_t damage);
   virtual HWC2::Error SetColorMode(ColorMode mode) { return HWC2::Error::Unsupported; }
   virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
     return HWC2::Error::Unsupported;
@@ -371,7 +359,6 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error DestroyLayer(hwc2_layer_t layer_id);
   virtual HWC2::Error SetLayerZOrder(hwc2_layer_t layer_id, uint32_t z);
   virtual HWC2::Error SetLayerType(hwc2_layer_t layer_id, IQtiComposerClient::LayerType type);
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests) = 0;
   virtual HWC2::Error GetReleaseFences(uint32_t *out_num_elements, hwc2_layer_t *out_layers,
                                        std::vector<shared_ptr<Fence>> *out_fences);
   virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence) = 0;
@@ -383,11 +370,8 @@ class HWCDisplay : public DisplayEventHandler {
                                               PerFrameMetadataKey *out_keys);
   virtual HWC2::Error SetDisplayAnimating(bool animating) {
     animating_ = animating;
-    validated_ = false;
     return HWC2::Error::None;
   }
-  virtual HWC2::Error PresentAndOrGetValidateDisplayOutput(uint32_t *out_num_types,
-                                                           uint32_t *out_num_requests);
   virtual bool IsDisplayCommandMode();
   virtual HWC2::Error SetQSyncMode(QSyncMode qsync_mode) {
     return HWC2::Error::Unsupported;
@@ -440,6 +424,11 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error NotifyDisplayCalibrationMode(bool in_calibration) {
     return HWC2::Error::Unsupported;
   };
+  virtual HWC2::Error CommitOrPrepare(bool validate_only, shared_ptr<Fence> *out_retire_fence,
+                                      uint32_t *out_num_types, uint32_t *out_num_requests,
+                                      bool *needs_commit);
+  virtual HWC2::Error PreValidateDisplay(bool *exit_validate) { return HWC2::Error::None; }
+  HWC2::Error TryDrawMethod(IQtiComposerClient::DrawMethod client_drawMethod);
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -492,11 +481,17 @@ class HWCDisplay : public DisplayEventHandler {
   HWC2::Error SubmitDisplayConfig(hwc2_config_t config);
   HWC2::Error GetCachedActiveConfig(hwc2_config_t *config);
   void SetActiveConfigIndex(int active_config_index);
+  HWC2::Error PostPrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests);
+  HWC2::Error HandlePrepareError(DisplayError error);
   int GetActiveConfigIndex();
   DisplayError ValidateTUITransition (SecureEvent secure_event);
   void MMRMEvent(bool restricted);
+  void UpdateRefreshRate();
+  void UpdateActiveConfig();
+  void DumpInputBuffers(void);
+  void RetrieveFences(shared_ptr<Fence> *out_retire_fence);
+  void SetDrawMethod();
 
-  bool validated_ = false;
   bool layer_stack_invalid_ = true;
   CoreInterface *core_intf_ = nullptr;
   HWCBufferAllocator *buffer_allocator_ = NULL;
@@ -523,6 +518,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool display_paused_ = false;
   uint32_t min_refresh_rate_ = 0;
   uint32_t max_refresh_rate_ = 0;
+  uint32_t qsync_fps_ = 0;
   uint32_t current_refresh_rate_ = 0;
   bool use_metadata_refresh_rate_ = false;
   uint32_t metadata_refresh_rate_ = 0;
@@ -543,7 +539,6 @@ class HWCDisplay : public DisplayEventHandler {
   bool pending_commit_ = false;
   bool is_cmd_mode_ = false;
   bool partial_update_enabled_ = false;
-  bool fast_path_composition_ = false;
   bool skip_commit_ = false;
   std::map<uint32_t, DisplayConfigVariableInfo> variable_config_map_;
   std::vector<uint32_t> hwc_config_map_;
@@ -565,21 +560,16 @@ class HWCDisplay : public DisplayEventHandler {
   bool display_pause_pending_ = false;
   bool display_idle_ = false;
   bool animating_ = false;
-  DisplayValidateState validate_state_ = kNormalValidate;
-  DisplayCommitState commit_state_ = kNormalCommit;
+  DisplayDrawMethod draw_method_ = kDrawDefault;
 
  private:
-  void DumpInputBuffers(void);
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
-  void UpdateRefreshRate();
   void WaitOnPreviousFence();
-  void UpdateActiveConfig();
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
   uint32_t geometry_changes_ = GeometryChanges::kNone;
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
   int null_display_mode_ = 0;
-  bool fast_path_enabled_ = true;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
   shared_ptr<Fence> fbt_release_fence_ = nullptr;
   shared_ptr<Fence> release_fence_ = nullptr;
@@ -589,6 +579,9 @@ class HWCDisplay : public DisplayEventHandler {
   bool game_supported_ = false;
   uint64_t elapse_timestamp_ = 0;
   int async_power_mode_ = 0;
+  bool draw_method_set_ = false;
+  bool validate_done_ = false;
+  bool client_target_3_1_set_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

@@ -117,13 +117,16 @@ HWCDisplayPluggable::HWCDisplayPluggable(CoreInterface *core_intf,
                  sdm_id, DISPLAY_CLASS_PLUGGABLE) {
 }
 
-HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  auto status = HWC2::Error::None;
+HWC2::Error HWCDisplayPluggable::PreValidateDisplay(bool *exit_validate) {
+  // Draw method gets set as part of first commit.
+  SetDrawMethod();
 
+  auto status = HWC2::Error::None;
   if (active_secure_sessions_[kSecureDisplay] || display_paused_ ||
      (mmrm_restricted_ && (current_power_mode_ == HWC2::PowerMode::Off ||
      current_power_mode_ == HWC2::PowerMode::DozeSuspend))) {
     MarkLayersForGPUBypass();
+    *exit_validate = true;
     return status;
   }
 
@@ -131,7 +134,7 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
 
   if (layer_set_.empty()) {
     flush_ = !client_connected_;
-    validated_ = true;
+    *exit_validate = true;
     return status;
   }
 
@@ -144,10 +147,21 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
     MarkLayersForClientComposition();
   }
 
+  *exit_validate = false;
+
+  return status;
+}
+
+HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  bool exit_validate = false;
+  auto status = PreValidateDisplay(&exit_validate);
+  if (exit_validate) {
+    return status;
+  }
+
   // TODO(user): SetRefreshRate need to follow new interface when added.
 
-  status = PrepareLayerStack(out_num_types, out_num_requests);
-  return status;
+  return PrepareLayerStack(out_num_types, out_num_requests);
 }
 
 HWC2::Error HWCDisplayPluggable::Present(shared_ptr<Fence> *out_retire_fence) {
@@ -242,7 +256,6 @@ int HWCDisplayPluggable::SetState(bool connected) {
       shared_ptr<Fence> release_fence = nullptr;
       display_null_.GetDisplayState(&state);
       display_intf_->SetDisplayState(state, false /* teardown */, &release_fence);
-      validated_ = false;
 
       SetVsyncEnabled(HWC2::Vsync::Enable);
 
@@ -323,14 +336,12 @@ HWC2::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, Re
   }
 
   callbacks_->Refresh(id_);
-  validated_ = false;
 
   return status;
 }
 
 HWC2::Error HWCDisplayPluggable::UpdatePowerMode(HWC2::PowerMode mode) {
   current_power_mode_ = mode;
-  validated_ = false;
   return HWC2::Error::None;
 }
 
@@ -347,7 +358,6 @@ HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
   }
 
   callbacks_->Refresh(id_);
-  validated_ = false;
 
   return HWC2::Error::None;
 }

@@ -272,6 +272,7 @@ enum HWQseedStepVersion {
   kQseed3v4,
   kQseed3litev4,
   kQseed3litev5,
+  kQseed3litev7,
 };
 
 struct HWDestScalarInfo {
@@ -280,6 +281,11 @@ struct HWDestScalarInfo {
   uint32_t max_output_width = 0;
   uint32_t max_scale_up = 1;
   uint32_t prefill_lines = 4;
+};
+
+struct SyncPoints {
+  shared_ptr<Fence> release_fence = nullptr;
+  shared_ptr<Fence> retire_fence = nullptr;
 };
 
 enum SmartDMARevision {
@@ -343,6 +349,7 @@ struct HWResourceInfo {
   bool separate_rotator = false;
   bool has_qseed3 = false;
   bool has_concurrent_writeback = false;
+  std::vector<CwbTapPoint> tap_points = {};
   bool has_ppp = false;
   bool has_excl_rect = false;
   uint32_t writeback_index = kHWBlockMax;
@@ -376,6 +383,7 @@ struct HWResourceInfo {
   std::vector<uint32_t> initial_demura_planes = {};
   uint32_t demura_count = 0;
   uint32_t dspp_count = 0;
+  bool skip_inline_rot_threshold = false;
 };
 
 struct HWSplitInfo {
@@ -444,6 +452,7 @@ struct HWPanelInfo {
   bool dyn_bitclk_support = false;     // Bit clk can be updated to avoid RF interference.
   std::vector<uint64_t> bitclk_rates;  // Supported bit clk levels.
   uint32_t supported_colorspaces = 0;  // supported_colorspaces for DP displays.
+  uint32_t qsync_fps = 0;              // Min qsync fps
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||
@@ -759,7 +768,6 @@ struct HWLayersInfo {
   LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
   bool roi_split = false;          // Indicates separated left and right ROI
   bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
-  bool fast_path_composition = false;  // Indicates frame has fast path composition
   DestScaleInfoMap dest_scale_info_map = {};
   HWHDRLayerInfo hdr_layer_info = {};
   Handle pvt_data = NULL;   // Private data used by sdm extension only.
@@ -775,12 +783,17 @@ struct HWLayersInfo {
   HWAVRInfo hw_avr_info = {};
   std::bitset<kUpdateMax> updates_mask = 0;
   uint64_t elapse_timestamp = 0;
+  bool do_hw_validate = false;
+  uint32_t retire_fence_offset = 0;
+  bool trigger_async_commit = false;  // This field hints if asynchronous commit can be triggered.
   shared_ptr<Fence> retire_fence = nullptr;  // Retire fence for current draw cycle.
   LayerStackFlags flags;               //!< Flags associated with this layer set.
   PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
   LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
                                        //!< rendered for virtual displays.
                                        //!< NOTE: This field applies to a virtual display only.
+  CwbConfig *hw_cwb_config = NULL;     //!< Struct that contains CWB configuration passed to
+                                       //!< driver by SDM.
   bool stitch_present = false;  // Indicates there is stitch layer or not
   bool demura_present = false;  // Indicates there is demura layer or not
 };

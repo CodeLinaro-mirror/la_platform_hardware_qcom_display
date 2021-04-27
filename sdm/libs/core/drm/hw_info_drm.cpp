@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -75,6 +75,7 @@ using sde_drm::DRMCrtcInfo;
 using sde_drm::DRMPlaneType;
 using sde_drm::DRMTonemapLutType;
 using sde_drm::DRMPanelFeatureInfo;
+using sde_drm::DRMCWbCaptureMode;
 
 using std::vector;
 using std::map;
@@ -102,6 +103,9 @@ static HWQseedStepVersion GetQseedStepVersion(sde_drm::QSEEDStepVersion drm_vers
       break;
     case sde_drm::QSEEDStepVersion::V3LITE_V5:
       sdm_version = kQseed3litev5;
+      break;
+    case sde_drm::QSEEDStepVersion::V3LITE_V7:
+      sdm_version = kQseed3litev7;
       break;
   }
   return sdm_version;
@@ -131,7 +135,14 @@ DisplayError HWInfoDRM::Init() {
       return kErrorCriticalResource;
     }
     drm_master->GetHandle(&dev_fd);
-    DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+
+    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+    if (!drm_lib_loader) {
+      DLOGE("Failed to acquire DRMLibLoader instance");
+      return kErrorCriticalResource;
+    }
+    drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+
     if (!drm_mgr_intf_) {
       DRMLibLoader::Destroy();
       DRMMaster::DestroyInstance();
@@ -148,7 +159,10 @@ void HWInfoDRM::Deinit() {
   hw_resource_ = nullptr;
 
   if (drm_mgr_intf_) {
-    DRMLibLoader::GetInstance()->FuncDestroyDRMManager()();
+    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+    if (drm_lib_loader) {
+      drm_lib_loader->FuncDestroyDRMManager()();
+    }
     drm_mgr_intf_ = nullptr;
   }
 
@@ -245,6 +259,11 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   DLOGI("Has UBWC = %d", hw_resource->has_ubwc);
   DLOGI("Has Micro Idle = %d", hw_resource->has_micro_idle);
   DLOGI("Has Concurrent Writeback = %d", hw_resource->has_concurrent_writeback);
+  string tap_points = "Tap Points: ";
+  for (CwbTapPoint &tap_point : hw_resource->tap_points) {
+    tap_points += std::to_string(tap_point) + " ";
+  }
+  DLOGI("%s", tap_points.c_str());
   DLOGI("Has Src Tonemap = %lx", hw_resource->src_tone_map.to_ulong());
   DLOGI("Max Low Bw = %" PRIu64 "", hw_resource->dyn_bw_info.total_bw_limit[kBwVFEOn]);
   DLOGI("Max High Bw = %" PRIu64 "", hw_resource->dyn_bw_info.total_bw_limit[kBwVFEOff]);
@@ -304,6 +323,7 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   hw_resource->has_micro_idle = info.has_micro_idle;
   hw_resource->demura_count = info.demura_count;
   hw_resource->dspp_count = info.dspp_count;
+  hw_resource->skip_inline_rot_threshold = info.skip_inline_rot_threshold;
 
   for (int index = 0; index < kBwModeMax; index++) {
     if (index == kBwVFEOn) {
@@ -338,6 +358,9 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   hw_resource->min_prefill_lines = info.min_prefill_lines;
   hw_resource->secure_disp_blend_stage = info.secure_disp_blend_stage;
   hw_resource->has_concurrent_writeback = info.concurrent_writeback;
+  for (DRMCWbCaptureMode &tappt : info.tap_points) {
+    hw_resource->tap_points.push_back(static_cast<CwbTapPoint>(tappt));
+  }
   hw_resource->line_width_constraints_count = info.line_width_constraints_count;
   if (info.line_width_constraints_count) {
     auto &width_constraints = hw_resource->line_width_constraints;

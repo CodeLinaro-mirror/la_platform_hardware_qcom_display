@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -334,6 +334,13 @@ enum struct DRMOps {
    */
   CONNECTOR_GET_RETIRE_FENCE,
   /*
+   * Op: Sets retire fence offset on this connector.
+   * DRMAtomicReqInterface.
+   * Arg: uint32_t - Connector ID
+   *      uint32_t - Offset indicating number of cycles to advance retire fence.
+   */
+  CONNECTOR_SET_RETIRE_FENCE_OFFSET,
+  /*
    * Op: Sets writeback connector destination rect
    * Arg: uint32_t - Connector ID
    *      DRMRect - Dst Rectangle
@@ -439,6 +446,12 @@ enum struct DRMOps {
    * Arg: uint32_t - Video/Command Mode Bitmask
    */
   CONNECTOR_SET_PANEL_MODE,
+  /*
+   * Op: Sets new dynamic bit clk
+   * Arg: uint32_t - Connector ID
+   *      uint64_t - bit clk value
+   */
+  CONNECTOR_SET_DYN_BIT_CLK,
 };
 
 enum struct DRMRotation {
@@ -494,6 +507,12 @@ struct DRMRect {
   uint32_t bottom;  // Bottom-most pixel coordinate.
 };
 
+enum struct DRMCWbCaptureMode {
+  MIXER_OUT,
+  DSPP_OUT,
+  DEMURA_OUT,
+};
+
 //------------------------------------------------------------------------
 // DRM Info Query Types
 //------------------------------------------------------------------------
@@ -512,6 +531,7 @@ enum struct QSEEDStepVersion {
   V4,
   V3LITE_V4,
   V3LITE_V5,
+  V3LITE_V7,
 };
 
 enum struct SmartDMARevision {
@@ -562,6 +582,7 @@ struct DRMCrtcInfo {
   uint32_t min_prefill_lines = 0;
   int secure_disp_blend_stage = -1;
   bool concurrent_writeback = false;
+  std::vector<DRMCWbCaptureMode> tap_points;
   uint32_t vig_limit_index = 0;
   uint32_t dma_limit_index = 0;
   uint32_t scaling_limit_index = 0;
@@ -577,6 +598,7 @@ struct DRMCrtcInfo {
   uint64_t rc_total_mem_size = 0;
   uint32_t demura_count = 0;
   uint32_t dspp_count = 0;
+  bool skip_inline_rot_threshold = false;
 };
 
 enum struct DRMPlaneType {
@@ -665,11 +687,15 @@ struct DRMModeInfo {
   int wmin;
   int hmin;
   bool roi_merge;
-  uint64_t bit_clk_rate;
+  uint64_t default_bit_clk_rate;
   uint32_t transfer_time_us;
   uint32_t allowed_mode_switch;
   uint32_t panel_mode_caps;
   uint32_t cur_panel_mode;
+  uint32_t has_cwb_crop;
+  uint32_t has_dedicated_cwb;
+  std::vector<uint64_t> dyn_bitclk_list;
+  uint64_t curr_bit_clk_rate;
 };
 
 /* Per Connector Info*/
@@ -700,6 +726,7 @@ struct DRMConnectorInfo {
   std::vector<uint8_t> edid;
   uint32_t supported_colorspaces;
   uint64_t panel_id = 0;
+  uint32_t qsync_fps;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>
@@ -902,11 +929,6 @@ enum struct DRMMultiRectMode {
   NONE = 0,
   PARALLEL = 1,
   SERIAL = 2,
-};
-
-enum struct DRMCWbCaptureMode {
-  MIXER_OUT = 0,
-  DSPP_OUT = 1,
 };
 
 enum struct DRMQsyncMode {

@@ -33,9 +33,8 @@
 #undef HWC2_INCLUDE_STRINGIFICATION
 #undef HWC2_USE_CPP11
 #include <android/hardware/graphics/composer/2.3/IComposerClient.h>
-#include <vendor/qti/hardware/display/composer/3.0/IQtiComposerClient.h>
+#include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
 
-#include <deque>
 #include <map>
 #include <set>
 
@@ -44,7 +43,7 @@
 
 using PerFrameMetadataKey =
     android::hardware::graphics::composer::V2_3::IComposerClient::PerFrameMetadataKey;
-using vendor::qti::hardware::display::composer::V3_0::IQtiComposerClient;
+using vendor::qti::hardware::display::composer::V3_1::IQtiComposerClient;
 
 namespace sdm {
 
@@ -91,6 +90,7 @@ class HWCLayer {
                                             const uint32_t *sizes, const uint8_t* metadata);
   HWC2::Error SetLayerZOrder(uint32_t z);
   HWC2::Error SetLayerType(IQtiComposerClient::LayerType type);
+  HWC2::Error SetLayerFlag(IQtiComposerClient::LayerFlag flag);
   HWC2::Error SetLayerColorTransform(const float *matrix);
   void SetComposition(const LayerComposition &sdm_composition);
   HWC2::Composition GetClientRequestedCompositionType() { return client_requested_; }
@@ -100,9 +100,6 @@ class HWCLayer {
   int32_t GetLayerDataspace() { return dataspace_; }
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   void ResetGeometryChanges();
-  void PushBackReleaseFence(const shared_ptr<Fence> &fence);
-  void PopBackReleaseFence(shared_ptr<Fence> *fence);
-  void PopFrontReleaseFence(shared_ptr<Fence> *fence);
   void ResetValidation() { layer_->update_mask.reset(); }
   bool NeedsValidation() { return (geometry_changes_ || layer_->update_mask.any()); }
   bool IsSingleBuffered() { return single_buffer_; }
@@ -112,13 +109,15 @@ class HWCLayer {
   bool IsProtected() { return secure_; }
   static LayerBufferFormat GetSDMFormat(const int32_t &source, const int flags);
   bool IsSurfaceUpdated() { return surface_updated_; }
-  void SetPartialUpdate(bool enabled) { partial_update_enabled_ = enabled; }
   bool IsNonIntegralSourceCrop() { return non_integral_source_crop_; }
   bool HasMetaDataRefreshRate() { return has_metadata_refresh_rate_; }
   bool IsColorTransformSet() { return color_transform_matrix_set_; }
   void SetLayerAsMask();
   bool BufferLatched() { return buffer_flipped_; }
   void ResetBufferFlip() { buffer_flipped_ = false; }
+  shared_ptr<Fence> GetReleaseFence();
+  void SetReleaseFence(const shared_ptr<Fence> &release_fence);
+  bool IsLayerCompatible() { return compatible_; }
 
  private:
   Layer *layer_ = nullptr;
@@ -127,7 +126,7 @@ class HWCLayer {
   const hwc2_layer_t id_;
   const hwc2_display_t display_id_;
   static std::atomic<hwc2_layer_t> next_id_;
-  std::deque<shared_ptr<Fence>> release_fences_;
+  shared_ptr<Fence> release_fence_;
   HWCBufferAllocator *buffer_allocator_ = NULL;
   int32_t dataspace_ =  HAL_DATASPACE_UNKNOWN;
   LayerTransform layer_transform_ = {};
@@ -135,13 +134,13 @@ class HWCLayer {
   bool single_buffer_ = false;
   int buffer_fd_ = -1;
   bool dataspace_supported_ = false;
-  bool partial_update_enabled_ = false;
   bool surface_updated_ = true;
   bool non_integral_source_crop_ = false;
   bool has_metadata_refresh_rate_ = false;
   bool color_transform_matrix_set_ = false;
   bool buffer_flipped_ = false;
   bool secure_ = false;
+  bool compatible_ = false;
 
   // Composition requested by client(SF) Original
   HWC2::Composition client_requested_orig_ = HWC2::Composition::Device;

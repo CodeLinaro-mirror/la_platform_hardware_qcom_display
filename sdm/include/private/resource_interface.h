@@ -42,6 +42,8 @@ class ResourceInterface {
     kCmdCheckEnforceSplit,
     kCmdDedicatePipes,
     kCmdGetResourceStatus,
+    kCmdGetRetireFence,
+    kCmdNeedsValidate,
     kCmdMax,
   };
 
@@ -55,7 +57,7 @@ class ResourceInterface {
                                           const HWDisplayAttributes &display_attributes,
                                           const HWPanelInfo &hw_panel_info,
                                           const HWMixerAttributes &mixer_attributes) = 0;
-  virtual DisplayError Start(Handle display_ctx) = 0;
+  virtual DisplayError Start(Handle display_ctx, LayerStack *layer_stack) = 0;
   virtual DisplayError Stop(Handle display_ctx, DispLayerStack *disp_layer_stack) = 0;
   virtual DisplayError SetDrawMethod(Handle display_ctx, const DisplayDrawMethod &draw_method) = 0;
   virtual DisplayError Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack) = 0;
@@ -73,8 +75,7 @@ class ResourceInterface {
   virtual DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info) = 0;
   virtual DisplayError SetDetailEnhancerData(Handle display_ctx,
                                              const DisplayDetailEnhancerData &de_data) = 0;
-  virtual DisplayError UpdateSyncHandle(Handle display_ctx,
-                                        const shared_ptr<Fence> &sync_handle) = 0;
+  virtual DisplayError UpdateSyncHandle(Handle display_ctx, const SyncPoints &sync_points) = 0;
   virtual DisplayError Perform(int cmd, ...) = 0;
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) = 0;
   virtual DisplayError FreeDemuraFetchResources(Handle display_ctx) = 0;

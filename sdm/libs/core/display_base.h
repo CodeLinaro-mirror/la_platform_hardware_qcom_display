@@ -65,9 +65,11 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError Init();
   virtual DisplayError Deinit();
   virtual DisplayError Prepare(LayerStack *layer_stack);
+  virtual DisplayError PrePrepare(LayerStack *layer_stack);
   virtual DisplayError CommitOrPrepare(LayerStack *layer_stack);
   virtual DisplayError Commit(LayerStack *layer_stack);
   virtual DisplayError Flush(LayerStack *layer_stack);
+  virtual DisplayError FlushLocked(LayerStack *layer_stack);
   virtual DisplayError GetDisplayState(DisplayState *state);
   virtual DisplayError GetNumVariableInfoConfigs(uint32_t *count);
   virtual DisplayError GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info);
@@ -87,6 +89,9 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError DisablePartialUpdateOneFrame() {
+    return kErrorNotSupported;
+  }
+  virtual DisplayError DisablePartialUpdateOneFrameInternal() {
     return kErrorNotSupported;
   }
   virtual DisplayError SetDisplayMode(uint32_t mode) {
@@ -163,7 +168,6 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError GetRefreshRate(uint32_t *refresh_rate) { return kErrorNotSupported; }
-  virtual bool CanSkipValidate();
   virtual DisplayError SetBLScale(uint32_t level) { return kErrorNotSupported; }
   virtual bool CheckResourceState();
   virtual bool GameEnhanceSupported();
@@ -181,10 +185,22 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError IsSupportedOnDisplay(SupportedDisplayFeature feature, uint32_t *supported);
+  virtual DisplayError GetCwbBufferResolution(CwbTapPoint cwb_tappoint, uint32_t *x_pixels,
+                                              uint32_t *y_pixels);
   virtual DisplayError NotifyDisplayCalibrationMode(bool in_calibration) {
     return kErrorNotSupported;
   }
   virtual bool HasDemura() { return false; }
+  virtual DisplayError GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence);
+  virtual bool IsValidated() {
+    ClientLock lock(disp_mutex_);
+    return validated_ && !needs_validate_;
+  }
+  DisplayError DestroyLayer() {
+    ClientLock lock(disp_mutex_);
+    return kErrorNone;
+  }
+  virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) { return kErrorNotSupported; }
 
  protected:
   struct DisplayMutex {
@@ -226,7 +242,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError BuildLayerStackStats(LayerStack *layer_stack);
   virtual DisplayError ValidateGPUTargetParams();
   void CommitLayerParams(LayerStack *layer_stack);
-  void PostCommitLayerParams(LayerStack *layer_stack);
+  void PostCommitLayerParams();
   DisplayError ValidateScaling(uint32_t width, uint32_t height);
   DisplayError ValidateDataspace(const ColorMetaData &color_metadata);
   void HwRecovery(const HWRecoveryEvent sdm_event_code);
@@ -262,6 +278,15 @@ class DisplayBase : public DisplayInterface {
   virtual void HandleAsyncCommit();
   void MMRMEvent(uint32_t clk);
   void CheckMMRMState();
+  DisplayError SetVSyncStateLocked(bool enable);
+  virtual DisplayError SetUpCommit(LayerStack *layer_stack);
+  DisplayError PerformCommit(HWLayersInfo *hw_layers_info);
+  virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
+  bool IsPrimaryDisplayLocked();
+  virtual DisplayError CommitLocked(LayerStack *layer_stack);
+  DisplayError ConfigureCwb(LayerStack *layer_stack);
+  void ProcessPowerEvent();
+  DisplayError SetHWDetailedEnhancerConfig(void *params);
 
   DisplayMutex disp_mutex_;
   std::thread commit_thread_;
@@ -279,7 +304,7 @@ class DisplayBase : public DisplayInterface {
   Handle hw_device_ = 0;
   Handle display_comp_ctx_ = 0;
   DispLayerStack disp_layer_stack_;
-  bool needs_validate_ = true;
+  bool needs_validate_ = true;  // maintains validation state between Prepare/Commit Cycle
   bool vsync_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
   HWInfoInterface *hw_info_intf_ = NULL;
@@ -328,11 +353,26 @@ class DisplayBase : public DisplayInterface {
   PanelFeatureFactoryIntf *pf_factory_ = nullptr;
   PanelFeaturePropertyIntf *prop_intf_ = nullptr;
   bool first_cycle_ = true;
+  bool unified_draw_supported_ = true;  // By default supported, unless disabled by property.
+  bool validated_ = false;  // display validation status based on sideband events driver events etc.
+  shared_ptr<Fence> retire_fence_ = nullptr;
 
  private:
+  // Max tolerable power-state-change wait-times in milliseconds.
+  static const int kPowerStateTimeout = 5000;
+
   bool StartDisplayPowerReset();
   void EndDisplayPowerReset();
   void SetRCData(LayerStack *layer_stack);
+  DisplayError ValidateCwbConfigInfo(CwbConfig *cwb_config, const LayerBufferFormat &format);
+  bool IsValidCwbRoi(const LayerRect &cwb_roi, const LayerRect &full_frame);
+  void WaitForCompletion(SyncPoints *sync_points);
+  DisplayError PerformHwCommit(HWLayersInfo *hw_layers_info);
+  void CacheRetireFence();
+  void CacheFrameBuffer();
+  void CacheDisplayComposition();
+  void UpdateFrameBuffer();
+  void CleanupOnError();
   unsigned int rc_cached_res_width_ = 0;
   unsigned int rc_cached_res_height_ = 0;
   std::unique_ptr<RCIntf> rc_core_ = nullptr;
@@ -342,6 +382,12 @@ class DisplayBase : public DisplayInterface {
   static bool primary_active_;
   DisplayDrawMethod draw_method_ = kDrawDefault;
   bool draw_method_set_ = false;
+  CwbConfig *cwb_config_ = NULL;
+  bool transition_done_ = false;
+  bool gpu_comp_frame_ = false;
+  std::mutex power_mutex_;
+  std::condition_variable cv_;
+  LayerBuffer cached_framebuffer_ = {};
 };
 
 }  // namespace sdm

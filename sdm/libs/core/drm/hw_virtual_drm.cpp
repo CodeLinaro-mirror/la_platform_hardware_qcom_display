@@ -145,6 +145,9 @@ DisplayError HWVirtualDRM::Commit(HWLayersInfo *hw_layers_info) {
     DLOGE("Atomic commit failed for crtc_id %d conn_id %d", token_.crtc_id, token_.conn_id);
   }
 
+  // Retire fence marks WB done event.
+  output_buffer->release_fence = hw_layers_info->retire_fence;
+
   return(err);
 }
 
@@ -230,7 +233,7 @@ void HWVirtualDRM::GetModeIndex(const HWDisplayAttributes &display_attributes, i
   }
 }
 
-DisplayError HWVirtualDRM::PowerOn(const HWQosData &qos_data, shared_ptr<Fence> *release_fence) {
+DisplayError HWVirtualDRM::PowerOn(const HWQosData &qos_data, SyncPoints *sync_points) {
   DTRACE_SCOPED();
   if (!drm_atomic_intf_) {
     DLOGE("DRM Atomic Interface is null!");
@@ -243,7 +246,7 @@ DisplayError HWVirtualDRM::PowerOn(const HWQosData &qos_data, shared_ptr<Fence> 
     return kErrorNone;
   }
 
-  DisplayError err = HWDeviceDRM::PowerOn(qos_data, release_fence);
+  DisplayError err = HWDeviceDRM::PowerOn(qos_data, sync_points);
   if (err != kErrorNone) {
     return err;
   }

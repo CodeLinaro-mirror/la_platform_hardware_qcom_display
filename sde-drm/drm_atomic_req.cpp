@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -114,6 +114,7 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     } break;
     case DRMOps::CONNECTOR_SET_CRTC:
     case DRMOps::CONNECTOR_GET_RETIRE_FENCE:
+    case DRMOps::CONNECTOR_SET_RETIRE_FENCE_OFFSET:
     case DRMOps::CONNECTOR_SET_OUTPUT_RECT:
     case DRMOps::CONNECTOR_SET_OUTPUT_FB_ID:
     case DRMOps::CONNECTOR_SET_POWER_MODE:
@@ -126,14 +127,16 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL:
     case DRMOps::CONNECTOR_SET_FRAME_TRIGGER:
     case DRMOps::CONNECTOR_SET_COLORSPACE:
-    case DRMOps::CONNECTOR_SET_PANEL_MODE: {
+    case DRMOps::CONNECTOR_SET_PANEL_MODE: 
+    case DRMOps::CONNECTOR_SET_DYN_BIT_CLK: {
       drm_mgr_->GetConnectorMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
     } break;
     case DRMOps::DPPS_CACHE_FEATURE: {
       drm_mgr_->GetDppsMgrIntf()->CacheDppsFeature(obj_id, args);
     } break;
     case DRMOps::DPPS_COMMIT_FEATURE: {
-      drm_mgr_->GetDppsMgrIntf()->CommitDppsFeatures(drm_atomic_req_, token_);
+      uint32_t validate_only = va_arg(args, uint32_t);
+      drm_mgr_->GetDppsMgrIntf()->CommitDppsFeatures(drm_atomic_req_, token_, validate_only);
     } break;
     case DRMOps::PLANES_RESET_CACHE: {
       drm_mgr_->GetPlaneMgr()->ResetCache(drm_atomic_req_, obj_id);

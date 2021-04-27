@@ -119,7 +119,6 @@ HWC2::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
         DLOGE("SetConfig failed custom WxH %dx%d", new_width, new_height);
         return HWC2::Error::BadParameter;
       }
-      validated_ = false;
     }
 
     output_buffer_.width = UINT32(new_aligned_w);
@@ -131,9 +130,13 @@ HWC2::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
   return HWC2::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtualDPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+HWC2::Error HWCDisplayVirtualDPU::PreValidateDisplay(bool *exit_validate) {
+  // Draw method gets set as part of first commit.
+  SetDrawMethod();
+
   if (NeedsGPUBypass()) {
     MarkLayersForGPUBypass();
+    *exit_validate = true;
     return HWC2::Error::None;
   }
 
@@ -157,6 +160,18 @@ HWC2::Error HWCDisplayVirtualDPU::Validate(uint32_t *out_num_types, uint32_t *ou
     }
   }
 
+  *exit_validate = false;
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayVirtualDPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  bool exit_validate = false;
+  auto status = PreValidateDisplay(&exit_validate);
+  if (exit_validate) {
+    return status;
+  }
+
   return PrepareLayerStack(out_num_types, out_num_requests);
 }
 
@@ -178,10 +193,32 @@ HWC2::Error HWCDisplayVirtualDPU::Present(shared_ptr<Fence> *out_retire_fence) {
     return status;
   }
 
+  status = PostCommitLayerStack(out_retire_fence);
+
+  return status;
+}
+
+HWC2::Error HWCDisplayVirtualDPU::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence) {
+  // Retire fence points to WB done.
+  // Explicitly query for output buffer acquire fence.
+  display_intf_->GetOutputBufferAcquireFence(&layer_stack_.retire_fence);
+
   DumpVDSBuffer();
 
-  status = HWCDisplay::PostCommitLayerStack(out_retire_fence);
+  auto status = HWCDisplay::PostCommitLayerStack(out_retire_fence);
 
+  return status;
+}
+
+HWC2::Error HWCDisplayVirtualDPU::CommitOrPrepare(bool validate_only,
+                                                  shared_ptr<Fence> *out_retire_fence,
+                                                  uint32_t *out_num_types,
+                                                  uint32_t *out_num_requests, bool *needs_commit) {
+  DTRACE_SCOPED();
+
+  layer_stack_.output_buffer = &output_buffer_;
+  auto status = HWCDisplay::CommitOrPrepare(validate_only, out_retire_fence, out_num_types,
+                                            out_num_requests, needs_commit);
   return status;
 }
 

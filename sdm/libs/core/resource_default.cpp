@@ -204,7 +204,7 @@ DisplayError ResourceDefault::ReconfigureDisplay(Handle display_ctx,
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::Start(Handle display_ctx) {
+DisplayError ResourceDefault::Start(Handle display_ctx, LayerStack *layer_stack) {
   return kErrorNone;
 }
 
@@ -937,8 +937,7 @@ DisplayError ResourceDefault::SetDetailEnhancerData(Handle display_ctx,
   return kErrorNotSupported;
 }
 
-DisplayError ResourceDefault::UpdateSyncHandle(Handle display_ctx,
-                                               const shared_ptr<Fence> &sync_handle) {
+DisplayError ResourceDefault::UpdateSyncHandle(Handle display_ctx, const SyncPoints &sync_points) {
   return kErrorNotSupported;
 }
 

@@ -457,7 +457,14 @@ DisplayError HWDeviceDRM::Init() {
   DRMMaster *drm_master = {};
   DRMMaster::GetInstance(&drm_master);
   drm_master->GetHandle(&dev_fd_);
-  DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
+  DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+
+  if (!drm_lib_loader) {
+    DLOGW("Failed to retrieve DRMLibLoader instance");
+    return kErrorResources;
+  }
+
+  drm_lib_loader->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
 
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {
@@ -578,11 +585,11 @@ void HWDeviceDRM::InitializeConfigs() {
   for (uint32_t mode_index = 0; mode_index < modes_count; mode_index++) {
     if (panel_mode_pref & connector_info_.modes[mode_index].panel_mode_caps) {
       connector_info_.modes[mode_index].cur_panel_mode = panel_mode_pref;
-    } else {
-      connector_info_.modes[mode_index].cur_panel_mode =
-          (panel_mode_pref == DRM_MODE_FLAG_CMD_MODE_PANEL) ? DRM_MODE_FLAG_VID_MODE_PANEL
-                                                            : DRM_MODE_FLAG_CMD_MODE_PANEL;
-    }
+    } else if (panel_mode_pref == DRM_MODE_FLAG_VID_MODE_PANEL) {
+      connector_info_.modes[mode_index].cur_panel_mode = DRM_MODE_FLAG_VID_MODE_PANEL;
+    } else if (panel_mode_pref == DRM_MODE_FLAG_CMD_MODE_PANEL) {
+      connector_info_.modes[mode_index].cur_panel_mode = DRM_MODE_FLAG_CMD_MODE_PANEL;
+     }
     // Add mode variant if both panel modes are supported
     if (connector_info_.modes[mode_index].panel_mode_caps & DRM_MODE_FLAG_CMD_MODE_PANEL &&
         connector_info_.modes[mode_index].panel_mode_caps & DRM_MODE_FLAG_VID_MODE_PANEL) {
@@ -748,6 +755,14 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
     hw_panel_info_.max_fps = current_mode.vrefresh;
   }
 
+  if (connector_info_.qsync_fps > 0) {
+    // For command mode panel, driver will set connector property qsync_fps
+    hw_panel_info_.qsync_fps = connector_info_.qsync_fps;
+  } else {
+    // if for video mode panel, qsync_fps is not set, take default min_fps value
+    hw_panel_info_.qsync_fps = hw_panel_info_.min_fps;
+  }
+
   hw_panel_info_.is_primary_panel = connector_info_.is_primary;
   hw_panel_info_.is_pluggable = 0;
   hw_panel_info_.hdr_enabled = connector_info_.panel_hdr_prop.hdr_enabled;
@@ -778,12 +793,11 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
 
   GetHWDisplayPortAndMode();
   GetHWPanelMaxBrightness();
-
-  if (connector_info_.modes[current_mode_index_].panel_mode_caps & DRM_MODE_FLAG_CMD_MODE_PANEL) {
+  if (connector_info_.modes[current_mode_index_].cur_panel_mode & DRM_MODE_FLAG_CMD_MODE_PANEL) {
     hw_panel_info_.mode = kModeCommand;
   }
 
-  if (connector_info_.modes[current_mode_index_].panel_mode_caps &
+  if (connector_info_.modes[current_mode_index_].cur_panel_mode &
              DRM_MODE_FLAG_VID_MODE_PANEL) {
     hw_panel_info_.mode = kModeVideo;
   }
@@ -894,11 +908,16 @@ DisplayError HWDeviceDRM::GetHWPanelInfo(HWPanelInfo *panel_info) {
 }
 
 void HWDeviceDRM::SetDisplaySwitchMode(uint32_t index) {
+  if (current_mode_index_ == index) {
+    DLOGI("Mode %d already set", index);
+    return;
+  }
+
   uint32_t mode_flag = 0;
   uint32_t curr_mode_flag = 0, switch_mode_flag = 0;
   sde_drm::DRMModeInfo to_set = connector_info_.modes[index];
   sde_drm::DRMModeInfo current_mode = connector_info_.modes[current_mode_index_];
-  uint64_t current_bit_clk = connector_info_.modes[current_mode_index_].bit_clk_rate;
+  uint64_t target_bit_clk = connector_info_.modes[current_mode_index_].curr_bit_clk_rate;
   uint32_t switch_index  = 0;
 
   if (to_set.cur_panel_mode & DRM_MODE_FLAG_CMD_MODE_PANEL) {
@@ -923,9 +942,9 @@ void HWDeviceDRM::SetDisplaySwitchMode(uint32_t index) {
     if ((to_set.mode.vdisplay == connector_info_.modes[mode_index].mode.vdisplay) &&
         (to_set.mode.hdisplay == connector_info_.modes[mode_index].mode.hdisplay) &&
         (to_set.mode.vrefresh == connector_info_.modes[mode_index].mode.vrefresh) &&
-        (current_bit_clk == connector_info_.modes[mode_index].bit_clk_rate) &&
         (mode_flag & connector_info_.modes[mode_index].cur_panel_mode)) {
       index = mode_index;
+      to_set.curr_bit_clk_rate = GetSupportedBitClkRate(index, target_bit_clk);
       break;
     }
   }
@@ -1008,7 +1027,7 @@ DisplayError HWDeviceDRM::GetConfigIndex(char *mode, uint32_t *index) {
   return kErrorNone;
 }
 
-DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, shared_ptr<Fence> *release_fence) {
+DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, SyncPoints *sync_points) {
   SetQOSData(qos_data);
 
   if (tui_state_ != kTUIStateNone) {
@@ -1022,9 +1041,7 @@ DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, shared_ptr<Fence> *
 
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::ON);
-  if (release_fence) {
-    drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
-  }
+  drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
 
   int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
@@ -1033,22 +1050,17 @@ DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, shared_ptr<Fence> *
     return kErrorHardware;
   }
 
-  shared_ptr<Fence> retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_on");
-
-  if (release_fence) {
-    *release_fence = Fence::Create(INT(release_fence_fd), "release_power_on");
-    DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %s", Fence::GetStr(*release_fence).c_str());
-  }
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_on");
+  sync_points->release_fence = Fence::Create(INT(release_fence_fd), "release_power_on");
+  DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %d", INT(release_fence_fd));
   pending_power_state_ = kPowerStateNone;
-
-  Fence::Wait(retire_fence, kTimeoutMsPowerOn);
 
   last_power_mode_ = DRMPowerMode::ON;
 
   return kErrorNone;
 }
 
-DisplayError HWDeviceDRM::PowerOff(bool teardown) {
+DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
   DTRACE_SCOPED();
   if (!drm_atomic_intf_) {
     DLOGE("DRM Atomic Interface is null!");
@@ -1079,17 +1091,15 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown) {
     return kErrorHardware;
   }
 
-  shared_ptr<Fence> retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_off");
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_off");
   pending_power_state_ = kPowerStateNone;
-
-  Fence::Wait(retire_fence, kTimeoutMsPowerOff);
 
   last_power_mode_ = DRMPowerMode::OFF;
 
   return kErrorNone;
 }
 
-DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, shared_ptr<Fence> *release_fence) {
+DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, SyncPoints *sync_points) {
   DTRACE_SCOPED();
 
   if (!first_cycle_ || tui_state_ != kTUIStateNone || last_power_mode_ != DRMPowerMode::OFF) {
@@ -1108,9 +1118,7 @@ DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, shared_ptr<Fence> *rel
 
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::DOZE);
-  if (release_fence) {
-    drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
-  }
+  drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
 
   int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
@@ -1119,22 +1127,16 @@ DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, shared_ptr<Fence> *rel
     return kErrorHardware;
   }
 
-  shared_ptr<Fence> retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze");
-
-  if (release_fence) {
-    *release_fence = Fence::Create(release_fence_fd, "release_doze");
-    DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %s", Fence::GetStr(*release_fence).c_str());
-  }
-
-  Fence::Wait(retire_fence, kTimeoutMsDoze);
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze");
+  sync_points->release_fence = Fence::Create(release_fence_fd, "release_doze");
+  DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %d", INT(release_fence_fd));
 
   last_power_mode_ = DRMPowerMode::DOZE;
 
   return kErrorNone;
 }
 
-DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data,
-                                      shared_ptr<Fence> *release_fence) {
+DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, SyncPoints *sync_points) {
   DTRACE_SCOPED();
 
   if (tui_state_ != kTUIStateNone && tui_state_ != kTUIStateEnd) {
@@ -1155,9 +1157,7 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data,
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id,
                             DRMPowerMode::DOZE_SUSPEND);
-  if (release_fence) {
-    drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
-  }
+  drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
 
   int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
@@ -1166,15 +1166,11 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data,
     return kErrorHardware;
   }
 
-  shared_ptr<Fence> retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze_suspend");
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze_suspend");
+  sync_points->release_fence = Fence::Create(release_fence_fd, "release_doze_suspend");
+  DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %d", INT(release_fence_fd));
 
-  if (release_fence) {
-    *release_fence = Fence::Create(release_fence_fd, "release_doze_suspend");
-    DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %s", Fence::GetStr(*release_fence).c_str());
-  }
   pending_power_state_ = kPowerStateNone;
-
-  Fence::Wait(retire_fence, kTimeoutMsDozeSuspend);
 
   last_power_mode_ = DRMPowerMode::DOZE_SUSPEND;
 
@@ -1197,7 +1193,7 @@ void HWDeviceDRM::SetQOSData(const HWQosData &qos_data) {
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ROT_CLK, token_.crtc_id, qos_data.rot_clock_hz);
 }
 
-DisplayError HWDeviceDRM::Standby() {
+DisplayError HWDeviceDRM::Standby(SyncPoints *sync_points) {
   return kErrorNone;
 }
 
@@ -1213,7 +1209,6 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
   DRMSecurityLevel crtc_security_level = DRMSecurityLevel::SECURE_NON_SECURE;
   uint32_t index = current_mode_index_;
   sde_drm::DRMModeInfo current_mode = connector_info_.modes[index];
-  uint64_t current_bit_clk = connector_info_.modes[index].bit_clk_rate;
 
   solid_fills_.clear();
   bool resource_update = hw_layers_info->updates_mask.test(kUpdateResources);
@@ -1371,7 +1366,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_QSYNC_MODE, token_.conn_id, mode);
   }
 
-  drm_atomic_intf_->Perform(DRMOps::DPPS_COMMIT_FEATURE, 0 /* argument is not used */);
+  drm_atomic_intf_->Perform(DRMOps::DPPS_COMMIT_FEATURE, ((validate) ? 1 : 0));
   if (!validate) {
     drm_atomic_intf_->Perform(DRMOps::COMMIT_PANEL_FEATURES, 0 /* argument is not used */);
   }
@@ -1403,6 +1398,9 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
 
   if (!validate && release_fence_fd && retire_fence_fd) {
     drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, release_fence_fd);
+    // Set retire fence offset.
+    uint32_t offset = hw_layers_info->retire_fence_offset;
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_RETIRE_FENCE_OFFSET, token_.conn_id, offset);
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, retire_fence_fd);
   }
 
@@ -1419,7 +1417,6 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
       if ((current_mode.mode.vdisplay == connector_info_.modes[mode_index].mode.vdisplay) &&
           (current_mode.mode.hdisplay == connector_info_.modes[mode_index].mode.hdisplay) &&
-          (current_bit_clk == connector_info_.modes[mode_index].bit_clk_rate) &&
           (current_mode.cur_panel_mode == connector_info_.modes[mode_index].cur_panel_mode) &&
           (vrefresh_ == connector_info_.modes[mode_index].mode.vrefresh)) {
         current_mode = connector_info_.modes[mode_index];
@@ -1429,16 +1426,8 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
   }
 
   if (bit_clk_rate_) {
-    for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
-      if ((current_mode.mode.vdisplay == connector_info_.modes[mode_index].mode.vdisplay) &&
-          (current_mode.mode.hdisplay == connector_info_.modes[mode_index].mode.hdisplay) &&
-          (current_mode.mode.vrefresh == connector_info_.modes[mode_index].mode.vrefresh) &&
-          (current_mode.cur_panel_mode == connector_info_.modes[mode_index].cur_panel_mode) &&
-          (bit_clk_rate_ == connector_info_.modes[mode_index].bit_clk_rate)) {
-        current_mode = connector_info_.modes[mode_index];
-        break;
-      }
-    }
+    // Set the new bit clk rate
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_DYN_BIT_CLK, token_.conn_id, bit_clk_rate_);
   }
 
   if (first_cycle_) {
@@ -1612,7 +1601,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   SetupAtomic(scoped_ref, hw_layers_info, false /* validate */,
                                    &release_fence_fd, &retire_fence_fd);
 
-  bool sync_commit = synchronous_commit_ ||
+  bool sync_commit = synchronous_commit_ || first_cycle_ ||
                     (tui_state_ == kTUIStateStart || tui_state_ == kTUIStateEnd);
 
   if (hw_layers_info->elapse_timestamp > 0) {
@@ -1655,13 +1644,10 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   if (vrefresh_) {
     // Update current mode index if refresh rate is changed
     drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
-    uint64_t current_bit_clk = connector_info_.modes[current_mode_index_].bit_clk_rate;
     for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
       if ((current_mode.vdisplay == connector_info_.modes[mode_index].mode.vdisplay) &&
           (current_mode.hdisplay == connector_info_.modes[mode_index].mode.hdisplay) &&
-          (current_bit_clk == connector_info_.modes[mode_index].bit_clk_rate) &&
           (vrefresh_ == connector_info_.modes[mode_index].mode.vrefresh)) {
-        current_mode_index_ = mode_index;
         SetDisplaySwitchMode(mode_index);
         break;
       }
@@ -1669,19 +1655,11 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
     vrefresh_ = 0;
   }
 
+
   if (bit_clk_rate_) {
     // Update current mode index if bit clk rate is changed.
-    drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
-    for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
-      if ((current_mode.vdisplay == connector_info_.modes[mode_index].mode.vdisplay) &&
-          (current_mode.hdisplay == connector_info_.modes[mode_index].mode.hdisplay) &&
-          (current_mode.vrefresh == connector_info_.modes[mode_index].mode.vrefresh) &&
-          (bit_clk_rate_ == connector_info_.modes[mode_index].bit_clk_rate)) {
-        current_mode_index_ = mode_index;
-        SetDisplaySwitchMode(mode_index);
-        break;
-      }
-    }
+    connector_info_.modes[current_mode_index_].curr_bit_clk_rate = bit_clk_rate_;
+
     bit_clk_rate_ = 0;
   }
 
@@ -1947,11 +1925,9 @@ DisplayError HWDeviceDRM::SetRefreshRate(uint32_t refresh_rate) {
 
   // Check if requested refresh rate is valid
   sde_drm::DRMModeInfo current_mode = connector_info_.modes[current_mode_index_];
-  uint64_t current_bit_clk = connector_info_.modes[current_mode_index_].bit_clk_rate;
   for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
     if ((current_mode.mode.vdisplay == connector_info_.modes[mode_index].mode.vdisplay) &&
         (current_mode.mode.hdisplay == connector_info_.modes[mode_index].mode.hdisplay) &&
-        (current_bit_clk == connector_info_.modes[mode_index].bit_clk_rate) &&
         (current_mode.cur_panel_mode == connector_info_.modes[mode_index].cur_panel_mode) &&
         (refresh_rate == connector_info_.modes[mode_index].mode.vrefresh)) {
       vrefresh_ = refresh_rate;
@@ -2612,6 +2588,29 @@ void HWDeviceDRM::GetTopologySplit(HWTopology hw_topology, uint32_t *split_numbe
     case kPPSplit:
     default:
       *split_number = 1;
+  }
+}
+
+uint64_t HWDeviceDRM::GetSupportedBitClkRate(uint32_t new_mode_index,
+                                uint64_t bit_clk_rate_request) {
+  if (current_mode_index_ == new_mode_index) {
+    if ((std::find(connector_info_.modes[current_mode_index_].dyn_bitclk_list.begin(),
+    connector_info_.modes[current_mode_index_].dyn_bitclk_list.end(), bit_clk_rate_request) !=
+    connector_info_.modes[current_mode_index_].dyn_bitclk_list.end())) {
+      return bit_clk_rate_request;
+    } else {
+      DLOGW("Requested rate not supported: %" PRIu64, bit_clk_rate_request);
+      return connector_info_.modes[current_mode_index_].curr_bit_clk_rate;
+    }
+  }
+
+  if ((std::find(connector_info_.modes[new_mode_index].dyn_bitclk_list.begin(),
+        connector_info_.modes[new_mode_index].dyn_bitclk_list.end(), bit_clk_rate_request) !=
+        connector_info_.modes[new_mode_index].dyn_bitclk_list.end())) {
+    return bit_clk_rate_request;
+  } else {
+    DLOGW("Requested rate not supported: %" PRIu64, bit_clk_rate_request);
+    return connector_info_.modes[new_mode_index].default_bit_clk_rate;
   }
 }
 }  // namespace sdm

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -20,7 +20,7 @@
 #ifndef __HWC_SESSION_H__
 #define __HWC_SESSION_H__
 
-#include <vendor/qti/hardware/display/composer/3.0/IQtiComposerClient.h>
+#include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
 #include <config/device_interface.h>
 
 #include <core/core_interface.h>
@@ -62,9 +62,13 @@ namespace composer_V2_4 = ::android::hardware::graphics::composer::V2_4;
 using HwcDisplayCapability = composer_V2_4::IComposerClient::DisplayCapability;
 using HwcDisplayConnectionType = composer_V2_4::IComposerClient::DisplayConnectionType;
 
+namespace aidl::vendor::qti::hardware::display::config {
+  class DisplayConfigAIDL;
+}
+
 namespace sdm {
 
-using vendor::qti::hardware::display::composer::V3_0::IQtiComposerClient;
+using vendor::qti::hardware::display::composer::V3_1::IQtiComposerClient;
 
 int32_t GetDataspaceFromColorMode(ColorMode mode);
 
@@ -101,6 +105,9 @@ constexpr int32_t kPropertyMax = 256;
 
 class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
                    public HWCDisplayEventHandler, public DisplayConfig::ClientContext {
+
+ friend class aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
+
  public:
   enum HotPlugEvent {
     kHotPlugNone,
@@ -159,9 +166,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
       auto hwc_layer = hwc_display_[display]->GetHWCLayer(layer);
       if (hwc_layer != nullptr) {
         status = (hwc_layer->*member)(std::forward<Args>(args)...);
-        if (hwc_display_[display]->GetGeometryChanges()) {
-          hwc_display_[display]->ResetValidation();
-        }
       }
     }
     return INT32(status);
@@ -185,8 +189,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t SetOutputBuffer(hwc2_display_t display, buffer_handle_t buffer,
                           const shared_ptr<Fence> &release_fence);
   int32_t SetPowerMode(hwc2_display_t display, int32_t int_mode);
-  int32_t ValidateDisplay(hwc2_display_t display, uint32_t *out_num_types,
-                          uint32_t *out_num_requests);
   int32_t SetColorMode(hwc2_display_t display, int32_t /*ColorMode*/ int_mode);
   int32_t SetColorModeWithRenderIntent(hwc2_display_t display, int32_t /*ColorMode*/ int_mode,
                                        int32_t /*RenderIntent*/ int_render_intent);
@@ -235,6 +237,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t SetClientTarget(hwc2_display_t display, buffer_handle_t target,
                           shared_ptr<Fence> acquire_fence,
                           int32_t dataspace, hwc_region_t damage);
+  int32_t SetClientTarget_3_1(hwc2_display_t display, buffer_handle_t target,
+                              shared_ptr<Fence> acquire_fence,
+                              int32_t dataspace, hwc_region_t damage);
   int32_t SetCursorPosition(hwc2_display_t display, hwc2_layer_t layer, int32_t x, int32_t y);
   int32_t GetDataspaceSaturationMatrix(int32_t /*Dataspace*/ int_dataspace, float *out_matrix);
   int32_t SetDisplayBrightnessScale(const android::Parcel *input_parcel);
@@ -251,6 +256,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t SetLayerZOrder(hwc2_display_t display, hwc2_layer_t layer, uint32_t z);
   int32_t SetLayerType(hwc2_display_t display, hwc2_layer_t layer,
                        IQtiComposerClient::LayerType type);
+  int32_t SetLayerFlag(hwc2_display_t display, hwc2_layer_t layer,
+                       IQtiComposerClient::LayerFlag flag);
   int32_t SetLayerSurfaceDamage(hwc2_display_t display, hwc2_layer_t layer, hwc_region_t damage);
   int32_t SetLayerVisibleRegion(hwc2_display_t display, hwc2_layer_t layer, hwc_region_t damage);
   int32_t SetLayerCompositionType(hwc2_display_t display, hwc2_layer_t layer, int32_t int_type);
@@ -293,6 +300,12 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
       hwc2_display_t display, hwc2_config_t config,
       const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
       VsyncPeriodChangeTimeline *out_timeline);
+  HWC2::Error CommitOrPrepare(hwc2_display_t display, bool validate_only,
+                              shared_ptr<Fence> *out_retire_fence,
+                              uint32_t *out_num_types, uint32_t *out_num_requests,
+                              bool *needs_commit);
+  HWC2::Error TryDrawMethod(hwc2_display_t display, IQtiComposerClient::DrawMethod drawMethod);
+
 
   static Locker locker_[HWCCallbacks::kNumDisplays];
   static Locker power_state_[HWCCallbacks::kNumDisplays];
@@ -309,16 +322,17 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     explicit CWB(HWCSession *hwc_session) : hwc_session_(hwc_session) { }
     void PresentDisplayDone(hwc2_display_t disp_id);
 
-    int32_t PostBuffer(std::weak_ptr<DisplayConfig::ConfigCallback> callback, bool post_processed,
-                       const native_handle_t *buffer);
+    int32_t PostBuffer(std::weak_ptr<DisplayConfig::ConfigCallback> callback,
+                       const CwbConfig &cwb_config, const native_handle_t *buffer);
 
    private:
     struct QueueNode {
-      QueueNode(std::weak_ptr<DisplayConfig::ConfigCallback> cb, bool pp, const hidl_handle& buf)
-        : callback(cb), post_processed(pp), buffer(buf) { }
+      QueueNode(std::weak_ptr<DisplayConfig::ConfigCallback> cb, const CwbConfig &cwb_conf,
+                const hidl_handle &buf)
+          : callback(cb), cwb_config(cwb_conf), buffer(buf) {}
 
       std::weak_ptr<DisplayConfig::ConfigCallback> callback;
-      bool post_processed = false;
+      CwbConfig cwb_config = {};
       const native_handle_t *buffer;
     };
 
@@ -508,9 +522,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   android::status_t GetDisplayPortId(uint32_t display, int *port_id);
 
   // Internal methods
-  HWC2::Error ValidateDisplayInternal(hwc2_display_t display, uint32_t *out_num_types,
-                                      uint32_t *out_num_requests);
-  HWC2::Error PresentDisplayInternal(hwc2_display_t display);
   void HandleSecureSession();
   void HandlePendingPowerMode(hwc2_display_t display, const shared_ptr<Fence> &retire_fence);
   void HandlePendingHotplug(hwc2_display_t disp_id, const shared_ptr<Fence> &retire_fence);
@@ -527,6 +538,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   void PerformIdleStatusCallback(hwc2_display_t display);
   DispType GetDisplayConfigDisplayType(int qdutils_disp_type);
   HWC2::Error TeardownConcurrentWriteback(hwc2_display_t display);
+  void PostCommitUnlocked(hwc2_display_t display, const shared_ptr<Fence> &retire_fence,
+                          HWC2::Error status);
+  void PostCommitLocked(hwc2_display_t display);
+  void CancelTUILock(hwc2_display_t display);
 
   CoreInterface *core_intf_ = nullptr;
   HWCDisplay *hwc_display_[HWCCallbacks::kNumDisplays] = {nullptr};
@@ -545,7 +560,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool reset_panel_ = false;
   bool client_connected_ = false;
   bool new_bw_mode_ = false;
-  bool need_invalidate_ = false;
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = nullptr;
   HWCSocketHandler socket_handler_;

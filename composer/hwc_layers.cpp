@@ -31,20 +31,20 @@ namespace sdm {
 std::atomic<hwc2_layer_t> HWCLayer::next_id_(1);
 
 DisplayError SetCSC(const native_handle_t *handle, ColorMetaData *color_metadata) {
-  ColorMetaData color;
-  if (qtigralloc::getMetadataState(const_cast<native_handle_t *>(handle), QTI_COLOR_METADATA)) {
-    int err = static_cast<int>(
-        qtigralloc::get(const_cast<native_handle_t *>(handle), QTI_COLOR_METADATA, &color));
-    if (!err) {
-      color_metadata->colorPrimaries = color.colorPrimaries;
-      color_metadata->transfer = color.transfer;
-      color_metadata->range = color.range;
-      return kErrorNone;
-    } else {
-      DLOGW("Error in qtigralloc get, err=%d", err);
+  int err = qtigralloc::getMetadataState(const_cast<native_handle_t *>(handle),
+                                         QTI_COLOR_METADATA);
+  if (err == 1) {
+    err = static_cast<int>(qtigralloc::get(const_cast<native_handle_t *>(handle),
+                                           QTI_COLOR_METADATA, color_metadata));
+    if (err != 0) {
+      DLOGE("Error in qtigralloc get, err = %d", err);
+      return kErrorUndefined;
     }
+  } else if (err == 0) {
+    DLOGV("Color Metadata state is not set");
   } else {
-    DLOGV("Failed to get values for CSC");
+    DLOGE("Failed to get Color Metadata state");
+    return kErrorUndefined;
   }
 
   return kErrorNone;
@@ -194,17 +194,12 @@ bool GetSDMColorSpace(const int32_t &dataspace, ColorMetaData *color_metadata) {
 HWCLayer::HWCLayer(hwc2_display_t display_id, HWCBufferAllocator *buf_allocator)
   : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
   layer_ = new Layer();
-  // Fences are deferred, so the first time this layer is presented, return -1
-  // TODO(user): Verify that fences are properly obtained on suspend/resume
-  release_fences_.push_back(nullptr);
   geometry_changes_ |= kAdded;
 }
 
 HWCLayer::~HWCLayer() {
   // Close any fences left for this layer
-  while (!release_fences_.empty()) {
-    release_fences_.pop_front();
-  }
+  release_fence_ = nullptr;
   if (layer_) {
     if (buffer_fd_ >= 0) {
       ::close(buffer_fd_);
@@ -302,11 +297,6 @@ HWC2::Error HWCLayer::SetLayerSurfaceDamage(hwc_region_t damage) {
 
   if (!layer_->flags.updating && surface_updated_) {
     layer_->update_mask.set(kSurfaceInvalidate);
-  }
-
-  if (!partial_update_enabled_) {
-    SetDirtyRegions(damage);
-    return HWC2::Error::None;
   }
 
   // Check if there is an update in SurfaceDamage rects.
@@ -556,6 +546,12 @@ HWC2::Error HWCLayer::SetLayerType(IQtiComposerClient::LayerType type) {
   }
 
   type_ = layer_type;
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCLayer::SetLayerFlag(IQtiComposerClient::LayerFlag flag) {
+  compatible_ = (flag == IQtiComposerClient::LayerFlag::COMPATIBLE);
+
   return HWC2::Error::None;
 }
 
@@ -1060,26 +1056,12 @@ void HWCLayer::SetComposition(const LayerComposition &sdm_composition) {
   return;
 }
 
-void HWCLayer::PushBackReleaseFence(const shared_ptr<Fence> &fence) {
-  release_fences_.push_back(fence);
+shared_ptr<Fence> HWCLayer::GetReleaseFence() {
+  return release_fence_;
 }
 
-void HWCLayer::PopBackReleaseFence(shared_ptr<Fence> *fence) {
-  if (release_fences_.empty()) {
-    return;
-  }
-
-  *fence = release_fences_.back();
-  release_fences_.pop_back();
-}
-
-void HWCLayer::PopFrontReleaseFence(shared_ptr<Fence> *fence) {
-  if (release_fences_.empty()) {
-    return;
-  }
-
-  *fence = release_fences_.front();
-  release_fences_.pop_front();
+void HWCLayer::SetReleaseFence(const shared_ptr<Fence> &release_fence) {
+  release_fence_ = release_fence;
 }
 
 bool HWCLayer::IsRotationPresent() {
