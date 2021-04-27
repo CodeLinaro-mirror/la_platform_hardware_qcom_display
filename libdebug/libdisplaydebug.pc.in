@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libdisplaydebug
+Description: Libdebug .pc file
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -ldisplaydebug
+Cflags: -I${includedir}
