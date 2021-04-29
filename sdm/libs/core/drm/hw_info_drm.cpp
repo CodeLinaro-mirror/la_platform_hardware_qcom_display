@@ -408,6 +408,9 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
         pipe_caps.type = kPipeTypeDMA;
         if (!hw_resource->num_dma_pipe) {
           PopulateSupportedFmts(kHWDMAPipe, pipe_obj.second, hw_resource);
+          if (!hw_resource->num_vig_pipe) {
+            PopulatePipeCaps(pipe_obj.second, hw_resource);
+          }
         }
         hw_resource->num_dma_pipe++;
         break;
