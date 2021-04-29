@@ -62,7 +62,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libdl libgrallocut
                                   android.hardware.graphics.mapper@2.1 \
                                   android.hardware.graphics.mapper@3.0 \
                                   android.hardware.graphics.mapper@4.0 \
-                                  libdmabufheap
+                                  libdmabufheap libvmmem
 LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__ -Wno-unused-variable \
                                  -Wunused-but-set-variable  -Wno-unused-parameter

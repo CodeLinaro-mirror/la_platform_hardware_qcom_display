@@ -178,20 +178,26 @@ int DmaManager::UnmapBuffer(void *base, unsigned int size, unsigned int /*offset
 
 int DmaManager::SecureMemPerms(AllocData *data) {
   int ret = 0;
-  // Disable libvmmem calls until library is added to QIIFA CMD
-  /*
   std::unique_ptr<VmMem> vmmem = VmMem::CreateVmMem();
+  if (!vmmem) {
+    return -ENOMEM;
+  }
   VmPerm vm_perms;
 
   for (auto vm_name : data->vm_names) {
     VmHandle handle = vmmem->FindVmByName(vm_name);
-    vm_perms.push_back(std::make_pair(handle, VMMEM_READ | VMMEM_WRITE));
+    if (vm_name == "qcom,cp_sec_display" || vm_name == "qcom,cp_camera_preview") {
+      vm_perms.push_back(std::make_pair(handle, VMMEM_READ));
+    } else if (vm_name == "qcom,cp_cdsp") {
+      vm_perms.push_back(std::make_pair(handle, VMMEM_READ | VMMEM_WRITE | VMMEM_EXEC));
+    } else {
+      vm_perms.push_back(std::make_pair(handle, VMMEM_READ | VMMEM_WRITE));
+    }
   }
 
   ret = vmmem->LendDmabuf(data->fd, vm_perms);
-  */
   return ret;
-  }
+}
 
 void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_heap_name,
                              std::vector<std::string> *dma_vm_names, unsigned int *alloc_type,

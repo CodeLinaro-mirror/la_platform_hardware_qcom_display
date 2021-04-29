@@ -33,6 +33,7 @@
 #include <BufferAllocator/BufferAllocator.h>
 #include <string>
 #include <vector>
+#include <vmmem.h>
 
 #include "gr_alloc_interface.h"
 
