@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -742,10 +742,10 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       format = kFormatBGR888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
-      format = kFormatRGB565;
+      format = kFormatBGR565;
       break;
     case HAL_PIXEL_FORMAT_BGR_565:
-      format = kFormatBGR565;
+      format = kFormatRGB565;
       break;
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:

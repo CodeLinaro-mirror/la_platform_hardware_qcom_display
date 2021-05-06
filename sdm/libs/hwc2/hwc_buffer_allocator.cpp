@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -316,10 +316,10 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
       *target = HAL_PIXEL_FORMAT_RGB_888;
       break;
     case kFormatRGB565:
-      *target = HAL_PIXEL_FORMAT_RGB_565;
+      *target = HAL_PIXEL_FORMAT_BGR_565;
       break;
     case kFormatBGR565:
-      *target = HAL_PIXEL_FORMAT_BGR_565;
+      *target = HAL_PIXEL_FORMAT_RGB_565;
       break;
     case kFormatBGR888:
       *target = HAL_PIXEL_FORMAT_BGR_888;
