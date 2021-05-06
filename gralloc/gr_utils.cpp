@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1943,7 +1943,7 @@ void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
       *drm_format = DRM_FORMAT_BGR888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
-      *drm_format = DRM_FORMAT_BGR565;
+      *drm_format = DRM_FORMAT_RGB565;
       break;
     case HAL_PIXEL_FORMAT_BGR_565:
       *drm_format = DRM_FORMAT_BGR565;
