@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -99,6 +99,24 @@ int HWCDisplayPluggable::Init() {
   return status;
 }
 
+HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
+                                                   android_color_transform_t hint) {
+  if (HAL_COLOR_TRANSFORM_IDENTITY == hint) {
+    has_color_tranform_ = false;
+    // From 2.1 IComposerClient.hal:
+    // If the device is not capable of either using the hint or the matrix to apply the desired
+    // color transform, it must force all layers to client composition during VALIDATE_DISPLAY.
+  } else {
+    // Also, interpret HAL_COLOR_TRANSFORM_ARBITRARY_MATRIX hint as non-identity matrix.
+    has_color_tranform_ = true;
+  }
+
+  callbacks_->Refresh(id_);
+  validated_ = false;
+
+  return HWC2::Error::None;
+}
+
 void HWCDisplayPluggable::Destroy(HWCDisplay *hwc_display) {
   // Flush the display to have outstanding fences signaled.
   hwc_display->Flush();
@@ -133,10 +151,12 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
     return status;
   }
 
-  // Apply current Color Mode and Render Intent.
-  if (color_mode_->ApplyCurrentColorModeWithRenderIntent(
-      static_cast<bool>(layer_stack_.flags.hdr_present)) != HWC2::Error::None) {
-    // Fallback to GPU Composition, if Color Mode can't be applied.
+  status = color_mode_->ApplyCurrentColorModeWithRenderIntent(
+                                                 static_cast<bool>(layer_stack_.flags.hdr_present));
+  if (status != HWC2::Error::None || has_color_tranform_) {
+    // Fallback to GPU Composition if Color Mode can't be applied or if a color tranform needs to be
+    // applied.
+
     MarkLayersForClientComposition();
   }
 

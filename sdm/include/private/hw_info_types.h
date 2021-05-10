@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -238,6 +238,7 @@ struct HWPipeCaps {
   bool support_handoff = false;
   // Allow all pipelines to be usable on all displays by default
   std::bitset<32> hw_block_mask = std::bitset<32>().set();
+  uint32_t multirect_cap_mask = 0;
 };
 
 struct HWPipeStateInfo {
@@ -436,6 +437,7 @@ struct HWPanelInfo {
   bool qsync_support = false;          // Specifies panel supports qsync feature or not.
   bool dyn_bitclk_support = false;     // Bit clk can be updated to avoid RF interference.
   std::vector<uint64_t> bitclk_rates;  // Supported bit clk levels.
+  uint32_t max_blendstages;           // Max blend stages by panel
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||

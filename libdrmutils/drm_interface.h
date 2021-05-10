@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017 - 2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -555,7 +555,7 @@ struct DRMPlaneTypeInfo {
   uint32_t cache_size;  // cache size in bytes for inline rotation support.
   bool has_excl_rect = false;
   QSEEDStepVersion qseed3_version;
-  bool multirect_prop_present = false;
+  uint32_t multirect_prop_mask = 0;
   InlineRotationVersion inrot_version;  // inline rotation version
   bool inverse_pma = false;
   uint32_t dgm_csc_version = 0;  // csc used with DMA
@@ -645,6 +645,7 @@ struct DRMConnectorInfo {
   uint32_t topology_control;
   bool dyn_bitclk_support;
   std::vector<uint8_t> edid;
+  uint32_t max_blendstages;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>
@@ -766,6 +767,7 @@ enum DRMCscType {
   kCscYuv2Rgb601L,
   kCscYuv2Rgb601FR,
   kCscYuv2Rgb709L,
+  kCscYuv2Rgb709FR,
   kCscYuv2Rgb2020L,
   kCscYuv2Rgb2020FR,
   kCscTypeMax,
