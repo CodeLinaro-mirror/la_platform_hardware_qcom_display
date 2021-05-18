@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -313,7 +313,7 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
   int width = info.width;
   int height = info.height;
   uint64_t usage = info.usage;
-
+  unsigned int mmm_color_format = 0;
   if (!IsGPUFlagSupported(usage)) {
     ALOGE("Unsupported GPU usage flags present 0x%" PRIx64, usage);
     return 0;
@@ -384,7 +384,9 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
       case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
       case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
 #ifdef __MIN_ANDROID_VER_T__
-        size = MMM_COLOR_FMT_BUFFER_SIZE(MMM_COLOR_FMT_NV12, width, height);
+        mmm_color_format = (usage & GRALLOC_USAGE_PRIVATE_HEIF) ? MMM_COLOR_FMT_NV12_512 :
+                                                                  MMM_COLOR_FMT_NV12;
+        size = MMM_COLOR_FMT_BUFFER_SIZE(mmm_color_format, width, height);
 #else
         size = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, width, height);
 #endif
@@ -563,6 +565,7 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
   unsigned int y_stride = 0, y_height = 0, y_size = 0;
   unsigned int c_stride = 0, c_height = 0, c_size = 0;
   uint64_t yOffset, cOffset;
+  unsigned int mmm_color_format = 0;
 
   y_stride = c_stride = UINT(width) * bpp;
   y_height = INT(height);
@@ -585,7 +588,9 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
 #ifdef __MIN_ANDROID_VER_T__
-      c_height = MMM_COLOR_FMT_UV_SCANLINES(MMM_COLOR_FMT_NV12, height);
+      mmm_color_format = (info.usage & GRALLOC_USAGE_PRIVATE_HEIF) ? MMM_COLOR_FMT_NV12_512 :
+                                                                     MMM_COLOR_FMT_NV12;
+      c_height = MMM_COLOR_FMT_UV_SCANLINES(mmm_color_format, height);
 #else
       c_height = VENUS_UV_SCANLINES(COLOR_FMT_NV12, height);
 #endif
@@ -1119,6 +1124,7 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   int height = info.height;
   int format = info.format;
   uint64_t usage = info.usage;
+  unsigned int mmm_color_format = 0;
   if (width < 1 || height < 1) {
     *alignedw = 0;
     *alignedh = 0;
@@ -1214,8 +1220,10 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
 #ifdef __MIN_ANDROID_VER_T__
-      aligned_w = INT(MMM_COLOR_FMT_Y_STRIDE(MMM_COLOR_FMT_NV12, width));
-      aligned_h = INT(MMM_COLOR_FMT_Y_SCANLINES(MMM_COLOR_FMT_NV12, height));
+      mmm_color_format = (usage & GRALLOC_USAGE_PRIVATE_HEIF) ? MMM_COLOR_FMT_NV12_512 :
+                                                                MMM_COLOR_FMT_NV12;
+      aligned_w = INT(MMM_COLOR_FMT_Y_STRIDE(mmm_color_format, width));
+      aligned_h = INT(MMM_COLOR_FMT_Y_SCANLINES(mmm_color_format, height));
 #else
       aligned_w = INT(VENUS_Y_STRIDE(COLOR_FMT_NV12, width));
       aligned_h = INT(VENUS_Y_SCANLINES(COLOR_FMT_NV12, height));
