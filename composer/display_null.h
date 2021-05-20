@@ -69,6 +69,7 @@ class DisplayNull : public DisplayInterface {
   virtual void CheckMMRMState() { }
   virtual bool IsValidated() { return true; }
   virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) { return kErrorNotSupported; }
+  virtual void FlushConcurrentWriteback() {}
 
   MAKE_NO_OP(CommitOrPrepare(LayerStack *))
   MAKE_NO_OP(PrePrepare(LayerStack *))
@@ -79,6 +80,7 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(Flush(LayerStack *))
   MAKE_NO_OP(GetVSyncState(bool *))
   MAKE_NO_OP(SetDrawMethod(DisplayDrawMethod))
+  MAKE_NO_OP(SetNoisePlugInOverride(bool, int32_t, int32_t, int32_t))
   MAKE_NO_OP(SetActiveConfig(uint32_t))
   MAKE_NO_OP(SetActiveConfig(DisplayConfigVariableInfo *))
   MAKE_NO_OP(SetMaxMixerStages(uint32_t))

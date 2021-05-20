@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018, 2020-2021 The Linux Foundation. All rights reserved.
  * Not a Contribution
  *
  * Copyright (C) 2010 The Android Open Source Project
@@ -662,6 +662,19 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
         return Error::BAD_VALUE;
       }
       break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
+        comp.offsetInBits = 6;
+        comp.sizeInBits = 10;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 22;
+        comp.sizeInBits = 10;
+      } else {
+        return Error::BAD_VALUE;
+      }
+      break;
+
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_RAW16):
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_RAW.value) {
         comp.offsetInBits = 0;
@@ -1149,6 +1162,13 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
 
   uint64_t usage = descriptor.GetUsage();
+
+  // Disable UBWC for RC layers, remove this check after fix is available in SF/framework
+  if (strstr(descriptor.GetName().c_str(), "ScreenDecorOverlay") != NULL) {
+    usage |= BufferUsage::CPU_READ_RARELY;
+    usage |= BufferUsage::CPU_WRITE_RARELY;
+  }
+
   int format = GetImplDefinedFormat(usage, descriptor.GetFormat());
   uint32_t layer_count = descriptor.GetLayerCount();
 

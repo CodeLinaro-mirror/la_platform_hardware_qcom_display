@@ -87,6 +87,23 @@ enum CWBClient {
   kCWBClientComposer,   // Client to HWC i.e. SurfaceFlinger
 };
 
+enum CWBStatus {
+  kCWBAvailable,     // Available to accept new CWB request
+  kCWBConfigure,     // CWB is Configured in the current frame
+  kCWBTeardown,      // CWB tear down in the current frame. Frame's Retire fence would be cached.
+                     // New CWB requests coming in are rejected until this retire fence signals.
+  kCWBPostTeardown,  // CWB teardown done in previous frame.
+};
+
+struct CwbState {
+  hwc2_display_t cwb_disp_id = -1;                          // display id on which cwb is either
+                                                            // requested, active or tearing down.
+  CWBClient cwb_client = kCWBClientNone;                    // the client actively performing cwb.
+  CWBStatus cwb_status = CWBStatus::kCWBAvailable;          // current cwb statuss
+  shared_ptr<Fence> teardown_frame_retire_fence = nullptr;  // cache cwb disable frame retire fence
+                                                            // to reject requests until it signals.
+};
+
 struct TransientRefreshRateInfo {
   uint32_t transient_vsync_period;
   int64_t vsync_applied_time;
@@ -174,6 +191,8 @@ class HWCDisplay : public DisplayEventHandler {
   // Framebuffer configurations
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms, uint32_t inactive_ms);
   virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
+                                         int32_t format);
+  virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                          int32_t format, const CwbConfig &cwb_config);
   virtual DisplayError SetMaxMixerStages(uint32_t max_mixer_stages);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending) {
@@ -194,10 +213,15 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetPanelResolution(uint32_t *width, uint32_t *height);
   virtual void GetRealPanelResolution(uint32_t *width, uint32_t *height);
   virtual void Dump(std::ostringstream *os);
+
+  // CWB related methods
   virtual int GetCwbBufferResolution(CwbTapPoint cwb_tappoint, uint32_t *x_pixels,
                                      uint32_t *y_pixels);
+  virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer,
+                                        shared_ptr<Fence> acquire_fence, CwbConfig cwb_config,
+                                        CWBClient client);
+  virtual HWC2::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence);
   virtual DisplayError TeardownConcurrentWriteback(bool *needs_refresh);
-
   // Captures frame output in the buffer specified by output_buffer_info. The API is
   // non-blocking and the client is expected to check operation status later on.
   // Returns -1 if the input is invalid.
@@ -212,14 +236,6 @@ class HWCDisplay : public DisplayEventHandler {
 
   virtual DisplayError SetHWDetailedEnhancerConfig(void *params) {
     return kErrorNotSupported;
-  }
-  virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer,
-                                        shared_ptr<Fence> acquire_fence, CwbConfig cwb_config,
-                                        CWBClient client) {
-    return HWC2::Error::Unsupported;
-  }
-  virtual HWC2::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence) {
-    return HWC2::Error::Unsupported;
   }
 
   virtual HWC2::Error SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
@@ -243,6 +259,8 @@ class HWCDisplay : public DisplayEventHandler {
   static uint32_t GetThrottlingRefreshRate() { return HWCDisplay::throttling_refresh_rate_; }
   static void SetThrottlingRefreshRate(uint32_t newRefreshRate)
               { HWCDisplay::throttling_refresh_rate_ = newRefreshRate; }
+  virtual int SetNoisePlugInOverride(bool override_en, int32_t attn, int32_t noise_zpos,
+                                     int32_t bl_thr);
   virtual int SetActiveDisplayConfig(uint32_t config);
   virtual int GetActiveDisplayConfig(uint32_t *config);
   virtual int GetDisplayConfigCount(uint32_t *count);
@@ -492,6 +510,13 @@ class HWCDisplay : public DisplayEventHandler {
   void RetrieveFences(shared_ptr<Fence> *out_retire_fence);
   void SetDrawMethod();
 
+  // CWB related methods
+  void SetCwbState();
+  void ResetCwbState();
+  void HandleFrameOutput();
+  void HandleFrameDump();
+  virtual void HandleFrameCapture(){};
+
   bool layer_stack_invalid_ = true;
   CoreInterface *core_intf_ = nullptr;
   HWCBufferAllocator *buffer_allocator_ = NULL;
@@ -509,9 +534,6 @@ class HWCDisplay : public DisplayEventHandler {
   std::map<hwc2_layer_t, HWC2::LayerRequest> layer_requests_;
   bool flush_on_error_ = false;
   bool flush_ = false;
-  uint32_t dump_frame_count_ = 0;
-  uint32_t dump_frame_index_ = 0;
-  bool dump_input_layers_ = false;
   HWC2::PowerMode current_power_mode_ = HWC2::PowerMode::Off;
   HWC2::PowerMode pending_power_mode_ = HWC2::PowerMode::Off;
   bool swap_interval_zero_ = false;
@@ -562,6 +584,28 @@ class HWCDisplay : public DisplayEventHandler {
   bool animating_ = false;
   DisplayDrawMethod draw_method_ = kDrawDefault;
 
+  // CWB state & configuration
+  CwbConfig cwb_config_ = {};
+  static CwbState cwb_state_;
+  static std::mutex cwb_state_lock_;  // cwb state lock. Set before accesing or updating cwb_state_
+
+  // Readback buffer configuration
+  LayerBuffer output_buffer_ = {};
+  bool readback_buffer_queued_ = false;
+  bool readback_configured_ = false;
+
+  // Members for N frame dump to file
+  bool dump_output_to_file_ = false;
+  uint32_t dump_frame_count_ = 0;
+  uint32_t dump_frame_index_ = 0;
+  bool dump_input_layers_ = false;
+  BufferInfo output_buffer_info_ = {};
+  void *output_buffer_base_ = nullptr;  // points to base address of output_buffer_info_
+
+  // Members for 1 frame capture in a client provided buffer
+  bool frame_capture_buffer_queued_ = false;
+  int frame_capture_status_ = -EAGAIN;
+
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
   void WaitOnPreviousFence();
@@ -571,7 +615,6 @@ class HWCDisplay : public DisplayEventHandler {
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
   int null_display_mode_ = 0;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
-  shared_ptr<Fence> fbt_release_fence_ = nullptr;
   shared_ptr<Fence> release_fence_ = nullptr;
   hwc2_config_t pending_config_index_ = 0;
   bool pending_first_commit_config_ = false;

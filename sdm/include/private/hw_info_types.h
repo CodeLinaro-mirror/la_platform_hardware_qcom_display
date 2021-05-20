@@ -775,15 +775,13 @@ struct HWLayersInfo {
   bool rc_config = false;
   RCLayersInfo rc_layers_info = {};
   bool spr_enable = false;
-  uint64_t rc_pu_flag_status = 0;
-  bool rc_pu_needs_full_roi = false;
   HWLayerConfig config[kMaxSDELayers] {};
   float output_compression = 1.0f;
   HWQosData qos_data = {};
   HWAVRInfo hw_avr_info = {};
   std::bitset<kUpdateMax> updates_mask = 0;
   uint64_t elapse_timestamp = 0;
-  bool do_hw_validate = false;
+  bool do_hw_validate = true;
   uint32_t retire_fence_offset = 0;
   bool trigger_async_commit = false;  // This field hints if asynchronous commit can be triggered.
   shared_ptr<Fence> retire_fence = nullptr;  // Retire fence for current draw cycle.

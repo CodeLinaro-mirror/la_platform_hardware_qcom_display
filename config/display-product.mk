@@ -1,41 +1,32 @@
 # Display product definitions
 PRODUCT_PACKAGES += \
     android.hardware.graphics.mapper@4.0-impl-qti-display \
+    android.hardware.graphics.mapper-impl-qti-display.xml \
+    vendor.qti.hardware.display.mapper@4.0.vendor \
     vendor.qti.hardware.display.allocator-service \
+    vendor.qti.hardware.display.allocator-service.rc \
+    vendor.qti.hardware.display.allocator-service.xml \
     vendor.qti.hardware.display.composer-service \
-    lights.$(TARGET_BOARD_PLATFORM) \
-    hwcomposer.$(TARGET_BOARD_PLATFORM) \
+    vendor.qti.hardware.display.composer-service.rc \
+    vendor.qti.hardware.display.composer-service.xml \
     libsdmcore \
     libsdmutils \
+    libqdutils \
     libqdMetaData \
     libdisplayconfig.vendor \
     libdisplayconfig.qti.vendor \
-    vendor.display.config@1.0.vendor \
-    vendor.display.config@1.1.vendor \
-    vendor.display.config@1.2.vendor \
-    vendor.display.config@1.3.vendor \
-    vendor.display.config@1.4.vendor \
-    vendor.display.config@1.5.vendor \
-    vendor.display.config@1.6.vendor \
-    vendor.display.config@1.7.vendor \
-    vendor.display.config@1.8.vendor \
-    vendor.display.config@1.9.vendor \
-    vendor.display.config@1.10.vendor \
-    vendor.display.config@1.11.vendor \
-    vendor.display.config@1.12.vendor \
-    vendor.display.config@1.13.vendor \
-    vendor.display.config@1.14.vendor \
-    vendor.display.config@1.15.vendor \
     vendor.display.config@2.0.vendor \
-    vendor.qti.hardware.display.mapper@4.0.vendor \
+    vendor.qti.hardware.display.config.vendor \
     init.qti.display_boot.sh \
     init.qti.display_boot.rc \
-    modetest \
-    vendor.qti.hardware.display.config.vendor
+    modetest
+
 
 #oem_services library
 PRODUCT_PACKAGES += \
     libfilefinder \
+    vendor.qti.hardware.display.demura@1.0-service.rc \
+    vendor.qti.hardware.display.demura-service.xml \
     vendor.qti.hardware.display.demura@1.0-service
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
@@ -89,7 +80,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.hw=0 \
     debug.egl.hw=0 \
     debug.sf.latch_unsignaled=1 \
-    debug.sf.high_fps_late_app_phase_offset_ns=1000000 \
+    debug.sf.high_fps_late_app_phase_offset_ns=500000 \
     debug.mdpcomp.logs=0 \
     vendor.gralloc.disable_ubwc=0 \
     vendor.display.disable_scaler=0 \
@@ -98,15 +89,13 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.comp_mask=0 \
     vendor.display.enable_optimize_refresh=1 \
     vendor.display.use_smooth_motion=1 \
-    debug.sf.enable_advanced_sf_phase_offset=1 \
-    debug.sf.high_fps_late_sf_phase_offset_ns=-4000000 \
-    debug.sf.high_fps_early_phase_offset_ns=-4000000 \
-    debug.sf.high_fps_early_gl_phase_offset_ns=-4000000 \
+    debug.sf.high_fps_late_sf_phase_offset_ns=-500000 \
+    debug.sf.high_fps_early_phase_offset_ns=-2000000 \
+    debug.sf.high_fps_early_gl_phase_offset_ns=-2000000 \
     debug.sf.disable_client_composition_cache=1 \
     debug.sf.enable_gl_backpressure=1 \
     debug.sf.enable_hwc_vds=1 \
-    vendor.display.vds_allow_hwc=1 \
-    vendor.display.enable_rotator_ui=0
+    vendor.display.vds_allow_hwc=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
@@ -149,6 +138,10 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.set_touch_timer_ms=200
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_frame_buffer_acquired_buffers=3
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dimension=4096
+
+ifeq ($(TARGET_BOARD_PLATFORM),taro)
+PRODUCT_PROPERTY_OVERRIDES += debug.sf.set_idle_timer_ms=80
+endif
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
 # Recovery is enabled, logging is enabled

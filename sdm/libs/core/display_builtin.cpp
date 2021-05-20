@@ -131,10 +131,11 @@ DisplayError DisplayBuiltIn::Init() {
   deferred_config_.frame_count = (value > 0) ? UINT32(value) : 0;
 
   if (pf_factory_ && prop_intf_) {
-    if (DisplayBase::SetupRC() != kErrorNone) {
-      // Non-fatal but not expected, log error
-      DLOGE("RC Failed to initialize. Error = %d", error);
-    }
+    // Get status of RC enablement property. Default RC is disabled.
+    int rc_prop_value = 0;
+    Debug::GetProperty(ENABLE_ROUNDED_CORNER, &rc_prop_value);
+    rc_enable_prop_ = rc_prop_value ? true : false;
+    DLOGI("RC feature %s.", rc_enable_prop_ ? "enabled" : "disabled");
 
     if ((error = SetupSPR()) != kErrorNone) {
       DLOGE("SPR Failed to initialize. Error = %d", error);
@@ -170,6 +171,10 @@ DisplayError DisplayBuiltIn::Init() {
   DebugHandler::Get()->GetProperty(ENHANCE_IDLE_TIME, &value);
   enhance_idle_time_ = (value == 1);
 
+  value = 0;
+  DebugHandler::Get()->GetProperty(ENABLE_DPPS_DYNAMIC_FPS, &value);
+  enable_dpps_dyn_fps_ = (value == 1);
+
   return error;
 }
 
@@ -199,7 +204,12 @@ DisplayError DisplayBuiltIn::PrePrepare(LayerStack *layer_stack) {
   uint32_t display_width = display_attributes_.x_pixels;
   uint32_t display_height = display_attributes_.y_pixels;
 
-  DisplayError error = DisplayBase::PrePrepare(layer_stack);
+  DisplayError error = HandleDemuraLayer(layer_stack);
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  error = DisplayBase::PrePrepare(layer_stack);
   if (error == kErrorNone) {
     return kErrorNone;
   }
@@ -1160,6 +1170,7 @@ DisplayError DisplayBuiltIn::DppsProcessOps(enum DppsOps op, void *payload, size
       info->is_primary = IsPrimaryDisplayLocked();
       info->display_id = display_id_;
       info->display_type = display_type_;
+      info->fps = enable_dpps_dyn_fps_ ? display_attributes_.fps : 0;
 
       error = hw_intf_->GetPanelBrightnessBasePath(&(info->brightness_base_path));
       if (error != kErrorNone) {
@@ -1284,6 +1295,7 @@ std::string DisplayBuiltIn::Dump() {
   hw_intf_->GetDisplayAttributes(active_index, &attrib);
 
   os << "device type:" << display_type_;
+  os << " DrawMethod: " << draw_method_;
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
@@ -1621,7 +1633,7 @@ DisplayError DisplayBuiltIn::SetDynamicDSIClock(uint64_t bit_clk_rate) {
   ClientLock lock(disp_mutex_);
   if (!active_) {
     DLOGW("Invalid display state = %d. Panel must be on.", state_);
-    return kErrorNotSupported;
+    return kErrorNone;
   }
 
   if (!hw_panel_info_.dyn_bitclk_support) {
@@ -1755,11 +1767,6 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
     return false;
   }
 
-  DisplayError error = BuildLayerStackStats(layer_stack);
-  if (error != kErrorNone) {
-    return false;
-  }
-
   disp_layer_stack_.info.left_frame_roi.clear();
   disp_layer_stack_.info.right_frame_roi.clear();
   disp_layer_stack_.info.dest_scale_info_map.clear();
@@ -1803,6 +1810,32 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
   return same_roi;
 }
 
+DisplayError DisplayBuiltIn::HandleDemuraLayer(LayerStack *layer_stack) {
+  if (!layer_stack) {
+    DLOGE("layer_stack is null");
+    return kErrorParameters;
+  }
+  std::vector<Layer *> &layers = layer_stack->layers;
+  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
+
+  if (comp_manager_->GetDemuraStatus() &&
+      comp_manager_->GetDemuraStatusForDisplay(display_id_) &&
+      demura_layer_.input_buffer.planes[0].fd > 0) {
+    if (hw_layers_info.demura_target_index == -1) {
+      // If demura layer added for first time, do not skip validate
+      needs_validate_ = true;
+    }
+    layers.push_back(&demura_layer_);
+    DLOGI_IF(kTagDisplay, "Demura layer added to layer stack");
+  } else if (hw_layers_info.demura_target_index != -1) {
+    // Demura was present last frame but is now disabled
+    needs_validate_ = true;
+    hw_layers_info.demura_present = false;
+    DLOGD_IF(kTagDisplay, "Demura layer to be removed in this frame");
+  }
+  return kErrorNone;
+}
+
 DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
   std::vector<Layer *> &layers = layer_stack->layers;
   HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
@@ -1842,30 +1875,6 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
       hw_layers_info.game_present = true;
     }
     index++;
-  }
-  if (comp_manager_->GetDemuraStatus() &&
-      comp_manager_->GetDemuraStatusForDisplay(display_id_) &&
-      demura_layer_.input_buffer.planes[0].fd > 0 &&
-      hw_layers_info.demura_target_index == -1) {
-    layers.push_back(&demura_layer_);
-    hw_layers_info.demura_target_index = index;
-    hw_layers_info.demura_present = true;
-    disp_layer_stack_.stack->flags.demura_present = true;
-    DLOGD_IF(kTagDisplay, "Display %d shall request Demura in this frame", display_id_);
-  } else if ((!comp_manager_->GetDemuraStatus() ||
-              !comp_manager_->GetDemuraStatusForDisplay(display_id_)) &&
-             hw_layers_info.demura_target_index != -1 ) {
-    layers.erase(layers.begin() + hw_layers_info.demura_target_index);
-    hw_layers_info.demura_present = false;
-    disp_layer_stack_.stack->flags.demura_present = false;
-    if (hw_layers_info.gpu_target_index > hw_layers_info.demura_target_index) {
-      hw_layers_info.gpu_target_index--;
-    }
-    if (hw_layers_info.stitch_target_index > hw_layers_info.demura_target_index) {
-      hw_layers_info.stitch_target_index--;
-    }
-    hw_layers_info.demura_target_index = -1;
-    DLOGD_IF(kTagDisplay, "Display %d shall remove Demura in this frame", display_id_);
   }
 
   DLOGI_IF(kTagDisplay, "LayerStack layer_count: %zu, app_layer_count: %d, "
@@ -1978,6 +1987,15 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
   SetPUonDestScaler();
+
+  if (enable_dpps_dyn_fps_) {
+    uint32_t dpps_fps = display_attributes_.fps;
+    DppsNotifyPayload dpps_payload = {};
+    dpps_payload.is_primary = IsPrimaryDisplay();
+    dpps_payload.payload = &dpps_fps;
+    dpps_payload.payload_size = sizeof(dpps_fps);
+    dpps_info_.DppsNotifyOps(kDppsUpdateFpsEvent, &dpps_payload, sizeof(dpps_payload));
+  }
 
   return kErrorNone;
 }

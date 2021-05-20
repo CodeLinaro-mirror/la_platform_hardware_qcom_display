@@ -197,6 +197,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   void PreCommit(LayerStack *layer_stack);
   DisplayError ControlPartialUpdateLocked(bool enable, uint32_t *pending);
   DisplayError SetDppsFeatureLocked(void *payload, size_t size);
+  DisplayError HandleDemuraLayer(LayerStack *layer_stack);
 
   const uint32_t kPuTimeOutMs = 1000;
   std::vector<HWEvent> event_list_;
@@ -208,7 +209,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   bool panel_feature_init_ = false;
   bool disable_dyn_fps_ = false;
   DppsInfo dpps_info_ = {};
-  FrameTriggerMode trigger_mode_debug_ = kFrameTriggerMax;
+  // Posted Start is default mode
+  FrameTriggerMode trigger_mode_debug_ = kFrameTriggerPostedStart;
   float level_remainder_ = 0.0f;
   float cached_brightness_ = 0.0f;
   bool pending_brightness_ = false;
@@ -241,6 +243,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   Layer demura_layer_ = {};
   bool demura_intended_ = false;
   bool pending_color_space_ = false;
+  bool enable_dpps_dyn_fps_ = false;
   HWDisplayMode last_panel_mode_ = kModeDefault;
 };
 

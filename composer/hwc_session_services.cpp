@@ -267,6 +267,23 @@ int HWCSession::SetActiveConfigIndex(int disp_id, uint32_t config) {
   return error;
 }
 
+int HWCSession::SetNoisePlugInOverride(int32_t disp_id, bool override_en, int32_t attn,
+                                       int32_t noise_zpos, int32_t bl_thr) {
+  int32_t disp_idx = GetDisplayIndex(disp_id);
+  if (disp_idx == -1) {
+    DLOGE("Invalid display = %d", disp_id);
+    return -EINVAL;
+  }
+
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+  int32_t error = -EINVAL;
+  if (hwc_display_[disp_idx]) {
+    error = hwc_display_[disp_idx]->SetNoisePlugInOverride(override_en, attn, noise_zpos, bl_thr);
+  }
+
+  return error;
+}
+
 int HWCSession::DisplayConfigImpl::SetActiveConfig(DispType dpy, uint32_t config) {
   return hwc_session_->SetActiveConfigIndex(MapDisplayType(dpy), config);
 }
@@ -653,6 +670,43 @@ int32_t HWCSession::getDisplayMaxBrightness(uint32_t display, uint32_t *max_brig
   return error;
 }
 
+int HWCSession::SetCameraSmoothInfo(CameraSmoothOp op, int32_t fps) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto const& [id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyCameraSmoothInfo(op, fps);
+    }
+  }
+
+  return 0;
+}
+
+int HWCSession::RegisterCallbackClient(
+        const std::shared_ptr<IDisplayConfigCallback>& callback, int64_t *client_handle) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  callback_clients_.emplace(callback_client_id_, callback);
+  *client_handle = callback_client_id_;
+  callback_client_id_++;
+
+  return 0;
+}
+
+int HWCSession::UnregisterCallbackClient(const int64_t client_handle) {
+  bool removed = false;
+
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for(auto it = callback_clients_.begin(); it != callback_clients_.end(); ) {
+    if (it->first == client_handle) {
+      it = callback_clients_.erase(it);
+      removed = true;
+    } else {
+      it++;
+    }
+  }
+
+  return removed ? 0 : -EINVAL;
+}
+
 int HWCSession::DisplayConfigImpl::SetDisplayAnimating(uint64_t display_id, bool animating) {
   return hwc_session_->CallDisplayFunction(display_id, &HWCDisplay::SetDisplayAnimating, animating);
 }
@@ -945,26 +999,31 @@ int HWCSession::DisplayConfigImpl::SetCWBOutputBuffer(uint32_t disp_id,
     return -1;
   }
 
-  if (disp_id != UINT32(DisplayConfig::DisplayType::kPrimary)) {
-    DLOGE("Only supported for primary display at present.");
+  // Output buffer dump is not supported, if Virtual display is present.
+  int dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
+  if ((dpy_index != -1) && hwc_session_->hwc_display_[dpy_index]) {
+    DLOGW("Output buffer dump is not supported with Virtual display!");
     return -1;
   }
 
-  // Output buffer dump is not supported, if External or Virtual display is present.
-  int external_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
-  int virtual_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
-  int primary_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_PRIMARY);
-
-  if (((external_dpy_index != -1) && hwc_session_->hwc_display_[external_dpy_index]) ||
-      ((virtual_dpy_index != -1) && hwc_session_->hwc_display_[virtual_dpy_index])) {
-    DLOGW("Output buffer dump is not supported with External or Virtual display!");
+  hwc2_display_t disp_type = HWC_DISPLAY_PRIMARY;
+  if (disp_id == UINT32(DisplayConfig::DisplayType::kPrimary)) {
+    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_PRIMARY);
+  } else if (disp_id == UINT32(DisplayConfig::DisplayType::kExternal)) {
+    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
+    disp_type = HWC_DISPLAY_EXTERNAL;
+  } else if (disp_id == UINT32(DisplayConfig::DisplayType::kBuiltIn2)) {
+    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_BUILTIN_2);
+    disp_type = HWC_DISPLAY_BUILTIN_2;
+  } else {
+    DLOGE("CWB is supported on primary and external displays only at present.");
     return -1;
   }
 
   // Mutex scope
   {
-    SCOPE_LOCK(hwc_session_->locker_[HWC_DISPLAY_PRIMARY]);
-    if (!hwc_session_->hwc_display_[primary_dpy_index]) {
+    SCOPE_LOCK(hwc_session_->locker_[disp_type]);
+    if (!hwc_session_->hwc_display_[dpy_index]) {
       DLOGE("Display is not created yet.");
       return -1;
     }
@@ -981,11 +1040,13 @@ int HWCSession::DisplayConfigImpl::SetCWBOutputBuffer(uint32_t disp_id,
   DLOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f)",
         cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom);
 
-  return hwc_session_->cwb_.PostBuffer(callback_, cwb_config, native_handle_clone(buffer));
+  return hwc_session_->cwb_.PostBuffer(callback_, cwb_config, native_handle_clone(buffer),
+                                       disp_type);
 }
 
 int32_t HWCSession::CWB::PostBuffer(std::weak_ptr<DisplayConfig::ConfigCallback> callback,
-                                    const CwbConfig &cwb_config, const native_handle_t *buffer) {
+                                    const CwbConfig &cwb_config, const native_handle_t *buffer,
+                                    hwc2_display_t display_type) {
   SCOPE_LOCK(queue_lock_);
 
   // Ensure that async task runs only until all queued CWB requests have been fulfilled.
@@ -994,7 +1055,15 @@ int32_t HWCSession::CWB::PostBuffer(std::weak_ptr<DisplayConfig::ConfigCallback>
   // currently running async task will automatically desolve without processing more requests.
   bool post_future = !queue_.size();
 
-  QueueNode *node = new QueueNode(callback, cwb_config, buffer);
+  if (!post_future) {  // if queue_ is not empty
+    // reject the cwb request if it's made on another display than the currently cwb active display
+    QueueNode *node = queue_.front();
+    if (node->display_type != display_type) {
+      return -1;
+    }
+  }
+
+  QueueNode *node = new QueueNode(callback, cwb_config, buffer, display_type);
   queue_.push(node);
 
   if (post_future) {
@@ -1010,9 +1079,6 @@ int32_t HWCSession::CWB::PostBuffer(std::weak_ptr<DisplayConfig::ConfigCallback>
 }
 
 void HWCSession::CWB::ProcessRequests() {
-  HWCDisplay *hwc_display = hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY];
-  Locker &locker = hwc_session_->locker_[HWC_DISPLAY_PRIMARY];
-
   while (true) {
     QueueNode *node = nullptr;
     int status = 0;
@@ -1029,6 +1095,9 @@ void HWCSession::CWB::ProcessRequests() {
 
       node = queue_.front();
     }
+
+    HWCDisplay *hwc_display = hwc_session_->hwc_display_[node->display_type];
+    Locker &locker = hwc_session_->locker_[node->display_type];
 
     // Configure cwb parameters, trigger refresh, wait for commit, get the release fence and
     // wait for fence to signal.
@@ -1049,10 +1118,14 @@ void HWCSession::CWB::ProcessRequests() {
     }
 
     if (!status) {
-      hwc_session_->callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
+      hwc_session_->callbacks_.Refresh(node->display_type);
 
-      std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock);
+      // Mutex scope
+      // Wait for the signal from commit thread to retrieve the CWB release fence
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cv_.wait(lock);
+      }
 
       shared_ptr<Fence> release_fence = nullptr;
       // Mutex scope
@@ -1101,7 +1174,7 @@ void HWCSession::CWB::AsyncTask(CWB *cwb) {
 }
 
 void HWCSession::CWB::PresentDisplayDone(hwc2_display_t disp_id) {
-  if (disp_id != HWC_DISPLAY_PRIMARY) {
+  if (disp_id == HWC_DISPLAY_VIRTUAL) {
     return;
   }
 

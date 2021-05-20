@@ -271,15 +271,6 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
 
 // Query the dspp capabilities and enable the RC feature.
 DisplayError DisplayBase::SetupRC() {
-  // Get status of RC enablement property. Default RC is disabled.
-  int rc_prop_value = 0;
-  Debug::GetProperty(ENABLE_ROUNDED_CORNER, &rc_prop_value);
-  rc_enable_prop_ = rc_prop_value ? true : false;
-  DLOGI("RC feature %s.", rc_enable_prop_ ? "enabled" : "disabled");
-  if (!rc_enable_prop_) {
-    return kErrorNone;
-  }
-
   RCInputConfig input_cfg = {};
   input_cfg.display_id = display_id_;
   input_cfg.display_type = display_type_;
@@ -386,6 +377,7 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
     // Check and release cwb_config_ if it was instantiated in the previous draw cycle.
     delete cwb_config_;
     cwb_config_ = NULL;
+    disp_layer_stack_.info.hw_cwb_config = NULL;
   }
   return error;
 }
@@ -479,18 +471,32 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
   return kErrorNone;
 }
 
-DisplayError DisplayBase::PrePrepare(LayerStack *layer_stack) {
-  DTRACE_SCOPED();
-  ClientLock lock(disp_mutex_);
-  disp_layer_stack_.stack = layer_stack;
-  layer_stack->needs_validate = !validated_ || needs_validate_;
-  if (!layer_stack->needs_validate) {
+bool DisplayBase::CheckValidateNeeded() {
+  // This function returns true(needs validate) on certain special conditions, such as CWB.
+  // We can add checks on more conditions here for which Validate call would be needed.
+  if ((cwb_config_ == NULL) ==
+      (hw_resource_info_.has_concurrent_writeback && disp_layer_stack_.stack->output_buffer)) {
+    DLOGI_IF(kTagDisplay, "Need to Validate for CWB setup/teardown .");
+    return true;
+  } else {
     // Check for validation in case of new display connected, other displays exiting off state etc.
     bool needs_validate = false;
     comp_manager_->NeedsValidate(display_comp_ctx_, &needs_validate);
-    layer_stack->needs_validate = needs_validate;
+    return needs_validate;
+  }
+  return false;
+}
+
+DisplayError DisplayBase::PrePrepare(LayerStack *layer_stack) {
+  DTRACE_SCOPED();
+  ClientLock lock(disp_mutex_);
+  DisplayError error = BuildLayerStackStats(layer_stack);
+  if (error != kErrorNone) {
+    DLOGE("BuildLayerStackStats failed %d", error);
+    return error;
   }
 
+  layer_stack->needs_validate = !validated_ || needs_validate_ || CheckValidateNeeded();
   return comp_manager_->PrePrepare(display_comp_ctx_, &disp_layer_stack_);
 }
 
@@ -519,10 +525,9 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   if (!rc_core_ && !first_cycle_ && rc_enable_prop_ && pf_factory_ && prop_intf_) {
     error = SetupRC();
-    if (error == kErrorNone) {
-      rc_panel_feature_init_ = true;
-    } else {
-      DLOGW("RC feature not supported");
+    if (error != kErrorNone) {
+      // Non-fatal but not expected, log error
+      DLOGE("RC Failed to initialize. Error = %d", error);
     }
   }
   if (rc_panel_feature_init_) {
@@ -555,7 +560,6 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   disp_layer_stack_.info.updates_mask.set(kUpdateResources);
   comp_manager_->GenerateROI(display_comp_ctx_, &disp_layer_stack_);
-  rc_pu_flag_status_ = disp_layer_stack_.info.rc_pu_flag_status;
 
   CheckMMRMState();
 
@@ -592,6 +596,10 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
 
   return error;
+}
+
+void DisplayBase::FlushConcurrentWriteback() {
+  hw_intf_->FlushConcurrentWriteback();
 }
 
 // Send layer stack to RC core to generate and configure the mask on HW.
@@ -666,7 +674,11 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
   // Perform prepare
   error = Prepare(layer_stack);
   if (error != kErrorNone) {
-    DLOGE("Prepare failed: %d", error);
+    if (error == kErrorPermission) {
+      DLOGW("Prepare failed: %d", error);
+    } else {
+      DLOGE("Prepare failed: %d", error);
+    }
     return error;
   }
 
@@ -746,21 +758,13 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   if (rc_panel_feature_init_) {
     GenericPayload in, out;
     RCMaskCfgState *mask_status = nullptr;
-    uint64_t *rc_pu_flag_status = nullptr;
     int ret = -1;
     ret = out.CreatePayload<RCMaskCfgState>(mask_status);
     if (ret) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    ret = in.CreatePayload<uint64_t>(rc_pu_flag_status);
-    if (ret) {
-      DLOGE("failed to create the payload. Error:%d", ret);
-      return kErrorUndefined;
-    }
-    *rc_pu_flag_status = rc_pu_flag_status_;
     ret = rc_core_->ProcessOps(kRCFeatureCommit, in, &out);
-    disp_layer_stack_.info.rc_pu_needs_full_roi = (*mask_status).rc_pu_full_roi;
     if (ret) {
      // If RC commit failed, fall back to default (GPU/SDE pipes) drawing of "handled" mask layers.
      DLOGW("Failed to set the data on driver for display: %d-%d, Error: %d, status: %d",
@@ -778,14 +782,7 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
         return kErrorNotValidated;
       }
     } else {
-      DLOGI_IF(kTagDisplay, "Status of RC mask data: %d., pu_rc_status_: 0x%" PRIx64,
-               (*mask_status).rc_mask_state, rc_pu_flag_status_);
-      if ((*mask_status).rc_pu_full_roi) {
-        if (rc_pu_flag_status_ && rc_pu_flag_status_ != SDE_HW_PU_USECASE) {
-          validated_ = false;
-          return kErrorNotValidated;
-        }
-      }
+      DLOGI_IF(kTagDisplay, "Status of RC mask data: %d.", (*mask_status).rc_mask_state);
       if ((*mask_status).rc_mask_state == kStatusRcMaskStackDirty) {
         validated_ = false;
         DLOGI_IF(kTagDisplay, "Mask is ready for display %d-%d, call Corresponding Prepare()",
@@ -795,8 +792,7 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
     }
   }
 
-  disp_layer_stack_.info.retire_fence_offset = (draw_method_ != kDrawDefault) &&
-                                               (display_type_ != kVirtual) ? 1 : 0;
+  disp_layer_stack_.info.retire_fence_offset = retire_fence_offset_;
   // Regiser for power events on first cycle in unified draw.
   if (first_cycle_ && (draw_method_ != kDrawDefault) && (display_type_ != kVirtual)) {
     DLOGI("Registering for power events");
@@ -1122,7 +1118,16 @@ DisplayError DisplayBase::SetDrawMethod(DisplayDrawMethod draw_method) {
     return kErrorNotSupported;
   }
 
-  comp_manager_->SetDrawMethod(display_comp_ctx_, draw_method);
+  auto error = comp_manager_->SetDrawMethod(display_comp_ctx_, draw_method);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set method: %d for %d-%d", draw_method, display_id_, display_type_);
+    retire_fence_offset_ = 0;
+    draw_method_ = kDrawDefault;
+    draw_method_set_ = true;
+    return error;
+  }
+
+  retire_fence_offset_ = (draw_method != kDrawDefault) && (display_type_ != kVirtual) ? 1 : 0;
   draw_method_ = draw_method;
   draw_method_set_ = true;
   DLOGI("method: %d", draw_method);
@@ -1332,6 +1337,7 @@ std::string DisplayBase::Dump() {
   hw_intf_->GetDisplayAttributes(active_index, &attrib);
 
   os << "device type:" << display_type_;
+  os << " DrawMethod: " << draw_method_;
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
@@ -1984,6 +1990,11 @@ DisplayError DisplayBase::SetVSyncStateLocked(bool enable) {
   vsync_enable_pending_ = !enable ? false : vsync_enable_pending_;
 
   return error;
+}
+
+DisplayError DisplayBase::SetNoisePlugInOverride(bool override_en, int32_t attn,
+                                                 int32_t noise_zpos, int32_t bl_thr) {
+  return kErrorNone;
 }
 
 DisplayError DisplayBase::ReconfigureDisplay() {

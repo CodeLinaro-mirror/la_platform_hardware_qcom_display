@@ -123,7 +123,7 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
   if (buf == nullptr) {
     return HWC2::Error::BadParameter;
   }
-  const native_handle_t *output_handle = static_cast<const native_handle_t *>(buf);
+  const private_handle_t *output_handle = static_cast<const private_handle_t *>(buf);
 
   if (output_handle) {
     int output_handle_format, output_handle_flags = 0;
@@ -174,7 +174,7 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
 
 HWC2::Error HWCDisplayVirtual::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                                   int32_t format, const CwbConfig &cwb_config) {
-  HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, cwb_config);
+  HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format);
   dump_output_layer_ = ((bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP)) != 0);
 
   DLOGI("output_layer_dump_enable %d", dump_output_layer_);

@@ -1438,6 +1438,34 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       }
       break;
 
+    case qService::IQService::SET_NOISE_PLUGIN_OVERRIDE: {
+        if (!input_parcel) {
+          DLOGE("QService command = %d: input_parcel needed.", command);
+          break;
+        }
+
+        int32_t disp_id = input_parcel->readInt32();
+
+        bool override_en = ((input_parcel->readInt32()) == 1);
+
+        int32_t attn = -1;
+        if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+          attn = input_parcel->readInt32();
+        }
+
+        int32_t noise_zpos = -1;
+        if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+          noise_zpos = input_parcel->readInt32();
+        }
+
+        int32_t bl_thr = -1;
+        if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+          bl_thr = input_parcel->readInt32();
+        }
+        status = SetNoisePlugInOverride(disp_id, override_en, attn, noise_zpos, bl_thr);
+      }
+      break;
+
     case qService::IQService::SET_ACTIVE_CONFIG: {
         if (!input_parcel) {
           DLOGE("QService command = %d: input_parcel needed.", command);
@@ -1869,14 +1897,12 @@ android::status_t HWCSession::SetFrameDumpConfig(const android::Parcel *input_pa
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t bit_mask_layer_type = UINT32(input_parcel->readInt32());
 
-  // Output buffer dump is not supported, if External or Virtual display is present.
+  // Output buffer dump is not supported, if Virtual display is present.
   bool output_buffer_dump = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
   if (output_buffer_dump) {
-    int external_dpy_index = GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
     int virtual_dpy_index = GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
-    if (((external_dpy_index != -1) && hwc_display_[external_dpy_index]) ||
-        ((virtual_dpy_index != -1) && hwc_display_[virtual_dpy_index])) {
-      DLOGW("Output buffer dump is not supported with External or Virtual display!");
+    if ((virtual_dpy_index != -1) && hwc_display_[virtual_dpy_index]) {
+      DLOGW("Output buffer dump is not supported with Virtual display!");
       return -EINVAL;
     }
   }
@@ -1889,6 +1915,13 @@ android::status_t HWCSession::SetFrameDumpConfig(const android::Parcel *input_pa
     // HAL Pixel Format for output buffer
     output_format = input_parcel->readInt32();
   }
+
+  LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(output_format, 0);
+  if (sdm_format == kFormatInvalid) {
+    DLOGW("Format %d is not supported by SDM", output_format);
+    return -EINVAL;
+  }
+
   if (input_parcel->dataPosition() != input_parcel->dataSize()) {
     // Option to dump Layer Mixer output (0) or DSPP output (1) or Demura  output (2)
     cwb_config.tap_point = static_cast<CwbTapPoint>(input_parcel->readInt32());
@@ -3301,10 +3334,8 @@ int32_t HWCSession::SetReadbackBuffer(hwc2_display_t display, const native_handl
     return HWC2_ERROR_UNSUPPORTED;
   }
 
-  int external_dpy_index = GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
   int virtual_dpy_index = GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
-  if (((external_dpy_index != -1) && hwc_display_[external_dpy_index]) ||
-      ((virtual_dpy_index != -1) && hwc_display_[virtual_dpy_index])) {
+  if ((virtual_dpy_index != -1) && hwc_display_[virtual_dpy_index]) {
     return HWC2_ERROR_UNSUPPORTED;
   }
 

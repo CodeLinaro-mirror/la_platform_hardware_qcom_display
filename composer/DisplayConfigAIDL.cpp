@@ -894,31 +894,31 @@ ScopedAStatus
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  if (dispId != UINT32(DisplayType::PRIMARY)) {
-    ALOGE("%s: Only supported for primary display at present.", __FUNCTION__);
+  // Output buffer dump is not supported, if Virtual display is present.
+  int dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
+  if ((dpy_index != -1) && hwc_session_->hwc_display_[dpy_index]) {
+    ALOGW("Output buffer dump is not supported with Virtual display!");
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  if (rect.left || rect.top || rect.right || rect.bottom) {
-    ALOGE("%s: Cropping rectangle is not supported.", __FUNCTION__);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  // Output buffer dump is not supported, if External or Virtual display is present.
-  int external_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
-  int virtual_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
-  int primary_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_PRIMARY);
-
-  if (((external_dpy_index != -1) && hwc_session_->hwc_display_[external_dpy_index]) ||
-      ((virtual_dpy_index != -1) && hwc_session_->hwc_display_[virtual_dpy_index])) {
-    ALOGW("Output buffer dump is not supported with External or Virtual display!");
+  hwc2_display_t disp_type = HWC_DISPLAY_PRIMARY;
+  if (dispId == UINT32(DisplayType::PRIMARY)) {
+    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_PRIMARY);
+  } else if (dispId == UINT32(DisplayType::EXTERNAL)) {
+    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
+    disp_type = HWC_DISPLAY_EXTERNAL;
+  } else if (dispId == UINT32(DisplayType::BUILTIN2)) {
+    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_BUILTIN_2);
+    disp_type = HWC_DISPLAY_BUILTIN_2;
+  } else {
+    ALOGE("%s: CWB is supported on primary or external display only at present.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
   // Mutex scope
   {
-    SCOPE_LOCK(hwc_session_->locker_[HWC_DISPLAY_PRIMARY]);
-    if (!hwc_session_->hwc_display_[primary_dpy_index]) {
+    SCOPE_LOCK(hwc_session_->locker_[disp_type]);
+    if (!hwc_session_->hwc_display_[dpy_index]) {
       ALOGE("%s: Display is not created yet.", __FUNCTION__);
       return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
     }
@@ -936,9 +936,47 @@ ScopedAStatus
         cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom);
 
   // TODO(user): Convert NativeHandle to native_handle_t, call PostBuffer
-  hwc_session_->cwb_.PostBuffer(callback_, cwb_config, ::android::dupFromAidl(buffer));
+  hwc_session_->cwb_.PostBuffer(callback_, cwb_config, ::android::dupFromAidl(buffer), disp_type);
 
   return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t fps) {
+  int ret = -1;
+
+  if (fps <= 0) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
+  ret = hwc_session_->SetCameraSmoothInfo(op, fps);
+
+  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+}
+
+ScopedAStatus DisplayConfigAIDL::registerCallback(
+                                const std::shared_ptr<IDisplayConfigCallback>& callback,
+                                int64_t* client_handle) {
+  int ret = -1;
+
+  if (callback == nullptr) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
+  ret = hwc_session_->RegisterCallbackClient(callback, client_handle);
+
+  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+}
+
+ScopedAStatus DisplayConfigAIDL::unRegisterCallback(int64_t client_handle) {
+  int ret = -1;
+
+  if (client_handle < 0) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
+  ret = hwc_session_->UnregisterCallbackClient(client_handle);
+
+  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
 } // namespace config
