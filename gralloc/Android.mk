@@ -56,7 +56,7 @@ LOCAL_C_INCLUDES              := $(common_includes) \
                                  $(LIBION_HEADER_PATHS) \
                                  $(kernel_includes)
 
-LOCAL_HEADER_LIBRARIES        := display_headers
+LOCAL_HEADER_LIBRARIES        := display_headers libvmmem_headers
 LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libdl libgrallocutils libion libgralloctypes \
                                   libgralloc.qti libhidlbase \
                                   android.hardware.graphics.mapper@2.1 \
