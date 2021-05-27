@@ -89,6 +89,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_decimation=1 \
     vendor.display.enable_null_display=0 \
     vendor.display.disable_excl_rect=0 \
+    vendor.display.disable_excl_rect_partial_fb=1 \
     vendor.display.comp_mask=0 \
     vendor.display.enable_default_color_mode=1 \
     vendor.display.enable_optimize_refresh=1 \
@@ -103,9 +104,6 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.wcg_composition_dataspa
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
 endif
 
-ifeq ($(TARGET_BOARD_PLATFORM),$(TRINKET))
-PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_excl_rect_partial_fb=1
-endif
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
 # Recovery is enabled, logging is enabled
