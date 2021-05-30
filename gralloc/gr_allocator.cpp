@@ -78,7 +78,7 @@
 #define ION_SC_FLAGS (ION_SECURE | ION_FLAG_CP_CAMERA)
 #define ION_SC_PREVIEW_FLAGS (ION_SECURE | ION_FLAG_CP_CAMERA_PREVIEW)
 #define ION_SC_ENCODE_FLAGS (ION_SECURE | ION_FLAG_CP_CAMERA_ENCODE | \
-                                 ION_FLAG_CP_CAMERA | ION_FLAG_CP_CDSP)
+                             ION_FLAG_CP_CAMERA | ION_FLAG_CP_CAMERA_GFX)
 #endif
 
 using std::shared_ptr;
