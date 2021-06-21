@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <utility>
 
 #include "comp_manager.h"
 #include "strategy.h"
@@ -262,7 +263,7 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
   Handle &display_resource_ctx = display_comp_ctx->display_resource_ctx;
 
   // Call Layer Precheck to get feedback
-  LayerFeedback feedback = {};
+  LayerFeedback feedback(disp_layer_stack->info.app_layer_count);
   if (resource_intf_)
     resource_intf_->Precheck(display_resource_ctx, disp_layer_stack, &feedback);
 
@@ -347,11 +348,12 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
     }
 
     if (!exit) {
-      error = resource_intf_->Prepare(display_resource_ctx, disp_layer_stack);
+      LayerFeedback updated_feedback(disp_layer_stack->info.app_layer_count);
+      error = resource_intf_->Prepare(display_resource_ctx, disp_layer_stack, &updated_feedback);
       // Exit if successfully prepared resource, else try next strategy.
       exit = (error == kErrorNone);
       if (!exit)
-        display_comp_ctx->constraints.feedback = {};
+        display_comp_ctx->constraints.feedback = updated_feedback;
     }
   }
 
@@ -408,7 +410,8 @@ DisplayError CompManager::ReConfigure(Handle display_ctx, DispLayerStack *disp_l
 
   DisplayError error = kErrorUndefined;
   resource_intf_->Start(display_resource_ctx, disp_layer_stack->stack);
-  error = resource_intf_->Prepare(display_resource_ctx, disp_layer_stack);
+  LayerFeedback feedback(disp_layer_stack->info.app_layer_count);
+  error = resource_intf_->Prepare(display_resource_ctx, disp_layer_stack, &feedback);
 
   if (error != kErrorNone) {
     DLOGE("Reconfigure failed for display = %d", display_comp_ctx->display_type);
@@ -695,14 +698,16 @@ void CompManager::UpdateStrategyConstraints(bool is_primary, bool disabled) {
   max_sde_builtin_layers_ = (disabled && (powered_on_displays_.size() <= 1)) ? kMaxSDELayers : 2;
 }
 
-bool CompManager::CheckResourceState(Handle display_ctx) {
+bool CompManager::CheckResourceState(Handle display_ctx, bool *res_exhausted,
+                                     HWDisplayAttributes attr) {
   SCOPE_LOCK(locker_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
   bool res_wait_needed = false;
 
   resource_intf_->Perform(ResourceInterface::kCmdGetResourceStatus,
-                          display_comp_ctx->display_resource_ctx, &res_wait_needed);
+                          display_comp_ctx->display_resource_ctx, res_exhausted, &attr,
+                          &res_wait_needed);
   return res_wait_needed;
 }
 
