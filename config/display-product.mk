@@ -110,7 +110,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.enable_hwc_vds=1 \
     vendor.display.vds_allow_hwc=1 \
     vendor.display.enable_async_vds_creation=1 \
-    vendor.display.enable_rounded_corner=1
+    vendor.display.enable_rounded_corner=1 \
+    vendor.display.disable_3d_adaptive_tm=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
@@ -190,6 +191,7 @@ SOONG_CONFIG_qtidisplay_headless := false
 SOONG_CONFIG_qtidisplay_llvmsa := false
 SOONG_CONFIG_qtidisplay_gralloc4 := true
 SOONG_CONFIG_qtidisplay_default := true
+SOONG_CONFIG_qtidisplay_sourcebuild := true
 
 # Techpack values
 

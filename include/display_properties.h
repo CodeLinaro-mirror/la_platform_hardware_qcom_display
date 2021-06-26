@@ -61,7 +61,7 @@
 #define PREFER_SOURCE_SPLIT_PROP             DISPLAY_PROP("prefer_source_split")
 #define MIXER_RESOLUTION_PROP                DISPLAY_PROP("mixer_resolution")
 #define SIMULATED_CONFIG_PROP                DISPLAY_PROP("simulated_config")
-#define MAX_EXTERNAL_LAYERS_PROP             DISPLAY_PROP("max_external_layers")
+#define MAX_SECONDARY_FETCH_LAYERS_PROP       DISPLAY_PROP("max_secondary_fetch_layers")
 #define PERF_HINT_WINDOW_PROP                DISPLAY_PROP("perf_hint_window")
 #define ENABLE_EXTERNAL_DOWNSCALE_PROP       DISPLAY_PROP("enable_external_downscale")
 #define EXTERNAL_ACTION_SAFE_WIDTH_PROP      DISPLAY_PROP("external_action_safe_width")
@@ -120,6 +120,8 @@
 #define DISABLE_ROTATOR_PRE_DOWNSCALER_PROP  DISPLAY_PROP("disable_pre_downscaler")
 #define DISABLE_INLINE_ROTATOR_UI_PROP       DISPLAY_PROP("disable_inline_rotator_ui")
 #define ENABLE_POMS_DURING_DOZE              DISPLAY_PROP("enable_poms_during_doze")
+// Disable 3D adaptive tone mapping support
+#define DISABLE_3D_ADAPTIVE_TM               DISPLAY_PROP("disable_3d_adaptive_tm")
 // RC
 #define ENABLE_ROUNDED_CORNER                DISPLAY_PROP("enable_rounded_corner")
 #define DISABLE_ROUNDED_CORNER_THREAD        DISPLAY_PROP("disable_rounded_corner_thread")
