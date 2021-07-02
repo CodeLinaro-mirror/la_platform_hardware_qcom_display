@@ -15,6 +15,10 @@ PRODUCT_PACKAGES += \
     libsdmcore \
     libsdmutils \
     libqdMetaData \
+    libqdMetaData.system \
+    libdisplayconfig \
+    libgralloc.qti \
+    libdisplayconfig.qti \
     libdisplayconfig.vendor \
     vendor.display.config@1.0.vendor \
     vendor.display.config@1.1.vendor \
@@ -144,6 +148,36 @@ else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_hw_recovery_dump=1
 endif
+
+ifeq ($(TARGET_USES_QMAA),true)
+    ifneq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),true)
+        #QMAA Mode is enabled
+        TARGET_IS_HEADLESS := true
+    endif
+endif
+
+# Soong Namespace
+SOONG_CONFIG_NAMESPACES += qtidisplay
+
+# Soong Keys
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3
+
+# Soong Values
+SOONG_CONFIG_qtidisplay_drmpp := true
+SOONG_CONFIG_qtidisplay_headless := false
+SOONG_CONFIG_qtidisplay_llvmsa := false
+SOONG_CONFIG_qtidisplay_gralloc4 := true
+SOONG_CONFIG_qtidisplay_displayconfig_enabled := false
+SOONG_CONFIG_qtidisplay_default := true
+SOONG_CONFIG_qtidisplay_var1 := false
+SOONG_CONFIG_qtidisplay_var2 := false
+SOONG_CONFIG_qtidisplay_var3 := false
+
+ifeq ($(call is-vendor-board-platform,QCOM),true)
+    SOONG_CONFIG_qtidisplay_displayconfig_enabled := true
+endif
+
+# Techpack values
 
 QMAA_ENABLED_HAL_MODULES += display
 ifeq ($(TARGET_USES_QMAA),true)
