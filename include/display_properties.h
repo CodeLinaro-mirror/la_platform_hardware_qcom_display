@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018 - 2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -132,6 +132,7 @@
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
 #define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
 #define ENABLE_POMS_DURING_DOZE              DISPLAY_PROP("enable_poms_during_doze")
+#define FLUSH_ON_LAYERSET_EMPTY              DISPLAY_PROP("flush_on_layer_set_empty")
 
 #define DISABLE_VIRTUAL_DISPLAY              DISPLAY_PROP("disable_virtual_display")
 #define DISABLE_COLOR_TRANSFORMATION         DISPLAY_PROP("disable_color_transformation")
