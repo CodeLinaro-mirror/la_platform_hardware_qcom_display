@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -2943,10 +2943,6 @@ HWC2::Error HWCSession::ValidateDisplayInternal(hwc2_display_t display, uint32_t
     if (need_invalidate_) {
       callbacks_.Refresh(display);
       need_invalidate_ = false;
-    }
-
-    if (color_mgr_) {
-      color_mgr_->SetColorModeDetailEnhancer(hwc_display_[display]);
     }
   }
 
