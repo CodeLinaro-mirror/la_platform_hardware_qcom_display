@@ -72,7 +72,7 @@ int kgsl_memtrack_get_memory(pid_t pid, enum memtrack_type type,
      * count the entry as accounted else count the entry as unaccounted.
      */
     while (1) {
-        unsigned long size, mapsize;
+        unsigned long size, mapsize = 0;
         char line_type[7];
         char flags[10];
         char line_usage[19];
