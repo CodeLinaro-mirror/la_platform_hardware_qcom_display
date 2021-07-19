@@ -85,6 +85,9 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sharp_1080p_c
 PRODUCT_COPY_FILES += hardware/qcom/display/config/backlight_calib_r66451_amoled_cmd_mode_dsi_visionox_panel_with_DSC.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display/backlight_calib_r66451_amoled_cmd_mode_dsi_visionox_panel_with_DSC.xml
 PRODUCT_COPY_FILES += hardware/qcom/display/config/backlight_calib_r66451_amoled_cmd_mode_dsi_visionox_panel_with_DSC.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display/backlight_calib_r66451_amoled_video_mode_dsi_visionox_panel_with_DSC.xml
 
+#Smomo config xml file
+PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_COPY_OUT_VENDOR)/etc/smomo_setting.xml
+
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.demo.hdmirotationlock=false \
     persist.sys.sf.color_saturation=1.0 \
@@ -92,7 +95,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.hw=0 \
     debug.egl.hw=0 \
     debug.sf.latch_unsignaled=1 \
-    debug.sf.high_fps_late_app_phase_offset_ns=500000 \
+    debug.sf.high_fps_late_app_phase_offset_ns=1000000 \
     debug.mdpcomp.logs=0 \
     vendor.gralloc.disable_ubwc=0 \
     vendor.display.disable_scaler=0 \
@@ -102,7 +105,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_optimize_refresh=0 \
     vendor.display.use_smooth_motion=1 \
     vendor.display.disable_stc_dimming=1 \
-    debug.sf.high_fps_late_sf_phase_offset_ns=-500000 \
+    debug.sf.high_fps_late_sf_phase_offset_ns=-1000000 \
     debug.sf.high_fps_early_phase_offset_ns=-2000000 \
     debug.sf.high_fps_early_gl_phase_offset_ns=-2000000 \
     debug.sf.disable_client_composition_cache=1 \
@@ -111,7 +114,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.vds_allow_hwc=1 \
     vendor.display.enable_async_vds_creation=1 \
     vendor.display.enable_rounded_corner=1 \
-    vendor.display.disable_3d_adaptive_tm=1
+    vendor.display.disable_3d_adaptive_tm=1 \
+    vendor.display.disable_sdr_dimming=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
@@ -183,7 +187,7 @@ endif
 SOONG_CONFIG_NAMESPACES += qtidisplay
 
 # Soong Keys
-SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 default sourcebuild
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 default var1 var2 var3
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -191,16 +195,15 @@ SOONG_CONFIG_qtidisplay_headless := false
 SOONG_CONFIG_qtidisplay_llvmsa := false
 SOONG_CONFIG_qtidisplay_gralloc4 := true
 SOONG_CONFIG_qtidisplay_default := true
-SOONG_CONFIG_qtidisplay_sourcebuild := true
+SOONG_CONFIG_qtidisplay_var1 := false
+SOONG_CONFIG_qtidisplay_var2 := false
+SOONG_CONFIG_qtidisplay_var3 := false
 
 # Techpack values
 
 ifeq ($(TARGET_IS_HEADLESS), true)
     # TODO: QMAA prebuilts
     PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/qmaa
-    PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/gralloc
-    PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/init
-    PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/libdebug
     SOONG_CONFIG_qtidisplay_headless := true
     SOONG_CONFIG_qtidisplay_default := false
 else
@@ -211,15 +214,22 @@ else
     #Properties that should not be set in QMAA are enabled here.
     PRODUCT_PROPERTY_OVERRIDES += \
         vendor.display.enable_early_wakeup=1
-    ifeq ($(BUILD_DISPLAY_TECHPACK_SOURCE), true)
-        PRODUCT_SOONG_NAMESPACES += hardware/qcom/display
-        PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/gralloc
-        PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/init
-        PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/libdebug
-    else
-        PRODUCT_SOONG_NAMESPACES += vendor/qcom/opensource/techpack/artifacts/display
+    ifneq ($(BUILD_DISPLAY_TECHPACK_SOURCE), true)
+        SOONG_CONFIG_qtidisplay_var1 := true
+        SOONG_CONFIG_qtidisplay_var2 := true
+        SOONG_CONFIG_qtidisplay_var3 := true
     endif
 endif
+
+ifeq (,$(wildcard $(QCPATH)/display-noship))
+    SOONG_CONFIG_qtidisplay_var1 := true
+endif
+
+ifeq (,$(wildcard $(QCPATH)/display))
+    SOONG_CONFIG_qtidisplay_var2 := true
+endif
+
+
 
 QMAA_ENABLED_HAL_MODULES += display
 
