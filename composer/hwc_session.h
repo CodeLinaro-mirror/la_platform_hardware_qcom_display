@@ -597,6 +597,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool secure_session_active_ = false;
   bool is_idle_time_up_ = false;
   std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
+  bool pluggable_is_primary_ = false;
 };
 }  // namespace sdm
 
