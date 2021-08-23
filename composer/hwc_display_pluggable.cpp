@@ -218,7 +218,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
 
   if (connected) {
     if (display_null_.IsActive()) {
-      error = core_intf_->CreateDisplay(type_, this, &display_intf_);
+      error = core_intf_->CreateDisplay(sdm_id_, this, &display_intf_);
       if (error != kErrorNone) {
         DLOGE("Display create failed. Error = %d display_type %d event_handler %p disp_intf %p",
               error, type_, this, &display_intf_);
