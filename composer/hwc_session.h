@@ -648,6 +648,7 @@ class HWCSession : public HWCUEvent,
   void HpdThreadBottom();
   std::thread hpd_thread_;
   LayerId tunneled_layer_ = -1;
+  bool pluggable_is_primary_ = false;
 };
 
 }  // namespace sdm
