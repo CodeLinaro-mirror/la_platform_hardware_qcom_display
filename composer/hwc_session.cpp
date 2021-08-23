@@ -470,29 +470,36 @@ void HWCSession::InitSupportedDisplaySlots() {
     // max_pluggable/builtin can both be initialized to 0 in case of invalid panel node
     // check to avoid overflow
     if (max_pluggable) {
+      DLOGI("Pluggable is primary display");
       max_pluggable--;
     }
   } else {
     if (max_builtin) {
+      DLOGI("Builtin is primary display");
       max_builtin--;
-    }
+    } else {
+      DLOGI("Zero builtin display");
+   }
   }
 
   // Init slots in accordance to h/w capability.
   uint32_t disp_count = UINT32(std::min(max_pluggable, HWCCallbacks::kNumPluggable));
   Display base_id = qdutils::DISPLAY_EXTERNAL;
+  DLOGI("Pluggable count = %d", disp_count);
   map_info_pluggable_.resize(disp_count);
   for (auto &map_info : map_info_pluggable_) {
     map_info.client_id = base_id++;
   }
 
   disp_count = UINT32(std::min(max_builtin, HWCCallbacks::kNumBuiltIn));
+  DLOGI("Builtin count = %d", disp_count);
   map_info_builtin_.resize(disp_count);
   for (auto &map_info : map_info_builtin_) {
     map_info.client_id = base_id++;
   }
 
   disp_count = UINT32(std::min(max_virtual, HWCCallbacks::kNumVirtual));
+  DLOGI("Virtual count = %d", disp_count);
   map_info_virtual_.resize(disp_count);
   for (auto &map_info : map_info_virtual_) {
     map_info.client_id = base_id++;
@@ -3113,6 +3120,7 @@ int HWCSession::CreatePrimaryDisplay() {
         map_info_primary_.sdm_id = info.display_id;
         status = kErrorNone;
         primary_pending_ = false;
+        DLOGI("External primary display is not connected!");
         break;
       }
 
