@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -55,6 +55,8 @@ class HWCDisplayPluggable : public HWCDisplay {
   virtual HWC2::Error SetColorMode(ColorMode mode);
   virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
+  virtual HWC2::Error SetClientTarget(buffer_handle_t target, int32_t acquire_fence,
+                                       int32_t dataspace, hwc_region_t damage);
 
  private:
   HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
