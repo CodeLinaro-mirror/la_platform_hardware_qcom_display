@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018 - 2020 The Linux Foundation. All rights reserved.
+* Copyright (c) 2018 - 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -134,5 +134,7 @@
 
 // Enable posted start dynamic
 #define ENABLE_POSTED_START_DYN_PROP         DISPLAY_PROP("enable_posted_start_dyn")
+
+#define ENABLE_EXTERNAL_MAX_LAYERS           DISPLAY_PROP("enable_external_max_layers")
 
 #endif  // __DISPLAY_PROPERTIES_H__

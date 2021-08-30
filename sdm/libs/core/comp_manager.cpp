@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -63,6 +63,10 @@ DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
   hw_res_info_ = hw_res_info;
   buffer_allocator_ = buffer_allocator;
   extension_intf_ = extension_intf;
+
+  int value = 0;
+  Debug::Get()->GetProperty(ENABLE_EXTERNAL_MAX_LAYERS, &value);
+  enable_external_max_layers_ = (value == 1);
 
   return error;
 }
@@ -663,9 +667,12 @@ void CompManager::UpdateStrategyConstraints(bool is_primary, bool disabled) {
     return;
   }
 
-  // Allow builtin display to use all pipes when primary is suspended.
+  // Allow secondary display to use all pipes when primary is suspended.
   // Restore it back to 2 after primary poweron.
   max_sde_builtin_layers_ = (disabled && (powered_on_displays_.size() <= 1)) ? kMaxSDELayers : 2;
+  if (enable_external_max_layers_) {
+    max_sde_ext_layers_ = max_sde_builtin_layers_;
+  }
 }
 
 bool CompManager::CanSkipValidate(Handle display_ctx) {

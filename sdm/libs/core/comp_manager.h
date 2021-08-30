@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -129,6 +129,7 @@ class CompManager {
   uint32_t max_sde_ext_layers_ = 0;
   uint32_t max_sde_builtin_layers_ = 2;
   DppsControlInterface *dpps_ctrl_intf_ = NULL;
+  bool enable_external_max_layers_ = false;
 };
 
 }  // namespace sdm
