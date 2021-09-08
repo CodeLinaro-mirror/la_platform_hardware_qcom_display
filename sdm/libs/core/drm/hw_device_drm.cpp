@@ -436,6 +436,10 @@ DisplayError HWDeviceDRM::Init() {
 
   drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
   drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
+  if (!connector_info_.modes.size()) {
+    DLOGE("Modes information empty for display: %d.", display_id_);
+    return kErrorDriverData;
+  }
   hw_info_intf_->GetHWResourceInfo(&hw_resource_);
 
   InitializeConfigs();
