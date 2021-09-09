@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -793,9 +793,21 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
 }
 
 DisplayError HWInfoDRM::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
-  hw_disp_info->type = kBuiltIn;
-  hw_disp_info->is_connected = true;
 
+  HWDisplaysInfo hw_displays_info;
+  DisplayError error = kErrorNone;
+  error = GetDisplaysStatus(&hw_displays_info);
+  if (error != kErrorNone)
+  {
+    return error;
+  }
+  for (auto &iter : hw_displays_info) {
+    auto &info = iter.second;
+    if (info.is_primary) {
+        hw_disp_info->type = info.display_type;
+        hw_disp_info->is_connected = info.is_connected;
+    }
+  }
   return kErrorNone;
 }
 
@@ -846,6 +858,10 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
     hw_info.is_connected = iter.second.is_connected ? 1 : 0;
     hw_info.is_primary = iter.second.is_primary ? 1 : 0;
     hw_info.is_wb_ubwc_supported = iter.second.is_wb_ubwc_supported;
+    if (iter.second.ext_bridge_hpd) {
+      hw_info.display_type = kPluggable;
+    }
+
     if (hw_info.display_id >= 0) {
       (*hw_displays_info)[hw_info.display_id] = hw_info;
     }
@@ -862,6 +878,7 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
 
 DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t *max_displays) {
   static DebugTag log_once = kTagNone;
+  bool dsi_bridge_pluggable = false;
 
   if (!max_displays) {
     DLOGE("No output parameter provided!");
@@ -903,18 +920,38 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
     }
   }
 
+  sde_drm::DRMConnectorsInfo conns_info = {};
+  drm_err = drm_mgr_intf_->GetConnectorsInfo(&conns_info);
+  if (drm_err) {
+    DLOGE("DRM Driver get connector error %d while getting max displays supported!", drm_err);
+    return kErrorUndefined;
+  }
+
+  for (auto &iter:conns_info) {
+    if (iter.second.ext_bridge_hpd) {
+      max_displays_builtin--;
+      max_displays_tmds++;
+      dsi_bridge_pluggable = true;
+    }
+  }
+
   switch (type) {
     case kBuiltIn:
       *max_displays = max_displays_builtin;
       break;
     case kPluggable:
-      *max_displays = std::max(max_displays_tmds, max_displays_dpmst);
+      if (dsi_bridge_pluggable) {
+        *max_displays = max_displays_tmds + max_displays_dpmst;
+      } else {
+        *max_displays = std::max(max_displays_tmds, max_displays_dpmst);
+      }
       break;
     case kVirtual:
       *max_displays = max_displays_virtual;
       break;
     case kDisplayTypeMax:
-      *max_displays = max_displays_builtin + std::max(max_displays_tmds, max_displays_dpmst) +
+      *max_displays = max_displays_builtin +
+                      std::max(max_displays_tmds, max_displays_dpmst) +
                       max_displays_virtual;
       break;
     default:
@@ -922,13 +959,26 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
       return kErrorParameters;
   }
 
-  DLOGI_IF(log_once, "Max %d concurrent displays.",
-           max_displays_builtin + std::max(max_displays_tmds, max_displays_dpmst) +
-               max_displays_virtual);
+  if (dsi_bridge_pluggable) {
+    DLOGI_IF(log_once, "Max %d concurrent displays.",
+             max_displays_builtin + (max_displays_tmds + max_displays_dpmst) +
+             max_displays_virtual);
+  } else {
+    DLOGI_IF(log_once, "Max %d concurrent displays.",
+             max_displays_builtin +
+             std::max(max_displays_tmds, max_displays_dpmst) +
+             max_displays_virtual);
+  }
+
   DLOGI_IF(log_once, "Max %d concurrent displays of type %d (BuiltIn).", max_displays_builtin,
            kBuiltIn);
-  DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Pluggable).",
-           std::max(max_displays_tmds, max_displays_dpmst), kPluggable);
+  if (dsi_bridge_pluggable) {
+    DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Pluggable).",
+             (max_displays_tmds + max_displays_dpmst), kPluggable);
+  } else {
+      DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Pluggable).",
+               std::max(max_displays_tmds, max_displays_dpmst), kPluggable);
+  }
   DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Virtual).", max_displays_virtual,
            kVirtual);
 
