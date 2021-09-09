@@ -53,6 +53,7 @@ struct eventData;
 struct cec_node_t {
     int fd = -1;
     const char *device;
+    bool is_connected;
     unsigned caps;
     unsigned available_log_addrs;
     unsigned num_log_addrs;

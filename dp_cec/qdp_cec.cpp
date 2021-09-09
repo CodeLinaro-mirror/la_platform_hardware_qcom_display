@@ -41,6 +41,8 @@
 #include <linux/cec-funcs.h>
 #include "qdp_cec.h"
 
+#define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
+
 namespace qdpcec {
 
 const int NUM_HDMI_PORTS = 1;
@@ -55,6 +57,8 @@ enum {
 };
 
 //Forward declarations
+static int cec_init_device(cec_context_t *ctx);
+static int cec_close_device(cec_context_t *ctx);
 static void cec_close_context(cec_context_t* ctx __unused);
 static int cec_enable(cec_context_t *ctx, int enable);
 static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id);
@@ -62,11 +66,13 @@ static void cec_monitor_deinit(cec_context_t* ctx);
 static void handle_cec_msg_event(cec_context_t* ctx, uint32_t node_event);
 
 void event_monitor(cec_context_t* ctx);  // hdmi event monitor function
-static void handle_dqevent(cec_context_t* ctx, cec_event ev);
 
 static int populate_event_data(cec_context_t* ctx, std::vector<eventData> *event_data_list);
 static int set_event_params(cec_context_t* ctx, uint32_t node_event, eventData *event_data);
 static void handle_exit_event(cec_context_t* ctx, uint32_t node_event);
+static void handle_hotplug_event(cec_context_t* ctx, uint32_t node_event);
+static const char *get_event_value(const char *uevent_data, int length, const char *event_info);
+static int uevent_init(int *uevent_fd);
 
 static int cec_add_logical_address(const struct hdmi_cec_device* dev,
         cec_logical_address_t addr)
@@ -158,7 +164,7 @@ static void cec_clear_logical_address(const struct hdmi_cec_device* dev)
 {
     cec_context_t* ctx = (cec_context_t*)(dev);
 
-    if (!(ctx->node.caps & CEC_CAP_LOG_ADDRS)) {
+    if (ctx->node.is_connected & !(ctx->node.caps & CEC_CAP_LOG_ADDRS)) {
         ALOGE("%s: Missing CEC_CAP_LOG_ADDRS capability", __FUNCTION__);
         return;
     }
@@ -181,6 +187,12 @@ static int cec_get_physical_address(const struct hdmi_cec_device* dev,
 {
     int err;
     cec_context_t* ctx = (cec_context_t*)(dev);
+
+    if (!ctx->node.is_connected) {
+        *addr = 0;
+        ALOGD_IF(DEBUG, "%s: Physical Address: 0x%x", __FUNCTION__, *addr);
+        return 0;
+    }
 
     if (ioctl(ctx->node.fd, CEC_ADAP_G_PHYS_ADDR, addr)) {
         err = errno;
@@ -299,6 +311,16 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
     //Ignore unplug events when system control is disabled
     if(!ctx->system_control && connected == 0)
         return;
+
+    // initialise the device on connect
+    ctx->node.is_connected = connected;
+    if (connected) {
+        cec_init_device(ctx);
+    } else {
+        cec_close_device(ctx);
+    }
+
+    // call callback
     hdmi_event_t event;
     event.type = HDMI_EVENT_HOT_PLUG;
     event.dev = (hdmi_cec_device *) ctx;
@@ -370,10 +392,10 @@ static void cec_set_audio_return_channel(const struct hdmi_cec_device* dev,
 
 static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id)
 {
-    // TODO: Fix implementation
     cec_context_t* ctx = (cec_context_t*)(dev);
-    ALOGE("%s: fd=%d, port_id=%d", __FUNCTION__, ctx->node.fd, port_id);
-    return 1;
+
+    ALOGE("%s: is_connected=%d, port_id=%d", __FUNCTION__, ctx->node.is_connected, port_id);
+    return ctx->node.is_connected;
 }
 
 static int cec_device_close(struct hw_device_t *dev)
@@ -396,16 +418,27 @@ static int cec_enable(cec_context_t *ctx, int enable)
     return 0;
 }
 
-//TODO: Create a cleanup function
-
-static int cec_init_context(cec_context_t *ctx)
+static int cec_close_device(cec_context_t *ctx)
 {
-    ALOGD_IF(DEBUG, "%s: Initializing context", __FUNCTION__);
-    int err = -EINVAL;
+    int ret = 0;
 
-    ctx->node.fd = -1;
+    if (ctx->node.fd > 0) {
+        ALOGD_IF(DEBUG, "%s: closing cec device", __FUNCTION__);
+        close(ctx->node.fd);
+        ctx->node.fd = -1;
 
+        // invalidate msg event poll
+        eventData event_data;
+	event_data.event_name = "cec_msg_event";
+        ret = set_event_params(ctx, 0, &event_data);
+    }
+    return ret;
+}
+
+static int cec_init_device(cec_context_t *ctx)
+{
     const int MAX_CEC_DEVICES = 3;
+    int err = -EINVAL;
 
     char cec_dev_path[MAX_PATH_LENGTH];
 
@@ -440,6 +473,55 @@ static int cec_init_context(cec_context_t *ctx)
     ctx->node.caps = caps.capabilities;
     ctx->node.available_log_addrs = caps.available_log_addrs;
 
+    // Set CEC Mode to wait for message.
+    __u32 monitor = CEC_MODE_INITIATOR | CEC_MODE_FOLLOWER;
+
+    if (ioctl(ctx->node.fd, CEC_S_MODE, &monitor)) {
+        err = errno;
+        ALOGE("%s: Selecting follower mode failed.\n: error=%s",
+                __FUNCTION__, strerror(err));
+        return -err;
+    }
+
+    // TODO: Enable CEC - framework expects it to be enabled by default
+    cec_enable(ctx, true);
+
+    eventData event_data;
+    event_data.event_name = "cec_msg_event";
+    err = set_event_params(ctx, 0, &event_data);
+
+    ALOGD("%s: CEC enabled", __FUNCTION__);
+    return 0;
+}
+
+//TODO: Create a cleanup function
+
+static int cec_init_context(cec_context_t *ctx)
+{
+    int err = -EINVAL;
+
+    ALOGD_IF(DEBUG, "%s: Initializing context", __FUNCTION__);
+
+    ctx->node.fd = -1;
+
+    // start monitor thread for connect event.
+    ctx->node_list.push_back("cec_msg_event");
+    ctx->node_list.push_back("hotplug_event");
+    ctx->node_list.push_back("exit_event");
+
+    err = populate_event_data(ctx, &ctx->event_data_list);
+    if (err < 0) {
+        ALOGE("Failed to populate poll parameters for monitoring HDMI CEC events. Exiting.");
+        return err;
+    }
+
+    ctx->cec_monitor = std::thread(event_monitor, ctx);
+
+    // TODO: check for failed to open error
+    if (cec_init_device(ctx) != 0) {
+        ALOGE("Failed to open cec device, will wait for hpd.");
+    }
+
     //Initialize ports - We support only one output port
     ctx->port_info = new hdmi_port_info[NUM_HDMI_PORTS];
     ctx->port_info[0].type = HDMI_OUTPUT;
@@ -454,32 +536,6 @@ static int cec_init_context(cec_context_t *ctx)
     ctx->vendor_id = 0xA47733;
     cec_clear_logical_address((hdmi_cec_device_t*)ctx);
 
-    // Set CEC Mode to wait for message.
-    __u32 monitor = CEC_MODE_INITIATOR | CEC_MODE_FOLLOWER;
-
-    if (ioctl(ctx->node.fd, CEC_S_MODE, &monitor)) {
-        err = errno;
-        ALOGE("%s: Selecting follower mode failed.\n: error=%s",
-                __FUNCTION__, strerror(err));
-        return -err;
-    }
-
-    // TODO: Enable CEC - framework expects it to be enabled by default
-    cec_enable(ctx, true);
-
-    ALOGD("%s: CEC enabled", __FUNCTION__);
-
-    ctx->node_list.push_back("cec_msg_event");
-    ctx->node_list.push_back("exit_event");
-
-    err = populate_event_data(ctx, &ctx->event_data_list);
-    if (err < 0) {
-        ALOGE("Failed to populate poll parameters for monitoring HDMI CEC events. Exiting.");
-        cec_enable(ctx, false);
-        return err;
-    }
-
-    ctx->cec_monitor = std::thread(event_monitor, ctx);
     return 0;
 }
 
@@ -599,11 +655,7 @@ static int set_event_params(cec_context_t* ctx, uint32_t node_event, eventData *
     if (!strncmp(event_data->event_name, "cec_msg_event", strlen("cec_msg_event"))) {
         poll_fd.fd = ctx->node.fd;
 
-        // TODO: Make proper check
-        if (poll_fd.fd < 0) {
-            ALOGE("CEC Node open failed.");
-            return poll_fd.fd;
-        }
+        // FIXME: fd is not checked, this was by design
         poll_fd.events |= POLLIN | POLLPRI | POLLERR;
         event_data->event_parser = &handle_cec_msg_event;
     } else if (!strncmp(event_data->event_name, "exit_event", strlen("exit_event"))) {
@@ -611,6 +663,14 @@ static int set_event_params(cec_context_t* ctx, uint32_t node_event, eventData *
         poll_fd.events |= POLLIN;
         event_data->event_parser = &handle_exit_event;
         ctx->exit_fd = poll_fd.fd;
+    } else if (!strncmp(event_data->event_name, "hotplug_event", strlen("hotplug_event"))) {
+        if (!uevent_init(&poll_fd.fd)) {
+            ALOGE("Failed to register uevent for hotplug detection");
+            return -1;
+        }
+
+        poll_fd.events |= POLLIN | POLLERR;
+        event_data->event_parser = &handle_hotplug_event;
     }
 
     ctx->poll_fds[node_event] = poll_fd;
@@ -635,32 +695,9 @@ static void handle_cec_msg_event(cec_context_t* ctx, uint32_t node_event) {
         if (ioctl(ctx->node.fd, CEC_DQEVENT, &ev)) {
             ALOGE("%s: ioctl CEC_DQEVENT failed, err=%s", __FUNCTION__, strerror(errno));
         } else {
-            ALOGI("%s: ioctl CEC_DQEVENT starts", __FUNCTION__);
-            handle_dqevent(ctx, ev);
+            ALOGI("%s: ioctl CEC_DQEVENT event = %d", __FUNCTION__, ev.event);
         }
     }
-}
-
-// TODO: Recheck functionality
-static void handle_dqevent(cec_context_t* ctx, cec_event ev) {
-    switch(ev.event) {
-        case CEC_EVENT_STATE_CHANGE:
-            if (ctx->port_info[0].physical_address != ev.state_change.phys_addr) {
-                ctx->port_info[0].physical_address = ev.state_change.phys_addr;
-                int connected;
-                if (ev.state_change.phys_addr == CEC_PHYS_ADDR_INVALID) {
-                    connected = 0;
-                } else {
-                    connected = 1;
-                }
-                ALOGD("HDMI CEC is %s", connected ? "connected" : "disconnected");
-                cec_hdmi_hotplug(ctx, connected);
-            }
-            break;
-        default:
-            ALOGD("%s: Unrecognized event: %d.\n", __FUNCTION__, ev.event);
-    }
-    return;
 }
 
 static void handle_exit_event(cec_context_t* ctx, uint32_t node_event) {
@@ -671,6 +708,79 @@ static void handle_exit_event(cec_context_t* ctx, uint32_t node_event) {
     }
 
     return;
+}
+
+static void handle_hotplug_event(cec_context_t* ctx, uint32_t node_event) {
+    char uevent_data[PAGE_SIZE];
+    int count = 0;
+
+    if (ctx->poll_fds[node_event].revents & POLLIN) {
+        count = static_cast<int> (recv(ctx->poll_fds[node_event].fd, uevent_data,
+            (INT32(sizeof(uevent_data))) - 2, 0));
+
+        if ((count > 0) && (strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG))) {
+            // MST hotplug will not carry connection status/test pattern etc.
+            // Pluggable display handler will check all connection status
+            // and take action accordingly.
+            ALOGD("drm hotplug");
+            const char *str_status = get_event_value(uevent_data, count, "status=");
+            const char *str_mst = get_event_value(uevent_data, count, "MST_HOTPLUG=");
+            if (!str_status && !str_mst) {
+              return;
+            }
+            if (str_status) {
+              bool connected = (strncmp(str_status, "connected", strlen("connected")) == 0);
+              ALOGD("CEC is %s", connected ? "connected" : "disconnected");
+              cec_hdmi_hotplug(ctx, connected);
+            }
+        }
+    }
+
+    return;
+}
+
+static const char *get_event_value(const char *uevent_data, int length, const char *event_info) {
+    const char *iterator_str = uevent_data;
+    const char *pstr = NULL;
+    while (((iterator_str - uevent_data) <= length) && (*iterator_str)) {
+        pstr = strstr(iterator_str, event_info);
+        if (pstr) {
+            break;
+        }
+        iterator_str += strlen(iterator_str) + 1;
+    }
+
+    if (pstr) {
+           pstr = pstr + strlen(event_info);
+    }
+
+    return pstr;
+}
+
+/* Returns 0 on failure, 1 on success */
+static int uevent_init(int *uevent_fd) {
+    struct sockaddr_nl addr;
+    int sz = 64*1024;
+    int s;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.nl_family = AF_NETLINK;
+    addr.nl_pid = getpid();
+    addr.nl_groups = 0xffffffff;
+
+    s = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
+    if (s < 0)
+        return 0;
+
+    setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &sz, sizeof(sz));
+
+    if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+        close(s);
+        return 0;
+    }
+
+    *uevent_fd = s;
+    return (*uevent_fd > 0);
 }
 
 static void cec_monitor_deinit(cec_context_t* ctx) {
