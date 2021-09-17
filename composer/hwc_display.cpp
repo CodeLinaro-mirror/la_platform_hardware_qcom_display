@@ -1212,6 +1212,20 @@ HWC2::Error HWCDisplay::SetClientTarget(buffer_handle_t target, shared_ptr<Fence
   sdm_layer->frame_rate = std::min(current_refresh_rate_, HWCDisplay::GetThrottlingRefreshRate());
   client_target_->SetLayerSurfaceDamage(damage);
   client_target_->SetLayerBuffer(target, acquire_fence);
+  client_target_handle_ = target;
+  client_acquire_fence_ = acquire_fence;
+  client_dataspace_     = dataspace;
+  client_damage_region_ = damage;
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplay::GetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
+                                        int32_t dataspace, hwc_region_t damage) {
+  target        = client_target_handle_;
+  acquire_fence = client_acquire_fence_;
+  dataspace     = client_dataspace_;
+  damage        = client_damage_region_;
 
   return HWC2::Error::None;
 }
@@ -2976,6 +2990,13 @@ HWC2::Error HWCDisplay::GetClientTargetProperty(ClientTargetProperty *out_client
       (android::hardware::graphics::common::V1_2::PixelFormat)format;
 
   return HWC2::Error::None;
+}
+
+void HWCDisplay::GetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo> *variable_config_map,
+                               int *active_config_index, uint32_t *num_configs) {
+  *variable_config_map = variable_config_map_;
+  *active_config_index = active_config_index_;
+  *num_configs = num_configs_;
 }
 
 } //namespace sdm
