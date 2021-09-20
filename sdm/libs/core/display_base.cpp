@@ -594,6 +594,11 @@ DisplayError DisplayBase::PrePrepare(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   ClientLock lock(disp_mutex_);
 
+  // Allow prepare as pending doze/pending_power_on is handled as a part of draw cycle
+  if (!active_ && (pending_power_state_ == kPowerStateNone)) {
+    return kErrorPermission;
+  }
+
   DisplayError error = InitRC();
   if (error != kErrorNone) {
     // Non-fatal but not expected, log error
@@ -634,6 +639,41 @@ DisplayError DisplayBase::PrePrepare(LayerStack *layer_stack) {
   return comp_manager_->PrePrepare(display_comp_ctx_, &disp_layer_stack_);
 }
 
+DisplayError DisplayBase::ForceToneMapUpdate(LayerStack *layer_stack) {
+  DTRACE_SCOPED();
+  int level = 0;
+  DisplayError error = kErrorNotSupported;
+
+
+  for (size_t hw_index = 0; hw_index < disp_layer_stack_.info.index.size(); hw_index++) {
+    size_t layer_index = disp_layer_stack_.info.index.at(hw_index);
+
+    if (layer_index >= layer_stack->layers.size()) {
+      DLOGE("Error forcing TM update. Layer stack appears to have changed");
+      return error;
+    }
+
+    Layer *stack_layer = layer_stack->layers.at(layer_index);
+    Layer &cached_layer = disp_layer_stack_.info.hw_layers.at(hw_index);
+    HWLayerConfig &hw_config = disp_layer_stack_.info.config[hw_index];
+
+    cached_layer.input_buffer.hist_data = stack_layer->input_buffer.hist_data;
+    cached_layer.input_buffer.color_metadata = stack_layer->input_buffer.color_metadata;
+    hw_config.left_pipe.lut_info.clear();
+    hw_config.right_pipe.lut_info.clear();
+  }
+
+  if (hw_intf_->GetPanelBrightness(&level) == kErrorNone) {
+    comp_manager_->SetBacklightLevel(display_comp_ctx_, level);
+  }
+  error = comp_manager_->ForceToneMapConfigure(display_comp_ctx_, &disp_layer_stack_);
+  if (error == kErrorNone) {
+    validated_ = true;
+  }
+
+  return error;
+}
+
 DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   ClientLock lock(disp_mutex_);
@@ -666,7 +706,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   }
 
   if (color_mgr_) {
-    color_mgr_->PrePrepare();
+    color_mgr_->Prepare();
     // apply pending DE config
     PPPendingParams pending_action;
     PPDisplayAPIPayload req_payload;
@@ -978,6 +1018,38 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
+  if (rc_cached_fb_width_ != fb_config_.x_pixels) {
+    GenericPayload in;
+    uint32_t *fb_width = nullptr;
+    ret = in.CreatePayload<uint32_t>(fb_width);
+    if (ret) {
+      DLOGE("failed to create the payload. Error:%d", ret);
+      return kErrorUndefined;
+    }
+    *fb_width = rc_cached_fb_width_ = fb_config_.x_pixels;
+    ret = rc_core_->SetParameter(kRCFeatureFbWidth, in);
+    if (ret) {
+      DLOGE("failed to set fb width. Error:%d", ret);
+      return kErrorUndefined;
+    }
+  }
+
+  if (rc_cached_fb_height_ != fb_config_.y_pixels) {
+    GenericPayload in;
+    uint32_t *fb_height = nullptr;
+    ret = in.CreatePayload<uint32_t>(fb_height);
+    if (ret) {
+      DLOGE("failed to create the payload. Error:%d", ret);
+      return kErrorUndefined;
+    }
+    *fb_height = rc_cached_fb_height_ = fb_config_.y_pixels;
+    ret = rc_core_->SetParameter(kRCFeatureFbHeight, in);
+    if (ret) {
+      DLOGE("failed to set mixer height. Error:%d", ret);
+      return kErrorUndefined;
+    }
+  }
+
   GenericPayload in;
   LayerStack **layer_stack_ptr = nullptr;
   ret = in.CreatePayload<LayerStack *>(layer_stack_ptr);
@@ -1146,6 +1218,19 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   if (!layer_stack) {
     return kErrorParameters;
   }
+
+#ifdef TRUSTED_VM
+  // Register all hw events on first commit for trusted vm only as the hw acquire happens as a
+  // part of first validate
+  if (first_cycle_) {
+    hw_events_intf_->SetEventState(HWEvent::PANEL_DEAD, true);
+    hw_events_intf_->SetEventState(HWEvent::IDLE_NOTIFY, true);
+    hw_events_intf_->SetEventState(HWEvent::IDLE_POWER_COLLAPSE, true);
+    hw_events_intf_->SetEventState(HWEvent::HW_RECOVERY, true);
+    hw_events_intf_->SetEventState(HWEvent::HISTOGRAM, true);
+    hw_events_intf_->SetEventState(HWEvent::MMRM, true);
+  }
+#endif
 
   disp_layer_stack_.info.output_buffer = layer_stack->output_buffer;
 
@@ -1428,13 +1513,13 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
     hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
   }
 
-  // For non-builtin displays, check panel capability for HDR10+
-  if (hdr_supported && hw_panel_info_.hdr_plus_enabled) {
-    hdr_plus_supported = true;
-  }
+  // Checking library support for HDR10+
+  comp_manager_->GetHDR10PlusCapability(&hdr_plus_supported);
 
   fixed_info->hdr_supported = hdr_supported;
-  fixed_info->hdr_plus_supported = hdr_plus_supported;
+  // For non-builtin displays, check panel capability for HDR10+
+  fixed_info->hdr_plus_supported =
+      hdr_supported && hw_panel_info_.hdr_plus_enabled && hdr_plus_supported;
   // Populate luminance values only if hdr will be supported on that display
   fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
   fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
@@ -3482,7 +3567,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
   secure_event_ = secure_event;
   if (secure_event == kTUITransitionEnd) {
     DisplayState pending_state;
-    *needs_refresh = (hw_panel_info_.mode == kModeCommand);
+    *needs_refresh = true;
     if (GetPendingDisplayState(&pending_state) == kErrorNone) {
       if (pending_state == kStateOff) {
         shared_ptr<Fence> release_fence = nullptr;
@@ -3562,7 +3647,7 @@ void DisplayBase::CheckMMRMState() {
     }
   }
 
-  if (comp_manager_->SetMaxSDEClk(mmrm_requested_clk_) != kErrorNone) {
+  if (comp_manager_->SetMaxSDEClk(display_comp_ctx_, mmrm_requested_clk_) != kErrorNone) {
     DLOGW("Could not set max sde clk");
     return;
   }
@@ -3587,7 +3672,7 @@ void DisplayBase::MMRMEvent(uint32_t clk) {
 
   mmrm_requested_clk_ = clk;
   mmrm_updated_ = true;
-  DLOGV("MMRM state has been updated");
+  DLOGI("MMRM state has been updated, clk requested=%u", clk);
 
   // Invalidate to retrigger clk calculation
   validated_ = false;

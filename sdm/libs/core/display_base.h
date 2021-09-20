@@ -217,6 +217,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError SetAlternateDisplayConfig(uint32_t *alt_config) {
     return kErrorNotSupported;
   }
+  virtual DisplayError ForceToneMapUpdate(LayerStack *layer_stack);
 
  protected:
   struct DisplayMutex {
@@ -409,6 +410,8 @@ class DisplayBase : public DisplayInterface {
   unsigned int rc_cached_res_height_ = 0;
   unsigned int rc_cached_mixer_width_ = 0;
   unsigned int rc_cached_mixer_height_ = 0;
+  unsigned int rc_cached_fb_width_ = 0;
+  unsigned int rc_cached_fb_height_ = 0;
   std::unique_ptr<RCIntf> rc_core_ = nullptr;
   bool rc_prepared_ = false;  // Used to avoid calling into RC core b/w Prepare and PrePrepare
   bool mmrm_updated_ = false;

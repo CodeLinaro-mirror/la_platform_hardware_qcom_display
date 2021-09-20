@@ -445,6 +445,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error SetAlternateDisplayConfig(bool set) {
     return HWC2::Error::Unsupported;
   }
+  virtual void IsMultiDisplay(bool is_multi_display) {
+    is_multi_display_ = is_multi_display;
+  }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -557,6 +560,7 @@ class HWCDisplay : public DisplayEventHandler {
   HWCToneMapper *tone_mapper_ = nullptr;
   uint32_t num_configs_ = 0;
   int disable_hdr_handling_ = 0;  // disables HDR handling.
+  int disable_sdr_histogram_ = 0;  // disables handling of SDR histogram data.
   bool pending_commit_ = false;
   bool is_cmd_mode_ = false;
   bool partial_update_enabled_ = false;
@@ -605,6 +609,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool frame_capture_buffer_queued_ = false;
   int frame_capture_status_ = -EAGAIN;
   uint32_t geometry_changes_ = GeometryChanges::kNone;
+  bool is_multi_display_ = false;
 
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);

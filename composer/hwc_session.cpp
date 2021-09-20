@@ -745,6 +745,17 @@ int32_t HWCSession::GetReleaseFences(hwc2_display_t display, uint32_t *out_num_e
 
 void HWCSession::PerformQsyncCallback(hwc2_display_t display, bool qsync_enabled,
                                       uint32_t refresh_rate, uint32_t qsync_refresh_rate) {
+  // AIDL callback
+  if (!callback_clients_.empty()) {
+    std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+    for (auto const& [id, callback] : callback_clients_) {
+      if (callback) {
+        callback->notifyQsyncChange(qsync_enabled, refresh_rate, qsync_refresh_rate);
+      }
+    }
+  }
+
+  // HIDL callback
   std::shared_ptr<DisplayConfig::ConfigCallback> callback = qsync_callback_.lock();
   if (!callback) {
     return;
@@ -1133,16 +1144,20 @@ int32_t HWCSession::SetPowerMode(hwc2_display_t display, int32_t int_mode) {
   // When secure session going on primary, if power request comes on second built-in, cache it and
   // process once secure session ends.
   // Allow power off transition during secure session.
-  bool is_builtin = (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN);
-  bool is_power_off = (hwc_display_[display]->GetCurrentPowerMode() == HWC2::PowerMode::Off);
-  if (secure_session_active_ && is_builtin && is_power_off) {
-    if (GetActiveBuiltinDisplay() != HWCCallbacks::kNumDisplays) {
-      DLOGI("Secure session in progress, defer power state change");
-      hwc_display_[display]->SetPendingPowerMode(mode);
-      return HWC2_ERROR_NONE;
+  {
+    SCOPE_LOCK(locker_[display]);
+    if (hwc_display_[display]) {
+      bool is_builtin = (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN);
+      bool is_power_off = (hwc_display_[display]->GetCurrentPowerMode() == HWC2::PowerMode::Off);
+      if (secure_session_active_ && is_builtin && is_power_off) {
+        if (GetActiveBuiltinDisplay() != HWCCallbacks::kNumDisplays) {
+          DLOGI("Secure session in progress, defer power state change");
+          hwc_display_[display]->SetPendingPowerMode(mode);
+          return HWC2_ERROR_NONE;
+        }
+      }
     }
   }
-
   if (pending_power_mode_[display]) {
     DLOGW("Set power mode is not allowed during secure display session");
     return HWC2_ERROR_UNSUPPORTED;
@@ -1170,8 +1185,14 @@ int32_t HWCSession::SetPowerMode(hwc2_display_t display, int32_t int_mode) {
     }
   } else {
     Locker::ScopeLock lock_disp(locker_[display]);
-    // Update hwc state for now. Actual poweron will handled through DisplayConfig.
-    hwc_display_[display]->UpdatePowerMode(mode);
+    if (hwc_display_[display]) {
+      // Update hwc state for now. Actual poweron will handled through DisplayConfig.
+      hwc_display_[display]->UpdatePowerMode(mode);
+    }
+    else {
+      DLOGW("Display %d no longer available.", display);
+      return HWC2_ERROR_BAD_DISPLAY;
+    }
   }
   // Reset idle pc ref count on suspend, as we enable idle pc during suspend.
   if (mode == HWC2::PowerMode::Off) {
@@ -1285,6 +1306,7 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
       *out_display_id = client_id;
       map_info.disp_type = kVirtual;
       map_info.sdm_id = display_id;
+      map_active_displays_.insert(std::make_pair(client_id, map_info.disp_type));
       break;
     }
   }
@@ -2628,6 +2650,8 @@ int HWCSession::CreatePrimaryDisplay() {
         if (!color_mgr_) {
           DLOGW("Failed to load HWCColorManager.");
         }
+
+        map_active_displays_.insert(std::make_pair(client_id, info.display_type));
       } else {
         DLOGE("Primary display creation has failed! status = %d", status);
         return status;
@@ -2722,6 +2746,8 @@ int HWCSession::HandleBuiltInDisplays() {
         map_info.disp_type = info.display_type;
         map_info.sdm_id = info.display_id;
         CreateDummyDisplay(client_id);
+
+        map_active_displays_.insert(std::make_pair(client_id, info.display_type));
       }
 
       DLOGI("Hotplugging builtin display, sdm id = %d, client id = %d", info.display_id,
@@ -2892,6 +2918,8 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
 
         DLOGI("Created pluggable display successfully: sdm id = %d, client id = %d",
               info.display_id, UINT32(client_id));
+
+        map_active_displays_.insert(std::make_pair(client_id, map_info.disp_type));
         CreateDummyDisplay(client_id);
       }
 
@@ -3034,6 +3062,8 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
         hwc_display_dummy = nullptr;
       }
     }
+
+    map_active_displays_.erase(client_id);
     display_ready_.reset(UINT32(client_id));
     pending_power_mode_[client_id] = false;
     hwc_display = nullptr;
@@ -3074,6 +3104,8 @@ void HWCSession::DestroyNonPluggableDisplay(DisplayMapInfo *map_info) {
         hwc_display_dummy = nullptr;
       }
     }
+    map_active_displays_.erase(client_id);
+
     pending_power_mode_[client_id] = false;
     hwc_display = nullptr;
     display_ready_.reset(UINT32(client_id));
@@ -3611,22 +3643,37 @@ int HWCSession::WaitForResources(bool wait_for_resources, hwc2_display_t active_
     if (enable_primary_reconfig_req_) {
       // todo (user): move this logic to wait for MDP resource reallocation/reconfiguration
       // to SDM module.
-      res_wait = hwc_display_[display_id]->CheckResourceState(&needs_active_builtin_reconfig);
+      {
+        SCOPE_LOCK(locker_[display_id]);
+        if (hwc_display_[display_id]) {
+          res_wait = hwc_display_[display_id]->CheckResourceState(&needs_active_builtin_reconfig);
+        }
+        else {
+          DLOGW("Display %" PRIu64 "no longer available.", display_id);
+          return HWC2_ERROR_BAD_DISPLAY;
+        }
+      }
       if (needs_active_builtin_reconfig) {
         SCOPE_LOCK(locker_[active_builtin_id]);
-        hwc2_config_t current_config = 0, new_config = 0;
-        hwc_display_[active_builtin_id]->GetActiveConfig(&current_config);
-        int status = INT32(hwc_display_[active_builtin_id]->SetAlternateDisplayConfig(true));
-        if (status) {
-          DLOGE("Active built-in %" PRIu64 " cannot switch to lower resource configuration",
-                active_builtin_id);
-          return status;
-        }
-        hwc_display_[active_builtin_id]->GetActiveConfig(&new_config);
+        if (hwc_display_[active_builtin_id]) {
+          hwc2_config_t current_config = 0, new_config = 0;
+          hwc_display_[active_builtin_id]->GetActiveConfig(&current_config);
+          int status = INT32(hwc_display_[active_builtin_id]->SetAlternateDisplayConfig(true));
+          if (status) {
+            DLOGE("Active built-in %" PRIu64 " cannot switch to lower resource configuration",
+                  active_builtin_id);
+            return status;
+          }
+          hwc_display_[active_builtin_id]->GetActiveConfig(&new_config);
 
-        // In case of config change, notify client with the new configuration
-        if (new_config != current_config) {
-          NotifyDisplayAttributes(active_builtin_id, new_config);
+          // In case of config change, notify client with the new configuration
+          if (new_config != current_config) {
+            NotifyDisplayAttributes(active_builtin_id, new_config);
+          }
+        }
+        else {
+          DLOGW("Display %" PRIu64 "no longer available.", active_builtin_id);
+          return HWC2_ERROR_BAD_DISPLAY;
         }
       }
     }
@@ -3644,9 +3691,18 @@ int HWCSession::WaitForResources(bool wait_for_resources, hwc2_display_t active_
         }
         cached_retire_fence_ == nullptr;
       }
-      res_wait = hwc_display_[display_id]->CheckResourceState(&needs_active_builtin_reconfig);
-      if (!enable_primary_reconfig_req_) {
-        needs_active_builtin_reconfig = false;
+      {
+        SCOPE_LOCK(locker_[display_id]);
+        if (hwc_display_[display_id]) {
+          res_wait = hwc_display_[display_id]->CheckResourceState(&needs_active_builtin_reconfig);
+          if (!enable_primary_reconfig_req_) {
+            needs_active_builtin_reconfig = false;
+          }
+        }
+        else {
+          DLOGW("Display %" PRIu64 "no longer available.", display_id);
+          return HWC2_ERROR_BAD_DISPLAY;
+        }
       }
     } while (res_wait || needs_active_builtin_reconfig);
   }
@@ -3836,7 +3892,7 @@ android::status_t HWCSession::TUITransitionEnd(int disp_id) {
 }
 
 android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
-  bool needs_refresh = false;
+  bool trigger_refresh = false;
   hwc2_display_t target_display = GetDisplayIndex(disp_id);
   if (target_display == -1) {
     target_display = GetActiveBuiltinDisplay();
@@ -3853,6 +3909,7 @@ android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
   std::copy(map_info_virtual_.begin(), map_info_virtual_.end(), std::back_inserter(map_info));
 
   for (auto &info : map_info) {
+    bool needs_refresh = false;
     {
       SEQUENCE_WAIT_SCOPE_LOCK(locker_[info.client_id]);
       if (hwc_display_[info.client_id]) {
@@ -3867,11 +3924,18 @@ android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
           return -EINVAL;
         }
       }
-    }
-    if (needs_refresh) {
-      callbacks_.Refresh(info.client_id);
+      trigger_refresh |= needs_refresh;
     }
   }
+  if (trigger_refresh) {
+    callbacks_.Refresh(target_display);
+    int ret = WaitForCommitDone(target_display, kClientTrustedUI);
+    if (ret != 0) {
+      DLOGE("WaitForCommitDone failed with error %d", ret);
+      return -EINVAL;
+    }
+  }
+
   if (pending_hotplug_event_ == kHotPlugEvent) {
     // Do hotplug handling in a different thread to avoid blocking TUI thread.
     std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
@@ -3982,6 +4046,7 @@ HWC2::Error HWCSession::CommitOrPrepare(hwc2_display_t display, bool validate_on
   {
     SEQUENCE_ENTRY_SCOPE_LOCK(locker_[display]);
     hwc_display_[display]->ProcessActiveConfigChange();
+    hwc_display_[display]->IsMultiDisplay((map_active_displays_.size() > 1) ? true : false);
     status = hwc_display_[display]->CommitOrPrepare(validate_only, out_retire_fence, out_num_types,
                                                     out_num_requests, needs_commit);
   }
