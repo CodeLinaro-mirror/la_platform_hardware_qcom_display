@@ -845,7 +845,8 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
 DisplayError HWInfoDRM::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
   HWDisplaysInfo hw_displays_info = {};
 
-  DisplayError error = GetDisplaysStatus(&hw_displays_info);
+  DisplayError error = kErrorNone;
+  error = GetDisplaysStatus(true, &hw_displays_info);
   if (error != kErrorNone) {
     DLOGE("Failed to get connected display list. Error = %d", error);
     return error;
@@ -865,7 +866,7 @@ DisplayError HWInfoDRM::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_
   return kErrorNone;
 }
 
-DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
+DisplayError HWInfoDRM::GetDisplaysStatus(bool skip_reload, HWDisplaysInfo *hw_displays_info) {
   static DebugTag log_once = kTagNone;
 
   if (!hw_displays_info) {
@@ -880,7 +881,7 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
 
   hw_displays_info->clear();
   sde_drm::DRMConnectorsInfo conns_info = {};
-  int drm_err = drm_mgr_intf_->GetConnectorsInfo(&conns_info);
+  int drm_err = drm_mgr_intf_->GetConnectorsInfo(skip_reload, &conns_info);
   if (drm_err) {
     DLOGE("DRM Driver error %d while getting displays' status!", drm_err);
     return kErrorUndefined;
@@ -986,7 +987,7 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
   }
 
   sde_drm::DRMConnectorsInfo conns_info = {};
-  drm_err = drm_mgr_intf_->GetConnectorsInfo(&conns_info);
+  drm_err = drm_mgr_intf_->GetConnectorsInfo(true, &conns_info);
   if (drm_err) {
     DLOGE("DRM Driver get connector error %d while getting max displays supported!", drm_err);
     return kErrorUndefined;
@@ -1054,7 +1055,7 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
 
 int HWInfoDRM::GetConnectorTypeforTMDS(uint32_t encoder_id, sde_drm::DRMEncoderInfo info) {
   sde_drm::DRMConnectorsInfo conns_info = {};
-  int drm_err = drm_mgr_intf_->GetConnectorsInfo(&conns_info);
+  int drm_err = drm_mgr_intf_->GetConnectorsInfo(true, &conns_info);
   if (drm_err) {
     DLOGE("DRM Driver error %d while getting max displays' supported", drm_err);
     return -1;

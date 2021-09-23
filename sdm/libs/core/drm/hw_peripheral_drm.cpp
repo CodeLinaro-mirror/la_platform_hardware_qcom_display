@@ -106,7 +106,7 @@ DisplayError HWPeripheralDRM::Init() {
   CreatePanelFeaturePropertyMap();
 
   sde_drm::DRMConnectorsInfo conns_info = {};
-  int drm_err = drm_mgr_intf_->GetConnectorsInfo(&conns_info);
+  int drm_err = drm_mgr_intf_->GetConnectorsInfo(false, &conns_info);
   if (drm_err) {
     DLOGE("DRM Driver error %d while getting Connectors info.", drm_err);
     return kErrorUndefined;
