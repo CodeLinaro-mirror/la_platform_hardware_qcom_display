@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -506,6 +506,7 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   const string qsync_support = "qsync support=";
   const string wb_ubwc = "wb_ubwc";
   const string dyn_bitclk_support = "dyn bitclk support=";
+  const string ext_bridge = "ext bridge hpd support=";
 
   while (std::getline(stream, line)) {
     if (line.find(pixel_formats) != string::npos) {
@@ -537,6 +538,8 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
       info->is_wb_ubwc_supported = true;
     } else if (line.find(dyn_bitclk_support) != string::npos) {
       info->dyn_bitclk_support = (string(line, dyn_bitclk_support.length()) == "true");
+    } else if (line.find(ext_bridge) != string::npos) {
+      info->ext_bridge_hpd = (string(line, ext_bridge.length()) == "true");
     }
   }
 
@@ -674,7 +677,8 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, std::vector<uint8_t> *edi
 int DRMConnector::GetInfo(DRMConnectorInfo *info) {
   uint32_t conn_id = drm_connector_->connector_id;
   if (!skip_connector_reload_ && (IsTVConnector(drm_connector_->connector_type)
-      || (DRM_MODE_CONNECTOR_VIRTUAL == drm_connector_->connector_type))) {
+      || (DRM_MODE_CONNECTOR_VIRTUAL == drm_connector_->connector_type)
+      || (DRM_MODE_CONNECTOR_DSI == drm_connector_->connector_type))) {
     // Reload since for some connectors like Virtual and DP, modes may change.
     drmModeConnectorPtr drm_connector = drmModeGetConnector(fd_, conn_id);
     if (!drm_connector) {
