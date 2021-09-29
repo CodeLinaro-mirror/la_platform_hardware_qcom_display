@@ -104,7 +104,9 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.comp_mask=0 \
     vendor.display.enable_default_color_mode=1 \
     vendor.display.enable_optimize_refresh=1 \
-    vendor.display.disable_ui_3d_tonemap=1
+    vendor.display.disable_ui_3d_tonemap=1 \
+    vendor.display.disable_virtual_display=1 \
+    vendor.display.disable_color_transformation=1
 
 #Set WCG properties
 ifeq ($(TARGET_BOARD_PLATFORM), sm8150)
