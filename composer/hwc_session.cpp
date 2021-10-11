@@ -189,6 +189,12 @@ int HWCSession::Init() {
     return -EINVAL;
   }
 
+  int value = 0;  // Default value when property is not present.
+  HWCDebugHandler::Get()->GetProperty(ENABLE_VERBOSE_LOG, &value);
+  if (value == 1) {
+    HWCDebugHandler::DebugAll(value, value);
+  }
+
   HWCDebugHandler::Get()->GetProperty(ENABLE_NULL_DISPLAY_PROP, &null_display_mode_);
   DLOGI("null_display_mode_: %d", null_display_mode_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_HOTPLUG_BWCHECK, &disable_hotplug_bwcheck_);
@@ -206,7 +212,7 @@ int HWCSession::Init() {
     DLOGI("Did not register HWCSession as the HWCUEvent handler");
   }
 
-  int value = 0;  // Default value when property is not present.
+  value = 0;  // Default value when property is not present.
   Debug::Get()->GetProperty(ENABLE_ASYNC_POWERMODE, &value);
   async_powermode_ = (value == 1);
   DLOGI("builtin_powermode_override: %d", async_powermode_);
@@ -490,7 +496,7 @@ int32_t HWCSession::CreateLayer(hwc2_display_t display,
 int32_t HWCSession::CreateVirtualDisplay(uint32_t width, uint32_t height, int32_t *format,
                                          hwc2_display_t *out_display_id) {
   // TODO(user): Handle concurrency with HDMI
-
+  hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
   if (!out_display_id || !width || !height || !format) {
     return  HWC2_ERROR_BAD_PARAMETER;
   }
@@ -504,6 +510,14 @@ int32_t HWCSession::CreateVirtualDisplay(uint32_t width, uint32_t height, int32_
     return HWC2_ERROR_NONE;
   }
 
+  {
+    //On Non-QSSI builds we have to disable virtual display to avoid jank
+    Locker::ScopeLock lock_disp(locker_[active_builtin_disp_id]);
+    if (hwc_display_[active_builtin_disp_id]->GetDrawMethod() != kDrawUnifiedWithGPUTarget) {
+      DLOGW("Draw method is not UnifiedWithGPUTarget, failing Virtual Display Creation.");
+      return HWC2_ERROR_UNSUPPORTED;
+    }
+  }
   auto status = CreateVirtualDisplayObj(width, height, format, out_display_id);
   if (status == HWC2::Error::None) {
     DLOGI("Created virtual display id:%" PRIu64 ", res: %dx%d", *out_display_id, width, height);
@@ -1265,6 +1279,9 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
     if (secure_sessions.any()) {
       DLOGE("Secure session is active, cannot create virtual display.");
       return HWC2::Error::Unsupported;
+    } else if (IsVirtualDisplayConnected()) {
+      DLOGE("Previous virtual session is active, cannot create virtual display.");
+      return HWC2::Error::Unsupported;
     } else if (IsPluggableDisplayConnected()) {
       DLOGE("External session is active, cannot create virtual display.");
       return HWC2::Error::Unsupported;
@@ -1316,6 +1333,15 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
 
 bool HWCSession::IsPluggableDisplayConnected() {
   for (auto &map_info : map_info_pluggable_) {
+    if (hwc_display_[map_info.client_id]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HWCSession::IsVirtualDisplayConnected() {
+  for (auto &map_info : map_info_virtual_) {
     if (hwc_display_[map_info.client_id]) {
       return true;
     }
