@@ -12,6 +12,11 @@ PRODUCT_PACKAGES += \
     libqdMetaData.vendor \
     libdisplayconfig.vendor \
     libdisplayconfig.qti.vendor \
+    libqdMetaData \
+    libqdMetaData.system \
+    libdisplayconfig \
+    libgralloc.qti \
+    libdisplayconfig.qti \
     vendor.display.config@1.0.vendor \
     vendor.display.config@1.1.vendor \
     vendor.display.config@1.2.vendor \
