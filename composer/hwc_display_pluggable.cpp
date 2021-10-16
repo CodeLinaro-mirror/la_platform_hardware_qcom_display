@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2019, 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -218,7 +218,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
 
   if (connected) {
     if (display_null_.IsActive()) {
-      error = core_intf_->CreateDisplay(type_, this, &display_intf_);
+      error = core_intf_->CreateDisplay(sdm_id_, this, &display_intf_);
       if (error != kErrorNone) {
         DLOGE("Display create failed. Error = %d display_type %d event_handler %p disp_intf %p",
               error, type_, this, &display_intf_);
@@ -331,6 +331,34 @@ HWC2::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, Re
 HWC2::Error HWCDisplayPluggable::UpdatePowerMode(HWC2::PowerMode mode) {
   current_power_mode_ = mode;
   validated_ = false;
+  return HWC2::Error::None;
+}
+
+
+HWC2::Error HWCDisplayPluggable::SetClientTarget(buffer_handle_t target, int32_t acquire_fence,
+                                               int32_t dataspace, hwc_region_t damage) {
+  HWC2::Error error = HWCDisplay::SetClientTarget(target, acquire_fence, dataspace, damage);
+  if (error != HWC2::Error::None) {
+    return error;
+  }
+
+  // windowed_display and dynamic scaling are not supported.
+  if (windowed_display_) {
+    return HWC2::Error::None;
+  }
+
+  Layer *sdm_layer = client_target_->GetSDMLayer();
+  uint32_t fb_width = 0, fb_height = 0;
+
+  GetFrameBufferResolution(&fb_width, &fb_height);
+
+  if (fb_width != sdm_layer->input_buffer.unaligned_width ||
+      fb_height != sdm_layer->input_buffer.unaligned_height) {
+    if (SetFrameBufferConfig(sdm_layer->input_buffer.unaligned_width,
+                             sdm_layer->input_buffer.unaligned_height)) {
+      return HWC2::Error::BadParameter;
+    }
+  }
   return HWC2::Error::None;
 }
 
