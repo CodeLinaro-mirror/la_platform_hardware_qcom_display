@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -325,7 +325,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   // Uevent handler
   virtual void UEventHandler(const char *uevent_data, int length);
   void ResetPanel();
-  void InitSupportedDisplaySlots();
+  int InitSupportedDisplaySlots();
   int GetDisplayIndex(int dpy);
   int CreatePrimaryDisplay();
   void CreateDummyDisplay(hwc2_display_t client_id);
