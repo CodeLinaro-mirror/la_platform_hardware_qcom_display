@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -1217,6 +1218,53 @@ Return<void> HWCSession::getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
   _hidl_cb(error, fsc_rgb_order);
 
   return Void();
+}
+
+Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, float green,
+                                      float blue) {
+  int disp_idx = GetDisplayIndex(disp_id);
+  int32_t error = -EINVAL;
+
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    DLOGE("Invalid display = %d", disp_id);
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (!hwc_display_[disp_idx]) {
+      DLOGW("Display is not connected");
+      error = -ENODEV;
+      return error;
+    }
+  }
+
+  if (enable == true) {
+    error = CreateVirtualDisplayForCAC(disp_idx);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_display_[disp_idx]) {
+      error = hwc_display_[disp_idx]->SetCAC(enable, red, green, blue);
+      DLOGI("CAC: disp_id = %d enable = %d, red = %f, green = %f, blue = %f, errno = %d, desc = %s",
+            disp_idx, enable, red, green, blue, error, strerror(error));
+    }
+  }
+
+  if(enable == false && wb_display_) {
+    error = DestroyVirtualDisplay(wb_display_);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
+  }
+
+  return error;
 }
 
 #endif

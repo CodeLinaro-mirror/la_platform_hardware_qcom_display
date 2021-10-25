@@ -22,7 +22,7 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.17/IDisplayConfig.h>
+#include <vendor/display/config/1.18/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
@@ -56,7 +56,7 @@
 namespace sdm {
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_17::IDisplayConfig;
+using vendor::display::config::V1_18::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -448,6 +448,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<int32_t> allowIdleFallback() override;
   Return<void> getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
                               getFSCRGBOrder_cb _hidl_cb) override;
+  Return<int32_t> enableCAC(uint32_t disp_id, bool enable, float red, float green, float blue)
+                            override;
 
 #endif
 
