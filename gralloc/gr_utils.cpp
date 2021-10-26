@@ -238,6 +238,21 @@ bool CpuCanRead(uint64_t usage) {
   return false;
 }
 
+bool AdrenoAlignmentRequired(uint64_t usage) {
+  if ((usage & BufferUsage::GPU_TEXTURE) || (usage & BufferUsage::GPU_RENDER_TARGET)) {
+    // Certain formats may need to bypass adreno alignment requirements to
+    // support legacy apps. The following check is for those cases where it is mandatory
+    // to use adreno alignment
+    if (((usage & GRALLOC_USAGE_PRIVATE_VIDEO_HW) &&
+          ((usage & BufferUsage::VIDEO_DECODER) ||
+           (usage & BufferUsage::VIDEO_ENCODER))) ||
+          !CpuCanAccess(usage)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool CpuCanWrite(uint64_t usage) {
   if (usage & BufferUsage::CPU_WRITE_MASK) {
     // Application intends to use CPU for rendering
@@ -314,6 +329,8 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
   int height = info.height;
   uint64_t usage = info.usage;
   unsigned int mmm_color_format = 0;
+  uint32_t alignment = 16;
+
   if (!IsGPUFlagSupported(usage)) {
     ALOGE("Unsupported GPU usage flags present 0x%" PRIx64, usage);
     return 0;
@@ -355,7 +372,15 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
           ALOGE("w or h is odd for the YV12 format");
           return 0;
         }
-        size = alignedw * alignedh + (ALIGN(alignedw / 2, 16) * (alignedh / 2)) * 2;
+
+        if (AdrenoAlignmentRequired(usage)) {
+          if (AdrenoMemInfo::GetInstance() == nullptr) {
+            ALOGE("Unable to get adreno instance");
+            return 0;
+          }
+          alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
+        }
+        size = alignedw * alignedh + (ALIGN(alignedw / 2, alignment) * (alignedh / 2)) * 2;
         size = ALIGN(size, (unsigned int) SIZE_4K);
         break;
       case HAL_PIXEL_FORMAT_YCbCr_420_SP:
@@ -418,7 +443,8 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
         size = VENUS_BUFFER_SIZE(COLOR_FMT_NV12_512, width, height);
 #endif
         break;
-      default:ALOGE("%s: Unrecognized pixel format: 0x%x", __FUNCTION__, format);
+      default:
+        ALOGE("%s: Unrecognized pixel format: 0x%x", __FUNCTION__, format);
         return 0;
     }
   }
@@ -1191,7 +1217,7 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
       aligned_w = ALIGN(width, 128);
       break;
     case HAL_PIXEL_FORMAT_YV12:
-      if ((usage & BufferUsage::GPU_TEXTURE) || (usage & BufferUsage::GPU_RENDER_TARGET)) {
+      if (AdrenoAlignmentRequired(usage)) {
         if (AdrenoMemInfo::GetInstance() == nullptr) {
           return 0;
         }
@@ -1562,6 +1588,8 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
   unsigned int y_stride, c_stride, y_height, c_height, y_size, c_size;
   uint64_t yOffset, cOffset, crOffset, cbOffset;
   int h_subsampling = 0, v_subsampling = 0;
+  uint32_t alignment = 16;
+
   switch (format) {
     // Semiplanar
     case HAL_PIXEL_FORMAT_YCbCr_420_SP:
@@ -1717,9 +1745,17 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
         err = -EINVAL;
         return err;
       }
+
+      if (AdrenoAlignmentRequired(info.usage)) {
+        if (AdrenoMemInfo::GetInstance() == nullptr) {
+          ALOGE("Unable to get adreno instance");
+          return -EINVAL;;
+        }
+        alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
+      }
       *plane_count = 3;
       y_stride = width;
-      c_stride = ALIGN(width / 2, 16);
+      c_stride = ALIGN(width / 2, alignment);
       y_height = UINT(height);
       y_size = (y_stride * y_height);
       height = height >> 1;
