@@ -8,6 +8,7 @@ PRODUCT_PACKAGES += \
     android.hardware.light@2.0-impl \
     gralloc.$(TARGET_BOARD_PLATFORM) \
     lights.$(TARGET_BOARD_PLATFORM) \
+    hdmi_cec.$(TARGET_BOARD_PLATFORM) \
     hwcomposer.$(TARGET_BOARD_PLATFORM) \
     memtrack.$(TARGET_BOARD_PLATFORM) \
     libsdmcore \
