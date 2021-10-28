@@ -91,7 +91,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <hal format="hidl">
         <name>vendor.display.color</name>
         <transport>hwbinder</transport>
-        <version>1.6</version>
+        <version>1.8</version>
         <interface>
             <name>IDisplayColor</name>
             <instance>default</instance>
