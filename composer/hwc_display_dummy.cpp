@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2019,2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -70,10 +70,10 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
                                  callbacks, event_handler, qservice, kBuiltIn, id, sdm_id,
                                  DISPLAY_CLASS_BUILTIN) {
   DisplayConfigVariableInfo config;
-  config.x_pixels = 720;
-  config.y_pixels = 1280;
-  config.x_dpi = 200.0f;
-  config.y_dpi = 200.0f;
+  config.x_pixels = 1920;
+  config.y_pixels = 1080;
+  config.x_dpi = 300.0f;
+  config.y_dpi = 300.0f;
   config.fps = 60;
   config.vsync_period_ns = 16600000;
   display_null_.SetFrameBufferConfig(config);
