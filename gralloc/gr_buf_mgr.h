@@ -64,6 +64,7 @@ class BufferManager {
   Error GetAllHandles(std::vector<const private_handle_t *> *out_handle_list);
   int GetCustomDimensions(private_handle_t *handle, int *stride, int *height);
   Error GetViewToImport(private_handle_t *handle, const uint32_t view_requested, uint32_t *view);
+  Error GetMetadataValue(private_handle_t *handle, int64_t metadatatype_value, void *out);
 
  private:
   BufferManager();
