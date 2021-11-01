@@ -537,7 +537,7 @@ static int cec_init_context(cec_context_t *ctx)
     cec_get_physical_address((hdmi_cec_device *) ctx,
             &ctx->port_info[0].physical_address);
 
-    ctx->version = 0x6;
+    ctx->version = 0x5;
     ctx->vendor_id = 0xA47733;
     cec_clear_logical_address((hdmi_cec_device_t*)ctx);
 
