@@ -1227,11 +1227,9 @@ int32_t HWCSession::GetDozeSupport(hwc2_display_t display, int32_t *out_support)
     return HWC2_ERROR_BAD_DISPLAY;
   }
 
-  if (hwc_display_[display]->GetDisplayClass() != DISPLAY_CLASS_BUILTIN) {
-    return HWC2_ERROR_NONE;
+  if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN) {
+    *out_support = 1;
   }
-
-  *out_support = hwc_display_[display]->HasSmartPanelConfig() ? 1 : 0;
 
   return HWC2_ERROR_NONE;
 }
