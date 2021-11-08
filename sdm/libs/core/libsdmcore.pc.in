@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libsdmcore
+Description: SDM core
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lsdmcore
+Cflags: -I${includedir} -I${includedir}/sdm/ -I${includedir}/sdm/
