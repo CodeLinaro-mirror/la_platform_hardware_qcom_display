@@ -497,7 +497,7 @@ int32_t HWCSession::CreateLayer(hwc2_display_t display,
 int32_t HWCSession::CreateVirtualDisplay(uint32_t width, uint32_t height, int32_t *format,
                                          hwc2_display_t *out_display_id) {
   // TODO(user): Handle concurrency with HDMI
-  hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+
   if (!out_display_id || !width || !height || !format) {
     return  HWC2_ERROR_BAD_PARAMETER;
   }
@@ -511,14 +511,6 @@ int32_t HWCSession::CreateVirtualDisplay(uint32_t width, uint32_t height, int32_
     return HWC2_ERROR_NONE;
   }
 
-  {
-    //On Non-QSSI builds we have to disable virtual display to avoid jank
-    Locker::ScopeLock lock_disp(locker_[active_builtin_disp_id]);
-    if (hwc_display_[active_builtin_disp_id]->GetDrawMethod() != kDrawUnifiedWithGPUTarget) {
-      DLOGW("Draw method is not UnifiedWithGPUTarget, failing Virtual Display Creation.");
-      return HWC2_ERROR_UNSUPPORTED;
-    }
-  }
   auto status = CreateVirtualDisplayObj(width, height, format, out_display_id);
   if (status == HWC2::Error::None) {
     DLOGI("Created virtual display id:%" PRIu64 ", res: %dx%d", *out_display_id, width, height);
@@ -3932,6 +3924,18 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
       return -EINVAL;
     }
   }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[target_display]);
+    if (hwc_display_[target_display]) {
+      if (hwc_display_[target_display]->PostHandleSecureEvent(kTUITransitionStart) != kErrorNone) {
+        return -EINVAL;
+      }
+    } else {
+      DLOGW("Target display %d is not ready", disp_id);
+      return -ENODEV;
+    }
+  }
   return 0;
 }
 android::status_t HWCSession::TUITransitionEnd(int disp_id) {
@@ -3972,6 +3976,19 @@ android::status_t HWCSession::TUITransitionEnd(int disp_id) {
       return -EINVAL;
     }
   }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[target_display]);
+    if (hwc_display_[target_display]) {
+      if (hwc_display_[target_display]->PostHandleSecureEvent(kTUITransitionEnd) != kErrorNone) {
+        return -EINVAL;
+      }
+    } else {
+      DLOGW("Target display %d is not ready", disp_id);
+      return -ENODEV;
+    }
+  }
+
   return TUITransitionUnPrepare(disp_id);
 }
 

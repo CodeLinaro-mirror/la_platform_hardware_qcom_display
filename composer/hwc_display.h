@@ -207,6 +207,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int HandleSecureSession(const std::bitset<kSecureMax> &secure_sessions,
                                   bool *power_on_pending, bool is_active_secure_display);
   virtual DisplayError HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh);
+  virtual DisplayError PostHandleSecureEvent(SecureEvent secure_event);
   virtual int GetActiveSecureSession(std::bitset<kSecureMax> *secure_sessions) { return 0; };
   virtual DisplayError SetMixerResolution(uint32_t width, uint32_t height);
   virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
@@ -302,7 +303,6 @@ class HWCDisplay : public DisplayEventHandler {
   }
   bool IsFirstCommitDone() { return !first_cycle_; }
   virtual void ProcessActiveConfigChange();
-  DisplayDrawMethod GetDrawMethod() { return draw_method_; }
 
   // HWC2 APIs
   virtual HWC2::Error AcceptDisplayChanges(void);
