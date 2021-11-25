@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -224,7 +224,11 @@ int HWCSession::Init() {
   }
   DLOGI("DISABLE_VIRTUAL_DISPLAY: %d", disable_virtual_display_);
 
-  InitSupportedDisplaySlots();
+  status = InitSupportedDisplaySlots();
+  if (status) {
+    DLOGE("Failed to initialize slots\n");
+    return status;
+  }
   // Create primary display here. Remaining builtin displays will be created after client has set
   // display indexes which may happen sometime before callback is registered.
   status = CreatePrimaryDisplay();
@@ -271,7 +275,7 @@ int HWCSession::Deinit() {
   return 0;
 }
 
-void HWCSession::InitSupportedDisplaySlots() {
+int HWCSession::InitSupportedDisplaySlots() {
   // Default slots:
   //    Primary = 0, External = 1
   //    Additional external displays 2,3,...max_pluggable_count.
@@ -285,14 +289,14 @@ void HWCSession::InitSupportedDisplaySlots() {
   if (null_display_mode_) {
     is_hdr_display_.resize(1);
     // Skip display slot initialization.
-    return;
+    return 0;
   }
 
   DisplayError error = CoreInterface::CreateCore(&buffer_allocator_, &buffer_sync_handler_,
                                                  &socket_handler_, &core_intf_);
   if (error != kErrorNone) {
     DLOGE("Failed to create CoreInterface");
-    return;
+    return -ENODEV;
   }
 
   HWDisplayInterfaceInfo hw_disp_info = {};
@@ -300,7 +304,7 @@ void HWCSession::InitSupportedDisplaySlots() {
   if (error != kErrorNone) {
     CoreInterface::DestroyCore();
     DLOGE("Primary display type not recognized. Error = %d", error);
-    return;
+    return -EINVAL;
   }
 
   int max_builtin = 0;
@@ -311,21 +315,21 @@ void HWCSession::InitSupportedDisplaySlots() {
   if (error != kErrorNone) {
     CoreInterface::DestroyCore();
     DLOGE("Could not find maximum built-in displays supported. Error = %d", error);
-    return;
+    return -EINVAL;
   }
 
   error = core_intf_->GetMaxDisplaysSupported(kPluggable, &max_pluggable);
   if (error != kErrorNone) {
     CoreInterface::DestroyCore();
     DLOGE("Could not find maximum pluggable displays supported. Error = %d", error);
-    return;
+    return -EINVAL;
   }
 
   error = core_intf_->GetMaxDisplaysSupported(kVirtual, &max_virtual);
   if (error != kErrorNone) {
     CoreInterface::DestroyCore();
     DLOGE("Could not find maximum virtual displays supported. Error = %d", error);
-    return;
+    return -EINVAL;
   }
 
   if (kPluggable == hw_disp_info.type && max_pluggable != 0) {
@@ -359,7 +363,7 @@ void HWCSession::InitSupportedDisplaySlots() {
   is_hdr_display_.resize(UINT32(base_id));
 
   if (!async_powermode_) {
-    return;
+    return 0;
   }
 
   int start_index = HWCCallbacks::kNumRealDisplays;
@@ -370,6 +374,8 @@ void HWCSession::InitSupportedDisplaySlots() {
     DLOGI("Display Pairs: map.client_id: %d, start_index: %d", map.client_id, start_index);
     map_hwc_display_.insert(std::make_pair(map.client_id, start_index++));
   }
+
+  return 0;
 }
 
 int HWCSession::GetDisplayIndex(int dpy) {
@@ -3559,6 +3565,7 @@ void HWCSession::NotifyClientStatus(bool connected) {
     }
     SCOPE_LOCK(locker_[i]);
     hwc_display_[i]->NotifyClientStatus(connected);
+    hwc_display_[i]->SetVsyncEnabled(HWC2::Vsync::Disable);
   }
 }
 
