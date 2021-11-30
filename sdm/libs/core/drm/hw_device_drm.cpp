@@ -359,7 +359,7 @@ DisplayError HWDeviceDRM::Init() {
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_OUTPUT_FENCE_OFFSET, token_.crtc_id, 1);
 
-    if (drm_atomic_intf_->Commit(true /* synchronous */, NULL)) {
+    if (drm_atomic_intf_->Commit(true /* synchronous */, NULL, true)) {
       DLOGE("Setting up CRTC %d, Connector %d for %s failed", token_.crtc_id, token_.conn_id,
             device_name_);
       return kErrorResources;
@@ -598,7 +598,7 @@ DisplayError HWDeviceDRM::PowerOn() {
   DTRACE_SCOPED();
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::ON);
-  int ret = drm_atomic_intf_->Commit(false /* synchronous */, NULL);
+  int ret = drm_atomic_intf_->Commit(false /* synchronous */, NULL, true);
   if (ret) {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
@@ -610,7 +610,7 @@ DisplayError HWDeviceDRM::PowerOff() {
 
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
-  int ret = drm_atomic_intf_->Commit(false /* synchronous */, NULL);
+  int ret = drm_atomic_intf_->Commit(false /* synchronous */, NULL, true);
   if (ret) {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
@@ -817,7 +817,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
   SetupAtomic(hw_layers, false /* validate */);
 
-  int ret = drm_atomic_intf_->Commit(false /* synchronous */, pflip_user_data_);
+  int ret = drm_atomic_intf_->Commit(false /* synchronous */, pflip_user_data_, false);
   if (ret) {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
@@ -849,7 +849,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
 }
 
 DisplayError HWDeviceDRM::Flush() {
-int ret = drm_atomic_intf_->Commit(false /* synchronous */, NULL);
+int ret = drm_atomic_intf_->Commit(false /* synchronous */, NULL, false);
   if (ret) {
     DLOGE("failed with error %d", ret);
     return kErrorHardware;
