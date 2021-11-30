@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -120,6 +121,9 @@ CamxPixelFormat CameraInfo::GetCameraPixelFormat(int hal_format) {
       break;
     case HAL_PIXEL_FORMAT_RAW12:
       format = CAMERA_PIXEL_FORMAT_RAW12;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
+      format = CAMERA_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC;
       break;
     default:
       ALOGE("%s: No map for format: 0x%x", __FUNCTION__, hal_format);

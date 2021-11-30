@@ -72,6 +72,7 @@ bool IsYuvFormat(int format) {
     case HAL_PIXEL_FORMAT_CbYCrY_422_I:
     case HAL_PIXEL_FORMAT_NV12_LINEAR_FLEX :
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
     case HAL_PIXEL_FORMAT_MULTIPLANAR_FLEX:
       return true;
     default:
@@ -153,6 +154,7 @@ bool IsCameraCustomFormat(int format) {
     case HAL_PIXEL_FORMAT_NV21_ZSL:
     case HAL_PIXEL_FORMAT_NV12_LINEAR_FLEX:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
     case HAL_PIXEL_FORMAT_MULTIPLANAR_FLEX:
     case HAL_PIXEL_FORMAT_RAW_OPAQUE:
     case HAL_PIXEL_FORMAT_RAW10:
@@ -689,6 +691,7 @@ bool IsUBwcFormat(int format) {
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
     case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
       return true;
     default:
       return false;
