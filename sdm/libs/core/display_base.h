@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2020, 2022, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -38,6 +38,7 @@
 #include "comp_manager.h"
 #include "color_manager.h"
 #include "hw_events_interface.h"
+#include "fps_manager.h"
 
 namespace sdm {
 
@@ -209,6 +210,7 @@ class DisplayBase : public DisplayInterface {
   DisplayEventHandler *event_handler_ = NULL;
   HWDeviceType hw_device_type_;
   HWInterface *hw_intf_ = NULL;
+  FpsManager *fps_manager_ = NULL;
   HWPanelInfo hw_panel_info_;
   HWResourceInfo hw_resource_info_ = {};
   BufferSyncHandler *buffer_sync_handler_ = NULL;
