@@ -72,6 +72,14 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_bengal_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_rm69299_amoled_fhd+_video_mode_dsi_visionox_panel.xml
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_bengal_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_rm69299_amoled_fhd+_cmd_mode_dsi_visionox_panel.xml
 
+#QDCM calibration xml file base on Talos panel type hx83112a
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_talos_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_hx83112a_video_mode_dsi_truly_panel.xml
+
+#QDCM calibration xml file base on Talos panel type td4328
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_talos_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_td4328_cmd_mode_dsi_truly_panel.xml
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_talos_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_td4328_video_mode_dsi_truly_panel.xml
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_talos_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_ili988c-dual-video_mode_dsi_truly_panel.xml
+
 #Multi-stc libraries config xml file
 PRODUCT_COPY_FILES += hardware/qcom/display/config/snapdragon_color_libs_config.xml:$(TARGET_COPY_OUT_VENDOR)/etc/snapdragon_color_libs_config.xml
 endif
@@ -105,6 +113,12 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.disable_client_composition_cache=1 \
     debug.sf.enable_gl_backpressure=1
 
+ifeq ($(TARGET_BOARD_PLATFORM),sm6150)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_inline_rotator=1 \
+    vendor.display.disable_decimation=1 \
+    vendor.display.enable_null_display=0
+endif
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
 PRODUCT_PROPERTY_OVERRIDES += \
