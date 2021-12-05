@@ -99,6 +99,7 @@ DisplayError DisplayBase::Init() {
   Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_on_external_);
   uint32_t active_index = 0;
   int drop_vsync = 0;
+  int32_t enable_wb_cac = 0;
   hw_intf_->GetActiveConfig(&active_index);
   hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
   fb_config_ = display_attributes_;
@@ -133,8 +134,10 @@ DisplayError DisplayBase::Init() {
   // ColorManager supported for built-in display.
   // ColorManager also supported for pluggable dispaly if ENABLE_QDCM_COLORMODES_ON_EXTERNAL
   // vendor property is set.
-  if ((kBuiltIn == display_type_) ||
-     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1))) {
+  DebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac);
+  // if CAC using WB is enabled disable DSPP and SSPP gamut conversion blocks
+  if (!enable_wb_cac && ((kBuiltIn == display_type_) ||
+     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1)))) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_,
