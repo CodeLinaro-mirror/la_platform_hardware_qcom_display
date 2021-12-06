@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -163,6 +164,7 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "Colorspace") { return DRMProperty::COLORSPACE; }
   if (name == "supported_colorspaces") { return DRMProperty::SUPPORTED_COLORSPACES; }
   if (name == "sspp_layout") { return DRMProperty::SDE_SSPP_LAYOUT; }
+  if (name == "layer_color_component") { return DRMProperty::LAYER_COLOR_COMPONENT; }
 
   return DRMProperty::INVALID;
 }

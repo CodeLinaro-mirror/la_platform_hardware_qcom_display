@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -984,6 +985,18 @@ void DRMPlane::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       DRM_LOGD("Plane %d: Setting SSPP Layout to %d", obj_id, layout_index);
     } break;
 
+    case DRMOps::PLANE_SET_LAYER_COLOR_FLAG: {
+      if (!prop_mgr_.IsPropertyAvailable(DRMProperty::LAYER_COLOR_COMPONENT)) {
+        DRM_LOGD("Layer color flag property isn't exposed");
+        break;
+      }
+      DRMReserveColor color_flag_index = (DRMReserveColor) va_arg(args, uint32_t);
+      prop_id = prop_mgr_.GetPropertyId(DRMProperty::LAYER_COLOR_COMPONENT);
+      AddProperty(req, obj_id, prop_id, (uint32_t)color_flag_index, true /* cache */,
+                  tmp_prop_val_map_);
+      DRM_LOGD("Plane = %d : Layer Color Component = %d", obj_id, color_flag_index);
+    } break;
+
     default:
       DRM_LOGE("Invalid opcode %d for DRM Plane %d", code, obj_id);
   }
@@ -1073,6 +1086,7 @@ void DRMPlane::Unset(bool is_commit, drmModeAtomicReq *req) {
   if (plane_type_info_.inverse_pma) {
     PerformWrapper(DRMOps::PLANE_SET_INVERSE_PMA, req, 0);
   }
+  PerformWrapper(DRMOps::PLANE_SET_LAYER_COLOR_FLAG, req, 0);
 
   // Reset the sspp tonemap properties if they were set and update the in-use only if
   // its a Commit as Unset is called in Validate as well.
