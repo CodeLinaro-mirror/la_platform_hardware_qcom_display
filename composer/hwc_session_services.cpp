@@ -581,7 +581,7 @@ Return<int32_t> HWCSession::IdlePowerCollapse(bool enable, bool synchronous) {
 
 int32_t HWCSession::IsWbUbwcSupported(int *value) {
   HWDisplaysInfo hw_displays_info = {};
-  DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
+  DisplayError error = core_intf_->GetDisplaysStatus(false, &hw_displays_info);
   if (error != kErrorNone) {
     return -EINVAL;
   }
