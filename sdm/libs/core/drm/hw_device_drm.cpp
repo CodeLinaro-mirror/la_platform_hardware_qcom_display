@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -437,6 +437,10 @@ DisplayError HWDeviceDRM::Init() {
 
   drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
   drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
+  if (!connector_info_.modes.size()) {
+    DLOGE("Modes information empty for display: %d.", display_id_);
+    return kErrorDriverData;
+  }
   hw_info_intf_->GetHWResourceInfo(&hw_resource_);
 
   InitializeConfigs();
@@ -491,9 +495,11 @@ void HWDeviceDRM::InitializeConfigs() {
 
   uint32_t width = connector_info_.modes[current_mode_index_].mode.hdisplay;
   uint32_t height = connector_info_.modes[current_mode_index_].mode.vdisplay;
+  uint32_t vic = connector_info_.modes[current_mode_index_].vic;
   for (uint32_t i = 0; i < connector_info_.modes.size(); i++) {
     auto &mode = connector_info_.modes[i].mode;
-    if (mode.hdisplay != width || mode.vdisplay != height) {
+    uint32_t mode_vic = connector_info_.modes[i].vic;
+    if (mode.hdisplay != width || mode.vdisplay != height || mode_vic != vic) {
       resolution_switch_enabled_ = true;
     }
     PopulateDisplayAttributes(i);
