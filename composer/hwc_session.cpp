@@ -1653,6 +1653,14 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       status = SetDisplayBrightnessScale(input_parcel);
       break;
 
+    case qService::IQService::SET_CAC:
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = SetCAC(input_parcel);
+      break;
+
     default:
       DLOGW("QService command = %d is not supported.", command);
       break;
@@ -3390,6 +3398,22 @@ int32_t HWCSession::SetDisplayBrightnessScale(const android::Parcel *input_parce
   }
 
   return INT32(error);
+}
+
+int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
+  auto display = input_parcel->readInt32();
+  bool enable = (input_parcel->readInt32() == 1);
+  float red_offset = static_cast<float>(input_parcel->readDouble());
+  float green_offset = static_cast<float>(input_parcel->readDouble());
+  float blue_offset = static_cast<float>(input_parcel->readDouble());
+
+  DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
+  int32_t err = -1;
+  if (hwc_display_[display]) {
+    err = hwc_display_[display]->SetCAC(enable, red_offset, green_offset, blue_offset);
+  }
+
+  return INT32(err);
 }
 
 void HWCSession::NotifyClientStatus(bool connected) {

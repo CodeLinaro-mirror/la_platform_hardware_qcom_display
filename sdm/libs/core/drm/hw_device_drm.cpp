@@ -2440,4 +2440,9 @@ DisplayError HWDeviceDRM::SetBlendSpace(const PrimariesTransfer &blend_space) {
   return kErrorNone;
 }
 
+DisplayError HWDeviceDRM::SetCAC(bool enable) {
+  enable_cac_ = enable;
+  return kErrorNone;
+}
+
 }  // namespace sdm

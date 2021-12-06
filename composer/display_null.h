@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -121,6 +122,7 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(colorSamplingOn());
   MAKE_NO_OP(colorSamplingOff());
   MAKE_NO_OP(SetDisplayElapseTime(uint64_t))
+  MAKE_NO_OP(SetCAC(bool, float, float, float))
 
  protected:
   DisplayConfigVariableInfo default_variable_config_ = {};

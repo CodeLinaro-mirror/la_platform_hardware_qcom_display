@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -195,6 +196,10 @@ void Strategy::GenerateROI() {
                                 layer_mixer_width, layer_mixer_height));
     hw_layers_info_->right_frame_roi.push_back(LayerRect(0.0f, 0.0f, 0.0f, 0.0f));
   }
+}
+
+DisplayError Strategy::SetCAC(bool enable, float red, float green, float blue) {
+  return strategy_intf_->SetCAC(enable, red, green, blue);
 }
 
 DisplayError Strategy::Reconfigure(const HWPanelInfo &hw_panel_info,

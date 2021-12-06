@@ -408,6 +408,9 @@ class HWCDisplay : public DisplayEventHandler {
       uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
   HWC2::Error SetDisplayElapseTime(uint64_t time);
   virtual bool HasReadBackBufferSupport() { return false; }
+  virtual int32_t SetCAC(bool enable, float red, float green, float blue) {
+    return kErrorNotSupported;
+  }
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
 
  protected:
@@ -501,6 +504,7 @@ class HWCDisplay : public DisplayEventHandler {
   LayerRect window_rect_ = {};
   bool windowed_display_ = false;
   uint32_t active_refresh_rate_ = 0;
+  bool enable_cac_ = false;
 
  private:
   void DumpInputBuffers(void);

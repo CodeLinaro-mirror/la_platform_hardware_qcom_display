@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -64,6 +65,7 @@ class CompManager {
   DisplayError PostCommit(Handle display_ctx, HWLayers *hw_layers);
   void Purge(Handle display_ctx);
   DisplayError SetIdleTimeoutMs(Handle display_ctx, uint32_t active_ms, uint32_t inactive_ms);
+  DisplayError SetCAC(Handle display_ctx, bool enable, float red, float green, float blue);
   void ProcessIdleTimeout(Handle display_ctx);
   void ProcessThermalEvent(Handle display_ctx, int64_t thermal_level);
   void ProcessIdlePowerCollapse(Handle display_ctx);

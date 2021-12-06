@@ -1561,4 +1561,17 @@ bool HWCDisplayBuiltIn::HasReadBackBufferSupport() {
   return fixed_info.readback_supported;
 }
 
+int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blue) {
+  DisplayError error = display_intf_->SetCAC(enable, red, green, blue);
+  if (error != kErrorNone) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f, "
+      "errno = %d, desc = %s", id_, sdm_id_, type_, enable, red, green, blue, error,
+      strerror(error));
+    return -1;
+  }
+
+  enable_cac_ = enable;
+  return 0;
+}
+
 }  // namespace sdm

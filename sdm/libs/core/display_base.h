@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -122,6 +123,7 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError SetVSyncState(bool enable);
+  virtual DisplayError SetCAC(bool enable, float red, float green, float blue);
   virtual void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) {}
   virtual DisplayError SetMixerResolution(uint32_t width, uint32_t height);
   virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
@@ -254,6 +256,7 @@ class DisplayBase : public DisplayInterface {
   QSyncMode qsync_mode_ = kQSyncModeNone;
   bool needs_avr_update_ = false;
   int enable_qdcm_colormodes_on_external_ = 0;
+  bool enable_cac_ = false;
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;

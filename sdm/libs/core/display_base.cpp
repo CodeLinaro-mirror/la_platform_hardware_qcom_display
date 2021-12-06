@@ -2139,4 +2139,16 @@ DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level)
   return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
 }
 
+DisplayError DisplayBase::SetCAC(bool enable, float red, float green, float blue) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError error = comp_manager_->SetCAC(display_comp_ctx_, enable, red, green, blue);
+  if (error) {
+    return kErrorNotSupported;
+  }
+  enable_cac_ = enable;
+  error = hw_intf_->SetCAC(enable_cac_);
+
+  return kErrorNone;
+}
+
 }  // namespace sdm

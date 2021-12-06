@@ -943,6 +943,16 @@ class DisplayInterface {
   */
   virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode) = 0;
 
+  /*! @brief Method to set CAC color offsets and CAC enable flag
+
+    @param[in] red green blue offsets
+
+    @param[in] cac enable flag
+
+    @return \link void \endlink
+  */
+  virtual DisplayError SetCAC(bool enable, float red, float green, float blue) = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };

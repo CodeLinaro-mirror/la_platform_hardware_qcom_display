@@ -143,6 +143,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual HWC2::Error SetPowerMode(HWC2::PowerMode mode, bool teardown);
   std::string Dump() override;
   virtual bool HasReadBackBufferSupport();
+  virtual int32_t SetCAC(bool enable, float red, float green, float blue);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,

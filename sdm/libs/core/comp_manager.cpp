@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -352,6 +353,13 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
   }
 
   return error;
+}
+
+DisplayError CompManager::SetCAC(Handle display_ctx, bool enable, float red, float green,
+                                 float blue) {
+  DisplayCompositionContext *display_comp_ctx =
+                             reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+  return display_comp_ctx->strategy->SetCAC(enable, red, green, blue);
 }
 
 DisplayError CompManager::PostPrepare(Handle display_ctx, HWLayers *hw_layers) {
