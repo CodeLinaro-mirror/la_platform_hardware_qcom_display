@@ -911,9 +911,15 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
     Layer &layer = hw_layer_info.hw_layers.at(i);
     HWRotatorSession *hw_rotator_session = &hw_layers->config[i].hw_rotator_session;
     if (hw_rotator_session->hw_block_count) {
-      hw_rotator_session->output_buffer.release_fence_fd = Sys::dup_(release_fence);
+      if(release_fence == -1)
+        hw_rotator_session->output_buffer.release_fence_fd = -1;
+       else
+        hw_rotator_session->output_buffer.release_fence_fd = Sys::dup_(release_fence);
     } else {
-      layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
+       if(release_fence == -1)
+        layer.input_buffer.release_fence_fd = -1;
+       else
+        layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
     }
   }
 
