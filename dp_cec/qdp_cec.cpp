@@ -42,6 +42,7 @@
 #include "qdp_cec.h"
 
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
+#define HDMI_HPD_STATE_PATH "/sys/bus/i2c/devices/0-002b/get_hpd_stat"
 
 namespace qdpcec {
 
@@ -73,6 +74,42 @@ static void handle_exit_event(cec_context_t* ctx, uint32_t node_event);
 static void handle_hotplug_event(cec_context_t* ctx, uint32_t node_event);
 static const char *get_event_value(const char *uevent_data, int length, const char *event_info);
 static int uevent_init(int *uevent_fd);
+
+/*
+* Kernel can't report initial HPD state, because when HDMI
+* driver is initialized HAL has not yet created cec driver's
+* adapter devnode. HDMI HPD state can't be reported without
+* adapter devnode, so we should get HDMI initial HPD state
+* through HDMI HPD state node when cec adapter just finished
+* initialization.
+*/
+static bool get_hpd_state_from_node()
+{
+   int ret = -1, fd = -1;
+   char buf[2];
+   ALOGI("%s", __func__);
+   memset(buf, 0, sizeof(buf));
+   fd = open(HDMI_HPD_STATE_PATH, O_RDONLY);
+   if (fd < 0) {
+       ALOGE("%s(): Open cec hpd state failed!", __func__);
+       ALOGE("%s(): Error code: %d, %s\n", __func__, errno, strerror(errno));
+       return false;
+   }
+   ret = read(fd, buf, sizeof(buf));
+   close(fd);
+   if (ret < 0) {
+       ALOGE("Read hdmi hpd state failed\n");
+       return false;
+   }
+   if(!strcmp(buf, "1")) {
+       return true;
+   } else if (!strcmp(buf, "0")) {
+       return false;
+   }
+       ALOGE("%s can't get hdmi status HDMI_NOT_CONNECTED\n", __func__);
+       return false;
+}
+
 
 static int cec_add_logical_address(const struct hdmi_cec_device* dev,
         cec_logical_address_t addr)
@@ -539,6 +576,7 @@ static int cec_init_context(cec_context_t *ctx)
     ctx->version = 0x6;
     ctx->vendor_id = 0xA47733;
     cec_clear_logical_address((hdmi_cec_device_t*)ctx);
+    ctx->node.is_connected = get_hpd_state_from_node();
 
     return 0;
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2018 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018,2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -94,7 +94,7 @@ DisplayError CoreImpl::Init() {
   }
 
   // Populate hw_displays_info_ once.
-  error = hw_info_intf_->GetDisplaysStatus(&hw_displays_info_);
+  error = hw_info_intf_->GetDisplaysStatus(false, &hw_displays_info_);
   if (error != kErrorNone) {
     DLOGW("Failed getting displays status. Error = %d", error);
   }
@@ -239,9 +239,9 @@ DisplayError CoreImpl::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_d
   return hw_info_intf_->GetFirstDisplayInterfaceType(hw_disp_info);
 }
 
-DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
+DisplayError CoreImpl::GetDisplaysStatus(bool skip_reload, HWDisplaysInfo *hw_displays_info) {
   SCOPE_LOCK(locker_);
-  DisplayError error = hw_info_intf_->GetDisplaysStatus(hw_displays_info);
+  DisplayError error = hw_info_intf_->GetDisplaysStatus(skip_reload, hw_displays_info);
   if (kErrorNone == error) {
     // Needed for error-checking in CreateDisplay(int32_t display_id, ...) and getting display-type.
     hw_displays_info_ = *hw_displays_info;
