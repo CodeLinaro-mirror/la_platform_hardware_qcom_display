@@ -1,4 +1,6 @@
 /*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
 * Copyright (c) 2017-2019,2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -62,6 +64,12 @@ DisplayError DisplayNull::GetFrameBufferConfig(DisplayConfigVariableInfo *variab
   }
 
   *variable_info = default_variable_config_;
+  return kErrorNone;
+}
+
+DisplayError DisplayNull::SetFrameBufferConfig(const DisplayConfigVariableInfo
+                                               &variable_info) {
+  default_variable_config_ = variable_info;
   return kErrorNone;
 }
 

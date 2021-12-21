@@ -1,4 +1,6 @@
 /*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
 * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -49,6 +51,7 @@ class DisplayNull : public DisplayInterface {
   virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
 
   virtual DisplayError GetFrameBufferConfig(DisplayConfigVariableInfo *variable_info);
+  virtual DisplayError SetFrameBufferConfig(const DisplayConfigVariableInfo &variable_info);
   virtual DisplayError GetConfig(uint32_t index, DisplayConfigVariableInfo *disp_attr);
   virtual DisplayError GetConfig(DisplayConfigFixedInfo *fixed_info);
   virtual DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate, uint32_t *max_refresh_rate);
@@ -70,7 +73,6 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(Commit(LayerStack *))
   MAKE_NO_OP(GetDisplayState(DisplayState *))
   MAKE_NO_OP(SetDisplayState(DisplayState, bool, int*))
-  MAKE_NO_OP(SetFrameBufferConfig(const DisplayConfigVariableInfo &))
   MAKE_NO_OP(Flush(LayerStack *))
   MAKE_NO_OP(GetVSyncState(bool *))
   MAKE_NO_OP(SetActiveConfig(uint32_t))

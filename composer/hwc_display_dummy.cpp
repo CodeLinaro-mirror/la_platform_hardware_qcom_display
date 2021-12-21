@@ -1,4 +1,6 @@
 /*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
 * Copyright (c) 2018-2019,2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -38,8 +40,18 @@ int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_al
                             HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                             qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
                             HWCDisplay **hwc_display) {
+  return Create(core_intf, buffer_allocator, callbacks, event_handler,
+                qservice, id, sdm_id, 1920, 1080, hwc_display);
+}
+
+int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
+                            HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
+                            qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                            uint32_t primary_width, uint32_t primary_height,
+                            HWCDisplay **hwc_display) {
   HWCDisplay *hwc_display_dummy = new HWCDisplayDummy(core_intf, buffer_allocator, callbacks,
-                                      event_handler, qservice, id, sdm_id);
+                                                      event_handler, qservice, id, sdm_id,
+                                                      primary_width, primary_height);
   *hwc_display = hwc_display_dummy;
   return kErrorNone;
 }
@@ -66,12 +78,13 @@ HWC2::Error HWCDisplayDummy::SetColorMode(ColorMode mode) {
 HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                                  HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                                  qService::QService *qservice, hwc2_display_t id,
-                                 int32_t sdm_id) :HWCDisplay(core_intf, buffer_allocator,
+                                 int32_t sdm_id, uint32_t primary_width,
+                                 uint32_t primary_height) :HWCDisplay(core_intf, buffer_allocator,
                                  callbacks, event_handler, qservice, kBuiltIn, id, sdm_id,
                                  DISPLAY_CLASS_BUILTIN) {
   DisplayConfigVariableInfo config;
-  config.x_pixels = 1920;
-  config.y_pixels = 1080;
+  config.x_pixels = primary_width;
+  config.y_pixels = primary_height;
   config.x_dpi = 300.0f;
   config.y_dpi = 300.0f;
   config.fps = 60;
