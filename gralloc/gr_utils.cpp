@@ -694,6 +694,11 @@ bool IsUBwcFormat(int format) {
 }
 
 bool IsUBwcSupported(int format) {
+#ifdef GRALLOC_DISABLE_UBWC
+  // Disable UBWC
+  return false;
+#endif
+
   // Existing HAL formats with UBWC support
   switch (format) {
     case HAL_PIXEL_FORMAT_BGR_565:
@@ -717,6 +722,11 @@ bool IsUBwcSupported(int format) {
 }
 
 bool IsUBwcPISupported(int format, uint64_t usage) {
+#ifdef GRALLOC_DISABLE_UBWC
+  // Disable UBWC
+  return false;
+#endif
+
   if (usage & BufferUsage::COMPOSER_OVERLAY || !(usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_PI)) {
     return false;
   }
@@ -739,6 +749,11 @@ bool IsUBwcPISupported(int format, uint64_t usage) {
 }
 
 bool IsUBwcEnabled(int format, uint64_t usage) {
+#ifdef GRALLOC_DISABLE_UBWC
+  // Disable UBWC
+  return false;
+#endif
+
   // Allow UBWC, if client is using an explicitly defined UBWC pixel format.
   if (IsUBwcFormat(format)) {
     return true;

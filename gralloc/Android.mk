@@ -124,6 +124,7 @@ LOCAL_CFLAGS                  := $(common_flags) $(qmaa_flags) -DLOG_TAG=\"qdgra
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 LOCAL_SRC_FILES               := QtiMapper4.cpp QtiMapperExtensions.cpp
 LOCAL_VINTF_FRAGMENTS         := android.hardware.graphics.mapper-impl-qti-display.xml
+PACKAGES.$(LOCAL_MODULE).OVERRIDES := android.hardware.graphics.mapper@4.0-impl.minigbm
 include $(BUILD_SHARED_LIBRARY)
 endif
 
@@ -160,4 +161,5 @@ LOCAL_C_INCLUDES              := $(common_includes) $(kernel_includes)
 LOCAL_SRC_FILES               := QtiAllocator.cpp service.cpp
 LOCAL_INIT_RC                 := vendor.qti.hardware.display.allocator-service.rc
 LOCAL_VINTF_FRAGMENTS         := vendor.qti.hardware.display.allocator-service.xml
+PACKAGES.$(LOCAL_MODULE).OVERRIDES := android.hardware.graphics.allocator@4.0-service.minigbm
 include $(BUILD_EXECUTABLE)

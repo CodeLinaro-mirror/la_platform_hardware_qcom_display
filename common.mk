@@ -78,3 +78,8 @@ ifeq ($(TARGET_COMPILE_WITH_MSM_KERNEL),true)
     kernel_includes += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include \
                        $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include/display
 endif
+
+ifeq ($(TARGET_DISABLE_UBWC), true)
+    common_flags += -DGRALLOC_DISABLE_UBWC
+endif
+

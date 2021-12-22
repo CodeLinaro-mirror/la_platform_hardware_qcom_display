@@ -32,6 +32,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <linux/msm_ion.h>
+typedef int ion_user_handle_t;
 #if TARGET_ION_ABI_VERSION >= 2
 #include <linux/dma-buf.h>
 #include <ion/ion.h>
