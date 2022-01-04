@@ -1226,7 +1226,25 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ZORDER, pipe_id, pipe_info->z_order);
 
+          // Update Layer color flag
+          sde_drm::DRMReserveColor color_reserve = sde_drm::DRMReserveColor::NONE;
+          if (layer.flags.is_color_red) {
+            color_reserve = sde_drm::DRMReserveColor::RED;
+          } else if (layer.flags.is_color_green) {
+            color_reserve = sde_drm::DRMReserveColor::GREEN;
+          } else if (layer.flags.is_color_blue) {
+            color_reserve = sde_drm::DRMReserveColor::BLUE;
+          }
+
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_LAYER_COLOR_FLAG, pipe_id, color_reserve);
+
           DRMBlendType blending = {};
+
+          // update blend type if layer color flag is set
+          if (color_reserve != sde_drm::DRMReserveColor::NONE) {
+            layer.blending = kBlendingLayerColor;
+          }
+
           SetBlending(layer.blending, &blending);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_BLEND_TYPE, pipe_id, blending);
 
@@ -1666,6 +1684,9 @@ void HWDeviceDRM::SetBlending(const LayerBlending &source, DRMBlendType *target)
       break;
     case kBlendingCoverage:
       *target = DRMBlendType::COVERAGE;
+      break;
+    case kBlendingLayerColor:
+      *target = DRMBlendType::LAYER_COLOR;
       break;
     default:
       *target = DRMBlendType::UNDEFINED;

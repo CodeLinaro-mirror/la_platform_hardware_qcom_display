@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -84,7 +85,8 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::PLANE_SET_INVERSE_PMA:
     case DRMOps::PLANE_SET_DGM_CSC_CONFIG:
     case DRMOps::PLANE_SET_POST_PROC:
-    case DRMOps::PLANE_SET_SSPP_LAYOUT: {
+    case DRMOps::PLANE_SET_SSPP_LAYOUT:
+    case DRMOps::PLANE_SET_LAYER_COLOR_FLAG: {
       drm_mgr_->GetPlaneMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
     } break;
     case DRMOps::CRTC_SET_POST_PROC:

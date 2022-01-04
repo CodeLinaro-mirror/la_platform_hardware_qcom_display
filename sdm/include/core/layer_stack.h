@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -61,6 +62,10 @@ enum LayerBlending {
   kBlendingCoverage,        //!< Pixel color is expressed using straight alpha in color tuples. If
                             //!< plane alpha is less than 0xff, apply modulation as well.
                             //!<   pixel.rgb = src.rgb x src.a + dest.rgb x (1 - src.a)
+
+  kBlendingLayerColor,      //!< Pixel color is indicated by the layer_color property,
+                            //!< consider other color components as alpha opaque(0xff)
+
 };
 
 /*! @brief This enum represents display layer composition types.
@@ -175,6 +180,16 @@ struct LayerFlags {
 
       uint32_t is_game : 1;  //!< This flag shall be set by client to indicate that this layer
                              //!< is a game layer.
+
+      uint32_t is_color_red : 1;  //!< This flag shall be set by client to indicate that extract
+                                  //!< only red color from layer
+
+      uint32_t is_color_green : 1;  //!< This flag shall be set by client to indicate that extract
+                                    //!< only green color from layer
+
+      uint32_t is_color_blue : 1;  //!< This flag shall be set by client to indicate that extract
+                                   //!< only blue color from layer
+
     };
 
     uint32_t flags = 0;       //!< For initialization purpose only.
