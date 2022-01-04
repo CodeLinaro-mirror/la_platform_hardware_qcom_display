@@ -1653,6 +1653,14 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       status = SetDisplayBrightnessScale(input_parcel);
       break;
 
+    case qService::IQService::SET_CAC:
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = SetCAC(input_parcel);
+      break;
+
     default:
       DLOGW("QService command = %d is not supported.", command);
       break;
@@ -3352,6 +3360,10 @@ android::status_t HWCSession::SetIdlePC(const android::Parcel *input_parcel) {
   return static_cast<android::status_t>(IdlePowerCollapse(enable, synchronous));
 }
 
+HWCDisplay *HWCSession::GetDisplay(hwc2_display_t display) {
+  return hwc_display_[display];
+}
+
 hwc2_display_t HWCSession::GetActiveBuiltinDisplay() {
   hwc2_display_t active_display = HWCCallbacks::kNumDisplays;
   // Get first active display among primary and built-in displays.
@@ -3390,6 +3402,27 @@ int32_t HWCSession::SetDisplayBrightnessScale(const android::Parcel *input_parce
   }
 
   return INT32(error);
+}
+
+int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
+  auto display = input_parcel->readInt32();
+  if (display != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  bool enable = (input_parcel->readInt32() == 1);
+  float red_offset = static_cast<float>(input_parcel->readDouble());
+  float green_offset = static_cast<float>(input_parcel->readDouble());
+  float blue_offset = static_cast<float>(input_parcel->readDouble());
+
+  DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
+  int32_t err = -1;
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+    err = hwc_display_[HWC_DISPLAY_PRIMARY]->SetCAC(enable, red_offset, green_offset, blue_offset);
+  }
+
+  return INT32(err);
 }
 
 void HWCSession::NotifyClientStatus(bool connected) {

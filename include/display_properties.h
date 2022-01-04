@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -125,6 +126,9 @@
 #define DISABLE_DYNAMIC_FPS                  DISPLAY_PROP("disable_dynamic_fps")
 // Multi qdcm xml support property
 #define QDCM_MULTI_XML_SUPPORT_PROP          DISPLAY_PROP("qdcm.support_multi_xml")
+// Enable DPU CAC thru WB
+#define ENABLE_WB_CAC                        DISPLAY_PROP("enable_wb_cac")
+
 
 // Add all vendor.display properties above
 

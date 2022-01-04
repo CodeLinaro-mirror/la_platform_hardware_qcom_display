@@ -406,8 +406,12 @@ class HWCDisplay : public DisplayEventHandler {
       uint64_t max_frames, uint64_t timestamp, uint64_t *numFrames,
       int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
       uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
+  virtual void SetFrameSplitRect(const LayerRect &rect) {
+    frame_split_rect_ = rect;
+  }
   HWC2::Error SetDisplayElapseTime(uint64_t time);
   virtual bool HasReadBackBufferSupport() { return false; }
+  virtual int32_t SetCAC(bool enable, float red, float green, float blue);
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
 
  protected:
@@ -501,6 +505,14 @@ class HWCDisplay : public DisplayEventHandler {
   LayerRect window_rect_ = {};
   bool windowed_display_ = false;
   uint32_t active_refresh_rate_ = 0;
+  bool enable_cac_ = false;  // Indicates if CAC is in progress
+  bool animating_ = false;
+  bool fast_path_enabled_ = true;
+  bool game_supported_ = false;
+  DisplayValidateState validate_state_ = kNormalValidate;
+  uint32_t geometry_changes_ = GeometryChanges::kNone;
+  uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
+  LayerRect frame_split_rect_ = {};
 
  private:
   void DumpInputBuffers(void);
@@ -510,19 +522,13 @@ class HWCDisplay : public DisplayEventHandler {
   void UpdateActiveConfig();
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
-  uint32_t geometry_changes_ = GeometryChanges::kNone;
-  uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
-  bool animating_ = false;
   int null_display_mode_ = 0;
-  DisplayValidateState validate_state_ = kNormalValidate;
-  bool fast_path_enabled_ = true;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
   int fbt_release_fence_ = -1;
   int release_fence_ = -1;
   hwc2_config_t pending_config_index_ = 0;
   bool pending_first_commit_config_ = false;
   hwc2_config_t pending_first_commit_config_index_ = 0;
-  bool game_supported_ = false;
   uint64_t elapse_timestamp_ = 0;
   int async_power_mode_ = 0;
   FscRgbOrder fsc_rgb_order_ = kFscUnknown;

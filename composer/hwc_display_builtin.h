@@ -34,6 +34,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
 
 #include "utils/sync_task.h"
 #include "utils/constants.h"
@@ -62,6 +64,10 @@ struct LayerStitchContext : public SyncTask<LayerStitchTaskCode>::TaskContext {
 
 class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode>::TaskHandler {
  public:
+  private_handle_t *wb_pvt_handle_ = nullptr;
+  buffer_handle_t wb_buffer_handle_ = nullptr;
+  BufferInfo wb_buffer_info_ = {};
+
   enum {
     SET_METADATA_DYN_REFRESH_RATE,
     SET_BINDER_DYN_REFRESH_RATE,
@@ -143,6 +149,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual HWC2::Error SetPowerMode(HWC2::PowerMode mode, bool teardown);
   std::string Dump() override;
   virtual bool HasReadBackBufferSupport();
+  virtual int32_t SetCAC(bool enable, float red, float green, float blue);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
@@ -172,6 +179,13 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   int GetBwCode(const DisplayConfigVariableInfo &attr);
   void SetBwLimitHint(bool enable);
   void SetPartialUpdate(DisplayConfigFixedInfo fixed_info);
+  void InitCacResources(uint32_t x_pixels, uint32_t y_pixels);
+  int AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels);
+  HWC2::Error ValidateWB(bool first);
+  HWC2::Error PresentWB(bool first, int32_t *out_retire_fence);
+  HWC2::Error ValidateAndCommitWB();
+  void BuildLayerStackFromWB();
+  void DumpOutputWB(int32_t out_wb_release);
 
   // SyncTask methods.
   void OnTask(const LayerStitchTaskCode &task_code,
@@ -222,6 +236,14 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool is_smart_panel_ = false;
   const char *kDisplayBwName = "display_bw";
   bool enable_bw_limits_ = false;
+
+  // Used for WB in primary display path
+  HWCLayer *wb_op_layer_ = {};  // App layer(WB o/p) for the primary builtin
+  HWCLayer *new_client_target_ = {};  // New client target(dummy), just w/h no buffer
+  std::map<hwc2_layer_t, HWCLayer *> sec_layer_map_;
+  std::multiset<HWCLayer *, SortLayersByZ> sec_layer_set_;
+
+  bool enable_cac_ = false;
 };
 
 }  // namespace sdm

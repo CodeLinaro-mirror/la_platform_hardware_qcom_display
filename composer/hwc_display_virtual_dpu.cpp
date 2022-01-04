@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -51,6 +52,7 @@ int HWCDisplayVirtualDPU::Init() {
   if (max_lum_ != -1.0 || min_lum_ != -1.0) {
     SetPanelLuminanceAttributes(min_lum_, max_lum_);
   }
+  DebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac_);
 
   status = SetConfig(width_, height_);
   if (status) {
@@ -110,13 +112,15 @@ HWC2::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf, int32_t r
     buffer_allocator_->GetAlignedWidthAndHeight(INT(active_width), INT(active_height),
                                                 output_handle_format, 0, &active_aligned_w,
                                                 &active_aligned_h);
-    if (new_aligned_w != active_aligned_w  || new_aligned_h != active_aligned_h) {
-      int status = SetConfig(UINT32(new_width), UINT32(new_height));
-      if (status) {
-        DLOGE("SetConfig failed custom WxH %dx%d", new_width, new_height);
-        return HWC2::Error::BadParameter;
+    if (!enable_wb_cac_) {
+      if (new_aligned_w != active_aligned_w  || new_aligned_h != active_aligned_h) {
+        int status = SetConfig(UINT32(new_width), UINT32(new_height));
+        if (status) {
+          DLOGE("SetConfig failed custom WxH %dx%d", new_width, new_height);
+          return HWC2::Error::BadParameter;
+        }
+        validated_ = false;
       }
-      validated_ = false;
     }
 
     output_buffer_.width = UINT32(new_aligned_w);

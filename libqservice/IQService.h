@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
  * Copyright (C) 2012-2014, 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Not a Contribution, Apache license notifications and license are
  * retained for attribution purposes only.
@@ -79,6 +80,13 @@ public:
       SET_PANEL_LUMINANCE = 47,                // Set Panel Luminance attributes.
       SET_BRIGHTNESS_SCALE = 48,               // Set brightness scale ratio
       SET_COLOR_SAMPLING_ENABLED = 49,         // Toggle the collection of display color stats
+      SET_UNUSED1 = 50,                        // Unused here
+      SET_UNUSED2 = 51,                        // Unused here
+      SET_UNUSED3 = 52,                        // Unused here
+      SET_UNUSED4 = 53,                        // Unused here
+      SET_UNUSED5 = 54,                        // Unused here
+      SET_UNUSED6 = 55,                        // Unused here
+      SET_CAC = 56,                            // Control CAC enable with Offset
       COMMAND_LIST_END = 400,
     };
 

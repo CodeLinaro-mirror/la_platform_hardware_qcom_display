@@ -1,5 +1,7 @@
 /*
 Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -642,32 +644,6 @@ DisplayError HWPeripheralDRM::SetDisplayDppsAdROI(void *payload) {
   }
 
   return err;
-}
-
-DisplayError HWPeripheralDRM::SetFrameTrigger(FrameTriggerMode mode) {
-  sde_drm::DRMFrameTriggerMode drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_DEFAULT;
-  switch (mode) {
-  case kFrameTriggerDefault:
-    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_DEFAULT;
-    break;
-  case kFrameTriggerSerialize:
-    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_SERIALIZE;
-    break;
-  case kFrameTriggerPostedStart:
-    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_POSTED_START;
-    break;
-  default:
-    DLOGE("Invalid frame trigger mode %d", (int32_t)mode);
-    return kErrorParameters;
-  }
-
-  int ret = drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_FRAME_TRIGGER,
-                                      token_.conn_id, drm_mode);
-  if (ret) {
-    DLOGE("Failed to perform CONNECTOR_SET_FRAME_TRIGGER, drm_mode %d, ret %d", drm_mode, ret);
-    return kErrorUndefined;
-  }
-  return kErrorNone;
 }
 
 DisplayError HWPeripheralDRM::SetPanelBrightness(int level) {

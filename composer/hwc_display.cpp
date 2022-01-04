@@ -826,6 +826,9 @@ void HWCDisplay::BuildLayerStack() {
   SetClientTargetDataSpace(client_target_dataspace);
   layer_stack_.layers.push_back(sdm_client_target);
 
+  // Set split rect to LS
+  layer_stack_.frame_split = frame_split_rect_;
+
   // fall back frame composition to GPU when client target is 10bit
   // TODO(user): clarify the behaviour from Client(SF) and SDM Extn -
   // when handling 10bit FBT, as it would affect blending
@@ -1843,6 +1846,7 @@ void HWCDisplay::DumpInputBuffers() {
   }
 }
 
+static uint32_t dump_index = 0;  // Used to dump WB Op Buffer of CAC
 void HWCDisplay::DumpOutputBuffer(const BufferInfo &buffer_info, void *base, int fence) {
   char dir_path[PATH_MAX];
   int  status;
@@ -1877,7 +1881,8 @@ void HWCDisplay::DumpOutputBuffer(const BufferInfo &buffer_info, void *base, int
     snprintf(dump_file_name, sizeof(dump_file_name), "%s/output_layer_%dx%d_%s_frame%d.raw",
              dir_path, buffer_info.alloc_buffer_info.aligned_width,
              buffer_info.alloc_buffer_info.aligned_height,
-             GetFormatString(buffer_info.buffer_config.format), dump_frame_index_);
+             GetFormatString(buffer_info.buffer_config.format), (dump_frame_index_) ?
+             dump_frame_index_ : dump_index++);
 
     FILE *fp = fopen(dump_file_name, "w+");
     if (fp) {
@@ -2337,24 +2342,26 @@ std::string HWCDisplay::Dump() {
   std::ostringstream os;
   os << "\n------------HWC----------------\n";
   os << "HWC2 display_id: " << id_ << std::endl;
-  for (auto layer : layer_set_) {
-    auto sdm_layer = layer->GetSDMLayer();
-    auto transform = sdm_layer->transform;
-    os << "layer: " << std::setw(4) << layer->GetId();
-    os << " z: " << layer->GetZ();
-    os << " composition: " <<
-          to_string(layer->GetClientRequestedCompositionType()).c_str();
-    os << "/" <<
-          to_string(layer->GetDeviceSelectedCompositionType()).c_str();
-    os << " alpha: " << std::to_string(sdm_layer->plane_alpha).c_str();
-    os << " format: " << std::setw(22) << GetFormatString(sdm_layer->input_buffer.format);
-    os << " dataspace:" << std::hex << "0x" << std::setw(8) << std::setfill('0')
-       << layer->GetLayerDataspace() << std::dec << std::setfill(' ');
-    os << " transform: " << transform.rotation << "/" << transform.flip_horizontal <<
-          "/"<< transform.flip_vertical;
-    os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec;
-    os << " secure: " << layer->IsProtected()
-       << std::endl;
+  if (type_ != kVirtual) {  // TODO(CAC): Fix this
+    for (auto layer : layer_set_) {
+      auto sdm_layer = layer->GetSDMLayer();
+      auto transform = sdm_layer->transform;
+      os << "layer: " << std::setw(4) << layer->GetId();
+      os << " z: " << layer->GetZ();
+      os << " composition: " <<
+            to_string(layer->GetClientRequestedCompositionType()).c_str();
+      os << "/" <<
+            to_string(layer->GetDeviceSelectedCompositionType()).c_str();
+      os << " alpha: " << std::to_string(sdm_layer->plane_alpha).c_str();
+      os << " format: " << std::setw(22) << GetFormatString(sdm_layer->input_buffer.format);
+      os << " dataspace:" << std::hex << "0x" << std::setw(8) << std::setfill('0')
+         << layer->GetLayerDataspace() << std::dec << std::setfill(' ');
+      os << " transform: " << transform.rotation << "/" << transform.flip_horizontal <<
+            "/"<< transform.flip_vertical;
+      os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec;
+      os << " secure: " << layer->IsProtected()
+         << std::endl;
+    }
   }
 
   if (has_client_composition_) {
@@ -2389,7 +2396,7 @@ std::string HWCDisplay::Dump() {
 }
 
 bool HWCDisplay::CanSkipValidate() {
-  if (!validated_ || solid_fill_enable_) {
+  if (enable_cac_ || !validated_ || solid_fill_enable_) {
     return false;
   }
 
@@ -2595,6 +2602,17 @@ void HWCDisplay::UpdateActiveConfig() {
 
   // Reset pending config.
   pending_config_ = false;
+}
+
+int32_t HWCDisplay::SetCAC(bool enable, float red, float green, float blue) {
+  DisplayError error = display_intf_->SetCAC(enable, red, green, blue);
+  if (error != kErrorNone) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f",
+          id_, sdm_id_, type_, enable, red, green, blue);
+    return -1;
+  }
+  enable_cac_ = enable;
+  return 0;
 }
 
 }  // namespace sdm

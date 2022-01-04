@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -127,12 +128,13 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError GetDynamicDSIClock(uint64_t *bit_clk_rate);
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data);
-  virtual DisplayError SetFrameTrigger(FrameTriggerMode mode) { return kErrorNotSupported; }
+  virtual DisplayError SetFrameTrigger(FrameTriggerMode mode);
   virtual DisplayError SetBLScale(uint32_t level) { return kErrorNotSupported; }
   virtual DisplayError GetPanelBrightnessBasePath(std::string *base_path) {
     return kErrorNotSupported;
   }
   virtual DisplayError SetBlendSpace(const PrimariesTransfer &blend_space);
+  virtual DisplayError SetCAC(bool enable);
 
   enum {
     kHWEventVSync,
@@ -255,6 +257,7 @@ class HWDeviceDRM : public HWInterface {
   // Destination scaler blocks in use by all HWDeviceDRM instances.
   static std::atomic<uint32_t> hw_dest_scaler_blocks_used_;
   bool null_display_commit_ = false;
+  bool enable_cac_ = false;
 
  private:
   void SetDisplaySwitchMode(uint32_t index);

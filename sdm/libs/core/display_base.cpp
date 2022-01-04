@@ -99,6 +99,7 @@ DisplayError DisplayBase::Init() {
   Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_on_external_);
   uint32_t active_index = 0;
   int drop_vsync = 0;
+  int32_t enable_wb_cac = 0;
   hw_intf_->GetActiveConfig(&active_index);
   hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
   fb_config_ = display_attributes_;
@@ -133,8 +134,10 @@ DisplayError DisplayBase::Init() {
   // ColorManager supported for built-in display.
   // ColorManager also supported for pluggable dispaly if ENABLE_QDCM_COLORMODES_ON_EXTERNAL
   // vendor property is set.
-  if ((kBuiltIn == display_type_) ||
-     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1))) {
+  DebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac);
+  // if CAC using WB is enabled disable DSPP and SSPP gamut conversion blocks
+  if (!enable_wb_cac && ((kBuiltIn == display_type_) ||
+     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1)))) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_,
@@ -780,7 +783,8 @@ std::string DisplayBase::Dump() {
   LayerBuffer *out_buffer = hw_layers_.info.stack->output_buffer;
   if (out_buffer) {
     os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
+       << " format: " << GetFormatString(out_buffer->format) << " buffer_id:" << std::hex << "0x" <<
+       out_buffer->buffer_id;
   }
   HWLayersInfo &layer_info = hw_layers_.info;
   for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
@@ -2137,6 +2141,18 @@ bool DisplayBase::GameEnhanceSupported() {
 DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
+}
+
+DisplayError DisplayBase::SetCAC(bool enable, float red, float green, float blue) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError error = comp_manager_->SetCAC(display_comp_ctx_, enable, red, green, blue);
+  if (error) {
+    return kErrorNotSupported;
+  }
+  enable_cac_ = enable;
+  error = hw_intf_->SetCAC(enable_cac_);
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -31,6 +32,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ctype.h>
 #include <drm_logger.h>
 #include <utils/debug.h>
+#include <utils/rect.h>
 #include <utils/utils.h>
 #include <algorithm>
 #include <vector>
@@ -64,12 +66,24 @@ void HWVirtualDRM::ConfigureWbConnectorFbId(uint32_t fb_id) {
   return;
 }
 
-void HWVirtualDRM::ConfigureWbConnectorDestRect() {
+void HWVirtualDRM::ConfigureWbConnectorDestRect(HWLayers *hw_layers) {
   DRMRect dst = {};
   dst.left = 0;
   dst.bottom = display_attributes_[current_mode_index_].y_pixels;
   dst.top = 0;
   dst.right = display_attributes_[current_mode_index_].x_pixels;
+
+  LayerRect &frame_split = hw_layers->info.stack->frame_split;
+  if (IsValid(frame_split)) {
+    // Frame_split is used Used for CAC use-case, where WB is half size of primary
+    dst.left = frame_split.left;
+    dst.bottom = frame_split.bottom;
+    dst.top = frame_split.top;
+    dst.right = frame_split.right;
+  }
+
+  DLOGV_IF(kTagDriverConfig, "DstRect l = %d t = %d r = %d b = %d", dst.left, dst.top,
+           dst.right, dst.bottom);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_RECT, token_.conn_id, dst);
   return;
 }
@@ -141,12 +155,21 @@ DisplayError HWVirtualDRM::Commit(HWLayers *hw_layers) {
   uint32_t fb_id = registry_.GetOutputFbId(output_buffer->handle_id);
 
   ConfigureWbConnectorFbId(fb_id);
-  ConfigureWbConnectorDestRect();
+  ConfigureWbConnectorDestRect(hw_layers);
   ConfigureWbConnectorSecureMode(output_buffer->flags.secure);
-
+  if (enable_cac_) {
+    SetFrameTrigger(kFrameTriggerPostedStart);
+  }
   err = HWDeviceDRM::AtomicCommit(hw_layers);
   if (err != kErrorNone) {
     DLOGE("Atomic commit failed for crtc_id %d conn_id %d", token_.crtc_id, token_.conn_id);
+  }
+  // Close the WB retire fence in CAC mode
+  LayerRect &frame_split = hw_layers->info.stack->frame_split;
+  // frame_Split is hint for CAC mode, close retire fence
+  if (IsValid(frame_split) || enable_cac_) {
+    LayerStack *stack = hw_layers->info.stack;
+    CloseFd(&stack->retire_fence_fd);
   }
 
   return(err);
@@ -172,8 +195,11 @@ DisplayError HWVirtualDRM::Validate(HWLayers *hw_layers) {
   uint32_t fb_id = registry_.GetOutputFbId(output_buffer->handle_id);
 
   ConfigureWbConnectorFbId(fb_id);
-  ConfigureWbConnectorDestRect();
+  ConfigureWbConnectorDestRect(hw_layers);
   ConfigureWbConnectorSecureMode(output_buffer->flags.secure);
+  if (enable_cac_) {
+    SetFrameTrigger(kFrameTriggerPostedStart);
+  }
 
   return HWDeviceDRM::Validate(hw_layers);
 }

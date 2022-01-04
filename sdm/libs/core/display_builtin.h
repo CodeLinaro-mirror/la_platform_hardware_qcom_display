@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -129,6 +130,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode);
   virtual DisplayError colorSamplingOn();
   virtual DisplayError colorSamplingOff();
+  virtual DisplayError SetCAC(bool enable, float red, float green, float blue);
 
   // Implement the HWEventHandlers
   virtual DisplayError VSync(int64_t timestamp);

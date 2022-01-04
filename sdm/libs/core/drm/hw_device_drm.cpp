@@ -1606,7 +1606,10 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
     if (hw_rotator_session->mode == kRotatorOffline) {
       hw_rotator_session->output_buffer.release_fence_fd = Sys::dup_(release_fence);
     } else {
-      layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
+      layer.input_buffer.release_fence_fd = -1;
+      if (!enable_cac_) {
+        layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
+      }
     }
   }
 
@@ -2337,8 +2340,9 @@ void HWDeviceDRM::DumpHWLayers(HWLayers *hw_layers) {
   uint32_t hw_layer_count = UINT32(hw_layer_info.hw_layers.size());
   std::vector<LayerRect> &left_frame_roi = hw_layer_info.left_frame_roi;
   std::vector<LayerRect> &right_frame_roi = hw_layer_info.right_frame_roi;
-  DLOGI("HWLayers Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
-         hw_layer_count, hw_layer_info.app_layer_count, hw_layer_info.gpu_target_index);
+  DLOGI("Display: %d:%d HWLayer Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
+         display_id_, disp_type_, hw_layer_count, hw_layer_info.app_layer_count,
+         hw_layer_info.gpu_target_index);
   DLOGI("LayerStackFlags = 0x%" PRIu32 ",  blend_cs = {primaries = %d, transfer = %d}",
          UINT32(stack->flags.flags), UINT32(stack->blend_cs.primaries),
          UINT32(stack->blend_cs.transfer));
@@ -2437,6 +2441,37 @@ void HWDeviceDRM::DumpHWLayers(HWLayers *hw_layers) {
 
 DisplayError HWDeviceDRM::SetBlendSpace(const PrimariesTransfer &blend_space) {
   blend_space_ = blend_space;
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::SetCAC(bool enable) {
+  enable_cac_ = enable;
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::SetFrameTrigger(FrameTriggerMode mode) {
+  sde_drm::DRMFrameTriggerMode drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_DEFAULT;
+  switch (mode) {
+  case kFrameTriggerDefault:
+    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_DEFAULT;
+    break;
+  case kFrameTriggerSerialize:
+    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_SERIALIZE;
+    break;
+  case kFrameTriggerPostedStart:
+    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_POSTED_START;
+    break;
+  default:
+    DLOGE("Invalid frame trigger mode %d", (int32_t)mode);
+    return kErrorParameters;
+  }
+
+  int ret = drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_FRAME_TRIGGER,
+                                      token_.conn_id, drm_mode);
+  if (ret) {
+    DLOGE("Failed to perform CONNECTOR_SET_FRAME_TRIGGER, drm_mode %d, ret %d", drm_mode, ret);
+    return kErrorUndefined;
+  }
   return kErrorNone;
 }
 

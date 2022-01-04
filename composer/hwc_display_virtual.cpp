@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -133,6 +134,7 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf, int32_t rele
     output_buffer_.flags.secure = 0;
     output_buffer_.flags.video = 0;
     output_buffer_.buffer_id = reinterpret_cast<uint64_t>(output_handle);
+    output_buffer_.handle_id = output_handle->id;
     output_buffer_.format = new_sdm_format;
     output_buffer_.color_metadata = color_metadata;
     output_handle_ = output_handle;
