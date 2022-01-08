@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2022, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -148,7 +148,7 @@
 #define ENHANCE_IDLE_TIME                    DISPLAY_PROP("enhance_idle_time")
 
 #define MMRM_FLOOR_CLK_VOTE                  DISPLAY_PROP("mmrm_floor_vote")
-
+#define DISABLE_MITIGATED_FPS                DISPLAY_PROP("disable_mitigated_fps")
 // DPPS dynamic fps
 #define ENABLE_DPPS_DYNAMIC_FPS              DISPLAY_PROP("enable_dpps_dynamic_fps")
 // Noise Layer
@@ -156,6 +156,8 @@
 #define ENABLE_PRIMARY_RECONFIG_REQUEST      DISPLAY_PROP("enable_primary_reconfig_request")
 // SDM verbose logging
 #define ENABLE_VERBOSE_LOG                   DISPLAY_PROP("enable_verbose_log")
+// HDR10 GPU Target
+#define ENABLE_HDR10_GPU_TARGET              DISPLAY_PROP("enable_hdr10_gpu_target")
 
 // Add all vendor.display properties above
 
@@ -173,7 +175,7 @@
 #define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
 #define DISABLE_IDLE_SCALING_LAYERS          DISPLAY_PROP("disable_idle_scaling_layers")
-#define ENABLE_CWB_IDLE_FALLBACK             DISPLAY_PROP("enable_cwb_idle_fallback")
+#define DISABLE_CWB_IDLE_FALLBACK            DISPLAY_PROP("disable_cwb_idle_fallback")
 
 // Add all other.properties above
 // End of property

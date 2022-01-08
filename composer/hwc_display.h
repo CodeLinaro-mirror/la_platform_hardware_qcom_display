@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2022, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -44,7 +44,7 @@
 #include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
 
 using android::hardware::graphics::common::V1_2::ColorMode;
-using android::hardware::graphics::common::V1_1::Dataspace;
+using android::hardware::graphics::common::V1_2::Dataspace;
 using android::hardware::graphics::common::V1_1::RenderIntent;
 using android::hardware::graphics::common::V1_2::Hdr;
 namespace composer_V2_4 = ::android::hardware::graphics::composer::V2_4;
@@ -52,6 +52,7 @@ using HwcAttribute = composer_V2_4::IComposerClient::Attribute;
 using VsyncPeriodChangeConstraints = composer_V2_4::IComposerClient::VsyncPeriodChangeConstraints;
 using VsyncPeriodChangeTimeline = composer_V2_4::VsyncPeriodChangeTimeline;
 using VsyncPeriodNanos = composer_V2_4::VsyncPeriodNanos;
+using ClientTargetProperty = composer_V2_4::IComposerClient::ClientTargetProperty;
 
 namespace sdm {
 
@@ -128,6 +129,7 @@ class HWCColorMode {
   virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
   virtual HWC2::Error RestoreColorTransform();
   virtual ColorMode GetCurrentColorMode() { return current_color_mode_; }
+  virtual RenderIntent GetCurrentRenderIntent() { return current_render_intent_; }
   virtual HWC2::Error ApplyCurrentColorModeWithRenderIntent(bool hdr_present);
   virtual HWC2::Error CacheColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
   void ReapplyMode() { apply_mode_ = true; };
@@ -293,6 +295,9 @@ class HWCDisplay : public DisplayEventHandler {
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   ColorMode GetCurrentColorMode() {
     return (color_mode_ ? color_mode_->GetCurrentColorMode() : ColorMode::SRGB);
+  }
+  RenderIntent GetCurrentRenderIntent() {
+    return (color_mode_ ? color_mode_->GetCurrentRenderIntent() : RenderIntent::COLORIMETRIC);
   }
   bool HWCClientNeedsValidate() {
     return (has_client_composition_ || layer_stack_.flags.single_buffered_layer_present);
@@ -461,6 +466,11 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error SetDimmingMinBl(int min_bl) {
     return HWC2::Error::Unsupported;
   }
+  virtual HWC2::Error GetClientTargetProperty(ClientTargetProperty *out_client_target_property);
+  virtual void GetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo> *variable_config_map,
+                             int *active_config_index, uint32_t *num_configs);
+  virtual void SetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo>& variable_config_map,
+                             int active_config_index, uint32_t num_configs) {};
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -478,6 +488,8 @@ class HWCDisplay : public DisplayEventHandler {
   virtual DisplayError HistogramEvent(int source_fd, uint32_t blob_id);
   virtual DisplayError HandleEvent(DisplayEvent event);
   virtual DisplayError HandleQsyncState(const QsyncEventData &qsync_data);
+  virtual DisplayError NotifyFpsMitigation(const float fps, DisplayConcurrencyType concurrency,
+                                           bool concurrency_begin);
   virtual void DumpOutputBuffer(const BufferInfo &buffer_info, void *base,
                                 shared_ptr<Fence> &retire_fence);
   virtual HWC2::Error PrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests);
@@ -643,6 +655,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool draw_method_set_ = false;
   bool validate_done_ = false;
   bool client_target_3_1_set_ = false;
+  bool pending_fb_reconfig_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {
