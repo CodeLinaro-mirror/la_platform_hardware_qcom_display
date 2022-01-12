@@ -34,6 +34,7 @@
 #include <utils/debug.h>
 #include <QService.h>
 #include <utils/utils.h>
+#include <utils/rect.h>
 #include <algorithm>
 #include <utility>
 #include <bitset>
@@ -3407,6 +3408,8 @@ int32_t HWCSession::SetDisplayBrightnessScale(const android::Parcel *input_parce
 }
 
 int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
+  int32_t error = -EINVAL;
+  int32_t err = -1;
   auto display = input_parcel->readInt32();
   if (display != HWC_DISPLAY_PRIMARY) {
     return HWC2_ERROR_UNSUPPORTED;
@@ -3418,10 +3421,28 @@ int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
   float blue_offset = static_cast<float>(input_parcel->readDouble());
 
   DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
-  int32_t err = -1;
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
-  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-    err = hwc_display_[HWC_DISPLAY_PRIMARY]->SetCAC(enable, red_offset, green_offset, blue_offset);
+  if (enable == true) {
+    error = CreateVirtualDisplayForCAC(display);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+    if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+      err = hwc_display_[HWC_DISPLAY_PRIMARY]->SetCAC(enable, red_offset, green_offset,
+                                                      blue_offset);
+    }
+  }
+
+  if(enable == false && wb_display_) {
+    error = DestroyVirtualDisplay(wb_display_);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
   }
 
   return INT32(err);
@@ -3458,5 +3479,56 @@ void HWCSession::WaitForResources(bool wait_for_resources, hwc2_display_t active
       res_wait = hwc_display_[display_id]->CheckResourceState();
     } while (res_wait);
   }
+}
+
+int32_t HWCSession::CreateVirtualDisplayForCAC(int disp_idx) {
+  DisplayConfigVariableInfo display_attributes;
+  uint32_t config_index = 0;
+  uint32_t width = 0, height = 0;
+  int32_t error = -EINVAL;
+  // Cannot use compressed format for half writeout in CAC
+  int32_t format = sdm::kFormatRGBA8888;
+
+  auto err = hwc_display_[disp_idx]->GetActiveConfig(&config_index);
+  if (err != HWC2::Error::None) {
+    DLOGE("GetActiveConfig() failed on disp idx %d.", disp_idx);
+    return INT32(err);
+  }
+
+  error = hwc_display_[disp_idx]->GetDisplayAttributesForConfig(INT(config_index),
+                                                                &display_attributes);
+  if (!error) {
+    width = display_attributes.x_pixels;
+    height = display_attributes.y_pixels;
+  } else {
+    DLOGE("GetDisplayAttributesForConfig() failed on disp idx %d for config index %d.", disp_idx,
+          config_index);
+    return INT32(error);
+  }
+
+  // The WB display size (width x height) must be half of primary panel,
+  // Ex: Portrait Primary panel -> top-bottom split => WB is (pri_width x pri_height/2)
+  //     Landscape Primary panel -> left-right split => WB is (pri_width/2 x pri_height)
+  LayerRect primary_res = { 0, 0, FLOAT(width), FLOAT(height)};
+  RectOrientation orientation = GetOrientation(primary_res);
+  if (orientation == kOrientationLandscape) {
+    width = width/2;
+  } else if (orientation == kOrientationPortrait) {
+    height = height/2;
+  }
+
+  error = CreateVirtualDisplay(width, height, &format, &wb_display_);
+  if (static_cast<HWC2::Error>(error) != HWC2::Error::None) {
+    DLOGE("CreateVirtualDisplay %dx%d format = %d FAILED!", width, height, format);
+    return error;
+  } else {
+    hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+    if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays) {
+      WaitForResources(true, active_builtin_disp_id, wb_display_);
+    }
+    DLOGI("Created WB display %dx%d format = %d", width, height, format);
+  }
+
+  return error;
 }
 }  // namespace sdm

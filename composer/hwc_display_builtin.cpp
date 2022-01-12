@@ -2009,13 +2009,19 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
       strerror(error));
     return -1;
   }
-  // Set the O/P buffer once.
-  wb_display->SetOutputBuffer(wb_buffer_handle_, -1);
 
   // Pass CAC enablement info to Builtin for fence management
   display_intf_->SetCAC(enable, red, green, blue);
 
   enable_cac_ = enable;
+  if (!enable_cac_) {
+    // Reset layer stack of WB display to allow it to be safely destroyed.
+    HWCDisplay::HWCLayerStack primary_layer_stack = {};
+    wb_display->GetLayerStack(&primary_layer_stack);
+    wb_display->ClearLayerStack();
+    SetLayerStack(&primary_layer_stack);
+  }
+
   validated_ = false;
   frame_split_rect_ = {};  // clear the frame_split_rect_
   cac_commit_done_ = false;

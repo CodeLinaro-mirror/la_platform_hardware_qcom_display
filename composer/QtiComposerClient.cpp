@@ -59,20 +59,6 @@ void BufferCacheEntry::clear() {
 QtiComposerClient::QtiComposerClient() : mWriter(kWriterInitialSize), mReader(*this) {
   hwc_session_ = HWCSession::GetInstance();
   mHandleImporter.initialize();
-
-  int32_t format = sdm::kFormatRGBA8888;  // Cannot use compressed format for half writeout in CAC
-
-  // The WB display size must be half of primary panel,
-  // Ex: Portrait Primary panel -> top bottom(pri_width x pri_height/2)
-  //     Landscape primary panel -> left/right -> (pri_widht/2 x height)
-  // Below numbers are for Kona MTP
-  auto err = hwc_session_->CreateVirtualDisplay(1440, 1440, &format, &hwc_session_->wb_display_);
-  if (static_cast<HWC2::Error>(err) != HWC2::Error::None) {
-    ALOGW("CreateVirtualDisplay FAILED");
-    return;
-  } else {
-    ALOGI("Created WB display");
-  }
 }
 
 QtiComposerClient::~QtiComposerClient() {

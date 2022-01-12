@@ -1,6 +1,6 @@
 /*
 * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
-* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
+* Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -184,6 +184,12 @@ HWC2::Error HWCDisplayVirtual::GetDisplayType(int32_t *out_type) {
 
 HWC2::Error HWCDisplayVirtual::SetColorMode(ColorMode mode) {
   return HWC2::Error::None;
+}
+
+void HWCDisplayVirtual::ClearLayerStack() {
+    client_target_ = nullptr;
+    layer_map_.clear();
+    layer_set_.clear();
 }
 
 }  // namespace sdm
