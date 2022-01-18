@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2018, 2020 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, 2020, 2022 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -44,6 +44,7 @@ class Debug {
  public:
   static inline DebugHandler* Get() { return DebugHandler::Get(); }
   static int GetSimulationFlag();
+  static int GetPreferredFps();
   static bool GetExternalResolution(char *val);
   static void GetIdleTimeoutMs(uint32_t *active_ms, uint32_t *inactive_ms);
   static bool IsRotatorDownScaleDisabled();

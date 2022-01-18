@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2020, 2022, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -41,6 +41,7 @@ class HWTVDRM : public HWDeviceDRM {
 
  protected:
   virtual DisplayError SetDisplayAttributes(uint32_t index);
+  virtual void ClearInactiveDisplayAttributes();
   virtual DisplayError GetConfigIndex(char *mode, uint32_t *index);
   virtual DisplayError PowerOff(bool teardown);
   virtual DisplayError Doze(const HWQosData &qos_data, int *release_fence);

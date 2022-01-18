@@ -25,6 +25,7 @@ endif
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 LOCAL_SRC_FILES               := core_interface.cpp \
                                  core_impl.cpp \
+                                 fps_manager.cpp \
                                  display_base.cpp \
                                  display_builtin.cpp \
                                  display_pluggable.cpp \
