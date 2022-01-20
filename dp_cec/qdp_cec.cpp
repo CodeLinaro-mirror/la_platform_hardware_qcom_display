@@ -27,6 +27,10 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*/
+
 #define DEBUG 0
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #include <log/log.h>
@@ -39,6 +43,7 @@
 #include <vector>
 #include <linux/cec.h>
 #include <linux/cec-funcs.h>
+#include <cutils/properties.h>
 #include "qdp_cec.h"
 
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
@@ -478,12 +483,22 @@ static int cec_close_device(cec_context_t *ctx)
 
 static int cec_init_device(cec_context_t *ctx)
 {
-    const int MAX_CEC_DEVICES = 3;
+    const int MAX_CEC_DEVICES = 6;
     int err = -EINVAL;
+    char value[PROPERTY_VALUE_MAX] = {0};
+    int num = 0;
 
     char cec_dev_path[MAX_PATH_LENGTH];
 
-    for(int num = 0; num < MAX_CEC_DEVICES; num++) {
+    if(property_get("vendor.display.enable_cec_node", value, "0") > 0) {
+        num = atoi(value);
+        if(num <= 0 || num >= MAX_CEC_DEVICES)
+            num = 0;
+        else
+            ALOGI("%s: vendor.display.enable_cec_node property enabled!", __FUNCTION__);
+    }
+
+    for(; num < MAX_CEC_DEVICES; num++) {
         snprintf(cec_dev_path, sizeof(cec_dev_path), "%s%d",
                 CEC_PATH_BASE, num);
         ALOGD_IF(DEBUG, "%s: Trying num: %d cec_dev_path: %s", __FUNCTION__, num, cec_dev_path);
