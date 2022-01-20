@@ -1,4 +1,6 @@
 /*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
 * Copyright (c) 2018-2020, 2022, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -122,6 +124,14 @@
 #define DISABLE_ROTATOR_PRE_DOWNSCALER_PROP  DISPLAY_PROP("disable_pre_downscaler")
 #define DISABLE_INLINE_ROTATOR_UI_PROP       DISPLAY_PROP("disable_inline_rotator_ui")
 #define DISABLE_DYNAMIC_FPS                  DISPLAY_PROP("disable_dynamic_fps")
+/*
+ * LOG_SINK_PROP: Set sink target for SDM logs
+ *   0: No logging
+ *   1: Android logger (default)
+ *   2: File logger
+ *   3: (0x1 | 0x2) Android logger + File logger
+ */
+#define LOG_SINK_PROP                        DISPLAY_PROP("set_log_sink")
 
 // Add all vendor.display properties above
 
