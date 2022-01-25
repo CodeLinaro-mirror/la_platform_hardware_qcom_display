@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -2612,6 +2613,8 @@ int32_t HWCDisplay::SetCAC(bool enable, float red, float green, float blue) {
     return -1;
   }
   enable_cac_ = enable;
+  validated_ = false;
+
   return 0;
 }
 

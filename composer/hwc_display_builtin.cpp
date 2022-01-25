@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -266,6 +267,7 @@ HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
   int32_t rel_fence = -1;
   HWC2::Error err = HWC2::Error::None;
 
+  DTRACE_SCOPED();
   err = ValidateWB(true);  // true -> top/left
   if (err != HWC2::Error::None) {
     DLOGE("ValidateWB top/left failed");
@@ -2007,6 +2009,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   display_intf_->SetCAC(enable, red, green, blue);
 
   enable_cac_ = enable;
+  validated_ = false;
   frame_split_rect_ = {};  // clear the frame_split_rect_
 
   return 0;
