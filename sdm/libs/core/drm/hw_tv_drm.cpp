@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2020, 2022 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -437,6 +437,29 @@ DisplayError HWTVDRM::PowerOn(const HWQosData &qos_data, int *release_fence) {
   }
 
   return HWDeviceDRM::PowerOn(qos_data, release_fence);
+}
+
+void HWTVDRM::ClearInactiveDisplayAttributes() {
+  HWDisplayAttributes display_attributes = display_attributes_[current_mode_index_];
+  sde_drm::DRMModeInfo active_mode = connector_info_.modes[current_mode_index_];
+  display_attributes_.clear();
+  connector_info_.modes.clear();
+  display_attributes_.push_back(display_attributes);
+  connector_info_.modes.push_back(active_mode);
+  current_mode_index_ = 0;
+  PopulateHWPanelInfo();
+  UpdateMixerAttributes();
+  int index = current_mode_index_;
+
+  DLOGI("Display attributes[%d]: WxH: %dx%d, DPI: %fx%f, FPS: %d, LM_SPLIT: %d, V_BACK_PORCH: %d," \
+        " V_FRONT_PORCH: %d, V_PULSE_WIDTH: %d, V_TOTAL: %d, H_TOTAL: %d, CLK: %dKHZ, TOPOLOGY: %d",
+        index, display_attributes_[index].x_pixels, display_attributes_[index].y_pixels,
+        display_attributes_[index].x_dpi, display_attributes_[index].y_dpi,
+        display_attributes_[index].fps, display_attributes_[index].is_device_split,
+        display_attributes_[index].v_back_porch, display_attributes_[index].v_front_porch,
+        display_attributes_[index].v_pulse_width, display_attributes_[index].v_total,
+        display_attributes_[index].h_total, display_attributes_[index].clock_khz,
+        display_attributes_[index].topology);
 }
 
 }  // namespace sdm

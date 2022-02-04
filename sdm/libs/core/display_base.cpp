@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2020, 2022, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -87,6 +87,10 @@ DisplayBase::DisplayBase(int32_t display_id, DisplayType display_type,
     hw_info_intf_(hw_info_intf) {}
 
 DisplayError DisplayBase::Init() {
+  uint32_t num_modes = 0;
+  int config_index = 0;
+  vector<HWDisplayAttributes> display_attributes = {};
+
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
   hw_panel_info_ = HWPanelInfo();
@@ -99,25 +103,6 @@ DisplayError DisplayBase::Init() {
 
   uint32_t active_index = 0;
   int drop_vsync = 0;
-  hw_intf_->GetActiveConfig(&active_index);
-  hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
-  fb_config_ = display_attributes_;
-
-  error = Debug::GetMixerResolution(&mixer_attributes_.width, &mixer_attributes_.height);
-  if (error == kErrorNone) {
-    if (hw_intf_->SetMixerAttributes(mixer_attributes_) == kErrorNone) {
-      custom_mixer_resolution_ = true;
-    }
-  }
-
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes_);
-  if (error != kErrorNone) {
-    return error;
-  }
-
-  // Override x_pixels and y_pixels of frame buffer with mixer width and height
-  fb_config_.x_pixels = mixer_attributes_.width;
-  fb_config_.y_pixels = mixer_attributes_.height;
 
   if (IsPrimaryDisplay()) {
     HWScaleLutInfo lut_info = {};
@@ -154,6 +139,50 @@ DisplayError DisplayBase::Init() {
     DLOGW("Display %d comp manager registration failed!", display_id_);
     goto CleanupOnError;
   }
+
+  fps_manager_ = FpsManager::getInstance();
+
+  if (!fps_manager_) {
+    DLOGW("Property not set for Fps Manager\n");
+  } else {
+    hw_intf_->GetNumDisplayAttributes(&num_modes);
+    display_attributes.resize(num_modes);
+
+    for (uint32_t i = 0; i < num_modes; i++) {
+      hw_intf_->GetDisplayAttributes(i, &display_attributes[i]);
+    }
+
+    config_index = fps_manager_->getPreferredConfigIndex(display_attributes);
+    if (config_index == -1) {
+      DLOGW("Config with preferred fps %d not found\n", fps_manager_->getPreferredFps());
+    } else {
+        error = hw_intf_->SetDisplayAttributes(config_index);
+        hw_intf_->ClearInactiveDisplayAttributes();
+        if (error == kErrorNone) {
+          DLOGW("Setting preferred fps %d ",fps_manager_->getPreferredFps());
+        }
+    }
+  }
+
+  hw_intf_->GetActiveConfig(&active_index);
+  hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
+  fb_config_ = display_attributes_;
+
+  error = Debug::GetMixerResolution(&mixer_attributes_.width, &mixer_attributes_.height);
+  if (error == kErrorNone) {
+    if (hw_intf_->SetMixerAttributes(mixer_attributes_) == kErrorNone) {
+      custom_mixer_resolution_ = true;
+    }
+  }
+
+  error = hw_intf_->GetMixerAttributes(&mixer_attributes_);
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  // Override x_pixels and y_pixels of frame buffer with mixer width and height
+  fb_config_.x_pixels = mixer_attributes_.width;
+  fb_config_.y_pixels = mixer_attributes_.height;
 
   if (color_modes_cs_.size() > 0) {
     error = comp_manager_->SetColorModesInfo(display_comp_ctx_, color_modes_cs_);

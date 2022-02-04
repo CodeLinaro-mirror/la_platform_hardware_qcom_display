@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2017-2019, 2022, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -42,6 +42,7 @@ class HWVirtualDRM : public HWDeviceDRM {
   HWVirtualDRM(int32_t display_id, BufferSyncHandler *buffer_sync_handler,
                BufferAllocator *buffer_allocator, HWInfoInterface *hw_info_intf);
   virtual ~HWVirtualDRM() {}
+  virtual void ClearInactiveDisplayAttributes() { }
   virtual DisplayError SetVSyncState(bool enable) { return kErrorNotSupported; }
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
     return kErrorNotSupported;

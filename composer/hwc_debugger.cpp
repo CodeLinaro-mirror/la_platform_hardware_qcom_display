@@ -1,4 +1,6 @@
 /*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
 * Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -32,6 +34,13 @@
 #include <display_properties.h>
 
 #include "hwc_debugger.h"
+
+#include <chrono>
+#include <iomanip>
+#include <fstream>
+#include <sstream>
+
+#define LOG_BUF_SIZE 1024
 
 namespace sdm {
 
@@ -179,35 +188,64 @@ void HWCDebugHandler::DebugQos(bool enable, int verbose_level) {
   DebugHandler::SetLogMask(debug_handler_.log_mask_);
 }
 
+void HWCDebugHandler::LogPrintWrapper(int prio, const char* tag,
+                                      const char *fmt, va_list ap) {
+  debug_handler_.GetProperty(LOG_SINK_PROP, &(debug_handler_.log_sink_));
+
+  if (debug_handler_.log_sink_ & kLogAndroidSink) {
+    __android_log_vprint(prio, tag, fmt, ap);
+  }
+
+  if (debug_handler_.log_sink_ & kLogFileSink) {
+    if (debug_handler_.boot_time.size() == 0) {
+      auto now = std::chrono::system_clock::now();
+      auto in_time_t = std::chrono::system_clock::to_time_t(now);
+      std::stringstream datetime;
+      datetime << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S");
+      debug_handler_.boot_time = datetime.str();
+    }
+    std::ofstream dbg_file(std::string(DumpDir()) + "/sdm_log_" +
+                           debug_handler_.boot_time + ".txt", std::ios_base::app);
+    if (!dbg_file) {
+      return;
+    }
+    char buf[LOG_BUF_SIZE];
+    vsnprintf(buf, LOG_BUF_SIZE, fmt, ap);
+    dbg_file << buf << std::endl;
+    // TODO: Optimize file handling. Prevent multiple file open and close calls.
+    dbg_file.close();
+  }
+}
+
 void HWCDebugHandler::Error(const char *fmt, ...) {
   va_list list;
   va_start(list, fmt);
-  __android_log_vprint(ANDROID_LOG_ERROR, LOG_TAG, fmt, list);
+  debug_handler_.LogPrintWrapper(ANDROID_LOG_ERROR, LOG_TAG, fmt, list);
 }
 
 void HWCDebugHandler::Warning(const char *fmt, ...) {
   va_list list;
   va_start(list, fmt);
-  __android_log_vprint(ANDROID_LOG_WARN, LOG_TAG, fmt, list);
+  debug_handler_.LogPrintWrapper(ANDROID_LOG_WARN, LOG_TAG, fmt, list);
 }
 
 void HWCDebugHandler::Info(const char *fmt, ...) {
   va_list list;
   va_start(list, fmt);
-  __android_log_vprint(ANDROID_LOG_INFO, LOG_TAG, fmt, list);
+  debug_handler_.LogPrintWrapper(ANDROID_LOG_INFO, LOG_TAG, fmt, list);
 }
 
 void HWCDebugHandler::Debug(const char *fmt, ...) {
   va_list list;
   va_start(list, fmt);
-  __android_log_vprint(ANDROID_LOG_DEBUG, LOG_TAG, fmt, list);
+  debug_handler_.LogPrintWrapper(ANDROID_LOG_DEBUG, LOG_TAG, fmt, list);
 }
 
 void HWCDebugHandler::Verbose(const char *fmt, ...) {
   if (debug_handler_.verbose_level_) {
     va_list list;
     va_start(list, fmt);
-    __android_log_vprint(ANDROID_LOG_VERBOSE, LOG_TAG, fmt, list);
+    debug_handler_.LogPrintWrapper(ANDROID_LOG_VERBOSE, LOG_TAG, fmt, list);
   }
 }
 
