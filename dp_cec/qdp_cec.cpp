@@ -328,6 +328,7 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
     hdmi_event_t event;
     event.type = HDMI_EVENT_HOT_PLUG;
     event.dev = (hdmi_cec_device *) ctx;
+    event.hotplug.port_id = 1;
     event.hotplug.connected = connected ? HDMI_CONNECTED : HDMI_NOT_CONNECTED;
     if (ctx->callback.callback_func) {
         ctx->callback.callback_func(&event, ctx->callback.callback_arg);
