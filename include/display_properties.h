@@ -195,6 +195,12 @@
 
 // Enable IWE
 #define ENABLE_INLINE_WRITEBACK              DISPLAY_PROP("enable_inline_writeback")
+/* Property DISPLAY_REBOOT_STRATEGY:
+ * Display framework reboot strategy to keep the SF and HWC in sync.
+ *   0: Default behaviour (Reboot framework on first DSI-HDMI connection)
+ *   1: DSI always, reboot everytime DSI-HDMI connected
+ */
+#define DISPLAY_REBOOT_STRATEGY         DISPLAY_PROP("display_reboot_strategy")
 
 // Configuration to reserve the writeback blocks for specific usage like CWB, IWE or WFD
 #define RESERVED_WRITEBACK_CONFIG            DISPLAY_PROP("reserved_writeback_config")
