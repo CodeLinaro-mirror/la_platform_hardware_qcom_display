@@ -117,6 +117,19 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     kHotPlugEvent,
   };
 
+  enum DisplayRebootStrategy {
+    kRebootStrategyDefault,
+    kRebootStrategyOnceDSI = kRebootStrategyDefault,
+    kRebootStrategyAlwaysDSI,
+  };
+
+  enum ComposerSetupMode {
+    kCompSetupModeDefault,
+    kCompSetupModePrimary = kCompSetupModeDefault,
+    kCompSetupModeNonPrimary,
+    kCompSetupModeNoDisplay,
+  };
+
   HWCSession();
   int Init();
   int Deinit();
@@ -477,7 +490,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool HasHDRSupport(HWCDisplay *hwc_display);
   void PostInit();
   int GetDispTypeFromPhysicalId(uint64_t physical_disp_id, DispType *disp_type);
+
   int SetBestNullDisplayResolution();
+  bool IsFrameworkRebootRequired(bool is_primary);
 
   // Uevent handler
   virtual void UEventHandler(const char *uevent_data, int length);
@@ -567,13 +582,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = nullptr;
   HWCSocketHandler socket_handler_;
-  bool null_display_active_ = false;
   bool is_composer_up_ = false;
   std::mutex mutex_lum_;
   int hpd_bpp_ = 0;
   int hpd_pattern_ = 0;
   static bool pending_power_mode_[HWCCallbacks::kNumDisplays];
-  static int null_display_mode_;
   HotPlugEvent pending_hotplug_event_ = kHotPlugNone;
   hwc2_display_t virtual_id_ = HWCCallbacks::kNumDisplays;
   Locker pluggable_handler_lock_;
@@ -600,6 +613,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
   bool pluggable_is_primary_ = false;
   bool pluggable_primary_connected_ = false;
+  DisplayConfigVariableInfo primary_config_ = {};
+  int composer_setup_mode_ = kCompSetupModeDefault;
+  int display_reboot_strategy_ = kRebootStrategyDefault;
+  bool null_display_active_ = false;
+  static int null_display_mode_;
 };
 }  // namespace sdm
 
