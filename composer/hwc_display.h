@@ -187,6 +187,12 @@ class HWCDisplay : public DisplayEventHandler {
     kDisplayStatusResume,  // Resume + PowerOn
   };
 
+  enum DisplayValidateState {
+    kNormalValidate,
+    kInternalValidate,
+    kSkipValidate,
+  };
+
   struct HWCLayerStack {
     HWCLayer *client_target = nullptr;                   // Also known as framebuffer target
     std::map<LayerId, HWCLayer *> layer_map;             // Look up by Id - TODO
@@ -291,6 +297,7 @@ class HWCDisplay : public DisplayEventHandler {
   HWCLayer *GetHWCLayer(LayerId layer_id);
   LayerId GetHWCTunnelledLayer();
   uint32_t GetGeometryChanges() { return geometry_changes_; }
+  void SetValidationState(DisplayValidateState state) { validate_state_ = state; }
   ColorMode GetCurrentColorMode() {
     return (color_mode_ ? color_mode_->GetCurrentColorMode() : ColorMode::SRGB);
   }
@@ -633,6 +640,7 @@ class HWCDisplay : public DisplayEventHandler {
   uint64_t expected_present_time_ = 0;  // Expected Present time for current frame
   int tunnelling_enable_ = 0;
   LayerId tunnelled_layer_ = -1;
+  DisplayValidateState validate_state_ = kNormalValidate;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {
