@@ -1,4 +1,7 @@
 /*
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Not a Contribution.
+ *
  * Copyright (c) 2014-2019,2021 The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
@@ -539,6 +542,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   std::bitset<HWCCallbacks::kNumDisplays> display_ready_;
   bool secure_session_active_ = false;
   bool pluggable_is_primary_ = false;
+  bool pluggable_primary_connected_ = false;
 };
 }  // namespace sdm
 

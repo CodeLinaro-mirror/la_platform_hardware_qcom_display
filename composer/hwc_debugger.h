@@ -1,4 +1,6 @@
 /*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
 * Copyright (c) 2014 - 2018, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -44,6 +46,14 @@ using display::DebugHandler;
 
 class HWCDebugHandler : public DebugHandler {
  public:
+  enum DisplayLogSink {
+    kLogNoSink                = 0x0,
+    kLogAndroidSink           = 0x1,
+    kLogDefaultSink           = kLogAndroidSink,
+    kLogFileSink              = 0x2,
+    klogAndroidAndFileSink    = 0x3,
+  };
+
   HWCDebugHandler();
   static inline DebugHandler* Get() { return &debug_handler_; }
   static const char* DumpDir() { return "/data/vendor/display"; }
@@ -60,6 +70,7 @@ class HWCDebugHandler : public DebugHandler {
   static void DebugQos(bool enable, int verbose_level);
   static void DebugDisplay(bool enable, int verbose_level);
   static int  GetIdleTimeoutMs();
+  static void LogPrintWrapper(int prio, const char* tag, const char *fmt, va_list ap);
 
   virtual void Error(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
   virtual void Warning(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -76,6 +87,8 @@ class HWCDebugHandler : public DebugHandler {
   static HWCDebugHandler debug_handler_;
   std::bitset<32> log_mask_;
   int32_t verbose_level_;
+  int32_t log_sink_ = kLogDefaultSink;
+  std::string boot_time;
 };
 
 }  // namespace sdm
