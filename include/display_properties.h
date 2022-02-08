@@ -164,6 +164,12 @@
  *   3: (0x1 | 0x2) Android logger + File logger
  */
 #define LOG_SINK_PROP                        DISPLAY_PROP("set_log_sink")
+/* Property DISPLAY_REBOOT_STRATEGY:
+ * Display framework reboot strategy to keep the SF and HWC in sync.
+ *   0: Default behaviour (Reboot framework on first DSI-HDMI connection)
+ *   1: DSI always, reboot everytime DSI-HDMI connected
+ */
+#define DISPLAY_REBOOT_STRATEGY         DISPLAY_PROP("display_reboot_strategy")
 
 // Add all vendor.display properties above
 
