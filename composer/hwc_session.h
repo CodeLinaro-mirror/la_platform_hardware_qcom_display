@@ -629,6 +629,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   void PerformIdleStatusCallback(hwc2_display_t display);
   DispType GetDisplayConfigDisplayType(int qdutils_disp_type);
   HWC2::Error TeardownConcurrentWriteback(hwc2_display_t display);
+  HWC2::Error DisableQsync(hwc2_display_t display);
   void PostCommitUnlocked(hwc2_display_t display, const shared_ptr<Fence> &retire_fence,
                           HWC2::Error status);
   void PostCommitLocked(hwc2_display_t display, shared_ptr<Fence> &retire_fence);
@@ -638,6 +639,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
 
   CoreInterface *core_intf_ = nullptr;
   HWCDisplay *hwc_display_[HWCCallbacks::kNumDisplays] = {nullptr};
+  QSyncMode  hwc_display_qsync_[HWCCallbacks::kNumDisplays] = {QSyncMode::kQSyncModeNone};
+  uint32_t idle_time_active_ms_ = 0;
+  uint32_t idle_time_inactive_ms_ = 0;
   HWCCallbacks callbacks_;
   HWCBufferAllocator buffer_allocator_;
   HWCVirtualDisplayFactory virtual_display_factory_;
@@ -682,10 +686,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool async_powermode_ = false;
   bool async_power_mode_triggered_ = false;
   bool async_vds_creation_ = false;
+  bool async_vds_creation_requested_ = false;
   bool power_state_transition_[HWCCallbacks::kNumDisplays] = {};
   std::bitset<HWCCallbacks::kNumDisplays> display_ready_;
   bool secure_session_active_ = false;
-  bool is_idle_time_up_ = false;
+  bool is_client_up_ = false;
   std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
   bool primary_pending_ = true;
   Locker primary_display_lock_;

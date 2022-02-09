@@ -459,6 +459,8 @@ int HWCSession::SetIdleTimeout(uint32_t value) {
   Debug::Get()->GetProperty(IDLE_TIME_INACTIVE_PROP, &inactive_ms);
   if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
     hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(value, inactive_ms);
+    idle_time_inactive_ms_ = inactive_ms;
+    idle_time_active_ms_ = value;
     return 0;
   }
 
@@ -1349,6 +1351,7 @@ int HWCSession::DisplayConfigImpl::SetQsyncMode(uint32_t disp_id, DisplayConfig:
   }
 
   hwc_session_->hwc_display_[disp_id]->SetQSyncMode(qsync_mode);
+  hwc_session_->hwc_display_qsync_[disp_id]  = qsync_mode;
   return 0;
 }
 
@@ -1384,6 +1387,8 @@ int HWCSession::DisplayConfigImpl::CreateVirtualDisplay(uint32_t width, uint32_t
   if (!hwc_session_->async_vds_creation_) {
     return HWC2_ERROR_UNSUPPORTED;
   }
+
+  hwc_session_->async_vds_creation_requested_ = true;
 
   if (!width || !height) {
     return HWC2_ERROR_BAD_PARAMETER;
@@ -1560,7 +1565,9 @@ int HWCSession::DisplayConfigImpl::AllowIdleFallback() {
   if (hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]) {
     DLOGI("enable idle time active_ms:%d inactive_ms:%d",active_ms,inactive_ms);
     hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(active_ms, inactive_ms);
-    hwc_session_->is_idle_time_up_ = true;
+    hwc_session_->is_client_up_ = true;
+    hwc_session_->idle_time_inactive_ms_ = inactive_ms;
+    hwc_session_->idle_time_active_ms_ = active_ms;
     return 0;
   }
 
