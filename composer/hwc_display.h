@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -413,6 +414,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual bool HasReadBackBufferSupport() { return false; }
   virtual int32_t SetCAC(bool enable, float red, float green, float blue);
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
+  bool IsCACEnabled() { return enable_cac_; }
 
  protected:
   static uint32_t throttling_refresh_rate_;

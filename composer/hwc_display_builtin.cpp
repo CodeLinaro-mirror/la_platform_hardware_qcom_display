@@ -867,6 +867,10 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
   auto status = HWC2::Error::None;
 
   DTRACE_SCOPED();
+  if (cac_commit_done_) {
+    // No need to call present on primary for every frame
+    return status;
+  }
 
   if (!is_primary_ && active_secure_sessions_[kSecureDisplay]) {
     return status;
@@ -905,6 +909,9 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
 
   CloseFd(&output_buffer_.acquire_fence_fd);
   pending_commit_ = false;
+  if (enable_cac_) {
+    cac_commit_done_ = true;
+  }
   return status;
 }
 
@@ -2011,6 +2018,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   enable_cac_ = enable;
   validated_ = false;
   frame_split_rect_ = {};  // clear the frame_split_rect_
+  cac_commit_done_ = false;
 
   return 0;
 }

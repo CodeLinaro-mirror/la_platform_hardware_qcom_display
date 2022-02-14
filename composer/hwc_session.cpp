@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -2948,7 +2949,8 @@ HWC2::Error HWCSession::PresentDisplayInternal(hwc2_display_t display, int32_t *
   DTRACE_SCOPED();
   // If display is in Skip-Validate state and Validate cannot be skipped, do Internal
   // Validation to optimize for the frames which don't require the Client composition.
-  if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
+  if ((hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) ||
+       hwc_display->IsCACEnabled()) {
     uint32_t out_num_types = 0, out_num_requests = 0;
     hwc_display->SetFastPathComposition(true);
     HWC2::Error error = ValidateDisplayInternal(display, &out_num_types, &out_num_requests);

@@ -243,6 +243,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   HWCLayer *new_client_target_ = {};  // New client target(dummy), just w/h no buffer
   std::map<hwc2_layer_t, HWCLayer *> sec_layer_map_;
   std::multiset<HWCLayer *, SortLayersByZ> sec_layer_set_;
+  bool cac_commit_done_ = false;
 };
 
 }  // namespace sdm
