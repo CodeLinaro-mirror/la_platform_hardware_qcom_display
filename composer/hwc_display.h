@@ -412,9 +412,11 @@ class HWCDisplay : public DisplayEventHandler {
   }
   HWC2::Error SetDisplayElapseTime(uint64_t time);
   virtual bool HasReadBackBufferSupport() { return false; }
-  virtual int32_t SetCAC(bool enable, float red, float green, float blue);
+  virtual int32_t SetCAC(bool enable, float red, float green, float blue,
+                         PanelOrientation orientation = {});
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
   bool IsCACEnabled() { return enable_cac_; }
+  PanelOrientation GetPanelOrientation() { return panel_orientation_; }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -534,6 +536,7 @@ class HWCDisplay : public DisplayEventHandler {
   uint64_t elapse_timestamp_ = 0;
   int async_power_mode_ = 0;
   FscRgbOrder fsc_rgb_order_ = kFscUnknown;
+  PanelOrientation panel_orientation_ = {};
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

@@ -73,16 +73,36 @@ void HWVirtualDRM::ConfigureWbConnectorDestRect(HWLayers *hw_layers) {
   dst.top = 0;
   dst.right = display_attributes_[current_mode_index_].x_pixels;
 
+  LayerRect display_rect = { 0.0, 0.0, FLOAT(dst.right), FLOAT(dst.bottom) };
   LayerRect &frame_split = hw_layers->info.stack->frame_split;
   if (IsValid(frame_split)) {
-    // Frame_split is used Used for CAC use-case, where WB is half size of primary
-    dst.left = frame_split.left;
-    dst.bottom = frame_split.bottom;
-    dst.top = frame_split.top;
-    dst.right = frame_split.right;
+    if (cac_orientation_.flip_horizontal && cac_orientation_.flip_vertical) {
+      // On inverse mounted pri-panel(most likely portrait), handle flips in WB pass
+      if (IsCongruent(frame_split, display_rect)) {
+        // WB top half to bottom
+        dst.left = 0;
+        // TODO(cac): Make this generic instead of (*2)
+        dst.bottom = display_attributes_[current_mode_index_].y_pixels * 2;
+        dst.top = display_attributes_[current_mode_index_].y_pixels;
+        dst.right = display_attributes_[current_mode_index_].x_pixels;
+      } else {
+        // WB bottom half at top
+        dst.left = 0;
+        dst.bottom = display_attributes_[current_mode_index_].y_pixels;
+        dst.top = 0;
+        dst.right = display_attributes_[current_mode_index_].x_pixels;
+      }
+    } else {
+      // Frame_split is used Used for CAC use-case, where WB is half size of primary
+      dst.left = frame_split.left;
+      dst.bottom = frame_split.bottom;
+      dst.top = frame_split.top;
+      dst.right = frame_split.right;
+    }
   }
 
-  DLOGV_IF(kTagDriverConfig, "DstRect l = %d t = %d r = %d b = %d", dst.left, dst.top,
+  DLOGV_IF(kTagDriverConfig, "flip_h = %d flip_v = %d DstRect l = %d t = %d r = %d b = %d",
+           cac_orientation_.flip_horizontal, cac_orientation_.flip_vertical, dst.left, dst.top,
            dst.right, dst.bottom);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_RECT, token_.conn_id, dst);
   return;

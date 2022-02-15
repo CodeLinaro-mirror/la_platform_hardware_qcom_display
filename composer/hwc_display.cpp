@@ -533,6 +533,7 @@ int HWCDisplay::Init() {
   is_cmd_mode_ = fixed_info.is_cmdmode;
   partial_update_enabled_ = fixed_info.partial_update || (!fixed_info.is_cmdmode);
   fsc_rgb_order_ = (sdm::HWCDisplay::FscRgbOrder)fixed_info.fsc_rgb_order;
+  panel_orientation_ = fixed_info.panel_orientation;
   client_target_->SetPartialUpdate(partial_update_enabled_);
 
   int disable_fast_path = 0;
@@ -2605,8 +2606,9 @@ void HWCDisplay::UpdateActiveConfig() {
   pending_config_ = false;
 }
 
-int32_t HWCDisplay::SetCAC(bool enable, float red, float green, float blue) {
-  DisplayError error = display_intf_->SetCAC(enable, red, green, blue);
+int32_t HWCDisplay::SetCAC(bool enable, float red, float green, float blue,
+                           PanelOrientation orientation) {
+  DisplayError error = display_intf_->SetCAC(enable, red, green, blue, orientation);
   if (error != kErrorNone) {
     DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f",
           id_, sdm_id_, type_, enable, red, green, blue);

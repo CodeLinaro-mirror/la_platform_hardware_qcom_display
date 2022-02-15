@@ -2450,8 +2450,9 @@ DisplayError HWDeviceDRM::SetBlendSpace(const PrimariesTransfer &blend_space) {
   return kErrorNone;
 }
 
-DisplayError HWDeviceDRM::SetCAC(bool enable) {
+DisplayError HWDeviceDRM::SetCAC(bool enable, PanelOrientation orientation) {
   enable_cac_ = enable;
+  cac_orientation_ = orientation;
   return kErrorNone;
 }
 

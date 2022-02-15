@@ -1981,7 +1981,8 @@ bool HWCDisplayBuiltIn::HasReadBackBufferSupport() {
   return fixed_info.readback_supported;
 }
 
-int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blue) {
+int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blue,
+                                  PanelOrientation orientation) {
   HWCSession *hwc_session_ = HWCSession::GetInstance();
   HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
                                      (hwc_session_->GetDisplay(hwc_session_->wb_display_));
@@ -1990,7 +1991,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
     return -1;
   }
 
-  int32_t error = wb_display->SetCAC(enable, red, green, blue);
+  int32_t error = wb_display->SetCAC(enable, red, green, blue, GetPanelOrientation());
   if (error != kErrorNone) {
     DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f, "
       "errno = %d, desc = %s", id_, sdm_id_, type_, enable, red, green, blue, error,
@@ -1999,7 +2000,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   }
 
   // Pass CAC enablement info to Builtin for fence management
-  display_intf_->SetCAC(enable, red, green, blue);
+  display_intf_->SetCAC(enable, red, green, blue, orientation);
 
   enable_cac_ = enable;
   if (!enable_cac_) {

@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -529,6 +530,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->partial_update = hw_panel_info_.partial_update;
   fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
   fixed_info->fsc_rgb_order = hw_panel_info_.fsc_rgb_order;
+  fixed_info->panel_orientation = hw_panel_info_.panel_orientation;
 
   return kErrorNone;
 }
@@ -2143,14 +2145,16 @@ DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level)
   return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
 }
 
-DisplayError DisplayBase::SetCAC(bool enable, float red, float green, float blue) {
+DisplayError DisplayBase::SetCAC(bool enable, float red, float green, float blue,
+                                 PanelOrientation orientation) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
-  DisplayError error = comp_manager_->SetCAC(display_comp_ctx_, enable, red, green, blue);
+  DisplayError error = comp_manager_->SetCAC(display_comp_ctx_, enable, red, green, blue,
+                                             orientation);
   if (error) {
     return kErrorNotSupported;
   }
   enable_cac_ = enable;
-  error = hw_intf_->SetCAC(enable_cac_);
+  error = hw_intf_->SetCAC(enable_cac_, orientation);
 
   return kErrorNone;
 }

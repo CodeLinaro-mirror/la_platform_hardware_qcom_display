@@ -1,6 +1,6 @@
 /*
 * Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
-* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -1205,12 +1205,6 @@ void DisplayBuiltIn::GetFpsConfig(HWDisplayAttributes *display_attr, HWPanelInfo
   display_attr->fps = display_attributes_.fps;
   display_attr->vsync_period_ns = display_attributes_.vsync_period_ns;
   panel_info->transfer_time_us = hw_panel_info_.transfer_time_us;
-}
-
-DisplayError DisplayBuiltIn::SetCAC(bool enable, float red, float green, float blue) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
-  enable_cac_ = enable;
-  return hw_intf_->SetCAC(enable_cac_);
 }
 
 }  // namespace sdm

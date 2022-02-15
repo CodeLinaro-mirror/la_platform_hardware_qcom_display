@@ -1,6 +1,6 @@
 /*
 * Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
-* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
+* Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -60,7 +60,8 @@ class StrategyInterface {
   virtual DisplayError SetBlendSpace(const PrimariesTransfer &blend_space) = 0;
   virtual bool CanSkipValidate(bool *needs_buffer_swap) = 0;
   virtual DisplayError SwapBuffers() = 0;
-  virtual DisplayError SetCAC(bool enable, float red, float green, float blue) = 0;
+  virtual DisplayError SetCAC(bool enable, float red, float green, float blue,
+                              PanelOrientation orientation) = 0;
 
   virtual ~StrategyInterface() { }
 };

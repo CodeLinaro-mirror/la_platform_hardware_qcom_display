@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2014 - 2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -194,6 +195,14 @@ enum FscRgbOrder {
   kFscGrb,
 };
 
+
+/*! @brief This enum defines the panel orientation. */
+struct PanelOrientation {
+  bool rotation = false;
+  bool flip_horizontal = false;
+  bool flip_vertical = false;
+};
+
 /*! @brief This structure defines configuration for fixed properties of a display device.
 
   @sa DisplayInterface::GetConfig
@@ -213,6 +222,7 @@ struct DisplayConfigFixedInfo {
   bool partial_update = false;         //!< If display supports Partial Update.
   bool readback_supported = false;     //!< If display supports buffer readback.
   FscRgbOrder fsc_rgb_order = kFscUnkown;  //!< FSC Panel's RGB order.
+  PanelOrientation panel_orientation = {};  //!< Panel's mount orientation
 };
 
 /*! @brief This structure defines configuration for variable properties of a display device.
@@ -949,9 +959,12 @@ class DisplayInterface {
 
     @param[in] cac enable flag
 
+    @param[in] orientation - to handle flips during CAC
+
     @return \link void \endlink
   */
-  virtual DisplayError SetCAC(bool enable, float red, float green, float blue) = 0;
+  virtual DisplayError SetCAC(bool enable, float red, float green, float blue,
+                              PanelOrientation orientation) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

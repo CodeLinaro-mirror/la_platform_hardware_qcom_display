@@ -1,6 +1,6 @@
 /*
 * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
-* Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
+* Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -363,10 +363,10 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
 }
 
 DisplayError CompManager::SetCAC(Handle display_ctx, bool enable, float red, float green,
-                                 float blue) {
+                                 float blue, PanelOrientation orientation) {
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-  return display_comp_ctx->strategy->SetCAC(enable, red, green, blue);
+  return display_comp_ctx->strategy->SetCAC(enable, red, green, blue, orientation);
 }
 
 DisplayError CompManager::PostPrepare(Handle display_ctx, HWLayers *hw_layers) {

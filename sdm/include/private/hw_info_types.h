@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -373,12 +374,6 @@ struct HWColorPrimaries {
   uint32_t blue[2] = {};              // Blue color primary
 };
 
-struct HWPanelOrientation {
-  bool rotation = false;
-  bool flip_horizontal = false;
-  bool flip_vertical = false;
-};
-
 struct HWPanelInfo {
   DisplayPort port = kPortDefault;    // Display port
   HWDisplayMode mode = kModeDefault;  // Display mode
@@ -411,7 +406,7 @@ struct HWPanelInfo {
   float average_luminance = 0.0f;     // Panel's average luminance level
   float blackness_level = 0.0f;       // Panel's blackness level
   HWColorPrimaries primaries = {};    // WRGB color primaries
-  HWPanelOrientation panel_orientation = {};  // Panel Orientation
+  PanelOrientation panel_orientation = {};  // Panel Orientation
   uint32_t transfer_time_us = 0;       // transfer time in micro seconds to panel's active region
   bool qsync_support = false;          // Specifies panel supports qsync feature or not.
   bool dyn_bitclk_support = false;     // Bit clk can be updated to avoid RF interference.
