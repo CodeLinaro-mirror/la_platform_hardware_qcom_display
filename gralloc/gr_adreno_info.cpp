@@ -29,7 +29,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -320,6 +320,8 @@ ADRENOPIXELFORMAT AdrenoMemInfo::GetGpuPixelFormat(int hal_format) {
       return ADRENO_PIXELFORMAT_ASTC_12X12;
     case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
       return ADRENO_PIXELFORMAT_ASTC_12X12_SRGB;
+    case HAL_PIXEL_FORMAT_YCbCr_422_I:
+      return ADRENO_PIXELFORMAT_YUY2;
     default:
       ALOGE("%s: No map for format: 0x%x", __FUNCTION__, hal_format);
       break;
