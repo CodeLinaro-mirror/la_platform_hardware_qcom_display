@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -111,6 +111,7 @@ bool IsYuvFormat(int format) {
     case static_cast<int>(PixelFormat::RAW_OPAQUE):
     case HAL_PIXEL_FORMAT_NV12_HEIF:
     case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+    case HAL_PIXEL_FORMAT_YCbCr_422_I:
     case HAL_PIXEL_FORMAT_NV12_LINEAR_FLEX:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_2_BATCH:
@@ -671,6 +672,7 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
       break;
     case static_cast<int>(PixelFormat::YCBCR_422_SP):
     case HAL_PIXEL_FORMAT_YCrCb_422_SP:
+    case HAL_PIXEL_FORMAT_YCrCb_422_I:
       if (unaligned_width & 1) {
         ALOGE("width is odd for the YUV422_SP format");
         return;
@@ -1665,6 +1667,17 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       plane_info[1].v_subsampling = v_subsampling;
       break;
 
+    case HAL_PIXEL_FORMAT_YCbCr_422_I:
+    case HAL_PIXEL_FORMAT_YCrCb_422_I:
+      *plane_count = 2;
+      GetYuvSPPlaneInfo(info, format, width, height, 2, plane_info);
+      GetYuvSubSamplingFactor(format, &h_subsampling, &v_subsampling);
+      plane_info[0].h_subsampling = 0;
+      plane_info[0].v_subsampling = 0;
+      plane_info[1].h_subsampling = h_subsampling;
+      plane_info[1].v_subsampling = v_subsampling;
+      break;
+
     case static_cast<int32_t>(PixelFormat::RAW16):
     case static_cast<int32_t>(PixelFormat::RAW12):
     case static_cast<int32_t>(PixelFormat::RAW10):
@@ -1864,8 +1877,6 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       break;
 
     // Unsupported formats
-    case static_cast<int32_t>(PixelFormat::YCBCR_422_I):
-    case HAL_PIXEL_FORMAT_YCrCb_422_I:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED:
     default:
       *plane_count = 0;
@@ -1929,6 +1940,7 @@ void GetYuvSubSamplingFactor(int32_t format, int *h_subsampling, int *v_subsampl
     case static_cast<int32_t>(PixelFormat::YCBCR_422_SP):
     case HAL_PIXEL_FORMAT_YCrCb_422_SP:
     case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+    case HAL_PIXEL_FORMAT_YCbCr_422_I:
       *h_subsampling = 1;
       *v_subsampling = 0;
       break;
