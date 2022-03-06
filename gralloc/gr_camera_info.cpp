@@ -51,9 +51,18 @@ CameraInfo *CameraInfo::GetInstance() {
   return s_instance;
 }
 
-CameraInfo::CameraInfo() {
+bool CameraInfo::IsCameraUtilsPresent() {
   libcamera_utils_ = ::dlopen("libcamxexternalformatutils.so", RTLD_NOW);
   if (libcamera_utils_) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+CameraInfo::CameraInfo() {
+  bool CameraUtilsPresent = IsCameraUtilsPresent();
+  if (CameraUtilsPresent) {
     *reinterpret_cast<void **>(&LINK_camera_get_stride_in_bytes) =
         ::dlsym(libcamera_utils_, "CamxFormatUtil_GetStrideInBytes");
     *reinterpret_cast<void **>(&LINK_camera_get_stride_in_pixels) =

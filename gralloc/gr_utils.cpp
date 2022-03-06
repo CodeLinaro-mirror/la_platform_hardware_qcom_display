@@ -153,6 +153,13 @@ bool IsCompressedRGBFormat(int format) {
 }
 
 bool IsCameraCustomFormat(int format, uint64_t usage) {
+  if (CameraInfo::GetInstance() &&
+      !(CameraInfo::GetInstance()->IsCameraUtilsPresent())) {
+      // If the mapping is made to a camera custom format and lib
+      // is absent, we return false and handle internally.
+      return false;
+  }
+
   switch (format) {
     case HAL_PIXEL_FORMAT_NV21_ZSL:
     case HAL_PIXEL_FORMAT_NV12_LINEAR_FLEX:

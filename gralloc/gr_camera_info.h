@@ -123,6 +123,8 @@ class CameraInfo {
   int GetCameraFormatPlaneInfo(int format, int width, int height, int *plane_count,
                                PlaneLayoutInfo *plane_info);
 
+  bool IsCameraUtilsPresent(void);
+
   CamxPixelFormat GetCameraPixelFormat(int hal_format);
 
   static CameraInfo *GetInstance();
