@@ -322,10 +322,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
                               int32_t *outCapabilities);
   static hwc2_function_pointer_t GetFunction(struct hwc2_device *device, int32_t descriptor);
 
-  // Uevent handler
-  virtual void UEventHandler(const char *uevent_data, int length);
   void ResetPanel();
   int InitSupportedDisplaySlots();
+  void InitSupportedNullDisplaySlots();
   int GetDisplayIndex(int dpy);
   int CreatePrimaryDisplay();
   void CreateDummyDisplay(hwc2_display_t client_id);
@@ -357,6 +356,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t getDisplayBrightness(uint32_t display, float *brightness);
   int32_t setDisplayBrightness(uint32_t display, float brightness);
   bool isSmartPanelConfig(uint32_t disp_id, uint32_t config_id);
+
+  // Uevent handler
+  virtual void UEventHandler(const char *uevent_data, int length);
 
   // service methods
   void StartServices();
