@@ -413,7 +413,7 @@ class HWCDisplay : public DisplayEventHandler {
   HWC2::Error SetDisplayElapseTime(uint64_t time);
   virtual bool HasReadBackBufferSupport() { return false; }
   virtual int32_t SetCAC(bool enable, float red, float green, float blue,
-                         PanelOrientation orientation = {});
+                         PanelOrientation orientation);
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
   bool IsCACEnabled() { return enable_cac_; }
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }

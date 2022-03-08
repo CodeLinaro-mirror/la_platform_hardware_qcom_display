@@ -1224,6 +1224,7 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
                                       float blue) {
   int disp_idx = GetDisplayIndex(disp_id);
   int32_t error = -EINVAL;
+  PanelOrientation default_orientation = {};
 
   if (disp_id != HWC_DISPLAY_PRIMARY) {
     DLOGE("Invalid display = %d", disp_id);
@@ -1250,7 +1251,7 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
     if (hwc_display_[disp_idx]) {
-      error = hwc_display_[disp_idx]->SetCAC(enable, red, green, blue);
+      error = hwc_display_[disp_idx]->SetCAC(enable, red, green, blue, default_orientation);
       DLOGI("CAC: disp_id = %d enable = %d, red = %f, green = %f, blue = %f, errno = %d, desc = %s",
             disp_idx, enable, red, green, blue, error, strerror(error));
     }

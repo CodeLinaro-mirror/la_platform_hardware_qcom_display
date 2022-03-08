@@ -3410,6 +3410,7 @@ int32_t HWCSession::SetDisplayBrightnessScale(const android::Parcel *input_parce
 int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
   int32_t error = -EINVAL;
   int32_t err = -1;
+  PanelOrientation default_orientation = {};
   auto display = input_parcel->readInt32();
   if (display != HWC_DISPLAY_PRIMARY) {
     return HWC2_ERROR_UNSUPPORTED;
@@ -3434,7 +3435,7 @@ int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
     if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
       err = hwc_display_[HWC_DISPLAY_PRIMARY]->SetCAC(enable, red_offset, green_offset,
-                                                      blue_offset);
+                                                      blue_offset, default_orientation);
     }
   }
 
