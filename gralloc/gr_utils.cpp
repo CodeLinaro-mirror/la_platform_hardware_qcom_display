@@ -86,22 +86,23 @@
 #define COLOR_FMT_P010_UBWC 9
 #endif
 
+#define ONLY_GPU_USAGE_MASK                                                                       \
+    (BufferUsage::GPU_TEXTURE | BufferUsage::GPU_RENDER_TARGET | BufferUsage::GPU_CUBE_MAP |      \
+     BufferUsage::GPU_MIPMAP_COMPLETE | BufferUsage::GPU_DATA_BUFFER | BufferUsage::RENDERSCRIPT)
+
+#define NON_GPU_USAGE_MASK                                                                        \
+    (BufferUsage::COMPOSER_CLIENT_TARGET | BufferUsage::COMPOSER_OVERLAY |                        \
+     BufferUsage::COMPOSER_CURSOR | BufferUsage::VIDEO_ENCODER | BufferUsage::CAMERA_OUTPUT |     \
+     BufferUsage::CAMERA_INPUT | BufferUsage::VIDEO_DECODER | BufferUsage::CPU_READ_MASK |        \
+     BufferUsage::CPU_WRITE_MASK | GRALLOC_USAGE_PRIVATE_CDSP |                                   \
+     GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY)
+
 #define DEBUG 0
 
 using aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::PlaneLayout;
 using aidl::android::hardware::graphics::common::PlaneLayoutComponent;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
-
-#define ONLY_GPU_CPU_USAGE_MASK (BufferUsage::GPU_TEXTURE | BufferUsage::GPU_RENDER_TARGET | \
-                                 BufferUsage::GPU_DATA_BUFFER | BufferUsage::RENDERSCRIPT | \
-                                 BufferUsage::CPU_READ_MASK | BufferUsage::CPU_WRITE_MASK)
-
-#define NON_GPU_CPU_USAGE_MASK (BufferUsage::COMPOSER_CLIENT_TARGET | \
-                                BufferUsage::COMPOSER_OVERLAY | BufferUsage::COMPOSER_CURSOR | \
-                                BufferUsage::VIDEO_ENCODER | BufferUsage::CAMERA_OUTPUT | \
-                                BufferUsage::CAMERA_INPUT | BufferUsage::VIDEO_DECODER | \
-                                GRALLOC_USAGE_PRIVATE_CDSP | GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY)
 
 namespace gralloc {
 
@@ -866,11 +867,11 @@ bool IsUBwcSupported(int format) {
   return false;
 }
 
-bool IsOnlyGpuCpuUsage(uint64_t usage) {
-  if (usage & NON_GPU_CPU_USAGE_MASK) {
+bool IsOnlyGpuUsage(uint64_t usage) {
+  if (usage & NON_GPU_USAGE_MASK) {
     return false;
   }
-  if (usage & ONLY_GPU_CPU_USAGE_MASK) {
+  if (usage & ONLY_GPU_USAGE_MASK) {
     return true;
   }
   return false;
@@ -1228,13 +1229,25 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   if (IsUncompressedRGBFormat(format)) {
     unsigned int aligned_w = width;
     unsigned int aligned_h = height;
-    if (AdrenoMemInfo::GetInstance()) {
+    unsigned int alignment = 32;
+
+    if (usage & ONLY_GPU_USAGE_MASK) {
+      if (AdrenoMemInfo::GetInstance() == nullptr) {
+        ALOGE("Unable to get adreno instance");
+        return -1;
+      }
       AdrenoMemInfo::GetInstance()->AlignUnCompressedRGB(width, height, format, tile, alignedw,
                                                          alignedh);
+    } else {
+      alignment = GetBppForUncompressedRGB(format) * 8;
+      *alignedw = ALIGN(width, alignment);
+      *alignedh = height;
     }
+
     if (((usage & BufferUsage::VIDEO_ENCODER) || (usage & BufferUsage::VIDEO_DECODER) ||
          (usage & BufferUsage::COMPOSER_OVERLAY)) &&
         (format == HAL_PIXEL_FORMAT_RGBA_8888)) {
+
       int mmm_format = MMM_COLOR_FMT_RGBA8888;
       if (ubwc_enabled) {
         mmm_format = MMM_COLOR_FMT_RGBA8888_UBWC;
@@ -1254,10 +1267,16 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   }
 
   if (IsCompressedRGBFormat(format)) {
-    if (AdrenoMemInfo::GetInstance()) {
+    if (usage & ONLY_GPU_USAGE_MASK) {
+      if (AdrenoMemInfo::GetInstance() == nullptr) {
+        ALOGE("Unable to get adreno instance");
+        return -1;
+      }
       AdrenoMemInfo::GetInstance()->AlignCompressedRGB(width, height, format, alignedw, alignedh);
+    } else {
+      ALOGE("CompressedRGB format without GPU usage flags");
+      return -1;
     }
-    return 0;
   }
 
   int aligned_w = width;
@@ -1268,12 +1287,17 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   switch (format) {
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP:
-      if (AdrenoMemInfo::GetInstance() == nullptr) {
-        ALOGW("%s: AdrenoMemInfo instance pointing to a NULL value.", __FUNCTION__);
-        return -1;
+      if (usage & ONLY_GPU_USAGE_MASK) {
+        if (AdrenoMemInfo::GetInstance() == nullptr) {
+          ALOGE("Unable to get adreno instance");
+          return -1;
+        }
+        alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
+        aligned_w = ALIGN(width, alignment);
+      } else {
+        // Keep default alignment as per current GpuPixelAlignment
+        aligned_w = ALIGN(width, 64);
       }
-      alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
-      aligned_w = ALIGN(width, alignment);
       break;
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
       aligned_w = ALIGN(width, alignment);
@@ -1298,7 +1322,8 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
     case HAL_PIXEL_FORMAT_YV12:
       if (AdrenoAlignmentRequired(usage)) {
         if (AdrenoMemInfo::GetInstance() == nullptr) {
-          return 0;
+          ALOGE("Unable to get adreno instance");
+          return -1;
         }
         alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
         aligned_w = ALIGN(width, alignment);
@@ -1509,9 +1534,10 @@ bool CanUseAdrenoForSize(int buffer_type, uint64_t usage) {
     return false;
   }
 
-  if (!IsOnlyGpuCpuUsage(usage)) {
+  if (!IsOnlyGpuUsage(usage)) {
     return false;
   }
+
   return true;
 }
 
