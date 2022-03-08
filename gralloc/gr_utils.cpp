@@ -34,7 +34,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef QMAA
@@ -70,6 +70,7 @@
     (BufferUsage::COMPOSER_CLIENT_TARGET | BufferUsage::COMPOSER_OVERLAY |                        \
      BufferUsage::COMPOSER_CURSOR | BufferUsage::VIDEO_ENCODER | BufferUsage::CAMERA_OUTPUT |     \
      BufferUsage::CAMERA_INPUT | BufferUsage::VIDEO_DECODER | GRALLOC_USAGE_PRIVATE_CDSP |        \
+     BufferUsage::CPU_READ_MASK | BufferUsage::CPU_WRITE_MASK |                                   \
      GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY | GRALLOC_USAGE_PRIVATE_VIDEO_HW)
 
 #define DEBUG 0
