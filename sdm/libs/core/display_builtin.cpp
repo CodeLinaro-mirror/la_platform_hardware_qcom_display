@@ -128,13 +128,13 @@ DisplayError DisplayBuiltIn::Init() {
                    /*HWEvent::IDLE_NOTIFY, */
                    HWEvent::SHOW_BLANK_EVENT, HWEvent::THERMAL_LEVEL, HWEvent::IDLE_POWER_COLLAPSE,
                    HWEvent::PINGPONG_TIMEOUT, HWEvent::PANEL_DEAD, HWEvent::HW_RECOVERY,
-                   HWEvent::HISTOGRAM};
+                   HWEvent::HISTOGRAM,        HWEvent::LINEPTR};
   } else {
     event_list_ = {HWEvent::VSYNC,         HWEvent::EXIT,
                    HWEvent::IDLE_NOTIFY,   HWEvent::SHOW_BLANK_EVENT,
                    HWEvent::THERMAL_LEVEL, HWEvent::PINGPONG_TIMEOUT,
                    HWEvent::PANEL_DEAD,    HWEvent::HW_RECOVERY,
-                   HWEvent::HISTOGRAM};
+                   HWEvent::HISTOGRAM,     HWEvent::LINEPTR};
   }
 
   avr_prop_disabled_ = Debug::IsAVRDisabled();
@@ -635,6 +635,10 @@ void DisplayBuiltIn::HwRecovery(const HWRecoveryEvent sdm_event_code) {
 
 void DisplayBuiltIn::Histogram(int histogram_fd, uint32_t blob_id) {
   event_handler_->HistogramEvent(histogram_fd, blob_id);
+}
+
+void DisplayBuiltIn::LinePtr(int64_t timestamp) {
+  event_handler_->HandleEvent(kLinePtrEvent);
 }
 
 DisplayError DisplayBuiltIn::GetPanelBrightness(float *brightness) {

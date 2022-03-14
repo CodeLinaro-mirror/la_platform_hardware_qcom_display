@@ -1324,6 +1324,11 @@ DisplayError DisplayBase::SetVSyncState(bool enable) {
   return error;
 }
 
+DisplayError DisplayBase::SetLinePtrState(bool enable, uint32_t line_count) {
+  return hw_events_intf_->SetEventState(HWEvent::LINEPTR, enable,
+                                        reinterpret_cast<void *>(line_count));
+}
+
 DisplayError DisplayBase::ReconfigureDisplay() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;

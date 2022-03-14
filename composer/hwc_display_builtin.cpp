@@ -2048,11 +2048,20 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
 
   enable_cac_ = enable;
   if (!enable_cac_) {
+    // Disable lineptr events on this display.
+    display_intf_->SetLinePtrState(false, 0);
     // Reset layer stack of WB display to allow it to be safely destroyed.
     HWCDisplay::HWCLayerStack primary_layer_stack = {};
     wb_display->GetLayerStack(&primary_layer_stack);
     wb_display->ClearLayerStack();
     SetLayerStack(&primary_layer_stack);
+  } else {
+    // Enable lineptr events at every y_pixels/2 on this display.
+    uint32_t config_index = 0;
+    GetActiveDisplayConfig(&config_index);
+    DisplayConfigVariableInfo attr = {};
+    GetDisplayAttributesForConfig(INT(config_index), &attr);
+    display_intf_->SetLinePtrState(true, attr.y_pixels/2);
   }
 
   validated_ = false;

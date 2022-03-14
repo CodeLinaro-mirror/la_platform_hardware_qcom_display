@@ -184,6 +184,7 @@ enum DisplayEvent {
   kPanelDeadEvent,          // Event triggered by ESD.
   kDisplayPowerResetEvent,  // Event triggered by Hardware Recovery.
   kInvalidateDisplay,       // Event triggered to Invalidate display.
+  kLinePtrEvent,            // Event triggered by Line Counter.
 };
 
 /*! @brief This enum represents the secure events received by Display HAL. */
@@ -536,6 +537,16 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError SetVSyncState(bool enable) = 0;
+
+  /*! @brief Method to set Line Counter event state. Default event state is disabled.
+
+    @param[in] enable true to activate line counter event.
+
+    @param[in] line_count value in "y" line number at which to trigger event.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetLinePtrState(bool enable, uint32_t line_count) = 0;
 
   /*! @brief Method to set idle timeout value. Idle fallback is disabled with timeout value 0.
 

@@ -157,6 +157,7 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError SetVSyncState(bool enable);
+  virtual DisplayError SetLinePtrState(bool enable, uint32_t line_count);
   virtual DisplayError SetCAC(bool enable, float red, float green, float blue,
                               PanelOrientation orientation);
   virtual void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) {}

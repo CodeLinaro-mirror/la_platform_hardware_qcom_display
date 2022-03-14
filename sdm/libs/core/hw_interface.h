@@ -101,6 +101,7 @@ class HWEventHandler {
   virtual void PanelDead() = 0;
   virtual void HwRecovery(const HWRecoveryEvent sdm_event_code) = 0;
   virtual void Histogram(int histogram_fd, uint32_t blob_id) = 0;
+  virtual void LinePtr(int64_t timestamp) = 0;
 
  protected:
   virtual ~HWEventHandler() { }

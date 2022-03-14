@@ -134,6 +134,7 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(GetPanelMaxBrightness(uint32_t *))
   MAKE_NO_OP(GetRefreshRate(uint32_t *))
   MAKE_NO_OP(SetVSyncState(bool))
+  MAKE_NO_OP(SetLinePtrState(bool, uint32_t))
   MAKE_NO_OP(SetMixerResolution(uint32_t, uint32_t))
   MAKE_NO_OP(SetDetailEnhancerData(const DisplayDetailEnhancerData &))
   MAKE_NO_OP(GetDisplayPort(DisplayPort *))

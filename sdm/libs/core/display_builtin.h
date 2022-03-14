@@ -175,6 +175,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   virtual void PingPongTimeout();
   virtual void PanelDead();
   virtual void HwRecovery(const HWRecoveryEvent sdm_event_code);
+  virtual void LinePtr(int64_t timestamp);
   virtual DisplayError TeardownConcurrentWriteback(void);
   void Histogram(int histogram_fd, uint32_t blob_id) override;
 
