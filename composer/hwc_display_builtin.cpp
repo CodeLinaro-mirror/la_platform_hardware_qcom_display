@@ -65,21 +65,21 @@ LayerRect GetFrameRect(bool first, uint32_t x_pixels, uint32_t y_pixels) {
     if (first) {  // top
       rect.left = 0; rect.top = 0;
       rect.right = FLOAT(x_pixels); rect.bottom = FLOAT(y_pixels/2);
-      LogI(kTagNone, "FrameRect Top", rect);
+      Log(kTagClient, "FrameRect Top", rect);
     } else {  // bottom
       rect.left = 0; rect.top = FLOAT(y_pixels/2);
       rect.right = FLOAT(x_pixels); rect.bottom = FLOAT(y_pixels);
-      LogI(kTagNone, "FrameRect Bottom", rect);
+      Log(kTagClient, "FrameRect Bottom", rect);
     }
   } else if (orientation == kOrientationLandscape) {
     if (first) {  // Left
       rect.left = 0; rect.top = 0;
       rect.right = FLOAT(x_pixels/2); rect.bottom = FLOAT(y_pixels);
-      LogI(kTagNone, "FrameRect Left", rect);
+      Log(kTagClient, "FrameRect Left", rect);
     } else {  // right
       rect.left = FLOAT(x_pixels/2); rect.top = 0;
       rect.right = FLOAT(x_pixels); rect.bottom = FLOAT(y_pixels);
-      LogI(kTagNone, "FrameRect Right", rect);
+      Log(kTagClient, "FrameRect Right", rect);
     }
   }
   return rect;
@@ -238,7 +238,6 @@ void HWCDisplayBuiltIn::InitCacResources(uint32_t x_pixels, uint32_t y_pixels) {
 }
 
 int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels) {
-#if 1
   wb_buffer_info_ = {};
   wb_buffer_info_.buffer_config.width = x_pixels;
   wb_buffer_info_.buffer_config.height = y_pixels;
@@ -254,7 +253,6 @@ int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels) {
   wb_buffer_handle_ = static_cast<buffer_handle_t>(wb_buffer_info_.private_data);
   wb_pvt_handle_ = reinterpret_cast<private_handle_t *>(wb_buffer_info_.private_data);
   DLOGI("handle of o/p buff = %lu fd = %d", wb_pvt_handle_->id, wb_pvt_handle_->fd);
-#endif
   return 0;
 }
 
@@ -268,16 +266,16 @@ HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
   HWC2::Error err = HWC2::Error::None;
 
   DTRACE_SCOPED();
-  err = ValidateWB(true);  // true -> top/left
+
+  // true -> top/left
+  err = ValidateWB(true);
   if (err != HWC2::Error::None) {
     DLOGE("ValidateWB top/left failed");
     return err;
   }
-  DLOGI("ValidateWB top/left success!!");
   rel_fence = -1;
-  err = PresentWB(true, &rel_fence);  // true -> top/left
+  err = PresentWB(true, &rel_fence);
   if (err == HWC2::Error::None) {
-    DLOGI("Present top/left success!! rel_fence = %d", rel_fence);
     CloseFd(&rel_fence);
   } else {
     DLOGE("Present top/left failed");
@@ -290,11 +288,9 @@ HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
     DLOGE("ValidateWB bottom/right failed");
     return err;
   }
-  DLOGI("ValidateWB bottom/right success!!");
   rel_fence = -1;
   err = PresentWB(false, &rel_fence);
   if (err == HWC2::Error::None) {
-    DLOGI("Present bottom/right success!! rel_fence = %d", rel_fence);
     CloseFd(&rel_fence);
   } else {
     DLOGE("Present bottom/right failed");
@@ -307,17 +303,16 @@ HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
 HWC2::Error HWCDisplayBuiltIn::ValidateWB(bool first) {
   HWC2::Error err = HWC2::Error::None;
   HWCSession *hwc_session_ = HWCSession::GetInstance();
-  DLOGI(" +++ Validating %s", first ? "top/left" : "bottom/right");
   HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
                                      (hwc_session_->GetDisplay(hwc_session_->wb_display_));
   if (!wb_display) {
     DLOGE("Return no WB display for display = %lu", id_);
     return HWC2::Error::Unsupported;
   }
+
   DTRACE_SCOPED();
   uint32_t x_pixels, y_pixels = 0;
   GetMixerResolution(&x_pixels, &y_pixels);
-  DLOGI("Mixer resolution x = %d y = %d", x_pixels, y_pixels);
   LayerRect frame_split_rect = GetFrameRect(first, x_pixels, y_pixels);
   wb_display->SetFrameSplitRect(frame_split_rect);
   HWCLayerStack pri_layer_stack;
@@ -332,12 +327,11 @@ HWC2::Error HWCDisplayBuiltIn::ValidateWB(bool first) {
     DLOGE("Failed err = %d", err);
     return err;
   }
-  DLOGD("Done Validating %s", first ? "top/left":"bottom/right");
+
   return HWC2::Error::None;
 }
 
 HWC2::Error HWCDisplayBuiltIn::PresentWB(bool first, int32_t *out_wb_release) {
-  DLOGI(" +++ Presenting %s", first ? "top/left" : "bottom/right");
   HWC2::Error err = HWC2::Error::None;
   HWCSession *hwc_session_ = HWCSession::GetInstance();
 
@@ -355,8 +349,7 @@ HWC2::Error HWCDisplayBuiltIn::PresentWB(bool first, int32_t *out_wb_release) {
     return err;
   }
 
-//  DumpOutputWB(*out_wb_release);  // Uncomment to dump the WB o/p in CAC
-  DLOGI(" Done Presenting -%s", first ? "top/left" : "bottom/right");
+  // DumpOutputWB(*out_wb_release);  // Uncomment to dump the WB o/p in CAC
 
   return HWC2::Error::None;
 }
@@ -551,13 +544,10 @@ void HWCDisplayBuiltIn::BuildLayerStackFromWB() {
   layer_stack_.flags.config_changed = !validated_;
   // Append client target to the layer stack
   Layer *wb_client_target = new_client_target_->GetSDMLayer();
-//  Layer *pri_client_target = client_target_->GetSDMLayer();
   wb_client_target->composition = kCompositionGPUTarget;
   wb_client_target->flags.updating = IsLayerUpdating(client_target_);
-  new_client_target_->SetLayerDataspace(client_target_->GetLayerDataspace());
   // Derive client target dataspace based on the color mode - bug/115482728
-//  int32_t client_target_dataspace = GetDataspaceFromColorMode(GetCurrentColorMode());
-//  SetClientTargetDataSpace(client_target_dataspace);
+  new_client_target_->SetLayerDataspace(client_target_->GetLayerDataspace());
   layer_stack_.layers.push_back(wb_client_target);
 
   // Set split rect to LS - for completion
@@ -578,14 +568,12 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   auto status = HWC2::Error::None;
 
   DTRACE_SCOPED();
-  DLOGI("Validate +++ enable cac = %d", enable_cac_);
   if (enable_cac_) {
     status = ValidateAndCommitWB();
     if (status != HWC2::Error::None) {
       DLOGE("ValidateWB failed");
       return status;
     }
-    DLOGI("validateWB Success");
   }
 
   if (display_paused_ || (!is_primary_ && active_secure_sessions_[kSecureDisplay])) {

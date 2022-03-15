@@ -3420,7 +3420,8 @@ int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
   float green_offset = static_cast<float>(input_parcel->readDouble());
   float blue_offset = static_cast<float>(input_parcel->readDouble());
 
-  DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
+  DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset,
+        blue_offset);
   if (enable == true) {
     error = CreateVirtualDisplayForCAC(display);
     if (error) {
