@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * Not a Contribution.
- *
  * Copyright (c) 2014-2019,2021 The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
@@ -18,6 +15,40 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #ifndef __HWC_SESSION_H__
@@ -109,6 +140,19 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   enum HotPlugEvent {
     kHotPlugNone,
     kHotPlugEvent,
+  };
+
+  enum DisplayRebootStrategy {
+    kRebootStrategyDefault,
+    kRebootStrategyOnceDSI = kRebootStrategyDefault,
+    kRebootStrategyAlwaysDSI,
+  };
+
+  enum ComposerSetupMode {
+    kCompSetupModeDefault,
+    kCompSetupModePrimary = kCompSetupModeDefault,
+    kCompSetupModeNonPrimary,
+    kCompSetupModeNoDisplay,
   };
 
   HWCSession();
@@ -371,6 +415,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   bool HasHDRSupport(HWCDisplay *hwc_display);
   void PostInit();
 
+  int SetBestNullDisplayResolution();
+  bool IsFrameworkRebootRequired(bool is_primary);
+
   // Uevent handler
   virtual void UEventHandler(const char *uevent_data, int length);
 
@@ -515,13 +562,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = nullptr;
   HWCSocketHandler socket_handler_;
-  bool null_display_active_ = false;
   bool is_composer_up_ = false;
   std::mutex mutex_lum_;
   int hpd_bpp_ = 0;
   int hpd_pattern_ = 0;
   static bool pending_power_mode_[HWCCallbacks::kNumDisplays];
-  static int null_display_mode_;
   HotPlugEvent pending_hotplug_event_ = kHotPlugNone;
   hwc2_display_t virtual_id_ = HWCCallbacks::kNumDisplays;
   Locker pluggable_handler_lock_;
@@ -543,6 +588,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   bool secure_session_active_ = false;
   bool pluggable_is_primary_ = false;
   bool pluggable_primary_connected_ = false;
+  DisplayConfigVariableInfo primary_config_ = {};
+  int composer_setup_mode_ = kCompSetupModeDefault;
+  int display_reboot_strategy_ = kRebootStrategyDefault;
+  bool null_display_active_ = false;
+  static int null_display_mode_;
 };
 }  // namespace sdm
 
