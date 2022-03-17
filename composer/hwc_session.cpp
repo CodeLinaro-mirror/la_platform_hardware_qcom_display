@@ -3377,7 +3377,7 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
       }
     }
 
-    if (pluggable_is_primary_) {
+    if (pluggable_is_primary_ && info.is_primary && !pluggable_primary_connected_) {
       DisplayMapInfo map_info = map_info_primary_;
       Display client_id = map_info.client_id;
       {
