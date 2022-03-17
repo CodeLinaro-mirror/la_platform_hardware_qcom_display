@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
+ * Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -45,6 +45,7 @@ class HWCDisplayVirtualDPU : public HWCDisplayVirtual {
   virtual HWC2::Error Present(int32_t *out_retire_fence);
   virtual HWC2::Error SetOutputBuffer(buffer_handle_t buf, int32_t release_fence);
   virtual HWC2::Error SetPanelLuminanceAttributes(float min_lum, float max_lum);
+  virtual HWC2::Error SetFrameRate(uint32_t fps);
 
  private:
   int SetConfig(uint32_t width, uint32_t height);

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved
+ * Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -188,6 +188,34 @@ HWC2::Error HWCDisplayVirtualDPU::SetPanelLuminanceAttributes(float min_lum, flo
   if (err != kErrorNone) {
     return HWC2::Error::BadParameter;
   }
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayVirtualDPU::SetFrameRate(uint32_t fps) {
+  DisplayConfigVariableInfo variable_info = {};
+  DisplayConfigVariableInfo curr_variable_info = {};
+
+  if (enable_wb_cac_) {
+    uint32_t config_index = 0;
+
+    GetActiveConfig(&config_index);
+    GetDisplayAttributesForConfig(INT(config_index), &curr_variable_info);
+    variable_info.x_pixels = curr_variable_info.x_pixels;
+    variable_info.y_pixels = curr_variable_info.y_pixels;
+    variable_info.fps = fps;
+  }
+
+  if (curr_variable_info.fps != variable_info.fps) {
+    DisplayError err = display_intf_->SetActiveConfig(&variable_info);
+    if (err != kErrorNone) {
+      DLOGE("SetActiveConfig on display %" PRIu64 " %d-%d failed to update fps = %d", id_, sdm_id_,
+            type_, fps);
+      return HWC2::Error::Unsupported;
+    }
+    DLOGI_IF(kTagClient, "SetActiveConfig on display %" PRIu64 " %d-%d updated WB display fps = %d",
+             id_, sdm_id_, type_, variable_info.fps);
+  }
+
   return HWC2::Error::None;
 }
 

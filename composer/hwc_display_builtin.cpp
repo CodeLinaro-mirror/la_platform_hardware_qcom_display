@@ -655,6 +655,9 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
     }
     // On success, set current refresh rate to new refresh rate.
     current_refresh_rate_ = refresh_rate;
+    if (enable_cac_) {
+      UpdateFramerateForCAC(current_refresh_rate_);
+    }
   }
 
   if (layer_set_.empty()) {
@@ -1196,6 +1199,7 @@ int HWCDisplayBuiltIn::Perform(uint32_t operation, ...) {
   }
   va_end(args);
   validated_ = false;
+  cac_commit_done_ = false;
 
   return 0;
 }
@@ -1991,6 +1995,12 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
     return -1;
   }
 
+  auto err = wb_display->SetFrameRate(current_refresh_rate_);
+  if (err != HWC2::Error::None) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d, fps = %d, errno = %d", id_, sdm_id_, type_,
+          current_refresh_rate_, err);
+  }
+
   int32_t error = wb_display->SetCAC(enable, red, green, blue, GetPanelOrientation());
   if (error != kErrorNone) {
     DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f, "
@@ -2016,6 +2026,25 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   cac_commit_done_ = false;
 
   return 0;
+}
+
+void HWCDisplayBuiltIn::UpdateFramerateForCAC(uint32_t fps) {
+  HWCSession *hwc_session_ = HWCSession::GetInstance();
+  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                                     (hwc_session_->GetDisplay(hwc_session_->wb_display_));
+  if (!wb_display) {
+    DLOGE("Return no WB display for display = %lu", id_);
+    return;
+  }
+
+  auto error = wb_display->SetFrameRate(fps);
+  if (error != HWC2::Error::None) {
+    DLOGE("Failed to set fps for display %" PRIu64 " %d-%d, fps = %d, errno = %d", id_, sdm_id_,
+          type_, fps, error);
+    return;
+  }
+
+  return;
 }
 
 }  // namespace sdm

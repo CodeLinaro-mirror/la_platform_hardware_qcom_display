@@ -152,6 +152,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual bool HasReadBackBufferSupport();
   virtual int32_t SetCAC(bool enable, float red, float green, float blue,
                          PanelOrientation orientation);
+  virtual void UpdateFramerateForCAC(uint32_t fps);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
