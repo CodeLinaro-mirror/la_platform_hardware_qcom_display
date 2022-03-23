@@ -96,6 +96,7 @@ class Strategy {
   bool CanSkipValidate(bool *needs_buffer_swap);
   void GenerateROI(HWLayersInfo *hw_layers_info, const PUConstraints &pu_constraints);
   DisplayError SwapBuffers();
+  DisplayError SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
 
  private:
   void GenerateROI();

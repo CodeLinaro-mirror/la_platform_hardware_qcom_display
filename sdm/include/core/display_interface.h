@@ -238,6 +238,20 @@ struct PanelOrientation {
   bool flip_vertical = false;
 };
 
+/*! @brief This structure defines a IPD(Inter Pupillary Distance) config that contains src and dst
+  rects per-color-layer to set IPD config.
+
+  @sa DisplayInterface::SetCACEyeConfig
+*/
+struct CACEyeConfig {
+  LayerRect red_channel_src;
+  LayerRect red_channel_dst;
+  LayerRect green_channel_src;
+  LayerRect green_channel_dst;
+  LayerRect blue_channel_src;
+  LayerRect blue_channel_dst;
+};
+
 /*! @brief This structure defines configuration for fixed properties of a display device.
 
   @sa DisplayInterface::GetConfig
@@ -1010,6 +1024,15 @@ class DisplayInterface {
   */
   virtual DisplayError SetCAC(bool enable, float red, float green, float blue,
                               PanelOrientation orientation) = 0;
+
+  /*! @brief Method to set src and dst rects per color layer of CAC to set CACEyeConfig
+
+    @param[in] left and right eye parameters
+
+    @return \link void \endlink
+  */
+  virtual DisplayError SetCACEyeConfig(const CACEyeConfig &left,
+                                       const CACEyeConfig &right) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

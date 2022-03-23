@@ -448,6 +448,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual bool HasReadBackBufferSupport() { return false; }
   virtual int32_t SetCAC(bool enable, float red, float green, float blue,
                          PanelOrientation orientation);
+  virtual int32_t SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
   bool IsCACEnabled() { return enable_cac_; }
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }

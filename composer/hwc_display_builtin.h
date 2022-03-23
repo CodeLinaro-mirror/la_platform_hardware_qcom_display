@@ -191,6 +191,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   static void* WBKickOffThread(void *context);
   void* PerformWBKickOff();
   virtual bool IsCacCommitDone();
+  virtual int32_t SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,

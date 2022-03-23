@@ -2198,4 +2198,15 @@ DisplayError DisplayBase::SetCAC(bool enable, float red, float green, float blue
   return kErrorNone;
 }
 
+DisplayError DisplayBase::SetCACEyeConfig(const CACEyeConfig &left,
+                                          const CACEyeConfig &right) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError error = comp_manager_->SetCACEyeConfig(display_comp_ctx_, left, right);
+  if (error) {
+    return kErrorNotSupported;
+  }
+
+  return kErrorNone;
+}
+
 }  // namespace sdm

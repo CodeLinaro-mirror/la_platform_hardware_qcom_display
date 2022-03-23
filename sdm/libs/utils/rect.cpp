@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -348,6 +349,16 @@ DisplayError GetScaleFactor(const LayerRect &crop, const LayerRect &dst,
   *scale_y = crop_height / dst_height;
 
   return kErrorNone;
+}
+
+bool IsScaled(const LayerRect &src, const LayerRect &dst) {
+  int src_width = INT(src.right - src.left);
+  int src_height = INT(src.bottom - src.top);
+
+  int dst_width = INT(dst.right - dst.left);
+  int dst_height = INT(dst.bottom - dst.top);
+
+  return ((dst_width != src_width) || (dst_height != src_height));
 }
 
 }  // namespace sdm

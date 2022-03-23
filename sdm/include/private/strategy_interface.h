@@ -96,6 +96,8 @@ class StrategyInterface {
   virtual DisplayError SwapBuffers() = 0;
   virtual DisplayError SetCAC(bool enable, float red, float green, float blue,
                               PanelOrientation orientation) = 0;
+  virtual DisplayError SetCACEyeConfig(const CACEyeConfig &left,
+                                       const CACEyeConfig &right) = 0;
 
   virtual ~StrategyInterface() { }
 };

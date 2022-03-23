@@ -237,6 +237,10 @@ DisplayError Strategy::SetCAC(bool enable, float red, float green, float blue,
   return strategy_intf_->SetCAC(enable, red, green, blue, orientation);
 }
 
+DisplayError Strategy::SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right) {
+  return strategy_intf_->SetCACEyeConfig(left, right);
+}
+
 DisplayError Strategy::Reconfigure(const HWPanelInfo &hw_panel_info,
                          const HWDisplayAttributes &display_attributes,
                          const HWMixerAttributes &mixer_attributes,

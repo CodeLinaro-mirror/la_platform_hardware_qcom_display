@@ -2164,4 +2164,35 @@ bool HWCDisplayBuiltIn::IsCacCommitDone() {
   return cac_commit_done_;
 }
 
+int32_t HWCDisplayBuiltIn::SetCACEyeConfig(const CACEyeConfig &left,
+                                           const CACEyeConfig &right) {
+  int32_t error = HWCDisplay::SetCACEyeConfig(left, right);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set IPD params for display %" PRIu64 " %d-%d, errno = %d", id_, sdm_id_,
+          type_, error);
+    return -1;
+  }
+
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
+  if (!wb_display) {
+    DLOGE("Return no WB display for display = %lu", id_);
+    return -1;
+  }
+
+  error = wb_display->SetCACEyeConfig(left, right);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set IPD params for display %" PRIu64 " %d-%d, errno = %d", id_, sdm_id_,
+          type_, error);
+    return -1;
+  }
+
+  validated_ = false;
+  cac_commit_done_ = false;
+  callbacks_->Refresh(id_);
+
+  return 0;
+}
+
 }  // namespace sdm

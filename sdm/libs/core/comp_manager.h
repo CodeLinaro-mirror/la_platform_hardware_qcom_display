@@ -128,6 +128,8 @@ class CompManager {
   bool CheckResourceState(Handle display_ctx);
   bool IsRotatorSupportedFormat(LayerBufferFormat format);
   DisplayError SwapBuffers(Handle display_ctx);
+  DisplayError SetCACEyeConfig(Handle display_ctx, const CACEyeConfig &left,
+                               const CACEyeConfig &right);
 
  private:
   static const int kMaxThermalLevel = 3;

@@ -403,6 +403,13 @@ DisplayError CompManager::SetCAC(Handle display_ctx, bool enable, float red, flo
   return display_comp_ctx->strategy->SetCAC(enable, red, green, blue, orientation);
 }
 
+DisplayError CompManager::SetCACEyeConfig(Handle display_ctx, const CACEyeConfig &left,
+                                          const CACEyeConfig &right) {
+  DisplayCompositionContext *display_comp_ctx =
+                             reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+  return display_comp_ctx->strategy->SetCACEyeConfig(left, right);
+}
+
 DisplayError CompManager::PostPrepare(Handle display_ctx, HWLayers *hw_layers) {
   SCOPE_LOCK(locker_);
   DisplayCompositionContext *display_comp_ctx =

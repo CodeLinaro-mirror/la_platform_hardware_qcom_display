@@ -2664,4 +2664,15 @@ int32_t HWCDisplay::SetCAC(bool enable, float red, float green, float blue,
   return 0;
 }
 
+int32_t HWCDisplay::SetCACEyeConfig(const CACEyeConfig &left,
+                                    const CACEyeConfig &right) {
+  DisplayError error = display_intf_->SetCACEyeConfig(left, right);
+  if (error != kErrorNone) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d", id_, sdm_id_, type_);
+    return -1;
+  }
+
+  return 0;
+}
+
 }  // namespace sdm

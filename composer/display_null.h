@@ -158,6 +158,7 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(colorSamplingOff());
   MAKE_NO_OP(SetDisplayElapseTime(uint64_t))
   MAKE_NO_OP(SetCAC(bool, float, float, float, PanelOrientation))
+  MAKE_NO_OP(SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right))
 
  protected:
   DisplayConfigVariableInfo default_variable_config_ = {};
