@@ -65,6 +65,7 @@
 #include <core/buffer_allocator.h>
 #include <utils/debug.h>
 #include <utils/constants.h>
+#include <utils/rect.h>
 #include <sync/sync.h>
 #include <vector>
 #include <string>
@@ -1296,6 +1297,77 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
       return error;
+    }
+  }
+
+  return error;
+}
+
+static void UpdateCACColorChannelRect(LayerRect &config_rect,
+                                      const IDisplayConfig::CacChannelRect &ipd_channel_rect) {
+  config_rect.left = ipd_channel_rect.left;
+  config_rect.top = ipd_channel_rect.top;
+  config_rect.right = ipd_channel_rect.right;
+  config_rect.bottom = ipd_channel_rect.bottom;
+}
+
+static int32_t UpdateCACEyeConfig(CACEyeConfig *config,
+                                  const IDisplayConfig::CacEyeConfig &ipd_config) {
+  UpdateCACColorChannelRect(config->red_channel_src, ipd_config.red_channel_src);
+  UpdateCACColorChannelRect(config->red_channel_dst, ipd_config.red_channel_dst);
+  UpdateCACColorChannelRect(config->green_channel_src, ipd_config.green_channel_src);
+  UpdateCACColorChannelRect(config->green_channel_dst, ipd_config.green_channel_dst);
+  UpdateCACColorChannelRect(config->blue_channel_src, ipd_config.blue_channel_src);
+  UpdateCACColorChannelRect(config->blue_channel_dst, ipd_config.blue_channel_dst);
+
+  if (IsScaled(config->green_channel_src, config->green_channel_dst)) {
+    DLOGE("Scaling not allowed on green channel");
+    return -1;
+  }
+
+  return 0;
+}
+
+Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
+                                            const IDisplayConfig::CacEyeConfig &left_config,
+                                            const IDisplayConfig::CacEyeConfig &right_config) {
+  int disp_idx = GetDisplayIndex(disp_id);
+  int32_t error = -EINVAL;
+  CACEyeConfig left_eye = {};
+  CACEyeConfig right_eye = {};
+
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    DLOGE("Invalid display = %d", disp_id);
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (!hwc_display_[disp_idx]) {
+      DLOGW("Display is not connected");
+      error = -ENODEV;
+      return error;
+    }
+  }
+
+  error = UpdateCACEyeConfig(&left_eye, left_config);
+  if (error) {
+    DLOGE("Failed to set CAC IPD left eye config err = %d, desc = %s",  error, strerror(error));
+    return error;
+  }
+  error = UpdateCACEyeConfig(&right_eye, right_config);
+  if (error) {
+    DLOGE("Failed to set CAC IPD right eye config err = %d, desc = %s",  error, strerror(error));
+    return error;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_display_[disp_idx]) {
+      error = hwc_display_[disp_idx]->SetCACEyeConfig(left_eye, right_eye);
+      if (error) {
+        DLOGE("Failed to set CAC IPD config err = %d, desc = %s",  error, strerror(error));
+      }
     }
   }
 

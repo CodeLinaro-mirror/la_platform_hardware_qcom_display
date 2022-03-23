@@ -62,6 +62,7 @@ LOCAL_SHARED_LIBRARIES        += vendor.display.config@1.15
 LOCAL_SHARED_LIBRARIES        += vendor.display.config@1.16
 LOCAL_SHARED_LIBRARIES        += vendor.display.config@1.17
 LOCAL_SHARED_LIBRARIES        += vendor.display.config@1.18
+LOCAL_SHARED_LIBRARIES        += vendor.display.config@1.19
 endif
 
 LOCAL_SRC_FILES               := QtiComposer.cpp QtiComposerClient.cpp service.cpp \
