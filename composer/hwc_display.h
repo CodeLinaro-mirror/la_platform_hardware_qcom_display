@@ -451,6 +451,7 @@ class HWCDisplay : public DisplayEventHandler {
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
   bool IsCACEnabled() { return enable_cac_; }
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }
+  virtual bool IsCacCommitDone() { return false; }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -552,6 +553,7 @@ class HWCDisplay : public DisplayEventHandler {
   uint32_t geometry_changes_ = GeometryChanges::kNone;
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
   LayerRect frame_split_rect_ = {};
+  bool vsync_enabled_ = false;    // TODO(CAC_Skip_Hidl): revisit vsync always on
 
  private:
   void DumpInputBuffers(void);

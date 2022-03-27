@@ -190,6 +190,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual void HandleLinePtrEvent();
   static void* WBKickOffThread(void *context);
   void* PerformWBKickOff();
+  virtual bool IsCacCommitDone();
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,

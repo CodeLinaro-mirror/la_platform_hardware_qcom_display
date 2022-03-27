@@ -245,6 +245,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t SetDisplayBrightness(hwc2_display_t display, float brightness);
   void WaitForResources(bool wait_for_resources, hwc2_display_t active_builtin_id,
                         hwc2_display_t display_id);
+  bool IsWBCacInProgress(hwc2_display_t display);
 
   // newly added
   int32_t GetDisplayType(hwc2_display_t display, int32_t *out_type);

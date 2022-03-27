@@ -19,7 +19,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -1305,7 +1305,6 @@ Error QtiComposerClient::CommandReader::validateDisplay(Display display,
                                        std::vector<uint32_t>& requestMasks) {
   uint32_t types_count = 0;
   uint32_t reqs_count = 0;
-
   auto err = mClient.hwc_session_->ValidateDisplay(mDisplay, &types_count, &reqs_count);
   if (err != HWC2_ERROR_NONE && err != HWC2_ERROR_HAS_CHANGES) {
     return static_cast<Error>(err);
@@ -1397,6 +1396,9 @@ bool QtiComposerClient::CommandReader::parseAcceptDisplayChanges(uint16_t length
 Error QtiComposerClient::CommandReader::presentDisplay(Display display, int32_t& presentFence,
                                                        std::vector<Layer>& layers,
                                                        std::vector<int32_t>& releaseFences) {
+  if (mClient.hwc_session_->IsWBCacInProgress(display)) {
+    return Error::NONE;
+  }
   int32_t err = mClient.hwc_session_->PresentDisplay(display, &presentFence);
   if (err != HWC2_ERROR_NONE) {
     return static_cast<Error>(err);

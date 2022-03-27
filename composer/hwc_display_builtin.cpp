@@ -893,6 +893,11 @@ HWC2::Error HWCDisplayBuiltIn::SetPowerMode(HWC2::PowerMode mode, bool teardown)
     SetBwLimitHint(false);
   }
 
+  if (enable_cac_ && cac_commit_done_) {
+    DLOGI("Resetting Commit done.... mode = %d", mode);
+    cac_commit_done_ = false;
+  }
+
   return HWC2::Error::None;
 }
 
@@ -900,6 +905,7 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
   auto status = HWC2::Error::None;
 
   DTRACE_SCOPED();
+
   if (cac_commit_done_) {
     // No need to call present on primary for every frame
     return status;
@@ -2083,6 +2089,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   validated_ = false;
   frame_split_rect_ = {};  // clear the frame_split_rect_
   cac_commit_done_ = false;
+  callbacks_->Refresh(id_);
 
   return 0;
 }
@@ -2117,6 +2124,12 @@ void HWCDisplayBuiltIn::HandleLinePtrEvent() {
   if (!enable_cac_) {
     return;
   }
+
+  if (!cac_commit_done_) {
+    callbacks_->Refresh(id_);
+    return;
+  }
+
   pthread_mutex_lock(&wb_lock_);
   pthread_cond_signal(&wb_cv_);
   pthread_mutex_unlock(&wb_lock_);
@@ -2132,10 +2145,23 @@ void *HWCDisplayBuiltIn::PerformWBKickOff() {
     }
     DTRACE_SCOPED();
     SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
-    ValidateAndCommitWB();
+    if (cac_commit_done_) {
+      ValidateAndCommitWB();
+    }
     pthread_mutex_unlock(&wb_lock_);
   }
   return nullptr;
+}
+
+bool HWCDisplayBuiltIn::IsCacCommitDone() {
+  if (cac_commit_done_) {
+    for (auto hwc_layer : layer_set_) {
+      auto layer = hwc_layer->GetSDMLayer();
+      layer->composition = kCompositionSDE;
+    }
+    DLOGI("cac commit done - Marking layers for GPU Bypass");
+  }
+  return cac_commit_done_;
 }
 
 }  // namespace sdm

@@ -945,7 +945,9 @@ HWC2::Error HWCDisplay::SetVsyncEnabled(HWC2::Vsync enabled) {
   else
     return HWC2::Error::BadParameter;
 
-  error = display_intf_->SetVSyncState(state);
+  if (state) {  // TODO(CAC_Skip_Hidl): Only enable vsync, revisit
+    error = display_intf_->SetVSyncState(state);
+  }
 
   if (error != kErrorNone) {
     if (error == kErrorShutDown) {
@@ -956,6 +958,7 @@ HWC2::Error HWCDisplay::SetVsyncEnabled(HWC2::Vsync enabled) {
     return HWC2::Error::BadDisplay;
   }
 
+  vsync_enabled_ = state;  // TODO(CAC_Skip_Hidl): revisit Vsync always on
   return HWC2::Error::None;
 }
 
@@ -1338,7 +1341,9 @@ HWC2::PowerMode HWCDisplay::GetCurrentPowerMode() {
 }
 
 DisplayError HWCDisplay::VSync(const DisplayEventVSync &vsync) {
-  callbacks_->Vsync(id_, vsync.timestamp);
+  if (vsync_enabled_) {  // TODO(CAC_Skip_Hidl): revisit vsync always on
+    callbacks_->Vsync(id_, vsync.timestamp);
+  }
   return kErrorNone;
 }
 

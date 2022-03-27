@@ -592,7 +592,21 @@ uint32_t HWCSession::GetMaxVirtualDisplayCount() {
 }
 
 int32_t HWCSession::GetActiveConfig(hwc2_display_t display, hwc2_config_t *out_config) {
-  return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, out_config);
+  DTRACE_SCOPED();
+  if (IsWBCacInProgress(display)) {
+    // when WB CAC is in progress, GetActiveConfig unlocked
+    if (display >= HWCCallbacks::kNumDisplays) {
+      return HWC2_ERROR_BAD_DISPLAY;
+    }
+    auto status = HWC2::Error::BadDisplay;
+    if (hwc_display_[display]) {
+      auto hwc_display = hwc_display_[display];
+      status = hwc_display->GetActiveConfig(out_config);
+    }
+    return INT32(status);
+  } else {
+    return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, out_config);
+  }
 }
 
 int32_t HWCSession::GetChangedCompositionTypes(hwc2_display_t display, uint32_t *out_num_elements,
@@ -786,7 +800,6 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, int32_t *out_retire_f
   }
 
   HandleSecureSession();
-
 
   hwc2_display_t target_display = display;
 
@@ -1163,6 +1176,13 @@ int32_t HWCSession::SetVsyncEnabled(hwc2_display_t display, int32_t int_enabled)
     callbacks_.UpdateVsyncSource(display);
   }
 
+  if (IsWBCacInProgress(display)) {
+    // when WB CAC is in progress, Vsync is always enabled
+    if (display >= HWCCallbacks::kNumDisplays) {
+      return HWC2_ERROR_BAD_DISPLAY;
+    }
+     return INT32(0);
+  }
   return CallDisplayFunction(display, &HWCDisplay::SetVsyncEnabled, enabled);
 }
 
@@ -3567,4 +3587,20 @@ int32_t HWCSession::CreateVirtualDisplayForCAC(int disp_idx) {
 
   return error;
 }
+
+// Used to check WBCacInProgress - returns true when WB Pipeline is setup and Primary
+// Commit has been issued once
+bool HWCSession::IsWBCacInProgress(hwc2_display_t display) {
+  if (display >= HWCCallbacks::kNumDisplays) {
+    return HWC2_ERROR_BAD_DISPLAY;
+  }
+
+  bool in_progress = false;
+  if (hwc_display_[display]) {
+    in_progress  = hwc_display_[display]->IsCacCommitDone();
+  }
+
+  return in_progress;
+}
+
 }  // namespace sdm
