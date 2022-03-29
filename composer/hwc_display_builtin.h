@@ -187,6 +187,9 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual int32_t SetCAC(bool enable, float red, float green, float blue,
                          PanelOrientation orientation);
   virtual void UpdateFramerateForCAC(uint32_t fps);
+  virtual void HandleLinePtrEvent();
+  static void* WBKickOffThread(void *context);
+  void* PerformWBKickOff();
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
@@ -280,6 +283,11 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   std::map<hwc2_layer_t, HWCLayer *> sec_layer_map_;
   std::multiset<HWCLayer *, SortLayersByZ> sec_layer_set_;
   bool cac_commit_done_ = false;
+
+  pthread_cond_t wb_cv_ = {};
+  pthread_mutex_t wb_lock_ = {};
+  bool exit_wb_thread_ = false;
+  pthread_t wb_kickoff_thread_{};
 };
 
 }  // namespace sdm

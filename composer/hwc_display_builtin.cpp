@@ -70,6 +70,7 @@
 #include <utils/rect.h>
 #include <stdarg.h>
 #include <sys/mman.h>
+#include <pthread.h>
 
 #include <map>
 #include <string>
@@ -228,6 +229,10 @@ int HWCDisplayBuiltIn::Init() {
 
   InitCacResources(attr.x_pixels, attr.y_pixels);
 
+  if (pthread_create(&wb_kickoff_thread_, NULL, &HWCDisplayBuiltIn::WBKickOffThread, this)) {
+    DLOGI("Failed to start %s, error = %s", "WB kickoff thread", strerror(errno));
+  }
+
   DLOGI("active_refresh_rate: %d", active_refresh_rate_);
 
   return status;
@@ -291,7 +296,10 @@ int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels) {
 }
 
 HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
-  // Sequence is:
+  if (!enable_cac_) {
+    return HWC2::Error::None;
+  }
+  // Sequence is for 0 deg panel.
   // Validate top/left
   // commit top/left
   // Validate bottom/right
@@ -1859,6 +1867,14 @@ int HWCDisplayBuiltIn::Deinit() {
   // free the WB buffer
   buffer_allocator_->FreeBuffer(&wb_buffer_info_);
 
+  // stop the WB kickoff thread
+  pthread_mutex_lock(&wb_lock_);
+  exit_wb_thread_ = true;
+  pthread_cond_signal(&wb_cv_);
+  pthread_mutex_unlock(&wb_lock_);
+
+  pthread_join(wb_kickoff_thread_, NULL);
+
   delete wb_op_layer_;
   delete new_client_target_;
 
@@ -2088,6 +2104,38 @@ void HWCDisplayBuiltIn::UpdateFramerateForCAC(uint32_t fps) {
   }
 
   return;
+}
+
+void *HWCDisplayBuiltIn::WBKickOffThread(void *context) {
+  if (context) {
+    return reinterpret_cast<HWCDisplayBuiltIn *>(context)->PerformWBKickOff();
+  }
+  return NULL;
+}
+
+void HWCDisplayBuiltIn::HandleLinePtrEvent() {
+  if (!enable_cac_) {
+    return;
+  }
+  pthread_mutex_lock(&wb_lock_);
+  pthread_cond_signal(&wb_cv_);
+  pthread_mutex_unlock(&wb_lock_);
+}
+
+void *HWCDisplayBuiltIn::PerformWBKickOff() {
+  while (1) {
+    pthread_mutex_lock(&wb_lock_);
+    pthread_cond_wait(&wb_cv_, &wb_lock_);
+    if (exit_wb_thread_) {
+      pthread_mutex_unlock(&wb_lock_);
+      return nullptr;
+    }
+    DTRACE_SCOPED();
+    SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
+    ValidateAndCommitWB();
+    pthread_mutex_unlock(&wb_lock_);
+  }
+  return nullptr;
 }
 
 }  // namespace sdm

@@ -1397,7 +1397,8 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
     } break;
     case kLinePtrEvent: {
       // Handle line-ptr event.
-      DLOGI("Line ptr event on display %d-%d", sdm_id_, type_);
+      HandleLinePtrEvent();
+      DLOGI_IF(kTagDisplay, "Line ptr event on display %d-%d", sdm_id_, type_);
     } break;
     default:
       DLOGW("Unknown event: %d", event);
