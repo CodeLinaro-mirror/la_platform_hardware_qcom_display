@@ -2835,12 +2835,9 @@ int HWCSession::HandlePluggableDisplays(bool delay_hotplug) {
       case -EAGAIN:
       case -ENODEV:
         // Errors like device removal or deferral for which we want to try another hotplug handling.
-        if (pending_hotplug_event_ != kHotPlugEvent) {
-               pending_hotplug_event_ = kHotPlugEvent;
-               status = 0;
-               break;
-        }
-        [[fallthrough]];
+        pending_hotplug_event_ = kHotPlugEvent;
+        status = 0;
+        break;
       default:
         // Real errors we want to flag and stop hotplug handling.
         pending_hotplug_event_ = kHotPlugNone;
