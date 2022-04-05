@@ -242,7 +242,7 @@ int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels) {
   wb_buffer_info_ = {};
   wb_buffer_info_.buffer_config.width = x_pixels;
   wb_buffer_info_.buffer_config.height = y_pixels;
-  wb_buffer_info_.buffer_config.format = sdm::kFormatRGBA8888;
+  wb_buffer_info_.buffer_config.format = sdm::kFormatRGB888;
   wb_buffer_info_.buffer_config.cache = true;
 
   DLOGD("DC-WFD: ALLOCBUFFER: allocating Virtual Display outbuffer");

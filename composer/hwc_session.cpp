@@ -3486,8 +3486,8 @@ int32_t HWCSession::CreateVirtualDisplayForCAC(int disp_idx) {
   uint32_t config_index = 0;
   uint32_t width = 0, height = 0;
   int32_t error = -EINVAL;
-  // Cannot use compressed format for half writeout in CAC
-  int32_t format = sdm::kFormatRGBA8888;
+  // Use RGB888 format for WB CAC
+  int32_t format = sdm::kFormatRGB888;
 
   auto err = hwc_display_[disp_idx]->GetActiveConfig(&config_index);
   if (err != HWC2::Error::None) {
