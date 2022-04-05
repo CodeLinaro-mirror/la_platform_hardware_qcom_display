@@ -1,6 +1,6 @@
 /*
 Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
-Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -159,6 +159,8 @@ DisplayError HWVirtualDRM::Commit(HWLayers *hw_layers) {
   ConfigureWbConnectorSecureMode(output_buffer->flags.secure);
   if (enable_cac_) {
     SetFrameTrigger(kFrameTriggerPostedStart);
+  } else {
+    SetFrameTrigger(kFrameTriggerDefault);
   }
   err = HWDeviceDRM::AtomicCommit(hw_layers);
   if (err != kErrorNone) {
@@ -199,6 +201,8 @@ DisplayError HWVirtualDRM::Validate(HWLayers *hw_layers) {
   ConfigureWbConnectorSecureMode(output_buffer->flags.secure);
   if (enable_cac_) {
     SetFrameTrigger(kFrameTriggerPostedStart);
+  } else {
+    SetFrameTrigger(kFrameTriggerDefault);
   }
 
   return HWDeviceDRM::Validate(hw_layers);
