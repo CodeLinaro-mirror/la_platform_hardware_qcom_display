@@ -218,14 +218,7 @@ else
     #Properties that should not be set in QMAA are enabled here.
     PRODUCT_PROPERTY_OVERRIDES += \
         vendor.display.enable_early_wakeup=1
-    PRODUCT_SOONG_NAMESPACES += hardware/qcom/display
 endif
-
-#Modules that will be added in QMAA/Non-QMAA paths
-PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/gralloc
-PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/init
-PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/libdebug
-
 
 QMAA_ENABLED_HAL_MODULES += display
 
