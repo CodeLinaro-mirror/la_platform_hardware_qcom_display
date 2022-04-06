@@ -58,6 +58,9 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifndef SDM_VIRTUAL_DRIVER
+#include <cutils/properties.h>
+#endif
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/rect.h>
@@ -294,6 +297,7 @@ DisplayError DisplayBuiltIn::PrePrepare(LayerStack *layer_stack) {
     }
   }
   error = ChangeFps();
+  lower_fps_ = disp_layer_stack_.info.lower_fps;
 
   return kErrorNotValidated;
 }
@@ -389,7 +393,7 @@ void DisplayBuiltIn::UpdateQsyncMode() {
   }
 
   QSyncMode mode = kQSyncModeNone;
-  if (disp_layer_stack_.info.lower_fps && enable_qsync_idle_) {
+  if (lower_fps_ && enable_qsync_idle_) {
     // Override to continuous mode upon idling.
     mode = kQSyncModeContinuous;
     DLOGV_IF(kTagDisplay, "Qsync entering continuous mode");
@@ -504,6 +508,11 @@ DisplayError DisplayBuiltIn::SetupDemura() {
   if (!comp_manager_->GetDemuraStatus()) {
     comp_manager_->FreeDemuraFetchResources(display_id_);
     comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
+
+    // stop demura service as feature is not enabled
+#ifndef SDM_VIRTUAL_DRIVER
+    property_set("ctl.stop", "vendor.qti.hardware.display.demura");
+#endif
     return kErrorNone;
   }
 
@@ -786,6 +795,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
   handle_idle_timeout_ = false;
 
   pending_commit_ = false;
+  lower_fps_ = false;
 
   return kErrorNone;
 }
@@ -1124,6 +1134,7 @@ void DisplayBuiltIn::IdlePowerCollapse() {
     ClientLock lock(disp_mutex_);
     validated_ = false;
     comp_manager_->ProcessIdlePowerCollapse(display_comp_ctx_);
+    event_handler_->HandleEvent(kIdleTimeout);
   }
 }
 
@@ -1770,7 +1781,7 @@ DisplayError DisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
   ClientLock lock(disp_mutex_);
 
   if (!hw_panel_info_.qsync_support || first_cycle_) {
-    DLOGE("Failed: qsync_support: %d first_cycle %d", hw_panel_info_.qsync_support,
+    DLOGW("Failed: qsync_support: %d first_cycle %d", hw_panel_info_.qsync_support,
           first_cycle_);
     return kErrorNotSupported;
   }

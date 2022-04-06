@@ -534,6 +534,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual DisplayError DisablePartialUpdateOneFrame() {
     return kErrorNotSupported;
   }
+  virtual void ReqPerfHintRelease() { return; }
   const char *GetDisplayString();
   void MarkLayersForGPUBypass(void);
   void MarkLayersForClientComposition(void);
@@ -691,7 +692,6 @@ class HWCDisplay : public DisplayEventHandler {
   bool draw_method_set_ = false;
   bool validate_done_ = false;
   bool client_target_3_1_set_ = false;
-  bool pending_fb_reconfig_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {
