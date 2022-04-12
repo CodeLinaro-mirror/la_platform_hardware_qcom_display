@@ -2004,6 +2004,11 @@ int HWCDisplay::SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels) {
   return 0;
 }
 
+bool HWCDisplay::IsWBCacInUse() {
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  return hwc_session->wb_display_ ? true : false;
+}
+
 int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   int error = SetFrameBufferConfig(x_pixels, y_pixels);
   if (error < 0) {
@@ -2444,9 +2449,9 @@ std::string HWCDisplay::Dump() {
 }
 
 bool HWCDisplay::CanSkipValidate() {
-  if (enable_cac_ || !validated_ || solid_fill_enable_) {
-    return false;
-  }
+  if (IsWBCacInUse()|| !validated_ || solid_fill_enable_) {
+     return false;
+   }
 
   if ((tone_mapper_ && tone_mapper_->IsActive()) ||
       layer_stack_.flags.single_buffered_layer_present) {

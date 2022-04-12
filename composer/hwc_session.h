@@ -579,6 +579,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t disable_mask_layer_hint_ = 0;
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
+  int32_t enable_wb_cac_ = 0;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
   CWB cwb_;

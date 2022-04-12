@@ -215,6 +215,7 @@ int HWCSession::Init() {
   HWCDebugHandler::Get()->GetProperty(ENABLE_NULL_DISPLAY_PROP, &null_display_mode_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_HOTPLUG_BWCHECK, &disable_hotplug_bwcheck_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_MASK_LAYER_HINT, &disable_mask_layer_hint_);
+  HWCDebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac_);
 
   if (!null_display_mode_) {
     g_hwc_uevent_.Register(this);
@@ -3475,9 +3476,9 @@ int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
   float green_offset = static_cast<float>(input_parcel->readDouble());
   float blue_offset = static_cast<float>(input_parcel->readDouble());
 
-  DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset,
-        blue_offset);
-  if (enable == true) {
+  DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
+
+  if (enable && enable_wb_cac_) {
     error = CreateVirtualDisplayForCAC(display);
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));

@@ -227,8 +227,6 @@ int HWCDisplayBuiltIn::Init() {
   GetDisplayAttributesForConfig(INT(config_index), &attr);
   active_refresh_rate_ = attr.fps;
 
-  InitCacResources(attr.x_pixels, attr.y_pixels);
-
   if (pthread_create(&wb_kickoff_thread_, NULL, &HWCDisplayBuiltIn::WBKickOffThread, this)) {
     DLOGI("Failed to start %s, error = %s", "WB kickoff thread", strerror(errno));
   }
@@ -374,9 +372,9 @@ HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
 
 HWC2::Error HWCDisplayBuiltIn::ValidateWB(bool first) {
   HWC2::Error err = HWC2::Error::None;
-  HWCSession *hwc_session_ = HWCSession::GetInstance();
+  HWCSession *hwc_session = HWCSession::GetInstance();
   HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
-                                     (hwc_session_->GetDisplay(hwc_session_->wb_display_));
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
   if (!wb_display) {
     DLOGE("Return no WB display for display = %lu", id_);
     return HWC2::Error::Unsupported;
@@ -406,10 +404,10 @@ HWC2::Error HWCDisplayBuiltIn::ValidateWB(bool first) {
 
 HWC2::Error HWCDisplayBuiltIn::PresentWB(bool first, int32_t *out_wb_release) {
   HWC2::Error err = HWC2::Error::None;
-  HWCSession *hwc_session_ = HWCSession::GetInstance();
+  HWCSession *hwc_session = HWCSession::GetInstance();
 
   HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
-                                     (hwc_session_->GetDisplay(hwc_session_->wb_display_));
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
   if (!wb_display) {
     DLOGE("Return no WB display for display = %lu", id_);
     return HWC2::Error::Unsupported;
@@ -641,7 +639,9 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   auto status = HWC2::Error::None;
 
   DTRACE_SCOPED();
-  if (enable_cac_) {
+
+  bool is_wb_cac_in_use = IsWBCacInUse();
+  if (enable_cac_ && is_wb_cac_in_use) {
     status = ValidateAndCommitWB();
     if (status != HWC2::Error::None) {
       DLOGE("ValidateWB failed");
@@ -659,7 +659,8 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
     MarkLayersForClientComposition();
   }
 
-  if (enable_cac_) {
+  // If WB is not used for CAC not need to BuildLS from WB
+  if (enable_cac_ && is_wb_cac_in_use) {
     // Call new BuildLayerStack, which populates layers from secondary set
     BuildLayerStackFromWB();
   } else {
@@ -728,7 +729,7 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
     }
     // On success, set current refresh rate to new refresh rate.
     current_refresh_rate_ = refresh_rate;
-    if (enable_cac_) {
+    if (enable_cac_ && is_wb_cac_in_use) {
       UpdateFramerateForCAC(current_refresh_rate_);
     }
   }
@@ -979,7 +980,7 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
 
   CloseFd(&output_buffer_.acquire_fence_fd);
   pending_commit_ = false;
-  if (enable_cac_) {
+  if (enable_cac_ && IsWBCacInUse()) {
     cac_commit_done_ = true;
   }
   return status;
@@ -2074,26 +2075,30 @@ bool HWCDisplayBuiltIn::HasReadBackBufferSupport() {
 
 int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blue,
                                   PanelOrientation orientation) {
-  HWCSession *hwc_session_ = HWCSession::GetInstance();
-  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
-                                     (hwc_session_->GetDisplay(hwc_session_->wb_display_));
-  if (!wb_display) {
-    DLOGE("Return no WB display for display = %lu", id_);
-    return -1;
-  }
 
-  auto err = wb_display->SetFrameRate(current_refresh_rate_);
-  if (err != HWC2::Error::None) {
-    DLOGE("Failed for display %" PRIu64 " %d-%d, fps = %d, errno = %d", id_, sdm_id_, type_,
-          current_refresh_rate_, err);
-  }
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  HWCDisplayVirtualDPU *wb_display = nullptr;
+  if (hwc_session->wb_display_) {
+    uint32_t config_index = 0;
+    DisplayConfigVariableInfo attr = {};
+    GetDisplayAttributesForConfig(INT(config_index), &attr);
+    InitCacResources(attr.x_pixels, attr.y_pixels);
+    wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+      (hwc_session->GetDisplay(hwc_session->wb_display_));
 
-  int32_t error = wb_display->SetCAC(enable, red, green, blue, GetPanelOrientation());
-  if (error != kErrorNone) {
-    DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f, "
-      "errno = %d, desc = %s", id_, sdm_id_, type_, enable, red, green, blue, error,
-      strerror(error));
-    return -1;
+    auto err = wb_display->SetFrameRate(current_refresh_rate_);
+    if (err != HWC2::Error::None) {
+      DLOGE("Failed for display %" PRIu64 " %d-%d, fps = %d, errno = %d", id_, sdm_id_, type_,
+            current_refresh_rate_, err);
+    }
+
+    int32_t error = wb_display->SetCAC(enable, red, green, blue, GetPanelOrientation());
+    if (error != kErrorNone) {
+      DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f, "
+            "errno = %d, desc = %s", id_, sdm_id_, type_, enable, red, green, blue, error,
+            strerror(error));
+      return -1;
+    }
   }
 
   // Pass CAC enablement info to Builtin for fence management
@@ -2103,11 +2108,13 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   if (!enable_cac_) {
     // Disable lineptr events on this display.
     display_intf_->SetLinePtrState(false, 0);
-    // Reset layer stack of WB display to allow it to be safely destroyed.
-    HWCDisplay::HWCLayerStack primary_layer_stack = {};
-    wb_display->GetLayerStack(&primary_layer_stack);
-    wb_display->ClearLayerStack();
-    SetLayerStack(&primary_layer_stack);
+    if (wb_display != nullptr) {
+      // Reset layer stack of WB display to allow it to be safely destroyed.
+      HWCDisplay::HWCLayerStack primary_layer_stack = {};
+      wb_display->GetLayerStack(&primary_layer_stack);
+      wb_display->ClearLayerStack();
+      SetLayerStack(&primary_layer_stack);
+    }
   } else {
     // Enable lineptr events at every y_pixels/2 on this display.
     uint32_t config_index = 0;
@@ -2126,9 +2133,9 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
 }
 
 void HWCDisplayBuiltIn::UpdateFramerateForCAC(uint32_t fps) {
-  HWCSession *hwc_session_ = HWCSession::GetInstance();
+  HWCSession *hwc_session = HWCSession::GetInstance();
   HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
-                                     (hwc_session_->GetDisplay(hwc_session_->wb_display_));
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
   if (!wb_display) {
     DLOGE("Return no WB display for display = %lu", id_);
     return;
