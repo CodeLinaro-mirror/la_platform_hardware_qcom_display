@@ -12,6 +12,11 @@ PRODUCT_PACKAGES += \
     libqdMetaData.vendor \
     libdisplayconfig.vendor \
     libdisplayconfig.qti.vendor \
+    libqdMetaData \
+    libqdMetaData.system \
+    libdisplayconfig \
+    libgralloc.qti \
+    libdisplayconfig.qti \
     vendor.display.config@1.0.vendor \
     vendor.display.config@1.1.vendor \
     vendor.display.config@1.2.vendor \
@@ -114,7 +119,9 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_default_color_mode=1 \
     vendor.display.enable_optimize_refresh=1 \
     vendor.display.disable_ui_3d_tonemap=1 \
-    vendor.display.flush_on_layer_set_empty=1
+    vendor.display.flush_on_layer_set_empty=1 \
+    vendor.display.disable_virtual_display=1 \
+    vendor.display.disable_color_transformation=1
 
 ifeq ($(TARGET_BOARD_PLATFORM), msmnile)
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
