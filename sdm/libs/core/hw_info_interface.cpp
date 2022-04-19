@@ -26,6 +26,10 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Not a Contribution.
+ */
 
 #include <utils/utils.h>
 
@@ -42,13 +46,15 @@ namespace sdm {
 DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
   if (GetDriverType() == DriverType::FB) {
     *intf = new HWInfo();
+    return kErrorNone;
   } else {
 #ifdef COMPILE_DRM
     *intf = new HWInfoDRM();
+    return kErrorNone;
 #endif
   }
 
-  return kErrorNone;
+  return kErrorNotSupported;
 }
 
 DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {
