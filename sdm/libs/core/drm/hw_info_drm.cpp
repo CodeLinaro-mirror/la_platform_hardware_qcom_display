@@ -128,7 +128,14 @@ DisplayError HWInfoDRM::Init() {
       return kErrorCriticalResource;
     }
     drm_master->GetHandle(&dev_fd);
-    DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+
+    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+    if (!drm_lib_loader) {
+      DLOGE("Failed to acquire DRMLibLoader instance");
+      DRMMaster::DestroyInstance(card_id_);
+      return kErrorCriticalResource;
+    }
+    drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (!drm_mgr_intf_) {
       DRMLibLoader::Destroy();
       DRMMaster::DestroyInstance(card_id_);
@@ -150,7 +157,9 @@ void HWInfoDRM::Deinit() {
   }
 
   if (drm_mgr_intf_) {
-    DRMLibLoader::GetInstance()->FuncDestroyDRMManager()();
+    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+    if (drm_lib_loader)
+      drm_lib_loader->FuncDestroyDRMManager()();
     drm_mgr_intf_ = nullptr;
   }
 
