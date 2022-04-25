@@ -26,6 +26,10 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Not a Contribution.
+*/
 
 #define DEBUG 0
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
@@ -210,8 +214,8 @@ static int cec_send_message(const struct hdmi_cec_device* dev,
     ATRACE_CALL();
 
     // TODO: Need to find replacement for the following check
-    // if(cec_is_connected(dev, 0) <= 0)
-    //     return HDMI_RESULT_FAIL;
+    if(cec_is_connected(dev, 0) <= 0)
+         return HDMI_RESULT_FAIL;
 
     cec_context_t* ctx = (cec_context_t*)(dev);
 
@@ -324,6 +328,7 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
     hdmi_event_t event;
     event.type = HDMI_EVENT_HOT_PLUG;
     event.dev = (hdmi_cec_device *) ctx;
+    event.hotplug.port_id = 1;
     event.hotplug.connected = connected ? HDMI_CONNECTED : HDMI_NOT_CONNECTED;
     if (ctx->callback.callback_func) {
         ctx->callback.callback_func(&event, ctx->callback.callback_arg);
@@ -397,9 +402,22 @@ static void cec_set_audio_return_channel(const struct hdmi_cec_device* dev,
 static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id)
 {
     cec_context_t* ctx = (cec_context_t*)(dev);
+    int ret;
+    ret = ioctl(ctx->node.fd, CEC_ADAP_G_PHYS_ADDR,
+            &ctx->port_info[0].physical_address);
+    if (ret) {
+        ALOGD("%s: %m\n", __func__);
+        return ret;
+    }
+    if (ctx->port_info[0].physical_address == CEC_PHYS_ADDR_INVALID) {
+        ctx->node.is_connected = 0;
+        ALOGE("%s: is_connected=%d, port_id=%d", __FUNCTION__, ctx->node.is_connected, port_id);
+        return false;
+    }
 
+    ctx->node.is_connected = 1;
     ALOGE("%s: is_connected=%d, port_id=%d", __FUNCTION__, ctx->node.is_connected, port_id);
-    return ctx->node.is_connected;
+    return true;
 }
 
 static int cec_device_close(struct hw_device_t *dev)
