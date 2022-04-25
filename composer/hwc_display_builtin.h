@@ -190,6 +190,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual void HandleLinePtrEvent();
   static void* WBKickOffThread(void *context);
   void* PerformWBKickOff();
+  void ResetCacCommit();
   virtual bool IsCacCommitDone();
   virtual int32_t SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
 
@@ -222,7 +223,9 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   void SetBwLimitHint(bool enable);
   void SetPartialUpdate(DisplayConfigFixedInfo fixed_info);
   void InitCacResources(uint32_t x_pixels, uint32_t y_pixels);
-  int AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels);
+  int AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels, bool secure);
+  int ReAllocateWBOutputBuffer(bool secure);  // TODO(use:cac): handle new size
+  bool SecureLayerPresent();
   HWC2::Error ValidateWB(bool first);
   HWC2::Error PresentWB(bool first, int32_t *out_retire_fence);
   HWC2::Error ValidateAndCommitWB();

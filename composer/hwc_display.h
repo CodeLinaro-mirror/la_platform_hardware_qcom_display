@@ -453,6 +453,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool IsCACEnabled() { return enable_cac_; }
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }
   virtual bool IsCacCommitDone() { return false; }
+  virtual void ResetCacCommit() { return; }
 
  protected:
   static uint32_t throttling_refresh_rate_;

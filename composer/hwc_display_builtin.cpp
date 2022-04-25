@@ -244,7 +244,7 @@ std::string HWCDisplayBuiltIn::Dump() {
 
 void HWCDisplayBuiltIn::InitCacResources(uint32_t x_pixels, uint32_t y_pixels) {
   // Allocate o/p buffer and client target for WB
-  int ret = AllocateWbBuffer(x_pixels, y_pixels);
+  int ret = AllocateWbBuffer(x_pixels, y_pixels, false);
   if (ret) {
     DLOGE("Error allocating WB buffers");
     return;
@@ -276,16 +276,16 @@ void HWCDisplayBuiltIn::InitCacResources(uint32_t x_pixels, uint32_t y_pixels) {
   sdm_layer->input_buffer.height = x_pixels;  // aligned and unaligned are same, as its not used
 }
 
-int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels) {
+int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels, bool secure) {
   wb_buffer_info_ = {};
   wb_buffer_info_.buffer_config.width = x_pixels;
   wb_buffer_info_.buffer_config.height = y_pixels;
   wb_buffer_info_.buffer_config.format = sdm::kFormatRGB888;
   wb_buffer_info_.buffer_config.cache = true;
+  wb_buffer_info_.buffer_config.secure = secure;
 
-  DLOGD("DC-WFD: ALLOCBUFFER: allocating Virtual Display outbuffer");
   if (buffer_allocator_->AllocateBuffer(&wb_buffer_info_) != 0) {
-    DLOGD("DC-WFD: ERROR Virtual Display: AllocateBuffer");
+    DLOGE("Error allocating WB out_put buffer");
     return -1;
   }
 
@@ -293,6 +293,36 @@ int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels) {
   wb_pvt_handle_ = reinterpret_cast<private_handle_t *>(wb_buffer_info_.private_data);
   DLOGI("handle of o/p buff = %lu fd = %d", wb_pvt_handle_->id, wb_pvt_handle_->fd);
   return 0;
+}
+
+int HWCDisplayBuiltIn::ReAllocateWBOutputBuffer(bool secure) {
+  if (wb_buffer_info_.buffer_config.secure != secure) {
+    // Reallocate the the o/p buffer (same size) with secure attribute
+    DLOGI_IF(kTagClient, "For display %d-%d allocating WB buffer with secure = %s", sdm_id_, type_,
+             secure ? "true" : "false");
+    buffer_allocator_->FreeBuffer(&wb_buffer_info_);
+    wb_buffer_info_.buffer_config.secure = secure;
+    if (buffer_allocator_->AllocateBuffer(&wb_buffer_info_) != 0) {
+      DLOGE("WB Display: Reallocation failed");
+      return -1;
+    }
+
+    wb_buffer_handle_ = static_cast<buffer_handle_t>(wb_buffer_info_.private_data);
+    wb_pvt_handle_ = reinterpret_cast<private_handle_t *>(wb_buffer_info_.private_data);
+    wb_op_layer_->SetLayerBuffer(wb_buffer_handle_, -1);
+  }
+
+  return 0;
+}
+
+bool HWCDisplayBuiltIn::SecureLayerPresent() {
+  for (auto hwc_layer : layer_set_) {
+    Layer *layer = hwc_layer->GetSDMLayer();
+    if (layer->input_buffer.flags.secure) {
+      return true;
+    }
+  }
+  return false;
 }
 
 HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
@@ -360,7 +390,8 @@ HWC2::Error HWCDisplayBuiltIn::ValidateWB(bool first) {
   HWCLayerStack pri_layer_stack;
   GetLayerStack(&pri_layer_stack);
   wb_display->SetLayerStack(&pri_layer_stack);
-
+  bool secure = SecureLayerPresent();
+  ReAllocateWBOutputBuffer(secure);
   err = wb_display->SetOutputBuffer(wb_buffer_handle_, -1);
   uint32_t out_num_types;
   uint32_t out_num_requests;
@@ -2145,12 +2176,23 @@ void *HWCDisplayBuiltIn::PerformWBKickOff() {
     }
     DTRACE_SCOPED();
     SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
+    for (auto hwc_layer : layer_set_) {
+      auto layer = hwc_layer->GetSDMLayer();
+      if (layer->update_mask[kSecurity])  {
+        DLOGI_IF(kTagClient, "Display %d-%d Security level changed", sdm_id_, type_);
+        cac_commit_done_ = false;
+      }
+    }
     if (cac_commit_done_) {
       ValidateAndCommitWB();
     }
     pthread_mutex_unlock(&wb_lock_);
   }
   return nullptr;
+}
+
+void HWCDisplayBuiltIn::ResetCacCommit() {
+  cac_commit_done_ = false;
 }
 
 bool HWCDisplayBuiltIn::IsCacCommitDone() {
