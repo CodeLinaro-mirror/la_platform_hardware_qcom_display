@@ -43,6 +43,18 @@ fi
 setprop vendor.display.enable_camera_smooth 1
 
 case "$target" in
+    "sm6150")
+    #Set property to differentiate sm6150
+    #SOC ID for sm6150 opk is 401
+    case "$soc_hwid" in
+        # SOC ID for sm6150 opk is 401
+        401)
+        # Set property for sm6150
+        setprop vendor.display.disable_offline_rotator 0
+        setprop vendor.display.disable_rotator_ubwc 1
+        ;;
+    esac
+    ;;
     "lahaina")
     #Set property to differentiate Lahaina & Shima
     #SOC ID for Lahaina is 415, Lahaina P is 439, Lahaina-ATP is 456
