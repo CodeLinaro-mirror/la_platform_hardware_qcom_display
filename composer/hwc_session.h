@@ -56,7 +56,7 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.19/IDisplayConfig.h>
+#include <vendor/display/config/1.20/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
@@ -90,7 +90,7 @@
 namespace sdm {
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_19::IDisplayConfig;
+using vendor::display::config::V1_20::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -487,6 +487,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
                             override;
   Return<int32_t> setCacEyeConfig(uint32_t disp_id, const IDisplayConfig::CacEyeConfig &left,
                                   const IDisplayConfig::CacEyeConfig &right) override;
+  Return<int32_t> setSkewVsync(uint32_t disp_id, uint32_t skew_vsyn_val) override;
 
 #endif
 

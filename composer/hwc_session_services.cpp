@@ -78,6 +78,7 @@
 
 namespace sdm {
 
+static const uint32_t kSkewVsyncMax = 75;
 using ::android::hardware::Void;
 
 void HWCSession::StartServices() {
@@ -1367,6 +1368,43 @@ Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
       error = hwc_display_[disp_idx]->SetCACEyeConfig(left_eye, right_eye);
       if (error) {
         DLOGE("Failed to set CAC IPD config err = %d, desc = %s",  error, strerror(error));
+      }
+    }
+  }
+
+  return error;
+}
+
+Return<int32_t> HWCSession::setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val) {
+  int disp_idx = GetDisplayIndex(disp_id);
+  int32_t error = -EINVAL;
+
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    DLOGE("Invalid display = %d", disp_id);
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (!hwc_display_[disp_idx]) {
+      DLOGW("Display %d is not connected", disp_id);
+      error = -ENODEV;
+      return error;
+    }
+  }
+
+  if (skew_vsync_val > kSkewVsyncMax) {
+    DLOGE("Invalid skew vync value %d", skew_vsync_val);
+    return -EINVAL;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_display_[disp_idx]) {
+      error = hwc_display_[disp_idx]->SetSkewVsync(skew_vsync_val);
+      if (error) {
+        DLOGE("SetSkewVsync Failed: disp_id = %d skew_vsync_val = %d, errno = %d, desc = %s",
+              disp_id, skew_vsync_val, error, strerror(error));
       }
     }
   }
