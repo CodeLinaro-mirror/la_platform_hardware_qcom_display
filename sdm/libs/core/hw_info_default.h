@@ -29,6 +29,7 @@ class HWInfoDefault : public HWInfoInterface {
   virtual DisplayError GetDemuraPanelIds(std::vector<uint64_t> *panel_ids);
   virtual DisplayError GetPanelBootParamString(std::string *panel_boot_param_string);
   virtual uint32_t GetMaxMixerCount();
+  virtual uint32_t GetCoreId() { return 0; }
 };
 
 }  // namespace sdm

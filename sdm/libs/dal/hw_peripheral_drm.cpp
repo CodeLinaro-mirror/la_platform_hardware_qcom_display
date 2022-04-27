@@ -63,6 +63,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <fcntl.h>
 #include <display/drm/sde_drm.h>
 #include <utils/debug.h>
@@ -94,6 +101,7 @@ HWPeripheralDRM::HWPeripheralDRM(int32_t display_id, BufferAllocator *buffer_all
   disp_type_ = DRMDisplayType::PERIPHERAL;
   device_name_ = "Peripheral";
   display_id_ = display_id;
+  core_id_ = hw_info_intf->GetCoreId();
 }
 
 DisplayError HWPeripheralDRM::Init() {
@@ -121,9 +129,9 @@ void HWPeripheralDRM::InitDestScaler() {
       dest_scaler_blocks_used_ = 2;
     }
     if (hw_resource_.hw_dest_scalar_info.count >=
-        (hw_dest_scaler_blocks_used_ + dest_scaler_blocks_used_)) {
+        (hw_dest_scaler_blocks_used_[core_id_] + dest_scaler_blocks_used_)) {
       // Enough destination scaler blocks available so update the static counter.
-      hw_dest_scaler_blocks_used_ += dest_scaler_blocks_used_;
+      hw_dest_scaler_blocks_used_[core_id_] += dest_scaler_blocks_used_;
     } else {
       dest_scaler_blocks_used_ = 0;
     }
@@ -399,7 +407,7 @@ void HWPeripheralDRM::SetSelfRefreshState() {
                                 sde_drm::DRMCacheState::ENABLED);
     } else if (self_refresh_state_ == kSelfRefreshWriteAlloc) {
       drm_atomic_intf_->Perform(sde_drm::DRMOps::CONNECTOR_SET_CACHE_STATE,
-                                cwb_config_.token.conn_id, sde_drm::DRMCacheWBState::ENABLED);
+                                cwb_config_[core_id_].token.conn_id, sde_drm::DRMCacheWBState::ENABLED);
     } else if (self_refresh_state_ == kSelfRefreshDisableReadAlloc) {
       drm_atomic_intf_->Perform(sde_drm::DRMOps::CRTC_SET_CACHE_STATE, token_.crtc_id,
                                 sde_drm::DRMCacheState::DISABLED);

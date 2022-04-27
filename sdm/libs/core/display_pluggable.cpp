@@ -44,13 +44,13 @@
 namespace sdm {
 
 DisplayPluggable::DisplayPluggable(DisplayEventHandler *event_handler,
-                                   HWInfoInterface *hw_info_intf,
+                                   std::vector<HWInfoInterface*> hw_info_intf,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(kPluggable, event_handler, kDevicePluggable, buffer_allocator,
                 comp_manager, hw_info_intf) {}
 
-DisplayPluggable::DisplayPluggable(int32_t display_id, DisplayEventHandler *event_handler,
-                                   HWInfoInterface *hw_info_intf,
+DisplayPluggable::DisplayPluggable(DisplayId display_id, DisplayEventHandler *event_handler,
+                                   std::vector<HWInfoInterface*> hw_info_intf,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(display_id, kPluggable, event_handler, kDevicePluggable,
                 buffer_allocator, comp_manager, hw_info_intf) {}
@@ -58,7 +58,8 @@ DisplayPluggable::DisplayPluggable(int32_t display_id, DisplayEventHandler *even
 DisplayError DisplayPluggable::Init() {
   ClientLock lock(disp_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kPluggable, hw_info_intf_,
+  DisplayError error = HWInterface::Create(display_id_info_.GetConnId(), kPluggable,
+                                           hw_info_intf_[primary_core_id_],
                                            buffer_allocator_, &hw_intf_);
   if (error != kErrorNone) {
     if (kErrorDeviceRemoved == error) {
@@ -71,6 +72,8 @@ DisplayError DisplayPluggable::Init() {
 
   if (-1 == display_id_) {
     hw_intf_->GetDisplayId(&display_id_);
+    display_id_info_ = DisplayId(primary_core_id_, display_id_);
+    display_id_ = display_id_info_.GetDisplayId();
   }
 
   uint32_t active_mode_index = 0;
@@ -279,7 +282,18 @@ DisplayError DisplayPluggable::VSync(int64_t timestamp) {
 DisplayError DisplayPluggable::InitializeColorModes() {
   PrimariesTransfer pt = {};
   AttrVal var = {};
-  if (!hw_panel_info_.hdr_enabled && !hw_panel_info_.supported_colorspaces) {
+  bool hdr_supported = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    hdr_supported &= hw_resource_info_[i].has_hdr;
+  }
+
+  if ((!hw_panel_info_.hdr_enabled && !hw_panel_info_.supported_colorspaces) ||
+      !hdr_supported) {
     return kErrorNone;
   } else {
     if (hw_panel_info_.supported_colorspaces) {

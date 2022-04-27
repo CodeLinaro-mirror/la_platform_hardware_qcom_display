@@ -58,12 +58,20 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_INFO_TYPES_H__
 #define __HW_INFO_TYPES_H__
 
 #include <stdint.h>
 #include <core/display_interface.h>
 #include <core/core_interface.h>
+#include <drm_master.h>
 #include <utils/locker.h>
 #include <utils/fence.h>
 #include <utils/debug.h>
@@ -80,6 +88,7 @@ namespace sdm {
 using std::string;
 using std::pair;
 using std::vector;
+using drm_utils::DRMMaster;
 
 const int kMaxSDELayers = 16;   // Maximum number of layers that can be handled by MDP5 hardware
                                 // in a given layer stack.
@@ -464,6 +473,7 @@ struct HWResourceInfo {
   bool skip_inline_rot_threshold = false;
   bool has_noise_layer = false;
   uint32_t dsc_block_count = 0;
+  uint32_t core_id = 0;
 };
 
 struct HWSplitInfo {
@@ -1061,14 +1071,16 @@ struct Resolution {
 
 class FrameBufferObject : public LayerBufferObject {
  public:
-  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format, uint32_t width,
-                             uint32_t height, bool shallow = false, bool secure = false);
+  explicit FrameBufferObject(uint32_t fb_id, DRMMaster *master, LayerBufferFormat format,
+                             uint32_t width, uint32_t height, bool shallow = false,
+                             bool secure = false);
   ~FrameBufferObject();
   uint32_t GetFbId();
   bool IsEqual(LayerBufferFormat format, uint32_t width, uint32_t height, bool secure);
 
  private:
   uint32_t fb_id_;
+  DRMMaster *master_;
   LayerBufferFormat format_;
   uint32_t width_;
   uint32_t height_;
@@ -1091,6 +1103,49 @@ enum CwbClient {
   kCwbClientDemura,
   kCwbClientIdleFallback,
   kCwbClientMax,
+};
+
+class DisplayId {
+ public:
+  DisplayId() { }
+
+  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_(conn_id) {
+    core_id_bitset_ = std::bitset<32>((1 << core_id));
+    display_id_ = ((core_id_bitset_.to_ulong()) << 16) | (conn_id_ & 0xFFFF);
+  }
+
+  explicit DisplayId(uint32_t display_id) : display_id_(display_id) {
+    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> 16);
+    core_id_bitset_ = std::bitset<32>(core_id);
+    conn_id_ = (display_id_) < 0 ? 0 : ((display_id_) & 0xFFFF);
+  }
+
+  inline uint32_t GetDisplayId() {
+    return display_id_;
+  }
+
+  inline uint32_t GetCoreIdMap() {
+    return core_id_bitset_.to_ulong();
+  }
+
+  static uint32_t GetCoreIdMap(uint32_t display_id) {
+    return (display_id) < 0 ? 0 : ((display_id) >> 16);
+  }
+
+  inline uint32_t GetConnId() {
+    return conn_id_;
+  }
+
+  static uint32_t GetConnId(uint32_t display_id) {
+    return (display_id) < 0 ? 0 : ((display_id) & 0xFFFF);;
+  }
+
+  ~DisplayId() {}
+
+ private:
+  int32_t display_id_ = -1;
+  std::bitset<32> core_id_bitset_ = 0;
+  uint32_t conn_id_ = -1;
 };
 
 }  // namespace sdm

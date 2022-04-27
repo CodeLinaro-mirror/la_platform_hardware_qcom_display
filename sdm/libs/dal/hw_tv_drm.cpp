@@ -62,6 +62,13 @@
  *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include "hw_tv_drm.h"
 #include <math.h>
 #include <sys/time.h>
@@ -145,6 +152,7 @@ HWTVDRM::HWTVDRM(int32_t display_id, BufferAllocator *buffer_allocator,
   disp_type_ = DRMDisplayType::TV;
   device_name_ = "TV";
   display_id_ = display_id;
+  core_id_ = hw_info_intf->GetCoreId();
 }
 
 DisplayError HWTVDRM::SetDisplayAttributes(uint32_t index) {
@@ -258,8 +266,8 @@ DisplayError HWTVDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
   }
 
-  if (cwb_config_.enabled) {
-    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
+  if (cwb_config_[core_id_].enabled) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_[core_id_].token.conn_id, 0);
     DLOGI("Teardown CWB on %d-%d", display_id_, disp_type_);
   }
 

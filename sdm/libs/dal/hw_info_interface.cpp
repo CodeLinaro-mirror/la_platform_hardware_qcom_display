@@ -27,8 +27,16 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/utils.h>
 #include <private/hw_info_interface.h>
+#include <vector>
 
 #ifndef TARGET_HEADLESS
 #include "hw_info_drm.h"
@@ -39,37 +47,43 @@
 namespace sdm {
 
 int32_t HWInfoInterface::ref_count_ = 0;
-HWInfoInterface* HWInfoInterface::intf_ = nullptr;
+std::vector<HWInfoInterface*> HWInfoInterface::intf_(kMaxCore, nullptr);
 
-DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
+DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
+  DisplayError error = kErrorNone;
+  for (uint32_t i = 0; i < kMaxCore; i++) {
+
 #ifndef TARGET_HEADLESS
-  if (ref_count_ > 0 && intf_) {
-    ref_count_++;
-    *intf = intf_;
-    return kErrorNone;
-  }
-
-  *intf = new HWInfoDRM();
-#else
-  *intf = nullptr;
+    if (ref_count_ > 0 && intf_[i]) {
+      intfs->push_back(intf_[i]);
+      continue;
+    }
 #endif
 
-  DisplayError error = kErrorNone;
-  if (*intf) {
-    error = (*intf)->Init();
-    if (error != kErrorNone) {
-      delete *intf;
-      *intf = nullptr;
+    HWInfoInterface *hw_info = new HWInfoDRM(i);
+    if (!hw_info) {
+      DLOGE("Failed allocating HWInfoDRM(%d)", i);
+      return kErrorCriticalResource;
     }
-  } else {
-    error = kErrorCriticalResource;
-  }
 
-  if (*intf) {
-    intf_ = *intf;
-    ref_count_++;
-  }
+    error = hw_info->Init();
 
+    if (error != kErrorNone) {
+      delete hw_info;
+      hw_info = NULL;
+      if (i > 0) {
+        ref_count_++;
+      }
+      return intfs->size() ? kErrorNone : error;
+    }
+#ifndef TARGET_HEADLESS
+    intfs->push_back(hw_info);
+    intf_[i] = (hw_info);
+#else
+    intfs->push_back(nullptr);
+#endif
+  }
+  ref_count_++;
   return error;
 }
 
@@ -81,7 +95,7 @@ DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {
     delete intf;
   }
 
-  intf_ = nullptr;
+  intf_.clear();
   return kErrorNone;
 }
 

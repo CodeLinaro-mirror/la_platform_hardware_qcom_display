@@ -53,6 +53,7 @@ namespace sdm {
 
 class HWInfoDRM : public HWInfoInterface {
  public:
+  explicit HWInfoDRM(uint32_t core_id = 0) : core_id_(core_id) {}
   virtual DisplayError Init();
   virtual ~HWInfoDRM();
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
@@ -64,6 +65,7 @@ class HWInfoDRM : public HWInfoInterface {
   virtual DisplayError GetDemuraPanelIds(std::vector<uint64_t> *panel_ids);
   virtual DisplayError GetPanelBootParamString(std::string *panel_boot_param_string);
   virtual uint32_t GetMaxMixerCount();
+  virtual uint32_t GetCoreId() { return core_id_; }
 
  private:
   void Deinit();
@@ -87,14 +89,15 @@ class HWInfoDRM : public HWInfoInterface {
   void MapPlaneToConnector(HWResourceInfo *hw_resource);
   void GetInitialDemuraInfo(HWResourceInfo *hw_resource);
 
-  sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};
+  sde_drm::DRMManagerInterface *drm_mgr_intf_ = NULL;
   bool default_mode_ = false;
   uint32_t max_cwb_ = 0;
 
   static const int kMaxStringLength = 1024;
   static const int kKiloUnit = 1000;
 
-  static HWResourceInfo *hw_resource_;
+  HWResourceInfo *hw_resource_ = NULL;
+  uint32_t core_id_ = 0;
 };
 
 }  // namespace sdm

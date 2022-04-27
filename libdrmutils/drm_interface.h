@@ -63,6 +63,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_INTERFACE_H__
 #define __DRM_INTERFACE_H__
 
@@ -1310,7 +1317,7 @@ class DRMManagerInterface;
 typedef int (*GetDRMManager)(int fd, DRMManagerInterface **intf);
 
 /* Destroy DRMManager instance */
-typedef int (*DestroyDRMManager)();
+typedef int (*DestroyDRMManager)(int fd);
 
 
 /*

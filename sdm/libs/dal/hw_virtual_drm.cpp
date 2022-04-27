@@ -63,6 +63,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <stdio.h>
 #include <ctype.h>
 #include <drm_logger.h>
@@ -94,6 +101,7 @@ HWVirtualDRM::HWVirtualDRM(int32_t display_id, BufferAllocator *buffer_allocator
   HWDeviceDRM::device_name_ = "Virtual";
   HWDeviceDRM::disp_type_ = DRMDisplayType::VIRTUAL;
   HWDeviceDRM::display_id_ = display_id;
+  HWDeviceDRM::core_id_ = hw_info_intf->GetCoreId();
 }
 
 void HWVirtualDRM::ConfigureWbConnectorFbId(uint32_t fb_id) {

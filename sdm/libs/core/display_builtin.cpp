@@ -53,14 +53,15 @@
 
 namespace sdm {
 
-DisplayBuiltIn::DisplayBuiltIn(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayBuiltIn::DisplayBuiltIn(DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager,
                                std::shared_ptr<IPCIntf> ipc_intf)
   : DisplayBase(kBuiltIn, event_handler, kDeviceBuiltIn, buffer_allocator, comp_manager,
                 hw_info_intf), ipc_intf_(ipc_intf) {}
 
-DisplayBuiltIn::DisplayBuiltIn(int32_t display_id, DisplayEventHandler *event_handler,
-                               HWInfoInterface *hw_info_intf,
+DisplayBuiltIn::DisplayBuiltIn(DisplayId display_id, DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager,
                                std::shared_ptr<IPCIntf> ipc_intf)
   : DisplayBase(display_id, kBuiltIn, event_handler, kDeviceBuiltIn, buffer_allocator, comp_manager,
@@ -76,7 +77,8 @@ static uint64_t GetTimeInMs(struct timespec ts) {
 DisplayError DisplayBuiltIn::Init() {
   ClientLock lock(disp_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kBuiltIn, hw_info_intf_,
+  DisplayError error = HWInterface::Create(display_id_info_.GetConnId(), kBuiltIn,
+                                           hw_info_intf_[primary_core_id_],
                                            buffer_allocator_, &hw_intf_);
   if (error != kErrorNone) {
     DLOGE("Failed to create hardware interface on. Error = %d", error);
@@ -85,6 +87,8 @@ DisplayError DisplayBuiltIn::Init() {
 
   if (-1 == display_id_) {
     hw_intf_->GetDisplayId(&display_id_);
+    display_id_info_ = DisplayId(primary_core_id_, display_id_);
+    display_id_ = display_id_info_.GetDisplayId();
   }
 
   error = DisplayBase::Init();
@@ -709,7 +713,7 @@ DisplayError DisplayBuiltIn::SetupDemuraT0AndTn() {
   bool demura_allowed = false, demuratn_allowed = false;
 
   if (!comp_manager_->GetDemuraStatus()) {
-    comp_manager_->FreeDemuraFetchResources(display_id_);
+    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
     comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
     return kErrorNone;
   }
@@ -731,7 +735,7 @@ DisplayError DisplayBuiltIn::SetupDemuraT0AndTn() {
   }
 
   if (value > 0) {
-    comp_manager_->FreeDemuraFetchResources(display_id_);
+    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
     comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
     return kErrorNone;
   } else if (value < 0) {
@@ -820,7 +824,7 @@ DisplayError DisplayBuiltIn::SetupDemuraT0AndTn() {
       // Non-fatal but not expected, log error
       DLOGE("Demura failed to initialize on display %d-%d, Error = %d", display_id_, display_type_,
             error);
-      comp_manager_->FreeDemuraFetchResources(display_id_);
+      comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
       comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
       if (demura_) {
         SetDemuraIntfStatus(false);
@@ -2602,19 +2606,31 @@ PrimariesTransfer DisplayBuiltIn::GetBlendSpaceFromStcColorMode(
 DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   ClientLock lock(disp_mutex_);
   fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+  bool hdr_supported = true;
+  bool has_concurrent_writeback = true;
 
-  HWResourceInfo hw_resource_info = HWResourceInfo();
-  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    HWResourceInfo hw_resource_info = HWResourceInfo();
+    hw_info_intf_[i]->GetHWResourceInfo(&hw_resource_info);
+    hdr_supported &= hw_resource_info.has_hdr;
+    has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;
+  }
+
   bool hdr_plus_supported = false;
   bool dolby_vision_supported = false;
 
   // Checking library support for HDR10+
   comp_manager_->GetHDRCapability(&hdr_plus_supported, &dolby_vision_supported);
 
-  fixed_info->hdr_supported = hw_resource_info.has_hdr;
+  fixed_info->hdr_supported = hdr_supported;
   // Built-in displays always support HDR10+ when the target supports HDR
-  fixed_info->hdr_plus_supported = hw_resource_info.has_hdr && hdr_plus_supported;
-  fixed_info->dolby_vision_supported = hw_resource_info.has_hdr && dolby_vision_supported;
+  fixed_info->hdr_plus_supported = hdr_supported && hdr_plus_supported;
+  fixed_info->dolby_vision_supported = hdr_supported && dolby_vision_supported;
   // Populate luminance values only if hdr will be supported on that display
   fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
   fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
@@ -2622,7 +2638,7 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
   fixed_info->partial_update = hw_panel_info_.partial_update;
-  fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+  fixed_info->readback_supported = has_concurrent_writeback;
   fixed_info->supports_unified_draw = unified_draw_supported_;
 
   return kErrorNone;
@@ -2937,7 +2953,7 @@ void DisplayIPCVmCallbackImpl::OnServerExit() {
 // LCOV_EXCL_STOP
 
 void DisplayBuiltIn::InitCWBBuffer() {
-  if (hw_panel_info_.mode != kModeVideo || !hw_resource_info_.has_concurrent_writeback
+  if (hw_panel_info_.mode != kModeVideo || !HasConcurrentWriteback()
       || !hw_panel_info_.is_primary_panel) {
     return;
   }

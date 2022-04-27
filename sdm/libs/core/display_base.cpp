@@ -83,7 +83,7 @@ static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
 // TODO(user): Have a single structure handle carries all the interface pointers and variables.
 DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
                          HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-                         CompManager *comp_manager, HWInfoInterface *hw_info_intf)
+                         CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf)
     : display_type_(display_type),
       event_handler_(event_handler),
       hw_device_type_(hw_device_type),
@@ -109,13 +109,15 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
   DLOGI("Commit thread started for display: %d", display_type);
 }
 
-DisplayBase::DisplayBase(int32_t display_id, DisplayType display_type,
+DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
                          DisplayEventHandler *event_handler, HWDeviceType hw_device_type,
                          BufferAllocator *buffer_allocator, CompManager *comp_manager,
-                         HWInfoInterface *hw_info_intf)
+                         std::vector<HWInfoInterface*> hw_info_intf)
     : DisplayBase(display_type, event_handler, hw_device_type, buffer_allocator, comp_manager,
                   hw_info_intf) {
-  display_id_ = display_id;
+  display_id_info_ = display_id;
+  display_id_ = display_id_info_.GetDisplayId();
+  core_id_ = display_id_info_.GetCoreIdMap();
   clearstack_.store(false);
   disp_layer_stack_ = &disp_layer_stacks_[0];
 }
@@ -137,10 +139,23 @@ DisplayError DisplayBase::Init() {
   hw_panel_info_ = HWPanelInfo();
   hw_intf_->GetHWPanelInfo(&hw_panel_info_);
   default_panel_mode_ = hw_panel_info_.mode;
-  if (hw_info_intf_) {
-    hw_info_intf_->GetHWResourceInfo(&hw_resource_info_);
+  for (auto info_intf : hw_info_intf_) {
+    HWResourceInfo res_info;
+    info_intf->GetHWResourceInfo(&res_info);
+    hw_resource_info_.push_back(res_info);
   }
-  auto max_mixer_stages = hw_resource_info_.num_blending_stages;
+
+  uint32_t num_blending_stages = INT_MAX;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    num_blending_stages = std::min(num_blending_stages, hw_resource_info_[i].num_blending_stages);
+  }
+
+  auto max_mixer_stages = num_blending_stages;
   int property_value = Debug::GetMaxPipesPerMixer(display_type_);
 
   uint32_t active_index = 0;
@@ -200,7 +215,7 @@ DisplayError DisplayBase::Init() {
         display_type_, hw_intf_, display_attributes_, hw_panel_info_, dpps_intf, this);
   }
 
-  error = comp_manager_->RegisterDisplay(display_id_, display_type_, display_attributes_,
+  error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, display_attributes_,
                                          hw_panel_info_, mixer_attributes_, fb_config_,
                                          &display_comp_ctx_, &cached_qos_data_, this);
   if (error != kErrorNone) {
@@ -217,7 +232,7 @@ DisplayError DisplayBase::Init() {
   }
 
   if (property_value > 0) {
-    max_mixer_stages = std::min(UINT32(property_value), hw_resource_info_.num_blending_stages);
+    max_mixer_stages = std::min(UINT32(property_value), num_blending_stages);
   }
   DisplayBase::SetMaxMixerStages(max_mixer_stages);
 
@@ -485,9 +500,9 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
 }
 
 DisplayError DisplayBase::NoiseInit() {
-  if (!hw_resource_info_.has_noise_layer || noise_disable_prop_) {
+  if (!HasNoiseLayer() || noise_disable_prop_) {
     DLOGW("Noise Layer disabled on display %d-%d has_noise = %d noise_disable_prop = %d",
-          display_id_, display_type_, hw_resource_info_.has_noise_layer, noise_disable_prop_);
+          display_id_, display_type_, HasNoiseLayer(), noise_disable_prop_);
     return kErrorNone;
   }
 
@@ -516,13 +531,18 @@ DisplayError DisplayBase::NoiseInit() {
 
 // Query the dspp capabilities and enable the RC feature.
 DisplayError DisplayBase::InitRC() {
+  uint32_t rc_total_mem_size = INT_MAX;
+  for (auto val : hw_resource_info_) {
+    rc_total_mem_size = std::min(rc_total_mem_size, val.rc_total_mem_size);
+  }
+
   if (!rc_core_ && !first_cycle_ && rc_enable_prop_ && pf_factory_ && prop_intf_) {
     RCInputConfig input_cfg = {};
     input_cfg.display_id = display_id_;
     input_cfg.display_type = display_type_;
     input_cfg.display_xres = display_attributes_.x_pixels;
     input_cfg.display_yres = display_attributes_.y_pixels;
-    input_cfg.max_mem_size = hw_resource_info_.rc_total_mem_size;
+    input_cfg.max_mem_size = rc_total_mem_size;
     rc_core_ = pf_factory_->CreateRCIntf(input_cfg, prop_intf_);
     GenericPayload dummy;
     int err = 0;
@@ -602,7 +622,7 @@ DisplayError DisplayBase::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t
 
 void DisplayBase::ConfigureCwbParams(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
-  if (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer) {  // CWB requested
+  if (HasConcurrentWriteback() && layer_stack->output_buffer) {  // CWB requested
     cwb_configured_ = true;
     comp_manager_->HandleCwbFrequencyBoost(true);
 
@@ -635,21 +655,33 @@ void DisplayBase::ConfigureCwbParams(LayerStack *layer_stack) {
 
 bool DisplayBase::IsWriteBackSupportedFormat(const LayerBufferFormat &format) {
   // check whether writeback supported for parameter color format or not.
-  std::map<HWSubBlockType, std::vector<LayerBufferFormat>>::iterator it =
-      hw_resource_info_.supported_formats_map.find(HWSubBlockType::kHWWBIntfOutput);
-  if (it == hw_resource_info_.supported_formats_map.end()) {
-    return false;
-  }
-  std::vector<LayerBufferFormat> &supported_sdm_formats = it->second;
-  if (supported_sdm_formats.empty()) {
-    return false;
-  }
-  for (int i = 0; i < supported_sdm_formats.size(); i++) {
-    if (supported_sdm_formats[i] == format) {
-      return true;
+  bool has_wb_support = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
     }
+
+    std::map<HWSubBlockType, std::vector<LayerBufferFormat>>::iterator it =
+    hw_resource_info_[i].supported_formats_map.find(HWSubBlockType::kHWWBIntfOutput);
+    if (it == hw_resource_info_[i].supported_formats_map.end()) {
+      return false;
+    }
+
+    std::vector<LayerBufferFormat> &supported_sdm_formats = it->second;
+    if (supported_sdm_formats.empty()) {
+      return false;
+    }
+    bool supp_format = false;
+    for (int i = 0; i < supported_sdm_formats.size(); i++) {
+      if (supported_sdm_formats[i] == format) {
+        supp_format = true;
+        break;
+      }
+    }
+    has_wb_support &= supp_format;
   }
-  return false;
+  return has_wb_support;
 }
 
 DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
@@ -1779,18 +1811,28 @@ DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *v
 DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   ClientLock lock(disp_mutex_);
   fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+  bool hdr_supported = true;
+  bool has_concurrent_writeback = true;
 
-  HWResourceInfo hw_resource_info = HWResourceInfo();
-  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-  bool hdr_supported = hw_resource_info.has_hdr;
-  bool hdr_plus_supported = false;
-  bool dolby_vision_supported = false;
-  HWDisplayInterfaceInfo hw_disp_info = {};
-  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
-  if (hw_disp_info.type == kHDMI) {
-    hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    HWResourceInfo hw_resource_info = HWResourceInfo();
+    hw_info_intf_[i]->GetHWResourceInfo(&hw_resource_info);
+    hdr_supported &= hw_resource_info.has_hdr;
+    has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;
+    HWDisplayInterfaceInfo hw_disp_info = {};
+    hw_info_intf_[i]->GetFirstDisplayInterfaceType(&hw_disp_info);
+    if (hw_disp_info.type == kHDMI) {
+      hdr_supported &= (hdr_supported && hw_panel_info_.hdr_enabled);
+    }
   }
 
+  bool hdr_plus_supported = false;
+  bool dolby_vision_supported = false;
   // Checking library support for HDR10+
   comp_manager_->GetHDRCapability(&hdr_plus_supported, &dolby_vision_supported);
 
@@ -1807,7 +1849,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
   fixed_info->partial_update = hw_panel_info_.partial_update;
-  fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+  fixed_info->readback_supported = has_concurrent_writeback;
   fixed_info->supports_unified_draw = unified_draw_supported_;
 
   return kErrorNone;
@@ -2976,7 +3018,7 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   uint32_t display_width = display_attributes_.x_pixels;
   uint32_t display_height = display_attributes_.y_pixels;
 
-  if (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer) {
+  if (HasConcurrentWriteback() && layer_stack->output_buffer) {
     DLOGV_IF(kTagDisplay, "Found concurrent writeback, configure LM width:%d height:%d", fb_width,
              fb_height);
     *new_mixer_width = fb_width;
@@ -3172,6 +3214,18 @@ DisplayError DisplayBase::GetDisplayId(int32_t *display_id) {
   return kErrorNone;
 }
 
+DisplayError DisplayBase::GetConnectorId(int32_t *conn_id) {
+  ClientLock lock(disp_mutex_);
+
+  if (!conn_id) {
+    return kErrorParameters;
+  }
+
+  *conn_id = display_id_info_.GetConnId();
+
+  return kErrorNone;
+}
+
 DisplayError DisplayBase::GetDisplayType(DisplayType *display_type) {
   ClientLock lock(disp_mutex_);
 
@@ -3334,7 +3388,7 @@ DisplayError DisplayBase::InitializeColorModes() {
           color_mode_attr_map_.insert(std::make_pair(color_modes_[i].name, var));
           // If target doesn't support SSPP tone maping and color mode is HDR,
           // add bt2020pq and bt2020hlg color modes.
-          if (hw_resource_info_.src_tone_map.none() && IsHdrMode(var)) {
+          if (!HasSrcTonemap() && IsHdrMode(var)) {
             std::string str_render_intent;
             GetValueOfModeAttribute(var, kRenderIntentAttribute, &str_render_intent);
             color_mode_map_.insert(std::make_pair(kBt2020Pq, &color_modes_[i]));
@@ -3401,7 +3455,7 @@ DisplayError DisplayBase::GetClientTargetSupport(uint32_t width, uint32_t height
 }
 
 bool DisplayBase::IsSupportSsppTonemap() {
-  if (hw_resource_info_.src_tone_map.none()) {
+  if (!HasSrcTonemap()) {
     return false;
   } else {
     return true;
@@ -3412,8 +3466,18 @@ DisplayError DisplayBase::ValidateScaling(uint32_t width, uint32_t height) {
   uint32_t display_width = display_attributes_.x_pixels;
   uint32_t display_height = display_attributes_.y_pixels;
 
-  float max_scale_down = FLOAT(hw_resource_info_.max_scale_down);
-  float max_scale_up = FLOAT(hw_resource_info_.max_scale_up);
+  uint32_t max_scale_down = INT_MAX;
+  uint32_t max_scale_up = INT_MAX;
+
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    max_scale_down = std::min(max_scale_down, hw_resource_info_[i].max_scale_down);
+    max_scale_up = std::min(max_scale_up, hw_resource_info_[i].max_scale_up);
+  }
 
   float scale_x = FLOAT(width / display_width);
   float scale_y = FLOAT(height / display_height);
@@ -3629,7 +3693,7 @@ void DisplayBase::EndDisplayPowerReset() {
 }
 
 bool DisplayBase::SetHdrModeAtStart(LayerStack *layer_stack) {
-  return (hw_resource_info_.src_tone_map.none() && layer_stack->flags.hdr_present);
+  return (!HasSrcTonemap() && layer_stack->flags.hdr_present);
 }
 
 PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
@@ -3658,7 +3722,7 @@ PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
     }
   }
   // TODO(user): Check is if someone calls with hal_display_p3
-  if (hw_resource_info_.src_tone_map.none() &&
+  if (!HasSrcTonemap() &&
       (pic_quality == kStandard && color_gamut == kBt2020)) {
     pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
     if (transfer == kHlg) {
@@ -3796,9 +3860,19 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
       *supported = custom_mixer_resolution_;
       break;
     case kCwbDemuraTapPoint: {
-      std::vector<CwbTapPoint> &tappoints = hw_resource_info_.tap_points;
-      *supported = UINT32(std::find(tappoints.begin(), tappoints.end(),
-                                    CwbTapPoint::kDemuraTapPoint) != tappoints.end());
+      std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+      bool tap_point_supported = true;
+      for (int i = 0; i < core_id_map.size(); i++) {
+        if (!core_id_map[i]) {
+          continue;
+        }
+
+        std::vector<CwbTapPoint> &tappoints = hw_resource_info_[i].tap_points;
+        tap_point_supported = tap_point_supported &
+                              UINT32(std::find(tappoints.begin(), tappoints.end(),
+                                     CwbTapPoint::kDemuraTapPoint) != tappoints.end());
+      }
+      *supported = tap_point_supported;
       break;
     }
     case kCwbCrop:
@@ -3971,7 +4045,13 @@ void DisplayBase::CheckMMRMState() {
   DTRACE_SCOPED();
   DLOGI("Handling updated MMRM request");
   mmrm_updated_ = false;
-  bool reduced_clk = (mmrm_requested_clk_ < hw_resource_info_.max_sde_clk) ? true : false;
+
+  uint32_t max_sde_clk = INT_MAX;
+  for (auto val : hw_resource_info_) {
+    max_sde_clk = std::min(max_sde_clk, val.max_sde_clk);
+  }
+
+  bool reduced_clk = (mmrm_requested_clk_ < max_sde_clk) ? true : false;
 
   // Check layers if clock is less than max
   LayerStack *stack = disp_layer_stack_->stack;
@@ -4328,7 +4408,7 @@ void DisplayBase::OnCwbTeardown(bool sync_teardown) {
 DisplayError DisplayBase::CaptureCwb(const LayerBuffer &output_buffer, const CwbConfig &config) {
   ClientLock lock(disp_mutex_);
 
-  if (!hw_resource_info_.has_concurrent_writeback) {
+  if (!HasConcurrentWriteback()) {
     return kErrorNotSupported;
   }
 
@@ -4384,7 +4464,7 @@ DisplayError DisplayBase::CaptureCwb(const LayerBuffer &output_buffer, const Cwb
 bool DisplayBase::HandleCwbTeardown() {
   ClientLock lock(disp_mutex_);
 
-  if (!hw_resource_info_.has_concurrent_writeback) {
+  if (!HasConcurrentWriteback()) {
     return false;
   }
 
@@ -4392,7 +4472,10 @@ bool DisplayBase::HandleCwbTeardown() {
 }
 
 uint32_t DisplayBase::GetAvailableMixerCount() {
-  uint32_t max_count = hw_info_intf_->GetMaxMixerCount();
+  uint32_t max_count = UINT32_MAX;
+  for (auto info_intf : hw_info_intf_) {
+    max_count = std::fmin(max_count, info_intf->GetMaxMixerCount());
+  }
   uint32_t cur_count = comp_manager_->GetMixerCount();
 
   DLOGV("max mixer count: %d, currently used: %d", max_count, cur_count);
@@ -4432,6 +4515,49 @@ DisplayError DisplayBase::DisableDestinationScalar() {
   hw_intf_->SetDestScalarData(dest_scale_info_map);
 
   return kErrorNone;
+}
+
+bool DisplayBase::HasNoiseLayer() {
+  bool has_noise_layer = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    has_noise_layer = has_noise_layer & hw_resource_info_[i].has_noise_layer;
+  }
+
+  return has_noise_layer;
+}
+
+bool DisplayBase::HasConcurrentWriteback() {
+  bool has_concurrent_writeback = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    has_concurrent_writeback = has_concurrent_writeback &
+                               hw_resource_info_[i].has_concurrent_writeback;
+  }
+
+  return has_concurrent_writeback;
+}
+
+bool DisplayBase::HasSrcTonemap() {
+  bool has_src_tone_map = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    has_src_tone_map = has_src_tone_map & hw_resource_info_[i].src_tone_map.any();
+  }
+
+  return has_src_tone_map;
 }
 
 }  // namespace sdm

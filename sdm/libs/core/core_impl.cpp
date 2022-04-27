@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -40,6 +40,8 @@
 #include <private/hw_info_interface.h>
 #include <map>
 #include <vector>
+#include <thread>
+#include <utility>
 
 #include "color_manager.h"
 #include "core_impl.h"
@@ -102,7 +104,7 @@ DisplayError CoreImpl::Init() {
   enable_null_display_ = (value == 1);
   DLOGI("property: enable_null_display_ = %d", enable_null_display_);
   if (enable_null_display_) {
-    hw_info_intf_ = new HWInfoDefault();
+    hw_info_intf_[0] = new HWInfoDefault();
     return kErrorNone;
   }
 
@@ -113,13 +115,16 @@ DisplayError CoreImpl::Init() {
     if ((err != kErrorNone) || !enable_null_display_) {
       goto CleanupOnError;
     }
-    hw_info_intf_ = new HWInfoDefault();
+    hw_info_intf_[0] = new HWInfoDefault();
     return kErrorNone;
   }
 
-  error = hw_info_intf_->GetHWResourceInfo(&hw_resource_);
-  if (error != kErrorNone) {
-    goto CleanupOnError;
+  for (auto hw_info : hw_info_intf_) {
+    HWResourceInfo hw_resource;
+    error = hw_info->GetHWResourceInfo(&hw_resource);
+    if (error != kErrorNone)
+      goto CleanupOnError;
+    hw_resource_.push_back(hw_resource);
   }
 
   InitializeSDMUtils();
@@ -132,10 +137,10 @@ DisplayError CoreImpl::Init() {
 
   enable_null_display_ = !comp_mgr_.IsDisplayHWAvailable();
   if (enable_null_display_) {
-    if (hw_info_intf_) {
-      HWInfoInterface::Destroy(hw_info_intf_);
+    if (hw_info_intf_[0]) {
+      HWInfoInterface::Destroy(hw_info_intf_[0]);
     }
-    hw_info_intf_ = new HWInfoDefault();
+    hw_info_intf_[0] = new HWInfoDefault();
     return kErrorNone;
   }
 
@@ -146,17 +151,16 @@ DisplayError CoreImpl::Init() {
   }
 
   // Populate hw_displays_info_ once.
-  error = hw_info_intf_->GetDisplaysStatus(&hw_displays_info_);
-  if (error != kErrorNone) {
-    DLOGW("Failed getting displays status. Error = %d", error);
-  }
+  GetDisplaysStatus(&hw_displays_info_);
+
+  // To-Do: Find primary card id, needed by GetFirstDisplayOnterfaceType
 
   // Must only call after GetDisplaysStatus
   if (ReserveDemuraResources() != kErrorNone) {
     comp_mgr_.SetDemuraStatus(false);
   }
 #ifndef TRUSTED_VM
-  vm_cb_intf_ = new CoreIPCVmCallbackImpl(ipc_intf_, hw_info_intf_);
+  vm_cb_intf_ = new CoreIPCVmCallbackImpl(ipc_intf_, hw_info_intf_[0]);
   if (vm_cb_intf_) {
     vm_cb_intf_->Init();
   }
@@ -165,9 +169,11 @@ DisplayError CoreImpl::Init() {
   return kErrorNone;
 
 CleanupOnError:
-  if (hw_info_intf_) {
-    HWInfoInterface::Destroy(hw_info_intf_);
+  for (auto hw_info : hw_info_intf_) {
+    HWInfoInterface::Destroy(hw_info);
   }
+  hw_info_intf_.clear();
+  hw_resource_.clear();
 
   return error;
 }
@@ -211,12 +217,15 @@ DisplayError CoreImpl::Deinit() {
     }
   }
 
-  if (enable_null_display_) {
-    delete static_cast<HWInfoDefault *>(hw_info_intf_);
-    hw_info_intf_ = nullptr;
-  } else {
-    HWInfoInterface::Destroy(hw_info_intf_);
+  for (auto hw_info : hw_info_intf_) {
+    if (enable_null_display_) {
+      delete static_cast<HWInfoDefault *>(hw_info);
+      hw_info = nullptr;
+    } else {
+      HWInfoInterface::Destroy(hw_info);
+    }
   }
+  hw_info_intf_.clear();
 #ifdef TRUSTED_VM
   // release free memory from the heap, needed for Trusted_VM due to the limited
   // carveout size
@@ -283,7 +292,16 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
     return CreateNullDisplayLocked(intf);
   }
 
-  auto iter = hw_displays_info_.find(display_id);
+  DisplayId disp_id = DisplayId(display_id);
+  uint32_t core_count = (std::bitset<32> (disp_id.GetCoreIdMap())).count();
+
+  // ToDo(devanshi): Fix when enabling virtual driver for dual core
+  if (disp_id.GetDisplayId() != 0 && core_count == 0) {
+    disp_id = DisplayId(0, display_id);
+    core_count = 1;
+  }
+
+  auto iter = hw_displays_info_.find(disp_id.GetDisplayId());
 
   if (iter == hw_displays_info_.end()) {
     DLOGE("Spurious display id %d", display_id);
@@ -293,17 +311,21 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
   DisplayBase *display_base = NULL;
   DisplayType display_type = iter->second.display_type;
 
+  if (core_count > hw_info_intf_.size()) {
+    return kErrorCriticalResource;
+  }
+
   switch (display_type) {
     case kBuiltIn:
-      display_base = new DisplayBuiltIn(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayBuiltIn(disp_id, event_handler, hw_info_intf_,
                                         buffer_allocator_, &comp_mgr_, ipc_intf_);
       break;
     case kPluggable:
-      display_base = new DisplayPluggable(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayPluggable(disp_id, event_handler, hw_info_intf_,
                                           buffer_allocator_, &comp_mgr_);
       break;
     case kVirtual:
-      display_base = new DisplayVirtual(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayVirtual(disp_id, event_handler, hw_info_intf_,
                                         buffer_allocator_, &comp_mgr_);
       break;
     default:
@@ -406,23 +428,40 @@ DisplayError CoreImpl::SetMaxBandwidthMode(HWBwModes mode) {
 
 DisplayError CoreImpl::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
   SCOPE_LOCK(locker_);
-  return hw_info_intf_->GetFirstDisplayInterfaceType(hw_disp_info);
+  return hw_info_intf_[0]->GetFirstDisplayInterfaceType(hw_disp_info);
 }
 
 DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
-  SCOPE_LOCK(locker_);
-  DisplayError error = kErrorNone;
-  error = hw_info_intf_->GetDisplaysStatus(hw_displays_info);
-  if (kErrorNone == error) {
-    // Needed for error-checking in CreateDisplay(int32_t display_id, ...) and getting display-type.
-    hw_displays_info_ = *hw_displays_info;
+  hw_displays_info->clear();
+  // Needed for error-checking in CreateDisplay(int32_t display_id, ...) and getting display-type.
+  for (auto hw_info : hw_info_intf_) {
+    HWDisplaysInfo display_infos;
+    DisplayError error = hw_info->GetDisplaysStatus(&display_infos);
+    if (error)
+      return error;
+    hw_displays_info->insert(display_infos.begin(), display_infos.end());
   }
-  return error;
+
+  hw_displays_info_ = *hw_displays_info;
+
+  return kErrorNone;
 }
 
 DisplayError CoreImpl::GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) {
   SCOPE_LOCK(locker_);
-  return hw_info_intf_->GetMaxDisplaysSupported(type, max_displays);
+
+  // ToDo: Revisit this avoid creating duplicate slot in dual core case
+  *max_displays = 0;
+  for (auto hw_info : hw_info_intf_) {
+    int32_t tmp;
+    DisplayError error = hw_info->GetMaxDisplaysSupported(type, &tmp);
+    if (error)
+      return error;
+
+    *max_displays += tmp;
+  }
+
+  return kErrorNone;
 }
 
 bool CoreImpl::IsRotatorSupportedFormat(LayerBufferFormat format) {
@@ -439,7 +478,7 @@ void CoreImpl::InitializeSDMUtils() {
   }
 
   sdm_utils_factory_intf_ = get_sdm_utils_f_ptr();
-  sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_);
+  sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[0]);
 }
 
 void CoreImpl::OverRideDemuraPanelIds(std::vector<uint64_t> *panel_ids) {
@@ -505,8 +544,8 @@ DisplayError CoreImpl::ReserveDemuraResources() {
     comp_mgr_.SetDemuraStatus(true);
   }
   std::map<uint32_t, uint8_t> required_demura_fetch_cnt;  // display_id, count
-  if ((err = hw_info_intf_->GetRequiredDemuraFetchResourceCount(&required_demura_fetch_cnt)) !=
-      kErrorNone) {
+  if ((err = hw_info_intf_[0]->
+             GetRequiredDemuraFetchResourceCount(&required_demura_fetch_cnt)) != kErrorNone) {
     DLOGE("Unable to get required demura pipes count");
     return err;
   }
@@ -522,9 +561,15 @@ DisplayError CoreImpl::ReserveDemuraResources() {
   Debug::Get()->GetProperty(DISABLE_DEMURA_PRIMARY, &primary_off);
   Debug::Get()->GetProperty(DISABLE_DEMURA_SECONDARY, &secondary_off);
 
-  int available_blocks = hw_resource_.demura_count;
+  int available_blocks = hw_resource_[0].demura_count;
   for (auto r = required_demura_fetch_cnt.begin(); r != required_demura_fetch_cnt.end();) {
-    HWDisplayInfo &info = hw_displays_info_[r->first];
+    uint32_t disp_id = 0;
+    for (auto display_info : hw_displays_info_) {
+      if (DisplayId::GetConnId(display_info.first) == r->first) {
+        disp_id = display_info.first;
+      }
+    }
+    HWDisplayInfo &info = hw_displays_info_[disp_id];
     DLOGI("[%d] is_primary = %d, p_off = %d, s_off = %d", r->first, info.is_primary, primary_off,
           secondary_off);
     if (info.is_primary && primary_off) {
@@ -537,7 +582,7 @@ DisplayError CoreImpl::ReserveDemuraResources() {
 
     available_blocks -= r->second;
     if (available_blocks < 0) {
-      DLOGE("Not enough Demura blocks (%u)", hw_resource_.demura_count);
+      DLOGE("Not enough Demura blocks (%u)", hw_resource_[0].demura_count);
       return kErrorResources;
     }
     ++r;
@@ -564,7 +609,13 @@ DisplayError CoreImpl::ReserveDemuraResources() {
       // For rest of the topology return error as they are not supported for demura.
       int8_t preferred_rect = -1;
       if (req_cnt == 1) {
-        HWDisplayInfo &info = hw_displays_info_[req.first];
+        uint32_t disp_id = 0;
+        for (auto display_info : hw_displays_info_) {
+          if (DisplayId::GetConnId(display_info.first) == req.first) {
+            disp_id = display_info.first;
+          }
+        }
+        HWDisplayInfo &info = hw_displays_info_[disp_id];
         preferred_rect = info.is_primary ? 0 : 1;
         DLOGI("[%u] is single LM. Requesting Demura rect %d", req.first, preferred_rect);
       } else if (req_cnt == 2) {
@@ -610,7 +661,7 @@ DisplayError CoreImpl::ReserveDemuraResources() {
     return kErrorResources;
   }
 
-  if ((err = hw_info_intf_->GetDemuraPanelIds(panel_ids)) != kErrorNone) {
+  if ((err = hw_info_intf_[0]->GetDemuraPanelIds(panel_ids)) != kErrorNone) {
     DLOGE("Unable to get demura panel ids");
     return err;
   }

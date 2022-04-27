@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -124,9 +124,9 @@ class CoreImpl : public CoreInterface {
 
   Locker locker_;
   BufferAllocator *buffer_allocator_ = NULL;
-  HWResourceInfo hw_resource_;
+  std::vector<HWResourceInfo> hw_resource_;
   CompManager comp_mgr_;
-  HWInfoInterface *hw_info_intf_ = NULL;
+  std::vector<HWInfoInterface*> hw_info_intf_;
   DynLib extension_lib_;
   ExtensionInterface *extension_intf_ = NULL;
   CreateExtensionInterface create_extension_intf_ = NULL;

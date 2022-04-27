@@ -79,10 +79,10 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
  public:
   DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, HWInfoInterface *hw_info_intf);
-  DisplayBase(int32_t display_id, DisplayType display_type, DisplayEventHandler *event_handler,
+              CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf);
+  DisplayBase(DisplayId display_id, DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, HWInfoInterface *hw_info_intf);
+              CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf);
   virtual ~DisplayBase();
   virtual DisplayError Init();
   virtual DisplayError Deinit();
@@ -174,6 +174,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   virtual DisplayError SetDetailEnhancerData(const DisplayDetailEnhancerData &de_data);
   virtual DisplayError GetDisplayPort(DisplayPort *port);
   virtual DisplayError GetDisplayId(int32_t *display_id);
+  virtual DisplayError GetConnectorId(int32_t *conn_id);
   virtual DisplayError GetDisplayType(DisplayType *display_type);
   virtual bool IsPrimaryDisplay();
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
@@ -260,6 +261,9 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   virtual DisplayError SetDemuraState(int state) { return kErrorNotSupported; }
   virtual DisplayError SetDemuraConfig(int demura_idx) { return kErrorNotSupported; }
   virtual void ResetDispLayerStack();
+  virtual bool HasNoiseLayer();
+  virtual bool HasConcurrentWriteback();
+  virtual bool HasSrcTonemap();
 
  protected:
   struct DisplayMutex {
@@ -355,13 +359,14 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
 
   DisplayMutex disp_mutex_;
   std::thread commit_thread_;
+  DisplayId display_id_info_ = {};
   int32_t display_id_ = -1;
   DisplayType display_type_;
   DisplayEventHandler *event_handler_ = NULL;
   HWDeviceType hw_device_type_;
   HWInterface *hw_intf_ = NULL;
   HWPanelInfo hw_panel_info_;
-  HWResourceInfo hw_resource_info_ = {};
+  std::vector<HWResourceInfo> hw_resource_info_;
   BufferAllocator *buffer_allocator_ {};
   CompManager *comp_manager_ = NULL;
   DisplayState state_ = kStateOff;
@@ -376,7 +381,9 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   bool needs_validate_ = true;  // maintains validation state between Prepare/Commit Cycle
   bool vsync_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
-  HWInfoInterface *hw_info_intf_ = NULL;
+  std::vector<HWInfoInterface*> hw_info_intf_;
+  std::bitset<32> core_id_;
+  uint32_t primary_core_id_ = 0;
   ColorManagerProxy *color_mgr_ = NULL;  // each display object owns its ColorManagerProxy
   bool partial_update_control_ = true;
   HWEventsInterface *hw_events_intf_ = NULL;

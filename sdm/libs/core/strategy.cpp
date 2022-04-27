@@ -39,25 +39,28 @@ namespace sdm {
 
 Strategy::Strategy(ExtensionInterface *extension_intf,
                    BufferAllocator *buffer_allocator,
-                   int32_t display_id, DisplayType type, const HWResourceInfo &hw_resource_info,
+                   DisplayId display_id, DisplayType type,
+                   const std::vector<HWResourceInfo> &hw_resource_info,
                    const HWPanelInfo &hw_panel_info, const HWMixerAttributes &mixer_attributes,
                    const HWDisplayAttributes &display_attributes,
                    const DisplayConfigVariableInfo &fb_config)
   : extension_intf_(extension_intf),
-    display_id_(display_id),
+    display_id_info_(display_id),
     display_type_(type),
     hw_resource_info_(hw_resource_info),
     hw_panel_info_(hw_panel_info),
     mixer_attributes_(mixer_attributes),
     display_attributes_(display_attributes),
     fb_config_(fb_config),
-    buffer_allocator_(buffer_allocator) {}
+    buffer_allocator_(buffer_allocator) {
+    display_id_ = display_id_info_.GetDisplayId();
+  }
 
 DisplayError Strategy::Init() {
   DisplayError error = kErrorNone;
 
   if (extension_intf_) {
-    error = extension_intf_->CreateStrategyExtn(display_id_, display_type_, buffer_allocator_,
+    error = extension_intf_->CreateStrategyExtn(display_id_info_, display_type_, buffer_allocator_,
                                                 hw_resource_info_, hw_panel_info_,
                                                 mixer_attributes_, display_attributes_, fb_config_,
                                                 &strategy_intf_);
@@ -67,7 +70,7 @@ DisplayError Strategy::Init() {
     }
 
     error = extension_intf_->CreatePartialUpdate(
-        display_id_, display_type_, hw_resource_info_, hw_panel_info_, mixer_attributes_,
+        display_id_info_, display_type_, hw_resource_info_, hw_panel_info_, mixer_attributes_,
         display_attributes_, fb_config_, &partial_update_intf_);
   }
 
@@ -183,7 +186,17 @@ void Strategy::GenerateROI() {
   float layer_mixer_width = mixer_attributes_.width;
   float layer_mixer_height = mixer_attributes_.height;
 
-  if (!hw_resource_info_.is_src_split && display_attributes_.is_device_split) {
+  bool is_src_split = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    is_src_split &= hw_resource_info_[i].is_src_split;
+  }
+
+  if (!is_src_split && display_attributes_.is_device_split) {
     split_display = true;
   }
 
@@ -220,9 +233,9 @@ DisplayError Strategy::Reconfigure(const HWPanelInfo &hw_panel_info,
     partial_update_intf_ = NULL;
   }
 
-  extension_intf_->CreatePartialUpdate(display_id_, display_type_, hw_resource_info_, hw_panel_info,
-                                       mixer_attributes, display_attributes, fb_config,
-                                       &partial_update_intf_);
+  extension_intf_->CreatePartialUpdate(display_id_info_, display_type_, hw_resource_info_,
+                                       hw_panel_info, mixer_attributes, display_attributes,
+                                       fb_config, &partial_update_intf_);
 
   error = strategy_intf_->Reconfigure(hw_panel_info, hw_resource_info_, display_attributes,
                                       mixer_attributes, fb_config);

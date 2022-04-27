@@ -24,6 +24,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_INFO_INTERFACE_H__
 #define __HW_INFO_INTERFACE_H__
 
@@ -39,7 +46,7 @@ namespace sdm {
 
 class HWInfoInterface {
  public:
-  static DisplayError Create(HWInfoInterface **intf);
+  static DisplayError Create(std::vector<HWInfoInterface*> *intfs);
   static DisplayError Destroy(HWInfoInterface *intf);
   virtual DisplayError Init() = 0;
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;
@@ -51,11 +58,13 @@ class HWInfoInterface {
   virtual DisplayError GetDemuraPanelIds(std::vector<uint64_t> *panel_ids) = 0;
   virtual DisplayError GetPanelBootParamString(std::string *panel_boot_param_string) = 0;
   virtual uint32_t GetMaxMixerCount() = 0;
+  virtual uint32_t GetCoreId() = 0;
 
  protected:
-  static int32_t ref_count_;
-  static HWInfoInterface *intf_;
+  static std::vector<HWInfoInterface*> intf_;
   virtual ~HWInfoInterface() { }
+  static const int kMaxCore = 12;
+  static int32_t ref_count_;
 };
 
 }  // namespace sdm

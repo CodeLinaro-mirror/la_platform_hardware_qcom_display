@@ -58,6 +58,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <math.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -67,6 +74,7 @@
 #include <dlfcn.h>
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include "resource_default.h"
 
@@ -74,11 +82,12 @@
 
 namespace sdm {
 
-DisplayError ResourceDefault::CreateResourceDefault(const HWResourceInfo &hw_resource_info,
+DisplayError ResourceDefault::CreateResourceDefault(const
+                                                    std::vector<HWResourceInfo> &hw_resource_info,
                                                     ResourceInterface **resource_intf) {
   DisplayError error = kErrorNone;
 
-  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info);
+  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info[0]);
   if (!resource_default) {
     return kErrorNone;
   }
@@ -171,7 +180,7 @@ DisplayError ResourceDefault::Deinit() {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::RegisterDisplay(int32_t display_id, DisplayType type,
+DisplayError ResourceDefault::RegisterDisplay(DisplayId display_id, DisplayType type,
                                               const HWDisplayAttributes &display_attributes,
                                               const HWPanelInfo &hw_panel_info,
                                               const HWMixerAttributes &mixer_attributes,
