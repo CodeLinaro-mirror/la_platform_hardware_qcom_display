@@ -164,6 +164,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode);
   virtual DisplayError colorSamplingOn();
   virtual DisplayError colorSamplingOff();
+  virtual DisplayError SetSkewVsync(uint32_t skew_vsync_val);
 
   // Implement the HWEventHandlers
   virtual DisplayError VSync(int64_t timestamp);

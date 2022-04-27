@@ -203,6 +203,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError ReconfigureDisplay();
   virtual DisplayError SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
   virtual DisplayError WbCacPerf(bool enable) { return kErrorNone; };
+  virtual DisplayError SetSkewVsync(uint32_t skew_vsync_val) { return kErrorNotSupported; };
 
  protected:
   const char *kBt2020Pq = "bt2020_pq";

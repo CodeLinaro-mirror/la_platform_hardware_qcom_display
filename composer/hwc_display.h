@@ -455,6 +455,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void CacCommitDone(bool cac_commit_done) { return; }
   virtual bool IsCacCommitDone() { return false; }
   bool IsWBCacInUse();
+  virtual int32_t SetSkewVsync(uint32_t skew_vsync_val) {
+    return kErrorNotSupported;
+  };
 
  protected:
   static uint32_t throttling_refresh_rate_;

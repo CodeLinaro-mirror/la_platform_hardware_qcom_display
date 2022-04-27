@@ -168,6 +168,7 @@ class HWInterface {
   virtual DisplayError GetPanelBrightnessBasePath(std::string *base_path) = 0;
   virtual DisplayError SetBlendSpace(const PrimariesTransfer &blend_space) = 0;
   virtual DisplayError SetCAC(bool enable, PanelOrientation orientation) = 0;
+  virtual DisplayError SetSkewVsync(uint32_t skew_vsync_val) = 0;
 
  protected:
   virtual ~HWInterface() { }

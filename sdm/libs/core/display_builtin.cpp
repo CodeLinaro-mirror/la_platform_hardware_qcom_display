@@ -1245,4 +1245,17 @@ void DisplayBuiltIn::GetFpsConfig(HWDisplayAttributes *display_attr, HWPanelInfo
   panel_info->transfer_time_us = hw_panel_info_.transfer_time_us;
 }
 
+DisplayError DisplayBuiltIn::SetSkewVsync(uint32_t skew_vsync_val) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  DisplayError err = hw_intf_->SetSkewVsync(skew_vsync_val);
+  if (err) {
+    DLOGE("Display %d-%d: Failed to set skew vsync value: %d", display_id_, display_type_,
+          skew_vsync_val);
+  } else {
+    DLOGI_IF(kTagDisplay, "Setting skew vsync value: %d", skew_vsync_val);
+  }
+  return err;
+}
+
 }  // namespace sdm

@@ -160,6 +160,7 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(SetCAC(bool, float, float, float, PanelOrientation))
   MAKE_NO_OP(SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right))
   MAKE_NO_OP(WbCacPerf(bool enable))
+  MAKE_NO_OP(SetSkewVsync(uint32_t))
 
  protected:
   DisplayConfigVariableInfo default_variable_config_ = {};

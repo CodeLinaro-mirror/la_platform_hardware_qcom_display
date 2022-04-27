@@ -169,6 +169,7 @@ class HWDeviceDRM : public HWInterface {
   }
   virtual DisplayError SetBlendSpace(const PrimariesTransfer &blend_space);
   virtual DisplayError SetCAC(bool enable, PanelOrientation orientation);
+  virtual DisplayError SetSkewVsync(uint32_t skew_vsync_val) { return kErrorNotSupported; }
 
   enum {
     kHWEventVSync,

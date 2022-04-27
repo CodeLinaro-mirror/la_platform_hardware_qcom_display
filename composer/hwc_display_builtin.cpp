@@ -2271,4 +2271,15 @@ int32_t HWCDisplayBuiltIn::SetCACEyeConfig(const CACEyeConfig &left,
   return 0;
 }
 
+int32_t HWCDisplayBuiltIn::SetSkewVsync(uint32_t skew_vsync_val) {
+  DisplayError error = display_intf_->SetSkewVsync(skew_vsync_val);
+  if (error != kErrorNone) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d, skew_vsync = %d", id_, sdm_id_, type_,
+          skew_vsync_val);
+    return -1;
+  }
+
+  return 0;
+};
+
 }  // namespace sdm
