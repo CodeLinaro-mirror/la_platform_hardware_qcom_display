@@ -64,6 +64,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <map>
 #include <utility>
 
@@ -74,7 +75,7 @@
 
 namespace sdm {
 
-DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
+DisplayError CompManager::Init(const std::vector<HWResourceInfo> &hw_res_info,
                                ExtensionInterface *extension_intf,
                                BufferAllocator *buffer_allocator,
                                SocketHandler *socket_handler) {
@@ -119,7 +120,7 @@ DisplayError CompManager::Deinit() {
   return kErrorNone;
 }
 
-DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
+DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type,
                                           const HWDisplayAttributes &display_attributes,
                                           const HWPanelInfo &hw_panel_info,
                                           const HWMixerAttributes &mixer_attributes,
@@ -186,7 +187,7 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     return error;
   }
 
-  registered_displays_.insert(display_id);
+  registered_displays_.insert(display_id.GetDisplayId());
   display_comp_ctx->is_primary_panel = hw_panel_info.is_primary_panel;
   display_comp_ctx->display_id = display_id;
   display_comp_ctx->display_type = type;
@@ -199,10 +200,11 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     max_sde_secondary_fetch_layers_ = UINT32(Debug::GetSecondaryMaxFetchLayers());
   }
 
-  display_demura_status_[display_id] = false;
+  display_demura_status_[display_id.GetDisplayId()] = false;
 
   DLOGV_IF(kTagCompManager, "Registered displays [%s], display %d-%d",
-           StringDisplayList(registered_displays_).c_str(), display_comp_ctx->display_id,
+           StringDisplayList(registered_displays_).c_str(),
+                             display_comp_ctx->display_id.GetDisplayId(),
            display_comp_ctx->display_type);
 
   return kErrorNone;
@@ -224,11 +226,12 @@ DisplayError CompManager::UnregisterDisplay(Handle display_ctx) {
   strategy->Deinit();
   delete strategy;
 
-  registered_displays_.erase(display_comp_ctx->display_id);
-  powered_on_displays_.erase(display_comp_ctx->display_id);
+  registered_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
+  powered_on_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
 
   DLOGV_IF(kTagCompManager, "Registered displays [%s], display %d-%d",
-           StringDisplayList(registered_displays_).c_str(), display_comp_ctx->display_id,
+           StringDisplayList(registered_displays_).c_str(),
+           display_comp_ctx->display_id.GetDisplayId(),
            display_comp_ctx->display_type);
 
   delete display_comp_ctx;
@@ -315,17 +318,36 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
     resource_intf_->Precheck(display_resource_ctx, disp_layer_stack, &feedback);
 
   constraints->safe_mode = safe_mode_;
-  constraints->max_layers = hw_res_info_.num_blending_stages;
+  uint32_t num_blending_stages = INT_MAX;
+  uint32_t num_vig_pipe = INT_MAX;
+  uint32_t num_dma_pipe = INT_MAX;
+  uint32_t num_rgb_pipe = INT_MAX;
+  bool separate_rotator = true;
+
+  std::bitset<8> core_id_map = display_comp_ctx->display_id.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    num_blending_stages = std::min(num_blending_stages, hw_res_info_[i].num_blending_stages);
+    num_vig_pipe = std::min(num_vig_pipe, hw_res_info_[i].num_vig_pipe);
+    num_dma_pipe = std::min(num_dma_pipe, hw_res_info_[i].num_dma_pipe);
+    num_rgb_pipe = std::min(num_rgb_pipe, hw_res_info_[i].num_rgb_pipe);
+    separate_rotator &=  hw_res_info_[i].separate_rotator;
+  }
+
+  constraints->max_layers = num_blending_stages;
   constraints->feedback = feedback;
 
   // Limit 2 layer SDE Comp if its not a Primary Display.
   // Safe mode is the policy for External display on a low end device.
   if (!display_comp_ctx->is_primary_panel) {
-    bool low_end_hw = ((hw_res_info_.num_vig_pipe + hw_res_info_.num_rgb_pipe +
-                        hw_res_info_.num_dma_pipe) <= kSafeModeThreshold);
+    bool low_end_hw = ((num_vig_pipe + num_rgb_pipe +
+                        num_dma_pipe) <= kSafeModeThreshold);
     constraints->max_layers = display_comp_ctx->display_type == kBuiltIn ?
                               max_sde_builtin_fetch_layers_ : max_sde_secondary_fetch_layers_;
-    constraints->safe_mode = (low_end_hw && !hw_res_info_.separate_rotator) ? true : safe_mode_;
+    constraints->safe_mode = (low_end_hw && !separate_rotator) ? true : safe_mode_;
   }
 
   // If a strategy fails after successfully allocating resources, then set safe mode
@@ -419,7 +441,7 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
   if (error != kErrorNone) {
     resource_intf_->Stop(display_resource_ctx, disp_layer_stack);
     DLOGE("Composition strategies exhausted for display = %d-%d. (first frame = %s)",
-          display_comp_ctx->display_id, display_comp_ctx->display_type,
+          display_comp_ctx->display_id.GetDisplayId(), display_comp_ctx->display_type,
           display_comp_ctx->first_cycle_ ? "True" : "False");
     return error;
   }
@@ -484,7 +506,8 @@ DisplayError CompManager::PostCommit(Handle display_ctx, DispLayerStack *disp_la
   display_comp_ctx->constraints.idle_timeout = false;
 
   DLOGV_IF(kTagCompManager, "Registered displays [%s], display %d-%d",
-           StringDisplayList(registered_displays_).c_str(), display_comp_ctx->display_id,
+           StringDisplayList(registered_displays_).c_str(),
+           display_comp_ctx->display_id.GetDisplayId(),
            display_comp_ctx->display_type);
 
   return kErrorNone;
@@ -633,7 +656,12 @@ DisplayError CompManager::ControlDpps(bool enable) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   // DPPS feature and HDR using SSPP tone mapping can co-exist
   // DPPS feature and HDR using DSPP tone mapping are mutually exclusive
-  if (dpps_ctrl_intf_ && hw_res_info_.src_tone_map.none()) {
+  bool src_tone_map = true;
+  for (auto val : hw_res_info_) {
+    src_tone_map = src_tone_map & val.src_tone_map.any();
+  }
+
+  if (dpps_ctrl_intf_ && !src_tone_map) {
     int err = 0;
     if (enable) {
       err = dpps_ctrl_intf_->On();
@@ -660,18 +688,18 @@ bool CompManager::SetDisplayState(Handle display_ctx, DisplayState state,
   switch (state) {
   case kStateOff:
     Purge(display_ctx);
-    powered_on_displays_.erase(display_comp_ctx->display_id);
+    powered_on_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
     break;
 
   case kStateOn:
   case kStateDoze:
     resource_intf_->Perform(ResourceInterface::kCmdDedicatePipes,
                             display_comp_ctx->display_resource_ctx);
-    powered_on_displays_.insert(display_comp_ctx->display_id);
+    powered_on_displays_.insert(display_comp_ctx->display_id.GetDisplayId());
     break;
 
   case kStateDozeSuspend:
-    powered_on_displays_.erase(display_comp_ctx->display_id);
+    powered_on_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
     break;
 
   default:

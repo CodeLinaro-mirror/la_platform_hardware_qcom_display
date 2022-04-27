@@ -158,21 +158,19 @@ static InlineRotationVersion GetInRotVersion(sde_drm::InlineRotationVersion drm_
   }
 }
 
-HWResourceInfo *HWInfoDRM::hw_resource_ = nullptr;
-
 DisplayError HWInfoDRM::Init() {
-  default_mode_ = (DRMLibLoader::GetInstance()->IsLoaded() == false);
+  default_mode_ = (DRMLibLoader::GetInstance(core_id_)->IsLoaded() == false);
   if (!default_mode_) {
     DRMMaster *drm_master = {};
     int dev_fd = -1;
-    DRMMaster::GetInstance(&drm_master);
+    DRMMaster::GetInstance(&drm_master, core_id_);
     if (!drm_master) {
-      DLOGE("Failed to acquire DRMMaster instance");
+      DLOGI("Failed to acquire DRMMaster instance %d", core_id_);
       return kErrorCriticalResource;
     }
     drm_master->GetHandle(&dev_fd);
 
-    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance(core_id_);
     if (!drm_lib_loader) {
       DLOGE("Failed to acquire DRMLibLoader instance");
       return kErrorCriticalResource;
@@ -180,8 +178,8 @@ DisplayError HWInfoDRM::Init() {
     drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
 
     if (!drm_mgr_intf_) {
-      DRMLibLoader::Destroy();
-      DRMMaster::DestroyInstance();
+      DRMLibLoader::Destroy(core_id_);
+      DRMMaster::DestroyInstance(core_id_);
       DLOGE("Failed to get DRMManagerInterface");
       return kErrorCriticalResource;
     }
@@ -195,15 +193,19 @@ void HWInfoDRM::Deinit() {
   hw_resource_ = nullptr;
 
   if (drm_mgr_intf_) {
-    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance(core_id_);
     if (drm_lib_loader) {
-      drm_lib_loader->FuncDestroyDRMManager()();
+      DRMMaster *drm_master = {};
+      int dev_fd = -1;
+      DRMMaster::GetInstance(&drm_master);
+      drm_master->GetHandle(&dev_fd);
+      drm_lib_loader->FuncDestroyDRMManager()(dev_fd);
     }
     drm_mgr_intf_ = nullptr;
   }
 
-  DRMLibLoader::Destroy();
-  DRMMaster::DestroyInstance();
+  DRMLibLoader::Destroy(core_id_);
+  DRMMaster::DestroyInstance(core_id_);
 }
 
 HWInfoDRM::~HWInfoDRM() {
@@ -265,6 +267,8 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   hw_resource->has_ubwc = true;
   hw_resource->separate_rotator = true;
   hw_resource->has_non_scalar_rgb = false;
+
+  hw_resource->core_id = core_id_;
 
   GetSystemInfo(hw_resource);
   GetHWPlanesInfo(hw_resource);
@@ -922,7 +926,8 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
   for (auto &iter : conns_info) {
     HWDisplayInfo hw_info = {};
     hw_info.display_id =
-        ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 : (int32_t)(iter.first);
+        ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 :
+                              (int32_t)DisplayId(core_id_, iter.first).GetDisplayId();
     switch (iter.second.type) {
       case DRM_MODE_CONNECTOR_DSI:
         hw_info.display_type = kBuiltIn;

@@ -1099,7 +1099,7 @@ class DRMManagerInterface;
 typedef int (*GetDRMManager)(int fd, DRMManagerInterface **intf);
 
 /* Destroy DRMManager instance */
-typedef int (*DestroyDRMManager)();
+typedef int (*DestroyDRMManager)(int fd);
 
 
 /*

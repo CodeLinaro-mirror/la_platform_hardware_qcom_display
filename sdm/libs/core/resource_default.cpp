@@ -30,6 +30,7 @@
 #include <utils/sys.h>
 #include <dlfcn.h>
 #include <algorithm>
+#include <vector>
 
 #include "resource_default.h"
 
@@ -37,11 +38,12 @@
 
 namespace sdm {
 
-DisplayError ResourceDefault::CreateResourceDefault(const HWResourceInfo &hw_resource_info,
+DisplayError ResourceDefault::CreateResourceDefault(const
+                                                    std::vector<HWResourceInfo> &hw_resource_info,
                                                     ResourceInterface **resource_intf) {
   DisplayError error = kErrorNone;
 
-  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info);
+  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info[0]);
   if (!resource_default) {
     return kErrorNone;
   }
@@ -134,7 +136,7 @@ DisplayError ResourceDefault::Deinit() {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::RegisterDisplay(int32_t display_id, DisplayType type,
+DisplayError ResourceDefault::RegisterDisplay(DisplayId display_id, DisplayType type,
                                               const HWDisplayAttributes &display_attributes,
                                               const HWPanelInfo &hw_panel_info,
                                               const HWMixerAttributes &mixer_attributes,

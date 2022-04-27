@@ -25,6 +25,7 @@
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <algorithm>
+#include <vector>
 #include "display_virtual.h"
 #include "hw_interface.h"
 #include "hw_info_interface.h"
@@ -33,14 +34,15 @@
 
 namespace sdm {
 
-DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(kVirtual, event_handler, kDeviceVirtual, buffer_allocator,
                 comp_manager, hw_info_intf) {
 }
 
-DisplayVirtual::DisplayVirtual(int32_t display_id, DisplayEventHandler *event_handler,
-                               HWInfoInterface *hw_info_intf,
+DisplayVirtual::DisplayVirtual(DisplayId display_id, DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(display_id, kVirtual, event_handler, kDeviceVirtual,
                 buffer_allocator, comp_manager, hw_info_intf) {
@@ -49,7 +51,8 @@ DisplayVirtual::DisplayVirtual(int32_t display_id, DisplayEventHandler *event_ha
 DisplayError DisplayVirtual::Init() {
   ClientLock lock(disp_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kVirtual, hw_info_intf_,
+  DisplayError error = HWInterface::Create(display_id_info_.GetConnId(), kVirtual,
+                                           hw_info_intf_[primary_core_id_],
                                            buffer_allocator_, &hw_intf_);
 
   if (error != kErrorNone) {
@@ -58,18 +61,31 @@ DisplayError DisplayVirtual::Init() {
 
   if (-1 == display_id_) {
     hw_intf_->GetDisplayId(&display_id_);
+    display_id_info_ = DisplayId(primary_core_id_, display_id_);
+    display_id_ = display_id_info_.GetDisplayId();
   }
 
-  if (hw_info_intf_) {
+  for (auto info_intf : hw_info_intf_) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-    auto max_mixer_stages = hw_resource_info.num_blending_stages;
-    int property_value = Debug::GetMaxPipesPerMixer(display_type_);
-    if (property_value >= 0) {
-      max_mixer_stages = std::min(UINT32(property_value), hw_resource_info.num_blending_stages);
-    }
-    DisplayBase::SetMaxMixerStages(max_mixer_stages);
+    info_intf->GetHWResourceInfo(&hw_resource_info);
+    hw_resource_info_.push_back(hw_resource_info);
   }
+
+  uint32_t max_mixer_stages = INT_MAX;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    max_mixer_stages = std::min(max_mixer_stages, hw_resource_info_[i].num_blending_stages);
+  }
+
+  int property_value = Debug::GetMaxPipesPerMixer(display_type_);
+  if (property_value >= 0) {
+    max_mixer_stages = std::min(UINT32(property_value), max_mixer_stages);
+  }
+  DisplayBase::SetMaxMixerStages(max_mixer_stages);
 
   int value = 0;
   Debug::Get()->GetProperty(DISABLE_MITIGATED_FPS, &value);
@@ -161,7 +177,7 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
 
   // if display is already connected, reconfigure the display with new configuration.
   if (!display_comp_ctx_) {
-    error = comp_manager_->RegisterDisplay(display_id_, display_type_, display_attributes,
+    error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, display_attributes,
                                            hw_panel_info, mixer_attributes, fb_config,
                                            &display_comp_ctx_, &cached_qos_data_);
   } else {

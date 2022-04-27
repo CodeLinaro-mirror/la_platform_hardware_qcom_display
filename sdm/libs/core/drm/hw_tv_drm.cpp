@@ -146,6 +146,7 @@ HWTVDRM::HWTVDRM(int32_t display_id, BufferAllocator *buffer_allocator,
   disp_type_ = DRMDisplayType::TV;
   device_name_ = "TV";
   display_id_ = display_id;
+  core_id_ = hw_info_intf->GetCoreId();
 }
 
 DisplayError HWTVDRM::SetDisplayAttributes(uint32_t index) {

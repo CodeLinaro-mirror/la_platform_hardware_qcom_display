@@ -53,7 +53,7 @@ class StrategyInterface {
   virtual DisplayError Stop() = 0;
   virtual DisplayError SetDrawMethod(const DisplayDrawMethod &draw_method) = 0;
   virtual DisplayError Reconfigure(const HWPanelInfo &hw_panel_info,
-                                   const HWResourceInfo &hw_res_info,
+                                   const std::vector<HWResourceInfo> &hw_res_info,
                                    const HWMixerAttributes &mixer_attributes,
                                    const DisplayConfigVariableInfo &fb_config) = 0;
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;

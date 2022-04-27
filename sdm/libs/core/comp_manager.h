@@ -64,6 +64,7 @@
 #include <core/display_interface.h>
 #include <private/extension_interface.h>
 #include <utils/locker.h>
+#include<limits.h>
 #include <bitset>
 #include <set>
 #include <vector>
@@ -79,10 +80,11 @@ namespace sdm {
 
 class CompManager {
  public:
-  DisplayError Init(const HWResourceInfo &hw_res_info_, ExtensionInterface *extension_intf,
+  DisplayError Init(const std::vector<HWResourceInfo> &hw_res_info_,
+                    ExtensionInterface *extension_intf,
                     BufferAllocator *buffer_allocator, SocketHandler *socket_handler);
   DisplayError Deinit();
-  DisplayError RegisterDisplay(int32_t display_id, DisplayType type,
+  DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
                                const HWDisplayAttributes &display_attributes,
                                const HWPanelInfo &hw_panel_info,
                                const HWMixerAttributes &mixer_attributes,
@@ -159,7 +161,7 @@ class CompManager {
     Strategy *strategy = NULL;
     StrategyConstraints constraints;
     Handle display_resource_ctx = NULL;
-    int32_t display_id = -1;
+    DisplayId display_id = {};
     DisplayType display_type = kBuiltIn;
     uint32_t max_strategies = 0;
     uint32_t remaining_strategies = 0;
@@ -181,7 +183,7 @@ class CompManager {
   bool safe_mode_ = false;              // Flag to notify all displays to be in resource crunch
                                         // mode, where strategy manager chooses the best strategy
                                         // that uses optimal number of pipes for each display
-  HWResourceInfo hw_res_info_;
+  std::vector<HWResourceInfo> hw_res_info_;
   BufferAllocator *buffer_allocator_ = NULL;
   ExtensionInterface *extension_intf_ = NULL;
   CapabilitiesInterface *cap_intf_ = nullptr;

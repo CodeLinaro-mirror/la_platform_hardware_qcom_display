@@ -54,8 +54,8 @@ int GetDRMManager(int fd, sde_drm::DRMManagerInterface **intf) {
   return 0;
 }
 
-int DestroyDRMManager() {
-  sde_drm::DRMManager::Destroy();
+int DestroyDRMManager(int fd) {
+  sde_drm::DRMManager::Destroy(fd);
   return 0;
 }
 
@@ -65,29 +65,33 @@ namespace sde_drm {
 
 #define __CLASS__ "DRMManager"
 
-DRMManager *DRMManager::s_drm_instance = NULL;
+sdm::MultiCoreInstance<int, DRMManager*> DRMManager::s_drm_instance;
 mutex DRMManager::s_lock;
 
 DRMManager *DRMManager::GetInstance(int fd) {
   lock_guard<mutex> lock(s_lock);
-  if (!s_drm_instance) {
-    s_drm_instance = new DRMManager();
 
-    int ret = s_drm_instance ? s_drm_instance->Init(fd) : DRM_ERR_INVALID;
+  auto iter = s_drm_instance.Find(fd);
+  if (iter == s_drm_instance.End()) {
+    DRMManager *drm_manager = new DRMManager();
+
+    int ret = drm_manager ? drm_manager->Init(fd) : DRM_ERR_INVALID;
     if (ret) {
-      delete s_drm_instance;
-      s_drm_instance = nullptr;
+      delete drm_manager;
+      drm_manager = nullptr;
     }
+
+    s_drm_instance[fd] = drm_manager;
   }
 
-  return s_drm_instance;
+  return s_drm_instance[fd];
 }
 
-void DRMManager::Destroy() {
+void DRMManager::Destroy(int fd) {
   lock_guard<mutex> lock(s_lock);
-  if (s_drm_instance) {
-    delete s_drm_instance;
-    s_drm_instance = nullptr;
+  if (s_drm_instance[fd]) {
+    delete s_drm_instance[fd];
+    s_drm_instance[fd] = nullptr;
   }
 }
 

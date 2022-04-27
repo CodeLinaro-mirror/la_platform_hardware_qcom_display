@@ -38,10 +38,10 @@ namespace sdm {
 
 class ResourceDefault : public ResourceInterface {
  public:
-  static DisplayError CreateResourceDefault(const HWResourceInfo &hw_resource_info,
+  static DisplayError CreateResourceDefault(const std::vector<HWResourceInfo> &hw_resource_info,
                                             ResourceInterface **resource_intf);
   static DisplayError DestroyResourceDefault(ResourceInterface *resource_intf);
-  virtual DisplayError RegisterDisplay(int32_t display_id, DisplayType type,
+  virtual DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
                                        const HWDisplayAttributes &display_attributes,
                                        const HWPanelInfo &hw_panel_info,
                                        const HWMixerAttributes &mixer_attributes,
@@ -75,7 +75,7 @@ class ResourceDefault : public ResourceInterface {
                                              const DisplayDetailEnhancerData &de_data);
   virtual DisplayError UpdateSyncHandle(Handle display_ctx, const SyncPoints &sync_points);
   virtual DisplayError Perform(int cmd, ...) { return kErrorNone; }
-  DisplayError SetDisplayState(int32_t display_id, DisplayState state) { return kErrorNone; }
+  DisplayError SetDisplayState(DisplayId display_id, DisplayState state) { return kErrorNone; }
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) { return false; }
   virtual DisplayError FreeDemuraFetchResources(const int32_t &display_id) { return kErrorNone; }
   virtual DisplayError GetDemuraFetchResourceCount(

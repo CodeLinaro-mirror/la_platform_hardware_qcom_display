@@ -38,24 +38,25 @@ using std::lock_guard;
 
 namespace drm_utils {
 
-DRMLibLoader *DRMLibLoader::s_instance = nullptr;
+sdm::MultiCoreInstance<uint32_t, DRMLibLoader*> DRMLibLoader::s_instance;
 mutex DRMLibLoader::s_lock;
 
-DRMLibLoader *DRMLibLoader::GetInstance() {
+DRMLibLoader *DRMLibLoader::GetInstance(uint32_t core_id) {
   lock_guard<mutex> obj(s_lock);
-
-  if (!s_instance) {
-    s_instance = new DRMLibLoader();
+  auto iter = s_instance.Find(core_id);
+  if (iter == s_instance.End()) {
+    DRMLibLoader *loader = new DRMLibLoader();
+    s_instance[core_id] = loader;
   }
-
-  return s_instance;
+  return s_instance[core_id];
 }
 
-void DRMLibLoader::Destroy() {
+void DRMLibLoader::Destroy(uint32_t core_id) {
   lock_guard<mutex> obj(s_lock);
-  if (s_instance) {
-    delete s_instance;
-    s_instance = nullptr;
+  if (s_instance[core_id]) {
+    delete s_instance[core_id];
+    s_instance[core_id] = nullptr;
+    s_instance.Erase(core_id);
   }
 }
 

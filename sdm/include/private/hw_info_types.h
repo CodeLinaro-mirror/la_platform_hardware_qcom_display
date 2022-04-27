@@ -428,6 +428,7 @@ struct HWResourceInfo {
   bool has_noise_layer = false;
   uint32_t dsc_block_count = 0;
   DDRVersion ddr_version = kDDRVersion5;
+  uint32_t core_id = 0;
 };
 
 struct HWSplitInfo {
@@ -931,6 +932,49 @@ struct HWMixerAttributes {
 struct Resolution {
   uint32_t x_pixels;
   uint32_t y_pixels;
+};
+
+class DisplayId {
+ public:
+  DisplayId() { }
+
+  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_(conn_id) {
+    core_id_bitset_ = std::bitset<32>((1 << core_id));
+    display_id_ = ((core_id_bitset_.to_ulong()) << 16) | (conn_id_ & 0xFFFF);
+  }
+
+  explicit DisplayId(uint32_t display_id) : display_id_(display_id) {
+    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> 16);
+    core_id_bitset_ = std::bitset<32>(core_id);
+    conn_id_ = (display_id_) < 0 ? 0 : ((display_id_) & 0xFFFF);
+  }
+
+  inline uint32_t GetDisplayId() {
+    return display_id_;
+  }
+
+  inline uint32_t GetCoreIdMap() {
+    return core_id_bitset_.to_ulong();
+  }
+
+  static uint32_t GetCoreIdMap(uint32_t display_id) {
+    return (display_id) < 0 ? 0 : ((display_id) >> 16);
+  }
+
+  inline uint32_t GetConnId() {
+    return conn_id_;
+  }
+
+  static uint32_t GetConnId(uint32_t display_id) {
+    return (display_id) < 0 ? 0 : ((display_id) & 0xFFFF);;
+  }
+
+  ~DisplayId() {}
+
+ private:
+  int32_t display_id_ = -1;
+  std::bitset<32> core_id_bitset_ = 0;
+  uint32_t conn_id_ = -1;
 };
 
 }  // namespace sdm

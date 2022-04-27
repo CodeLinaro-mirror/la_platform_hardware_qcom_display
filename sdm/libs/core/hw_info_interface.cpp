@@ -28,6 +28,7 @@
 */
 
 #include <utils/utils.h>
+#include <vector>
 
 #include "hw_info_interface.h"
 #ifndef TARGET_HEADLESS
@@ -38,26 +39,30 @@
 
 namespace sdm {
 
-DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
-#ifndef TARGET_HEADLESS
-
-  *intf = new HWInfoDRM();
-#else
-  *intf = nullptr;
-#endif
-
+DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
   DisplayError error = kErrorNone;
-  if (*intf) {
-    error = (*intf)->Init();
-    if (error != kErrorNone) {
-      delete *intf;
-      *intf = nullptr;
+  for (uint32_t i = 0; i < kMaxCore; i++) {
+    HWInfoInterface *hw_info = new HWInfoDRM(i);
+
+    if (!hw_info) {
+      DLOGE("Failed allocating HWInfoDRM(%d)", i);
+      return kErrorCriticalResource;
     }
-  } else {
-    error = kErrorCriticalResource;
+
+    error = hw_info->Init();
+    if (error != kErrorNone) {
+      delete hw_info;
+      hw_info = NULL;
+      return intfs->size() ? kErrorNone : error;
+    }
+#ifndef TARGET_HEADLESS
+    intfs->push_back(hw_info);
+#else
+    intfs->push_back(nullptr);
+#endif
   }
 
-  return error;
+  return kErrorNone;
 }
 
 DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {

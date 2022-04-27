@@ -36,10 +36,10 @@ namespace sdm {
 
 class DisplayPluggable : public DisplayBase, HWEventHandler {
  public:
-  DisplayPluggable(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+  DisplayPluggable(DisplayEventHandler *event_handler, std::vector<HWInfoInterface*> hw_info_intf,
                    BufferAllocator *buffer_allocator, CompManager *comp_manager);
-  DisplayPluggable(int32_t display_id, DisplayEventHandler *event_handler,
-                   HWInfoInterface *hw_info_intf, BufferAllocator *buffer_allocator,
+  DisplayPluggable(DisplayId display_id, DisplayEventHandler *event_handler,
+                   std::vector<HWInfoInterface*> hw_info_intf, BufferAllocator *buffer_allocator,
                    CompManager *comp_manager);
   DisplayError Init() override;
   DisplayError Prepare(LayerStack *layer_stack) override;

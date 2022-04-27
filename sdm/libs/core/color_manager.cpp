@@ -45,7 +45,7 @@ DynLib ColorManagerProxy::color_lib_;
 DynLib ColorManagerProxy::stc_lib_;
 CreateColorInterface ColorManagerProxy::create_intf_ = NULL;
 DestroyColorInterface ColorManagerProxy::destroy_intf_ = NULL;
-HWResourceInfo ColorManagerProxy::hw_res_info_;
+std::vector<HWResourceInfo> ColorManagerProxy::hw_res_info_;
 
 GetScPostBlendInterface ColorManagerProxy::create_stc_intf_ = NULL;
 
@@ -96,7 +96,7 @@ FeatureInterface* GetPostedStartFeatureCheckIntf(HWInterface *intf, PPFeaturesCo
   return new ColorFeatureCheckingImpl(intf, config, dyn_switch);
 }
 
-DisplayError ColorManagerProxy::Init(const HWResourceInfo &hw_res_info) {
+DisplayError ColorManagerProxy::Init(const std::vector<HWResourceInfo> &hw_res_info) {
   DisplayError error = kErrorNone;
 
   // Load color service library and retrieve its entry points.
@@ -197,7 +197,7 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
     if (error != kErrorNone) {
       DLOGW("Fail to get DSPP feature versions");
     } else {
-      hw_attr.Set(hw_res_info_, panel_info, attribute, versions, dpps_intf);
+      hw_attr.Set(hw_res_info_[0], panel_info, attribute, versions, dpps_intf);
       DLOGI("PAV2 version is versions = %d, version = %d ",
             hw_attr.version.version[kGlobalColorFeaturePaV2],
             versions.version[kGlobalColorFeaturePaV2]);

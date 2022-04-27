@@ -270,6 +270,8 @@ class HWDeviceDRM : public HWInterface {
   class Registry {
    public:
     explicit Registry(BufferAllocator *buffer_allocator);
+    // Init master
+    void Init(Handle master) {master_ = master;}
     // Called on each Validate and Commit to map the handle_id to fb_id of each layer buffer.
     void Register(HWLayersInfo *hw_layers_info);
     // Called on display disconnect to clear output buffer map and remove fb_ids.
@@ -290,6 +292,7 @@ class HWDeviceDRM : public HWInterface {
     std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> output_buffer_map_ {};
     BufferAllocator *buffer_allocator_ = {};
     uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
+    Handle master_ = nullptr;
   };
 
  protected:
@@ -302,6 +305,7 @@ class HWDeviceDRM : public HWInterface {
   const char *device_name_ = {};
   bool default_mode_ = false;
   int32_t display_id_ = -1;
+  uint32_t core_id_ = 0;
   sde_drm::DRMDisplayType disp_type_ = {};
   HWInfoInterface *hw_info_intf_ = {};
   int dev_fd_ = -1;
@@ -342,14 +346,15 @@ class HWDeviceDRM : public HWInterface {
   DRMPowerMode last_power_mode_ = DRMPowerMode::OFF;
   uint32_t dest_scaler_blocks_used_ = 0;  // Dest scaler blocks in use by this HWDeviceDRM instance.
   // Destination scaler blocks in use by all HWDeviceDRM instances.
-  static std::atomic<uint32_t> hw_dest_scaler_blocks_used_;
-  static int display_count_;
+  static std::unordered_map<uint32_t, std::atomic<uint32_t>> hw_dest_scaler_blocks_used_;
+  static std::unordered_map<uint32_t, int> display_count_;
 
   bool has_cwb_crop_ = false;       // virtual connector supports CWB ROI feature.
   bool has_dedicated_cwb_ = false;  // virtual connector supports dedicated CWB feature.
   bool has_cwb_dither_ = false;     // virtual connector supports CWB Dither feature.
-  static HWCwbConfig cwb_config_;
-  static std::mutex cwb_state_lock_;  // cwb state lock. Set before accesing or updating cwb_config_
+  static std::unordered_map<uint32_t, HWCwbConfig> cwb_config_;
+  static std::unordered_map<uint32_t, std::mutex> cwb_state_lock_;
+                           // cwb state lock. Set before accesing or updating cwb_config_
 
  private:
   void GetCWBCapabilities();
