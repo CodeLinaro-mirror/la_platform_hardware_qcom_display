@@ -2075,13 +2075,21 @@ bool HWCDisplayBuiltIn::HasReadBackBufferSupport() {
 
 int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blue,
                                   PanelOrientation orientation) {
+  uint32_t config_index = 0;
+  DisplayConfigVariableInfo attr = {};
+  GetDisplayAttributesForConfig(INT(config_index), &attr);
+
+  // Turn off CAC 4k@120Hz under landscape case
+  if (current_refresh_rate_ >= 120 && attr.x_pixels >= 4320
+      && (attr.x_pixels > attr.y_pixels)) {
+    DLOGW("Display %d-%d, Current refresh rate is %d, resolution is %dx%d",
+          sdm_id_, type_, current_refresh_rate_, attr.x_pixels, attr.y_pixels);
+    return -1;
+  }
 
   HWCSession *hwc_session = HWCSession::GetInstance();
   HWCDisplayVirtualDPU *wb_display = nullptr;
   if (hwc_session->wb_display_) {
-    uint32_t config_index = 0;
-    DisplayConfigVariableInfo attr = {};
-    GetDisplayAttributesForConfig(INT(config_index), &attr);
     InitCacResources(attr.x_pixels, attr.y_pixels);
     wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
       (hwc_session->GetDisplay(hwc_session->wb_display_));
@@ -2105,9 +2113,12 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   display_intf_->SetCAC(enable, red, green, blue, orientation);
 
   enable_cac_ = enable;
+  bool is_wb_cac_in_use = IsWBCacInUse();
   if (!enable_cac_) {
-    // Disable lineptr events on this display.
-    display_intf_->SetLinePtrState(false, 0);
+    // Disable lineptr events on this display when wb is in use.
+    if (is_wb_cac_in_use) {
+      display_intf_->SetLinePtrState(false, 0);
+    }
     if (wb_display != nullptr) {
       // Reset layer stack of WB display to allow it to be safely destroyed.
       HWCDisplay::HWCLayerStack primary_layer_stack = {};
@@ -2121,7 +2132,9 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
     GetActiveDisplayConfig(&config_index);
     DisplayConfigVariableInfo attr = {};
     GetDisplayAttributesForConfig(INT(config_index), &attr);
-    display_intf_->SetLinePtrState(true, attr.y_pixels/2);
+    if (is_wb_cac_in_use) {
+      display_intf_->SetLinePtrState(true, attr.y_pixels/2);
+    }
   }
 
   validated_ = false;
