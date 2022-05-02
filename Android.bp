@@ -87,7 +87,7 @@ qtidisplay_cc_defaults {
             cflags: ["-DPP_DRM_ENABLE"],
         },
         headless: {
-            cflags: ["-DTARGET_HEADLESS", "-DQMAA"],
+            cflags: ["-DTARGET_HEADLESS"],
         },
         llvmsa: {
             cflags: [
