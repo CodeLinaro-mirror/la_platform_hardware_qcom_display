@@ -32,7 +32,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "hw_device_drm.h"
 #include <drm/msm_drm.h>
+#ifdef __ANDROID_T__
+#include <display/drm/sde_drm.h>
+#else
 #include <drm/sde_drm.h>
+#endif
 #include <vector>
 
 namespace sdm {

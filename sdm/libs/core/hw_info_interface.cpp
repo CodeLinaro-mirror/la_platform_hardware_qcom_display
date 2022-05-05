@@ -29,7 +29,9 @@
 
 #include <utils/utils.h>
 
+#ifndef __ANDROID_T__
 #include "fb/hw_info.h"
+#endif
 #include "drm/hw_info_drm.h"
 
 #define __CLASS__ "HWInfoInterface"
@@ -38,7 +40,9 @@ namespace sdm {
 
 DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
   if (GetDriverType() == DriverType::FB) {
+#ifndef __ANDROID_T__
     *intf = new HWInfo();
+#endif
   } else {
     *intf = new HWInfoDRM();
   }

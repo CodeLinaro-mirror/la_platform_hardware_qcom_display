@@ -31,10 +31,12 @@
 #include <utils/utils.h>
 
 #include "hw_interface.h"
+#ifndef __ANDROID_T__
 #include "fb/hw_device.h"
 #include "fb/hw_primary.h"
 #include "fb/hw_hdmi.h"
 #include "fb/hw_virtual.h"
+#endif
 #include "drm/hw_peripheral_drm.h"
 #include "drm/hw_virtual_drm.h"
 #include "drm/hw_tv_drm.h"
@@ -54,21 +56,27 @@ DisplayError HWInterface::Create(int32_t display_id, DisplayType type,
   switch (type) {
     case kBuiltIn:
       if (driver_type == DriverType::FB) {
+#ifndef __ANDROID_T__
         hw = new HWPrimary(buffer_sync_handler, hw_info_intf);
+#endif
       } else {
         hw = new HWPeripheralDRM(display_id, buffer_sync_handler, buffer_allocator, hw_info_intf);
       }
       break;
     case kPluggable:
       if (driver_type == DriverType::FB) {
+#ifndef __ANDROID_T__
         hw = new HWHDMI(buffer_sync_handler, hw_info_intf);
+#endif
       } else {
         hw = new HWTVDRM(display_id, buffer_sync_handler, buffer_allocator, hw_info_intf);
       }
       break;
     case kVirtual:
       if (driver_type == DriverType::FB) {
+#ifndef __ANDROID_T__
         hw = new HWVirtual(buffer_sync_handler, hw_info_intf);
+#endif
       } else {
         hw = new HWVirtualDRM(display_id, buffer_sync_handler, buffer_allocator, hw_info_intf);
       }
