@@ -504,7 +504,8 @@ DisplayError HWDeviceDRM::Init() {
     DLOGW("Failed to retrieve DRMLibLoader instance");
     return kErrorResources;
   }
-  drm_lib_loader->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
+  if (drm_lib_loader->FuncGetDRMManager())
+    drm_lib_loader->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
 
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {

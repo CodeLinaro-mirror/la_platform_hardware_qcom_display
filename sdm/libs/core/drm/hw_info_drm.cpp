@@ -135,7 +135,8 @@ DisplayError HWInfoDRM::Init() {
       DRMMaster::DestroyInstance(card_id_);
       return kErrorCriticalResource;
     }
-    drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+    if (drm_lib_loader->FuncGetDRMManager())
+      drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (!drm_mgr_intf_) {
       DRMLibLoader::Destroy();
       DRMMaster::DestroyInstance(card_id_);
@@ -158,7 +159,7 @@ void HWInfoDRM::Deinit() {
 
   if (drm_mgr_intf_) {
     DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
-    if (drm_lib_loader)
+    if (drm_lib_loader && (drm_lib_loader->FuncDestroyDRMManager()))
       drm_lib_loader->FuncDestroyDRMManager()();
     drm_mgr_intf_ = nullptr;
   }
