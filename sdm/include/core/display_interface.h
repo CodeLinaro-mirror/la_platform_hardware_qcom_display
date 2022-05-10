@@ -164,6 +164,18 @@ enum ContentQuality {
   kContentQualityMax,
 };
 
+
+/*! @brief This enum represents the type of the content.
+
+  @sa DisplayInterface::SetDetailEnhancerData
+*/
+enum DeContentType {
+  kContentTypeUnknown,
+  kContentTypeVideo,
+  kContentTypeGraphics,
+  kContentTypeMax,
+};
+
 /*! @brief This enum represents the display port.
 
   @sa DisplayInterface::GetDisplayPort
@@ -328,8 +340,8 @@ struct DisplayConfigGroupInfo {
 
   bool operator==(const DisplayConfigGroupInfo& info) const {
     return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) &&
-            (h_total == info.h_total) && (v_total == info.v_total) && (x_dpi == info.x_dpi) &&
-            (y_dpi == info.y_dpi) && (is_yuv == info.is_yuv) && (smart_panel == info.smart_panel));
+            (x_dpi == info.x_dpi) && (y_dpi == info.y_dpi) && (is_yuv == info.is_yuv) &&
+            (smart_panel == info.smart_panel));
   }
 };
 
@@ -376,6 +388,7 @@ struct DisplayDetailEnhancerData {
   ScalingFilterConfig filter_config = kFilterEdgeDirected;
                                       // Y/RGB filter configuration
   uint32_t de_blend = 0;              // DE Unsharp Mask blend between High and Low frequencies
+  DeContentType content_type = kContentTypeUnknown;  // Specifies content type
 };
 
 /*! @brief This enum represents the supported display features that needs to be queried

@@ -81,6 +81,7 @@ class HWCDisplayVirtual : public HWCDisplay {
                                          int32_t format, CwbConfig &cwb_config);
   virtual HWC2::Error GetDisplayType(int32_t *out_type);
   virtual HWC2::Error SetColorMode(ColorMode mode);
+  virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
   virtual HWC2::Error SetOutputBuffer(buffer_handle_t buf, shared_ptr<Fence> release_fence);
   virtual HWC2::Error DumpVDSBuffer();
   bool NeedsGPUBypass();
@@ -104,7 +105,7 @@ class HWCDisplayVirtual : public HWCDisplay {
  private:
   bool dump_output_layer_ = false;
   bool commit_done_ = true;
-  std::thread notify_concurrency_fps_;
+  std::vector<std::thread> notify_concurrency_fps_;
 };
 
 }  // namespace sdm
