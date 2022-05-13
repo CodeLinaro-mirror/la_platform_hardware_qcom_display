@@ -128,7 +128,7 @@ DisplayError Strategy::Stop() {
 }
 
 DisplayError Strategy::GetNextStrategy() {
-  if (!disable_gpu_comp_ && !disp_layer_stack_->info.gpu_target_index) {
+  if (!disable_gpu_comp_ && !disp_layer_stack_->stack_info.gpu_target_index) {
     DLOGE("GPU composition is enabled and GPU target buffer not provided for display %d-%d.",
           display_id_, display_type_);
     return kErrorNotSupported;
@@ -146,7 +146,7 @@ DisplayError Strategy::GetNextStrategy() {
   // Mark all application layers for GPU composition. Find GPU target buffer and store its index for
   // programming the hardware.
   LayerStack *layer_stack = disp_layer_stack_->stack;
-  for (uint32_t i = 0; i < disp_layer_stack_->info.app_layer_count; i++) {
+  for (uint32_t i = 0; i < disp_layer_stack_->stack_info.app_layer_count; i++) {
     layer_stack->layers.at(i)->composition = kCompositionGPU;
     layer_stack->layers.at(i)->request.flags.request_flags = 0;  // Reset layer request
   }
@@ -154,7 +154,7 @@ DisplayError Strategy::GetNextStrategy() {
   // When mixer resolution and panel resolutions are same (1600x2560) and FB resolution is
   // 1080x1920 FB_Target destination coordinates(mapped to FB resolution 1080x1920) need to
   // be mapped to destination coordinates of mixer resolution(1600x2560).
-  Layer *gpu_target_layer = layer_stack->layers.at(disp_layer_stack_->info.gpu_target_index);
+  Layer *gpu_target_layer = layer_stack->layers.at(disp_layer_stack_->stack_info.gpu_target_index);
   float layer_mixer_width = FLOAT(mixer_attributes_.width);
   float layer_mixer_height = FLOAT(mixer_attributes_.height);
   float fb_width = FLOAT(fb_config_.x_pixels);
@@ -163,7 +163,7 @@ DisplayError Strategy::GetNextStrategy() {
   LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
 
   Layer layer = *gpu_target_layer;
-  disp_layer_stack_->info.index.push_back(disp_layer_stack_->info.gpu_target_index);
+  disp_layer_stack_->info.index.push_back(disp_layer_stack_->stack_info.gpu_target_index);
   disp_layer_stack_->info.roi_index.push_back(0);
   layer.transform.flip_horizontal ^= hw_panel_info_.panel_orientation.flip_horizontal;
   layer.transform.flip_vertical ^= hw_panel_info_.panel_orientation.flip_vertical;
@@ -200,19 +200,19 @@ void Strategy::GenerateROI() {
     split_display = true;
   }
 
-  disp_layer_stack_->info.left_frame_roi = {};
-  disp_layer_stack_->info.right_frame_roi = {};
+  disp_layer_stack_->stack_info.left_frame_roi = {};
+  disp_layer_stack_->stack_info.right_frame_roi = {};
 
   if (split_display) {
     float left_split = FLOAT(mixer_attributes_.split_left);
-    disp_layer_stack_->info.left_frame_roi.push_back(LayerRect(0.0f, 0.0f,
+    disp_layer_stack_->stack_info.left_frame_roi.push_back(LayerRect(0.0f, 0.0f,
                                 left_split, layer_mixer_height));
-    disp_layer_stack_->info.right_frame_roi.push_back(LayerRect(left_split,
+    disp_layer_stack_->stack_info.right_frame_roi.push_back(LayerRect(left_split,
                                 0.0f, layer_mixer_width, layer_mixer_height));
   } else {
-    disp_layer_stack_->info.left_frame_roi.push_back(LayerRect(0.0f, 0.0f,
+    disp_layer_stack_->stack_info.left_frame_roi.push_back(LayerRect(0.0f, 0.0f,
                                 layer_mixer_width, layer_mixer_height));
-    disp_layer_stack_->info.right_frame_roi.push_back(LayerRect(0.0f, 0.0f, 0.0f, 0.0f));
+    disp_layer_stack_->stack_info.right_frame_roi.push_back(LayerRect(0.0f, 0.0f, 0.0f, 0.0f));
   }
 }
 

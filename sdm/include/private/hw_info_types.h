@@ -939,7 +939,17 @@ enum SelfRefreshState {
   kSelfRefreshDisableReadAlloc,     // Indicates to disable self refresh
 };
 
-struct HWLayersInfo {
+struct CommonStackInfo {
+  int set_idle_time_ms = -1;    // Set idle time to the new specified value.
+                                //    -1 indicates no change in idle time since last set value.
+  std::bitset<kUpdateMax> updates_mask = 0;
+  LayerStackFlags flags;               //!< Flags associated with this layer set.
+  uint64_t elapse_timestamp = 0;
+  HWAVRInfo hw_avr_info = {};
+  PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
+};
+
+struct LayerStackInfo {
   uint32_t app_layer_count = 0;      // Total number of app layers. Must not be 0.
   int32_t gpu_target_index = -1;     // GPU target layer index. -1 if not present.
   int32_t stitch_target_index = -1;  // Blit target layer index. -1 if not present.
@@ -948,7 +958,39 @@ struct HWLayersInfo {
   int32_t cwb_target_index = -1;     // CWB target layer index. -1 if not present.
   int32_t iwe_target_index = -1;     // IWE target layer index. -1 if not present.
   std::vector<ColorPrimaries> wide_color_primaries = {};  // list of wide color primaries
+  std::vector<LayerRect> left_frame_roi = {};   // Left ROI.
+  std::vector<LayerRect> right_frame_roi = {};  // Right ROI.
+  DestScaleInfoMap dest_scale_info_map = {};
+  bool roi_split = false;          // Indicates separated left and right ROI
+  bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
+  HWHDRLayerInfo hdr_layer_info = {};
+  bool game_present = false;  // Indicates there is game layer or not
+  bool do_hw_validate = true;
+  bool trigger_async_commit = false;  // This field hints if asynchronous commit can be triggered.
+  NoiseLayerConfig noise_layer_info = {};
+  LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
 
+  bool stitch_present = false;  // Indicates there is stitch layer or not
+  bool demura_present = false;  // Indicates there is demura layer or not
+  bool cwb_present = false;  // Indicates there is cwb layer or not
+  bool lower_fps = false;  // This field hints to lower the fps in case of idle fallback
+  bool enable_self_refresh = false;  // This field hints to enable self refresh when idle timeout
+  LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
+                                       //!< rendered for virtual displays.
+                                       //!< NOTE: This field applies to a virtual display only.
+  CwbConfig *hw_cwb_config = NULL;     //!< Struct that contains CWB configuration passed to
+                                       //!< driver by SDM.
+  bool rc_config = false;
+  bool spr_enable = false;
+  RCLayersInfo rc_layers_info = {};
+  CommonStackInfo common_info = {};
+  Handle comp_stack = nullptr;
+  SelfRefreshState self_refresh_state = kSelfRefreshNone;
+};
+
+struct HWLayersInfo {
+  uint32_t core_id = 0;
+  CommonStackInfo *common_info = nullptr;
   std::vector<Layer> hw_layers = {};  // Layers which need to be programmed on the HW
   std::vector<LayerExt> layer_exts = {};  // Extention layer having list of
                                           // exclusion rectangles for each layer
@@ -956,33 +998,15 @@ struct HWLayersInfo {
                                  // be programmed on hardware.
   std::vector<uint32_t> roi_index {};  // Stores the ROI index where the layers are visible.
   shared_ptr<Fence> sync_handle = nullptr;  // Release fence id for current draw cycle.
-  int set_idle_time_ms = -1;    // Set idle time to the new specified value.
-                                //    -1 indicates no change in idle time since last set value.
   std::vector<LayerRect> left_frame_roi = {};   // Left ROI.
   std::vector<LayerRect> right_frame_roi = {};  // Right ROI.
-  LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
-  bool roi_split = false;          // Indicates separated left and right ROI
-  bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
   DestScaleInfoMap dest_scale_info_map = {};
-  HWHDRLayerInfo hdr_layer_info = {};
-  Handle pvt_data = NULL;   // Private data used by sdm extension only.
-  bool game_present = false;  // Indicates there is game layer or not
-  bool rc_config = false;
-  RCLayersInfo rc_layers_info = {};
-  bool spr_enable = false;
   HWLayerConfig config[kMaxSDELayers] {};
+  HWHDRLayerInfo hdr_layer_info = {};
   float output_compression = 1.0f;
   HWQosData qos_data = {};
-  HWAVRInfo hw_avr_info = {};
-  NoiseLayerConfig noise_layer_info = {};
-  std::bitset<kUpdateMax> updates_mask = 0;
-  uint64_t elapse_timestamp = 0;
-  bool do_hw_validate = true;
   uint32_t retire_fence_offset = 0;
-  bool trigger_async_commit = false;  // This field hints if asynchronous commit can be triggered.
   shared_ptr<Fence> retire_fence = nullptr;  // Retire fence for current draw cycle.
-  LayerStackFlags flags;               //!< Flags associated with this layer set.
-  PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
   LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
                                        //!< rendered for virtual displays.
                                        //!< NOTE: This field applies to a virtual display only.
@@ -1002,7 +1026,8 @@ struct HWLayersInfo {
 
 struct DispLayerStack {
   LayerStack *stack = NULL;          // Input layer stack. Set by the caller.
-  HWLayersInfo info {};
+  LayerStackInfo stack_info = {};  // Composition layer stack as seen by client
+  HWLayersInfo info {};  // Vector of HWLayers Info
 };
 
 struct HWDisplayAttributes : DisplayConfigVariableInfo {

@@ -284,7 +284,7 @@ DisplayError DisplayBuiltIn::PrePrepare(LayerStack *layer_stack) {
     }
   }
   error = ChangeFps();
-  lower_fps_ = disp_layer_stack_->info.lower_fps;
+  lower_fps_ = disp_layer_stack_->stack_info.lower_fps;
 
   return kErrorNotValidated;
 }
@@ -394,15 +394,13 @@ void DisplayBuiltIn::UpdateQsyncMode() {
              display_type_, mode);
   }
 
-  disp_layer_stack_->info.hw_avr_info.update = (mode != active_qsync_mode_) || needs_avr_update_;
-  disp_layer_stack_->info.hw_avr_info.mode = GetAvrMode(mode);
+  disp_layer_stack_->stack_info.common_info.hw_avr_info.update = (mode != active_qsync_mode_) ||
+                                                                needs_avr_update_;
+  disp_layer_stack_->stack_info.common_info.hw_avr_info.mode = GetAvrMode(mode);
 
-  DLOGV_IF(kTagDisplay, "display %d-%d update: %d mode: %d", display_id_, display_type_,
-           disp_layer_stack_->info.hw_avr_info.update, mode);
-
-  if (mode != active_qsync_mode_) {
-    HandleUpdateTransferTime(mode);
-  }
+  DLOGV_IF(kTagDisplay, "display %d-%d update: %d mode: %d",
+           display_id_, display_type_, disp_layer_stack_->stack_info.common_info.hw_avr_info.update,
+           mode);
 
   // Store active mode.
   active_qsync_mode_ = mode;
@@ -667,7 +665,7 @@ DisplayError DisplayBuiltIn::SetupDemuraLayer() {
 }
 
 void DisplayBuiltIn::PreCommit(LayerStack *layer_stack) {
-  uint32_t app_layer_count = disp_layer_stack_->info.app_layer_count;
+  uint32_t app_layer_count = disp_layer_stack_->stack_info.app_layer_count;
 
   // Enabling auto refresh is async and needs to happen before commit ioctl
   if (hw_panel_info_.mode == kModeCommand) {
@@ -1009,7 +1007,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
   }
 
   clock_gettime(CLOCK_MONOTONIC, &idle_timer_start_);
-  int idle_time_ms = disp_layer_stack_->info.set_idle_time_ms;
+  int idle_time_ms = disp_layer_stack_->stack_info.common_info.set_idle_time_ms;
   if (idle_time_ms >= 0) {
     hw_intf_->SetIdleTimeoutMs(UINT32(idle_time_ms));
     idle_time_ms_ = idle_time_ms;
@@ -1799,9 +1797,9 @@ std::string DisplayBuiltIn::Dump() {
   os << " DrawMethod: " << draw_method_;
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
-  if (disp_layer_stack_->info.noise_layer_info.enable) {
-    os << "\nNoise z-orders: [" << disp_layer_stack_->info.noise_layer_info.zpos_noise << ","
-       << disp_layer_stack_->info.noise_layer_info.zpos_attn << "]";
+  if (disp_layer_stack_->stack_info.noise_layer_info.enable) {
+    os << "\nNoise z-orders: [" << disp_layer_stack_->stack_info.noise_layer_info.zpos_noise
+       << "," << disp_layer_stack_->stack_info.noise_layer_info.zpos_attn << "]";
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
@@ -1881,7 +1879,7 @@ std::string DisplayBuiltIn::Dump() {
     }
   }
 
-  LayerRect &fb_roi = layer_info.partial_fb_roi;
+  LayerRect &fb_roi = disp_layer_stack_->stack_info.partial_fb_roi;
   if (IsValid(fb_roi)) {
     os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
       INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
@@ -2234,7 +2232,7 @@ bool DisplayBuiltIn::CanCompareFrameROI(LayerStack *layer_stack) {
   if (!hw_panel_info_.partial_update || (hw_panel_info_.left_roi_count != 1) ||
       layer_stack->flags.geometry_changed || layer_stack->flags.skip_present ||
       (layer_stack->layers.size() !=
-       (disp_layer_stack_->info.app_layer_count + stack_fudge_factor))) {
+       (disp_layer_stack_->stack_info.app_layer_count + stack_fudge_factor))) {
     return false;
   }
 
@@ -2270,7 +2268,7 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
     return false;
   }
 
-  if (disp_layer_stack_->info.iwe_target_index != -1) {
+  if (disp_layer_stack_->stack_info.iwe_target_index != -1) {
     return false;
   }
 
@@ -2308,7 +2306,7 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
       size_ff++;
     if (layer_stack->flags.demura_present)
       size_ff++;
-    if (disp_layer_stack_->info.flags.noise_present)
+    if (disp_layer_stack_->stack_info.common_info.flags.noise_present)
       size_ff++;
 
     for (uint32_t i = 0; i < (layer_stack->layers.size() - size_ff); i++) {
@@ -2325,22 +2323,21 @@ DisplayError DisplayBuiltIn::HandleDemuraLayer(LayerStack *layer_stack) {
     return kErrorParameters;
   }
   std::vector<Layer *> &layers = layer_stack->layers;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_->info;
 
   if (comp_manager_->GetDemuraStatus() &&
       comp_manager_->GetDemuraStatusForDisplay(display_id_) &&
       demura_layer_.input_buffer.planes[0].fd > 0) {
-    if (hw_layers_info.demura_target_index == -1) {
+    if (disp_layer_stack_->stack_info.demura_target_index == -1) {
       // If demura layer added for first time, do not skip validate
       needs_validate_ = true;
     }
     layers.push_back(&demura_layer_);
     DLOGI_IF(kTagDisplay, "Demura layer added to layer stack on display %d-%d", display_id_,
              display_type_);
-  } else if (hw_layers_info.demura_target_index != -1) {
+  } else if (disp_layer_stack_->stack_info.demura_target_index != -1) {
     // Demura was present last frame but is now disabled
     needs_validate_ = true;
-    hw_layers_info.demura_present = false;
+    disp_layer_stack_->stack_info.demura_present = false;
     DLOGD_IF(kTagDisplay, "Demura layer to be removed on display %d-%d in this frame",
              display_id_, display_type_);
   }
@@ -2389,18 +2386,18 @@ DisplayError DisplayBuiltIn::UpdateTransferTime(uint32_t transfer_time) {
 
 DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
   std::vector<Layer *> &layers = layer_stack->layers;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_->info;
-  hw_layers_info.app_layer_count = 0;
-  hw_layers_info.gpu_target_index = -1;
-  hw_layers_info.stitch_target_index = -1;
-  hw_layers_info.demura_target_index = -1;
-  hw_layers_info.noise_layer_index = -1;
-  hw_layers_info.cwb_target_index = -1;
+  LayerStackInfo &stack_info = disp_layer_stack_->stack_info;
+  stack_info.app_layer_count = 0;
+  stack_info.gpu_target_index = -1;
+  stack_info.stitch_target_index = -1;
+  stack_info.demura_target_index = -1;
+  stack_info.noise_layer_index = -1;
+  stack_info.cwb_target_index = -1;
 
   disp_layer_stack_->stack = layer_stack;
-  hw_layers_info.flags = layer_stack->flags;
-  hw_layers_info.blend_cs = layer_stack->blend_cs;
-  hw_layers_info.wide_color_primaries.clear();
+  stack_info.common_info.flags = layer_stack->flags;
+  stack_info.common_info.blend_cs = layer_stack->blend_cs;
+  stack_info.wide_color_primaries.clear();
 
   int index = 0;
   for (auto &layer : layers) {
@@ -2408,35 +2405,35 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
       layer->buffer_map = std::make_shared<LayerBufferMap>();
     }
     if (layer->composition == kCompositionGPUTarget) {
-      hw_layers_info.gpu_target_index = index;
+      stack_info.gpu_target_index = index;
     } else if (layer->composition == kCompositionStitchTarget) {
-      hw_layers_info.stitch_target_index = index;
+      stack_info.stitch_target_index = index;
       disp_layer_stack_->stack->flags.stitch_present = true;
-      hw_layers_info.stitch_present = true;
+      stack_info.stitch_present = true;
     } else if (layer->composition == kCompositionDemura) {
-      hw_layers_info.demura_target_index = index;
+      stack_info.demura_target_index = index;
       disp_layer_stack_->stack->flags.demura_present = true;
-      hw_layers_info.demura_present = true;
+      stack_info.demura_present = true;
       DLOGD_IF(kTagDisplay, "Display %d-%d shall request Demura in this frame", display_id_,
                display_type_);
     } else if (layer->flags.is_noise) {
-      hw_layers_info.flags.noise_present = true;
-      hw_layers_info.noise_layer_index = index;
-      hw_layers_info.noise_layer_info = noise_layer_info_;
+      stack_info.common_info.flags.noise_present = true;
+      stack_info.noise_layer_index = index;
+      stack_info.noise_layer_info = noise_layer_info_;
       DLOGV_IF(kTagDisplay, "Display %d-%d requested Noise at index = %d with zpos_n = %d",
                display_id_, display_type_, index, noise_layer_info_.zpos_noise);
     } else if (layer->composition == kCompositionCWBTarget) {
-      hw_layers_info.cwb_target_index = index;
-      hw_layers_info.cwb_present = true;
+      stack_info.cwb_target_index = index;
+      stack_info.cwb_present = true;
     } else {
-      hw_layers_info.app_layer_count++;
+      stack_info.app_layer_count++;
     }
     if (IsWideColor(layer->input_buffer.color_metadata.colorPrimaries)) {
-      hw_layers_info.wide_color_primaries.push_back(
+      stack_info.wide_color_primaries.push_back(
           layer->input_buffer.color_metadata.colorPrimaries);
     }
     if (layer->flags.is_game) {
-      hw_layers_info.game_present = true;
+      stack_info.game_present = true;
     }
     index++;
   }
@@ -2444,17 +2441,17 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
   DLOGI_IF(kTagDisplay, "LayerStack layer_count: %zu, app_layer_count: %d "
             "gpu_target_index: %d, stitch_index: %d demura_index: %d cwb_target_index: %d "
             "game_present: %d noise_present: %d display: %d-%d", layers.size(),
-            hw_layers_info.app_layer_count, hw_layers_info.gpu_target_index,
-            hw_layers_info.stitch_target_index, hw_layers_info.demura_target_index,
-            hw_layers_info.cwb_target_index, hw_layers_info.game_present,
-            hw_layers_info.flags.noise_present, display_id_, display_type_);
+            stack_info.app_layer_count, stack_info.gpu_target_index,
+            stack_info.stitch_target_index, stack_info.demura_target_index,
+            stack_info.cwb_target_index, stack_info.game_present,
+            stack_info.common_info.flags.noise_present, display_id_, display_type_);
 
-  if (!hw_layers_info.app_layer_count) {
+  if (!stack_info.app_layer_count) {
     DLOGW("Layer count is zero");
     return kErrorNoAppLayers;
   }
 
-  if (hw_layers_info.gpu_target_index > 0) {
+  if (stack_info.gpu_target_index > 0) {
     return ValidateGPUTargetParams();
   }
 
@@ -3066,8 +3063,8 @@ DisplayError DisplayBuiltIn::ChangeFps() {
     if (error != kErrorNone) {
       // Attempt to update refresh rate can fail if rf interference settings is detected.
       // Just drop min fps settting for now.
-      if (disp_layer_stack_->info.lower_fps) {
-        disp_layer_stack_->info.lower_fps = false;
+      if (disp_layer_stack_->stack_info.lower_fps) {
+        disp_layer_stack_->stack_info.lower_fps = false;
       }
       return error;
     }
@@ -3080,7 +3077,7 @@ DisplayError DisplayBuiltIn::ChangeFps() {
 
   // Set safe mode upon success.
   if (enhance_idle_time_ && (refresh_rate == hw_panel_info_.min_fps) &&
-      (disp_layer_stack_->info.lower_fps)) {
+      (disp_layer_stack_->stack_info.lower_fps)) {
     comp_manager_->ProcessIdleTimeout(display_comp_ctx_);
   }
 
@@ -3093,9 +3090,9 @@ DisplayError DisplayBuiltIn::ChangeFps() {
 
 bool DisplayBuiltIn::IdleFallbackLowerFps(bool idle_screen) {
   if (!enhance_idle_time_) {
-    return (disp_layer_stack_->info.lower_fps);
+    return (disp_layer_stack_->stack_info.lower_fps);
   }
-  if (!idle_screen || !disp_layer_stack_->info.lower_fps) {
+  if (!idle_screen || !disp_layer_stack_->stack_info.lower_fps) {
     return false;
   }
 
