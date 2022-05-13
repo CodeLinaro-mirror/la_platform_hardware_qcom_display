@@ -597,8 +597,8 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
       }
     }
 
-    disp_layer_stack_.info.hw_cwb_config = cwb_config_;
-    error = ValidateCwbConfigInfo(disp_layer_stack_.info.hw_cwb_config,
+    disp_layer_stack_.stack_info.hw_cwb_config = cwb_config_;
+    error = ValidateCwbConfigInfo(disp_layer_stack_.stack_info.hw_cwb_config,
                                   layer_stack->output_buffer->format);
     if (error != kErrorNone) {
       DLOGE("CWB_config validation failed.");
@@ -615,8 +615,8 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
         // Note: If destin scalar is enabled, then there would be full frame update and the check
         // whether PU ROI contains CWB ROI isn't needed. CWB doesn't requires Validate call then.
         bool cwb_needs_validate = true;
-        for (uint32_t i = 0; i < disp_layer_stack_.info.left_frame_roi.size(); i++) {
-          auto &pu_roi = disp_layer_stack_.info.left_frame_roi.at(i);
+        for (uint32_t i = 0; i < disp_layer_stack_.stack_info.left_frame_roi.size(); i++) {
+          auto &pu_roi = disp_layer_stack_.stack_info.left_frame_roi.at(i);
           if (Contains(pu_roi, cwb_config_->cwb_roi)) {  // checking whether PU roi contain CWB roi
             DLOGI_IF(kTagDisplay, "PU ROI contains CWB ROI. Validate not needed for CWB.");
             cwb_needs_validate = false;
@@ -637,7 +637,7 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
     // Check and release cwb_config_ if it was instantiated in the previous draw cycle.
     delete cwb_config_;
     cwb_config_ = NULL;
-    disp_layer_stack_.info.hw_cwb_config = NULL;
+    disp_layer_stack_.stack_info.hw_cwb_config = NULL;
     needs_validate_ = true;  // Do not skip Validate in CWB teardown frame.
 
     comp_manager_->HandleCwbFrequencyBoost(false);
@@ -679,16 +679,16 @@ bool DisplayBase::IsWriteBackSupportedFormat(const LayerBufferFormat &format) {
 DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   std::vector<Layer *> &layers = layer_stack->layers;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
-  hw_layers_info.app_layer_count = 0;
-  hw_layers_info.gpu_target_index = -1;
-  hw_layers_info.stitch_target_index = -1;
-  hw_layers_info.noise_layer_index = -1;
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
+  stack_info.app_layer_count = 0;
+  stack_info.gpu_target_index = -1;
+  stack_info.stitch_target_index = -1;
+  stack_info.noise_layer_index = -1;
 
   disp_layer_stack_.stack = layer_stack;
-  hw_layers_info.flags = layer_stack->flags;
-  hw_layers_info.blend_cs = layer_stack->blend_cs;
-  hw_layers_info.wide_color_primaries.clear();
+  stack_info.common_info.flags = layer_stack->flags;
+  stack_info.common_info.blend_cs = layer_stack->blend_cs;
+  stack_info.wide_color_primaries.clear();
 
   int index = 0;
   for (auto &layer : layers) {
@@ -696,24 +696,24 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
       layer->buffer_map = std::make_shared<LayerBufferMap>();
     }
     if (layer->composition == kCompositionGPUTarget) {
-      hw_layers_info.gpu_target_index = hw_layers_info.app_layer_count;
+      stack_info.gpu_target_index = stack_info.app_layer_count;
     } else if (layer->composition == kCompositionStitchTarget) {
-      hw_layers_info.stitch_target_index = index;
+      stack_info.stitch_target_index = index;
     } else if (layer->flags.is_noise) {
-      hw_layers_info.flags.noise_present = true;
-      hw_layers_info.noise_layer_index = index;
-      hw_layers_info.noise_layer_info = noise_layer_info_;
+      stack_info.common_info.flags.noise_present = true;
+      stack_info.noise_layer_index = index;
+      stack_info.noise_layer_info = noise_layer_info_;
       DLOGV_IF(kTagDisplay, "Display %d-%d requested Noise at index = %d with zpos_n = %d",
                 display_id_, display_type_, index, noise_layer_info_.zpos_noise);
     } else {
-      hw_layers_info.app_layer_count++;
+      stack_info.app_layer_count++;
     }
     if (IsWideColor(layer->input_buffer.color_metadata.colorPrimaries)) {
-      hw_layers_info.wide_color_primaries.push_back(
+      stack_info.wide_color_primaries.push_back(
           layer->input_buffer.color_metadata.colorPrimaries);
     }
     if (layer->flags.is_game) {
-      hw_layers_info.game_present = true;
+      stack_info.game_present = true;
     }
     index++;
   }
@@ -721,16 +721,16 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
   DLOGD_IF(kTagDisplay, "LayerStack layer_count: %zu, app_layer_count: %d, "
                         "gpu_target_index: %d, stitch_index: %d game_present: %d "
                         " noise_present: %d display: %d-%d", layers.size(),
-                        hw_layers_info.app_layer_count, hw_layers_info.gpu_target_index,
-                        hw_layers_info.stitch_target_index, hw_layers_info.game_present,
-                        hw_layers_info.flags.noise_present, display_id_, display_type_);
+                        stack_info.app_layer_count, stack_info.gpu_target_index,
+                        stack_info.stitch_target_index, stack_info.game_present,
+                        stack_info.common_info.flags.noise_present, display_id_, display_type_);
 
-  if (!hw_layers_info.app_layer_count) {
+  if (!stack_info.app_layer_count) {
     DLOGW("Layer count is zero");
     return kErrorNoAppLayers;
   }
 
-  if (hw_layers_info.gpu_target_index > 0) {
+  if (stack_info.gpu_target_index > 0) {
     return ValidateGPUTargetParams();
   }
 
@@ -738,8 +738,8 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
 }
 
 DisplayError DisplayBase::ValidateGPUTargetParams() {
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
-  Layer *gpu_target_layer = disp_layer_stack_.stack->layers.at(hw_layers_info.gpu_target_index);
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
+  Layer *gpu_target_layer = disp_layer_stack_.stack->layers.at(stack_info.gpu_target_index);
 
   if (!IsValid(gpu_target_layer->src_rect)) {
     DLOGE("Invalid src rect for GPU target layer");
@@ -841,7 +841,6 @@ DisplayError DisplayBase::ForceToneMapUpdate(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   DisplayError error = kErrorNotSupported;
 
-
   for (size_t hw_index = 0; hw_index < disp_layer_stack_.info.index.size(); hw_index++) {
     size_t layer_index = disp_layer_stack_.info.index.at(hw_index);
 
@@ -878,7 +877,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     return kErrorParameters;
   }
 
-  disp_layer_stack_.info.output_buffer = layer_stack->output_buffer;
+  disp_layer_stack_.stack_info.output_buffer = layer_stack->output_buffer;
 
   // Allow prepare as pending doze/pending_power_on is handled as a part of draw cycle
   if (!active_ && (pending_power_state_ == kPowerStateNone)) {
@@ -923,7 +922,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     disable_pu_one_frame_ = false;
   }
 
-  disp_layer_stack_.info.updates_mask.set(kUpdateResources);
+  disp_layer_stack_.stack_info.common_info.updates_mask.set(kUpdateResources);
   comp_manager_->GenerateROI(display_comp_ctx_, &disp_layer_stack_);
 
   CheckMMRMState();
@@ -935,7 +934,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     }
 
     // Trigger validate only if needed.
-    if (disp_layer_stack_.info.do_hw_validate) {
+    if (disp_layer_stack_.stack_info.do_hw_validate) {
       error = hw_intf_->Validate(&disp_layer_stack_.info);
     }
 
@@ -965,7 +964,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     }
   }
 
-  if (disp_layer_stack_.info.enable_self_refresh) {
+  if (disp_layer_stack_.stack_info.enable_self_refresh) {
     hw_intf_->EnableSelfRefresh();
   }
 
@@ -994,15 +993,15 @@ DisplayError DisplayBase::HandleNoiseLayer(LayerStack *layer_stack) {
     return error;
   }
 
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
   if (!noise_layer_info_.enable) {
-    if (hw_layers_info.noise_layer_index != -1) {
+    if (stack_info.noise_layer_index != -1) {
       DLOGV_IF(kTagDisplay, "Noise layer disabled for display %d-%d", display_id_, display_type_);
       needs_validate_ = true;
     }
     return kErrorNone;
   } else {
-    if (hw_layers_info.noise_layer_index == -1) {
+    if (stack_info.noise_layer_index == -1) {
       DLOGV_IF(kTagDisplay, "Noise layer Enabled for display %d-%d", display_id_, display_type_);
       needs_validate_ = true;
     }
@@ -1139,8 +1138,8 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
 
   if (rc_prepared_) {
     // Set the RC data into LayerStack which was generated in PrePrepare()
-    disp_layer_stack_.info.rc_config = rc_config_enable_;
-    disp_layer_stack_.info.rc_layers_info = rc_info_;
+    disp_layer_stack_.stack_info.rc_config = rc_config_enable_;
+    disp_layer_stack_.stack_info.rc_layers_info = rc_info_;
     if (rc_config_enable_) {
       DLOGV_IF(kTagDisplay, "RC is prepared, top_height = %d, RC bot_height = %d",
                rc_info_.top_height, rc_info_.bottom_height);
@@ -1150,8 +1149,8 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
 
   DTRACE_SCOPED();
   int ret = -1;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
-  hw_layers_info.spr_enable = spr_enable_;
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
+  stack_info.spr_enable = spr_enable_;
   DLOGI_IF(kTagDisplay, "Display resolution: %dx%d", display_attributes_.x_pixels,
            display_attributes_.y_pixels);
   if (rc_cached_res_width_ != display_attributes_.x_pixels) {
@@ -1279,8 +1278,8 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     return kErrorUndefined;
   }
 
-  hw_layers_info.rc_layers_info.mask_layer_idx.clear();
-  hw_layers_info.rc_layers_info.rc_hw_layer_idx.clear();
+  stack_info.rc_layers_info.mask_layer_idx.clear();
+  stack_info.rc_layers_info.rc_hw_layer_idx.clear();
 
   ret = rc_core_->ProcessOps(kRCFeaturePrepare, in, &out);
   if (!ret) {
@@ -1289,14 +1288,14 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     if (rc_out_config->rc_needs_full_roi) {
       DisablePartialUpdateOneFrameInternal();
     }
-    hw_layers_info.rc_config = true;
-    hw_layers_info.rc_layers_info.top_width = rc_out_config->top_width;
-    hw_layers_info.rc_layers_info.top_height = rc_out_config->top_height;
-    hw_layers_info.rc_layers_info.bottom_width = rc_out_config->bottom_width;
-    hw_layers_info.rc_layers_info.bottom_height = rc_out_config->bottom_height;
+    stack_info.rc_config = true;
+    stack_info.rc_layers_info.top_width = rc_out_config->top_width;
+    stack_info.rc_layers_info.top_height = rc_out_config->top_height;
+    stack_info.rc_layers_info.bottom_width = rc_out_config->bottom_width;
+    stack_info.rc_layers_info.bottom_height = rc_out_config->bottom_height;
 
     rc_config_enable_ = true;
-    rc_info_ = hw_layers_info.rc_layers_info;
+    rc_info_ = stack_info.rc_layers_info;
   } else {
     rc_config_enable_ = false;
     rc_info_ = {};
@@ -1304,10 +1303,10 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
 
   for (const auto &layer : layer_stack->layers) {
     if (layer->input_buffer.flags.mask_layer) {
-      hw_layers_info.rc_layers_info.mask_layer_idx.push_back(UINT32(layer->layer_id));
+      stack_info.rc_layers_info.mask_layer_idx.push_back(UINT32(layer->layer_id));
       rc_info_.mask_layer_idx.push_back(UINT32(layer->layer_id));
       if (layer->request.flags.rc && !ret) {
-        hw_layers_info.rc_layers_info.rc_hw_layer_idx.push_back(UINT32(layer->layer_id));
+        stack_info.rc_layers_info.rc_hw_layer_idx.push_back(UINT32(layer->layer_id));
         rc_info_.rc_hw_layer_idx.push_back(UINT32(layer->layer_id));
       }
     }
@@ -1367,7 +1366,7 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
   }
 
   // Trigger commit based on draw outcome.
-  bool async_commit = disp_layer_stack_.info.trigger_async_commit;
+  bool async_commit = disp_layer_stack_.stack_info.trigger_async_commit;
   DLOGV_IF(kTagDisplay, "Trigger async commit: %d", async_commit);
   if (async_commit) {
     // Copy layer stack attributes needed for commit.
@@ -2040,19 +2039,19 @@ DisplayError DisplayBase::SetMaxMixerStages(uint32_t max_mixer_stages) {
 }
 
 void DisplayBase::AppendRCMaskData(std::ostringstream &os) {
-  uint32_t num_mask_layers = disp_layer_stack_.info.rc_layers_info.mask_layer_idx.size();
-  uint32_t num_rc_hw_layers = disp_layer_stack_.info.rc_layers_info.rc_hw_layer_idx.size();
+  uint32_t num_mask_layers = disp_layer_stack_.stack_info.rc_layers_info.mask_layer_idx.size();
+  uint32_t num_rc_hw_layers = disp_layer_stack_.stack_info.rc_layers_info.rc_hw_layer_idx.size();
   if (num_mask_layers && rc_enable_prop_) {
     os << "\nRC HW Mask Layer Idx: [";
     for (uint32_t i = 0; i < num_rc_hw_layers; i++) {
-      os << disp_layer_stack_.info.rc_layers_info.rc_hw_layer_idx.at(i);
+      os << disp_layer_stack_.stack_info.rc_layers_info.rc_hw_layer_idx.at(i);
       if (i < (num_rc_hw_layers - 1)) {
         os << ", ";
       }
     }
     os << "] of [";
     for (uint32_t i = 0; i < num_mask_layers; i++) {
-      os << disp_layer_stack_.info.rc_layers_info.mask_layer_idx.at(i);
+      os << disp_layer_stack_.stack_info.rc_layers_info.mask_layer_idx.at(i);
       if (i < (num_mask_layers - 1)) {
         os << ", ";
       }
@@ -2076,9 +2075,9 @@ std::string DisplayBase::Dump() {
   os << " DrawMethod: " << draw_method_;
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
-  if (disp_layer_stack_.info.noise_layer_info.enable) {
-    os << "\nNoise z-orders: [" << disp_layer_stack_.info.noise_layer_info.zpos_noise << "," <<
-        disp_layer_stack_.info.noise_layer_info.zpos_attn << "]";
+  if (disp_layer_stack_.stack_info.noise_layer_info.enable) {
+    os << "\nNoise z-orders: [" << disp_layer_stack_.stack_info.noise_layer_info.zpos_noise << "," <<
+        disp_layer_stack_.stack_info.noise_layer_info.zpos_attn << "]";
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
@@ -2154,7 +2153,7 @@ std::string DisplayBase::Dump() {
     }
   }
 
-  LayerRect &fb_roi = layer_info.partial_fb_roi;
+  LayerRect &fb_roi = disp_layer_stack_.stack_info.partial_fb_roi;
   if (IsValid(fb_roi)) {
     os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
       INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
@@ -3209,8 +3208,8 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
     // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
     // secure display flags are also updated during SetClientTarget() called between validate and
     // commit. Need to revist this and update it accordingly for FBT layer.
-    if (disp_layer_stack_.info.gpu_target_index > 0 &&
-        (static_cast<uint32_t>(disp_layer_stack_.info.gpu_target_index) == sdm_layer_index)) {
+    if (disp_layer_stack_.stack_info.gpu_target_index > 0 &&
+       (static_cast<uint32_t>(disp_layer_stack_.stack_info.gpu_target_index) == sdm_layer_index)) {
       hw_layer.input_buffer.flags.secure = sdm_layer->input_buffer.flags.secure;
       hw_layer.input_buffer.format = sdm_layer->input_buffer.format;
       hw_layer.input_buffer.width = sdm_layer->input_buffer.width;
@@ -3223,7 +3222,7 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   UpdateFrameBuffer();
 
   if (layer_stack->elapse_timestamp) {
-    disp_layer_stack_.info.elapse_timestamp = layer_stack->elapse_timestamp;
+    disp_layer_stack_.stack_info.common_info.elapse_timestamp = layer_stack->elapse_timestamp;
   }
 
   return;
@@ -3251,7 +3250,7 @@ void DisplayBase::UpdateFrameBuffer() {
   for (uint32_t i = 0; i < hw_layers_count; i++) {
     uint32_t sdm_layer_index = disp_layer_stack_.info.index.at(i);
     Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
-    if (disp_layer_stack_.info.gpu_target_index == sdm_layer_index) {
+    if (disp_layer_stack_.stack_info.gpu_target_index == sdm_layer_index) {
       // Update GPU target buffer with cached fd.
       CloseFd(&hw_layer.input_buffer.planes[0].fd);
       hw_layer.input_buffer = cached_framebuffer_;
@@ -4226,7 +4225,7 @@ void DisplayBase::PrepareForAsyncTransition() {
 }
 
 std::chrono::system_clock::time_point DisplayBase::WaitUntil() {
-  int idle_time_ms = disp_layer_stack_.info.set_idle_time_ms;
+  int idle_time_ms = disp_layer_stack_.stack_info.common_info.set_idle_time_ms;
   std::chrono::system_clock::time_point timeout_time;
   // Indefinite wait if state is off or idle timeout has triggered
   if (state_ == kStateOff || idle_time_ms == 0 || handle_idle_timeout_) {
@@ -4255,8 +4254,11 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
     cwb_config_->cwb_roi = cwb_config_->cwb_full_rect;
   }
 
-  disp_layer_stack_.info.hw_cwb_config = cwb_config_;
-  error = ValidateCwbConfigInfo(disp_layer_stack_.info.hw_cwb_config,
+  disp_layer_stack_.stack_info.hw_cwb_config = cwb_config_;
+  if (cwb_config_) {
+    disp_layer_stack_.info.hw_cwb_config = *cwb_config_;
+  }
+  error = ValidateCwbConfigInfo(disp_layer_stack_.stack_info.hw_cwb_config,
                                 layer_stack->output_buffer->format);
   if (error != kErrorNone) {
     DLOGE("CWB_config validation failed.");

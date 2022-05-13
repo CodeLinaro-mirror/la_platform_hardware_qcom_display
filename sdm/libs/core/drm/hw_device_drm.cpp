@@ -1358,11 +1358,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
 
   solid_fills_.clear();
   noise_cfg_ = {};
-  bool resource_update = hw_layers_info->updates_mask.test(kUpdateResources);
-  bool buffer_update = hw_layers_info->updates_mask.test(kSwapBuffers);
+  bool resource_update = hw_layers_info->common_info->updates_mask.test(kUpdateResources);
+  bool buffer_update = hw_layers_info->common_info->updates_mask.test(kSwapBuffers);
   bool update_config = resource_update || buffer_update || tui_state_ == kTUIStateEnd ||
-                       hw_layers_info->flags.geometry_changed;
-  bool update_luts = hw_layers_info->updates_mask.test(kUpdateLuts);
+                       hw_layers_info->common_info->flags.geometry_changed;
+  bool update_luts = hw_layers_info->common_info->updates_mask.test(kUpdateLuts);
 
   if (hw_panel_info_.partial_update && update_config) {
     if (IsFullFrameUpdate(*hw_layers_info)) {
@@ -1533,11 +1533,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_SECURITY_LEVEL, token_.crtc_id, crtc_security_level);
   }
 
-  if (hw_layers_info->hw_avr_info.update) {
+  if (hw_layers_info->common_info->hw_avr_info.update) {
     sde_drm::DRMQsyncMode mode = sde_drm::DRMQsyncMode::NONE;
-    if (hw_layers_info->hw_avr_info.mode == kContinuousMode) {
+    if (hw_layers_info->common_info->hw_avr_info.mode == kContinuousMode) {
       mode = sde_drm::DRMQsyncMode::CONTINUOUS;
-    } else if (hw_layers_info->hw_avr_info.mode == kOneShotMode) {
+    } else if (hw_layers_info->common_info->hw_avr_info.mode == kOneShotMode) {
       mode = sde_drm::DRMQsyncMode::ONESHOT;
     }
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_QSYNC_MODE, token_.conn_id, mode);
@@ -1641,11 +1641,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
                               current_mode.curr_compression_mode);
   }
 
-  if (!validate && (hw_layers_info->set_idle_time_ms >= 0)) {
+  if (!validate && (hw_layers_info->common_info->set_idle_time_ms >= 0)) {
     DLOGI_IF(kTagDriverConfig, "Setting idle timeout to = %d ms",
-             hw_layers_info->set_idle_time_ms);
+             hw_layers_info->common_info->set_idle_time_ms);
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_IDLE_TIMEOUT, token_.crtc_id,
-                              hw_layers_info->set_idle_time_ms);
+                              hw_layers_info->common_info->set_idle_time_ms);
   }
 
   if (hw_panel_info_.mode == kModeCommand) {
@@ -1818,12 +1818,12 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
 
   bool sync_commit = synchronous_commit_ || first_cycle_;
 
-  if (hw_layers_info->elapse_timestamp > 0) {
+  if (hw_layers_info->common_info->elapse_timestamp > 0) {
     struct timespec t = {0, 0};
     clock_gettime(CLOCK_MONOTONIC, &t);
     uint64_t current_time = (UINT64(t.tv_sec) * 1000000000LL + t.tv_nsec);
-    if (current_time < hw_layers_info->elapse_timestamp) {
-      usleep(UINT32((hw_layers_info->elapse_timestamp - current_time) / 1000));
+    if (current_time < hw_layers_info->common_info->elapse_timestamp) {
+      usleep(UINT32((hw_layers_info->common_info->elapse_timestamp - current_time) / 1000));
     }
   }
 
@@ -1892,7 +1892,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   panel_compression_changed_ = 0;
   first_cycle_ = false;
   update_mode_ = false;
-  hw_layers_info->updates_mask = 0;
+  hw_layers_info->common_info->updates_mask = 0;
   pending_power_state_ = kPowerStateNone;
   // Inherently a real commit ensures null commit properties have happened, so update the member
   first_null_cycle_ = false;
@@ -2665,11 +2665,12 @@ void HWDeviceDRM::DumpHWLayers(HWLayersInfo *hw_layers_info) {
   uint32_t hw_layer_count = UINT32(hw_layers_info->hw_layers.size());
   std::vector<LayerRect> &left_frame_roi = hw_layers_info->left_frame_roi;
   std::vector<LayerRect> &right_frame_roi = hw_layers_info->right_frame_roi;
-  DLOGI("HWLayers Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
-         hw_layer_count, hw_layers_info->app_layer_count, hw_layers_info->gpu_target_index);
+//  DLOGI("HWLayers Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
+  //       hw_layer_count, hw_layers_info->app_layer_count, hw_layers_info->gpu_target_index);
   DLOGI("LayerStackFlags = 0x%" PRIu32 ",  blend_cs = {primaries = %d, transfer = %d}",
-         UINT32(hw_layers_info->flags.flags), UINT32(hw_layers_info->blend_cs.primaries),
-         UINT32(hw_layers_info->blend_cs.transfer));
+         UINT32(hw_layers_info->common_info->flags.flags),
+         UINT32(hw_layers_info->common_info->blend_cs.primaries),
+         UINT32(hw_layers_info->common_info->blend_cs.transfer));
   for (uint32_t i = 0; i < left_frame_roi.size(); i++) {
     DLOGI("left_frame_roi: x = %d, y = %d, w = %d, h = %d", INT(left_frame_roi[i].left),
         INT(left_frame_roi[i].top), INT(left_frame_roi[i].right), INT(left_frame_roi[i].bottom));
@@ -2946,7 +2947,8 @@ DisplayError HWDeviceDRM::SetupConcurrentWritebackModes() {
 }
 
 void HWDeviceDRM::ConfigureConcurrentWriteback(const HWLayersInfo &hw_layer_info) {
-  CwbConfig *cwb_config = hw_layer_info.hw_cwb_config;
+  CwbConfig cwb = hw_layer_info.hw_cwb_config;
+  CwbConfig *cwb_config = &cwb;
   LayerBuffer *output_buffer = hw_layer_info.output_buffer;
   registry_.MapOutputBufferToFbId(output_buffer);
   uint32_t &vitual_conn_id = cwb_config_[core_id_].token.conn_id;

@@ -313,7 +313,7 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
   Handle &display_resource_ctx = display_comp_ctx->display_resource_ctx;
 
   // Call Layer Precheck to get feedback
-  LayerFeedback feedback(disp_layer_stack->info.app_layer_count);
+  LayerFeedback feedback(disp_layer_stack->stack_info.app_layer_count);
   if (resource_intf_)
     resource_intf_->Precheck(display_resource_ctx, disp_layer_stack, &feedback);
 
@@ -360,11 +360,11 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
   }
 
   uint32_t size_ff = 1;  // gpu target layer always present
-  if (disp_layer_stack->info.stitch_present)
+  if (disp_layer_stack->stack_info.stitch_present)
     size_ff++;
-  if (disp_layer_stack->info.demura_present)
+  if (disp_layer_stack->stack_info.demura_present)
     size_ff++;
-  if (disp_layer_stack->info.cwb_present)
+  if (disp_layer_stack->stack_info.cwb_present)
     size_ff++;
   uint32_t app_layer_count = UINT32(disp_layer_stack->stack->layers.size()) - size_ff;
   if (display_comp_ctx->idle_fallback) {
@@ -429,7 +429,7 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
     }
 
     if (!exit) {
-      LayerFeedback updated_feedback(disp_layer_stack->info.app_layer_count);
+      LayerFeedback updated_feedback(disp_layer_stack->stack_info.app_layer_count);
       error = resource_intf_->Prepare(display_resource_ctx, disp_layer_stack, &updated_feedback);
       // Exit if successfully prepared resource, else try next strategy.
       exit = (error == kErrorNone);
