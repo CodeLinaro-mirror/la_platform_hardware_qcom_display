@@ -2,4 +2,4 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = libdebug libdrmutils sde-drm sdm/libs/utils sdm/libs/core libmemutils
+SUBDIRS = libdebug libdrmutils sde-drm sdm/libs/utils sdm/libs/core
