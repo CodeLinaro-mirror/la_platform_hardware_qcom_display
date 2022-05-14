@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -176,6 +176,7 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
 }
 
 int DRMAtomicReq::Validate() {
+  DTRACE_SCOPED();
   // Call UnsetUnusedPlanes to find planes that need to be unset. Do not call CommitPlaneState,
   // because we just want to validate, not actually mark planes as removed
   drm_mgr_->GetPlaneMgr()->UnsetUnusedResources(token_.crtc_id, false/*is_commit*/,

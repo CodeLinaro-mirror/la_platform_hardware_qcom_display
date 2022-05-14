@@ -452,8 +452,8 @@ class HWCDisplay : public DisplayEventHandler {
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
   bool IsCACEnabled() { return enable_cac_; }
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }
+  virtual void CacCommitDone(bool cac_commit_done) { return; }
   virtual bool IsCacCommitDone() { return false; }
-  virtual void ResetCacCommit() { return; }
 
  protected:
   static uint32_t throttling_refresh_rate_;

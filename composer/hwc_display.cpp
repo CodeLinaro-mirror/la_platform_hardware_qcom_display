@@ -653,7 +653,7 @@ HWC2::Error HWCDisplay::CreateLayer(hwc2_layer_t *out_layer_id) {
   validated_ = false;
   layer_stack_invalid_ = true;
   layer->SetPartialUpdate(partial_update_enabled_);
-  ResetCacCommit();
+  CacCommitDone(false);
 
   return HWC2::Error::None;
 }
@@ -688,7 +688,7 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
   geometry_changes_ |= GeometryChanges::kRemoved;
   validated_ = false;
   layer_stack_invalid_ = true;
-  ResetCacCommit();
+  CacCommitDone(false);
 
   return HWC2::Error::None;
 }

@@ -764,6 +764,7 @@ struct HWLayers {
   HWAVRInfo hw_avr_info = {};
   std::bitset<kUpdateMax> updates_mask = 0;
   uint64_t elapse_timestamp = 0;
+  LayerRect frame_split = {};
 };
 
 struct HWDisplayAttributes : DisplayConfigVariableInfo {
