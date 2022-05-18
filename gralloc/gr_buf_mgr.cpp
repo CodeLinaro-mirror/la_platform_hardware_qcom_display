@@ -489,6 +489,7 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_422_SP):
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS):
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_NV12_ENCODEABLE):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_NV12_LINEAR_FLEX):
       comp.sizeInBits = 8;
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
           comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
