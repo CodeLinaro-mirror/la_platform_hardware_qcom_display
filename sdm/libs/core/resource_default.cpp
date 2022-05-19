@@ -833,7 +833,7 @@ DisplayError ResourceDefault::SetDecimationFactor(HWPipeInfo *pipe) {
     return kErrorNotSupported;
   }
 
-  DLOGI_IF(kTagResources, "horizontal_decimation %d, vertical_decimation %d",
+  DLOGV_IF(kTagResources, "horizontal_decimation %d, vertical_decimation %d",
            pipe->horizontal_decimation, pipe->vertical_decimation);
 
   return kErrorNone;

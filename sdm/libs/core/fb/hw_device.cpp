@@ -196,9 +196,9 @@ DisplayError HWDevice::Validate(HWLayers *hw_layers) {
   mdp_layer_commit_v1 &mdp_commit = mdp_disp_commit_.commit_v1;
   uint32_t &mdp_layer_count = mdp_commit.input_layer_cnt;
 
-  DLOGI_IF(kTagDriverConfig, "left_roi: x = %d, y = %d, w = %d, h = %d", mdp_commit.left_roi.x,
+  DLOGV_IF(kTagDriverConfig, "left_roi: x = %d, y = %d, w = %d, h = %d", mdp_commit.left_roi.x,
     mdp_commit.left_roi.y, mdp_commit.left_roi.w, mdp_commit.left_roi.h);
-  DLOGI_IF(kTagDriverConfig, "right_roi: x = %d, y = %d, w = %d, h = %d", mdp_commit.right_roi.x,
+  DLOGV_IF(kTagDriverConfig, "right_roi: x = %d, y = %d, w = %d, h = %d", mdp_commit.right_roi.x,
     mdp_commit.right_roi.y, mdp_commit.right_roi.w, mdp_commit.right_roi.h);
 
   for (uint32_t i = 0; i < hw_layer_count; i++) {
@@ -451,10 +451,10 @@ DisplayError HWDevice::Commit(HWLayers *hw_layers) {
 
         DLOGV_IF(kTagDriverConfig, "****************** Layer[%d] %s pipe Input *******************",
                  i, count ? "Right" : "Left");
-        DLOGI_IF(kTagDriverConfig, "in_w %d, in_h %d, in_f %d, horz_deci %d, vert_deci %d",
+        DLOGV_IF(kTagDriverConfig, "in_w %d, in_h %d, in_f %d, horz_deci %d, vert_deci %d",
                  mdp_buffer.width, mdp_buffer.height, mdp_buffer.format, mdp_layer.horz_deci,
                  mdp_layer.vert_deci);
-        DLOGI_IF(kTagDriverConfig, "in_buf_fd %d, in_buf_offset %d, in_buf_stride %d, " \
+        DLOGV_IF(kTagDriverConfig, "in_buf_fd %d, in_buf_offset %d, in_buf_stride %d, " \
                  "in_plane_count %d, in_fence %d, layer count %d", mdp_buffer.planes[0].fd,
                  mdp_buffer.planes[0].offset, mdp_buffer.planes[0].stride, mdp_buffer.plane_count,
                  mdp_buffer.fence, mdp_commit.input_layer_cnt);
@@ -536,10 +536,10 @@ DisplayError HWDevice::Commit(HWLayers *hw_layers) {
 
   hw_layer_info.sync_handle = Sys::dup_(mdp_commit.release_fence);
 
-  DLOGI_IF(kTagDriverConfig, "*************************** %s Commit Input ************************",
+  DLOGV_IF(kTagDriverConfig, "*************************** %s Commit Input ************************",
            device_name_);
-  DLOGI_IF(kTagDriverConfig, "retire_fence_fd %d", stack->retire_fence_fd);
-  DLOGI_IF(kTagDriverConfig, "*******************************************************************");
+  DLOGV_IF(kTagDriverConfig, "retire_fence_fd %d", stack->retire_fence_fd);
+  DLOGV_IF(kTagDriverConfig, "*******************************************************************");
 
   if (mdp_commit.release_fence >= 0) {
     Sys::close_(mdp_commit.release_fence);
