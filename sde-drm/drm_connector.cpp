@@ -196,6 +196,7 @@ static DRMTopology GetTopologyEnum(const string &topology) {
   if (topology == "sde_dualpipe_dscmerge") return DRMTopology::DUAL_LM_DSCMERGE;
   if (topology == "sde_quadpipemerge") return DRMTopology::QUAD_LM_MERGE;
   if (topology == "sde_quadpipe_dscmerge") return DRMTopology::QUAD_LM_DSCMERGE;
+  if (topology == "sde_quadpipe_dscmerge_dualctl") return DRMTopology::QUAD_LM_DSCMERGE_DUALCTL;
   if (topology == "sde_quadpipe_3dmerge_dsc") return DRMTopology::QUAD_LM_MERGE_DSC;
   if (topology == "sde_quadpipe_dsc4hsmerge") return DRMTopology::QUAD_LM_DSC4HSMERGE;
   if (topology == "sde_ppsplit") return DRMTopology::PPSPLIT;
