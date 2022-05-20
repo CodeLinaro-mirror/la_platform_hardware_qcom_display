@@ -135,9 +135,9 @@ DisplayError DisplayBuiltIn::Init() {
   // Enable SPR as default is disabled.
   Debug::GetProperty(ENABLE_SPR, &spr_prop_value_);
 
-  error = CreatePanelfeatures();
-  if (error != kErrorNone) {
-    DLOGE("Failed to setup panel feature factory, error: %d", error);
+  DisplayError ret = CreatePanelfeatures();
+  if (ret != kErrorNone) {
+    DLOGE("Failed to setup panel feature factory, ret: %d", ret);
   } else {
     // Get status of RC enablement property. Default RC is disabled.
     int rc_prop_value = 0;
