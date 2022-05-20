@@ -26,10 +26,46 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <core/buffer_allocator.h>
 #include <utils/debug.h>
 #include <utils/constants.h>
+#include <utils/rect.h>
 #include <sync/sync.h>
 #include <vector>
 #include <string>
@@ -1183,5 +1219,127 @@ int HWCSession::DisplayConfigImpl::ControlQsyncCallback(bool enable) {
 
   return 0;
 }
+
+#if 0  // TODO(user): Enable after porting CAC API's
+Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, float green,
+                                      float blue) {
+  int disp_idx = GetDisplayIndex(disp_id);
+  int32_t error = -EINVAL;
+  PanelOrientation default_orientation = {};
+
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    DLOGE("Invalid display = %d", disp_id);
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (!hwc_display_[disp_idx]) {
+      DLOGW("Display is not connected");
+      error = -ENODEV;
+      return error;
+    }
+  }
+
+  if (enable == true) {
+    error = CreateVirtualDisplayForCAC(disp_idx);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_display_[disp_idx]) {
+      error = hwc_display_[disp_idx]->SetCAC(enable, red, green, blue, default_orientation);
+      DLOGI("CAC: disp_id = %d enable = %d, red = %f, green = %f, blue = %f, errno = %d, desc = %s",
+            disp_idx, enable, red, green, blue, error, strerror(error));
+    }
+  }
+
+  if(enable == false && wb_display_) {
+    error = DestroyVirtualDisplay(wb_display_);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
+  }
+
+  return error;
+}
+
+static void UpdateCACColorChannelRect(LayerRect &config_rect,
+                                      const IDisplayConfig::CacChannelRect &ipd_channel_rect) {
+  config_rect.left = ipd_channel_rect.left;
+  config_rect.top = ipd_channel_rect.top;
+  config_rect.right = ipd_channel_rect.right;
+  config_rect.bottom = ipd_channel_rect.bottom;
+}
+
+static int32_t UpdateCACEyeConfig(CACEyeConfig *config,
+                                  const IDisplayConfig::CacEyeConfig &ipd_config) {
+  UpdateCACColorChannelRect(config->red_channel_src, ipd_config.red_channel_src);
+  UpdateCACColorChannelRect(config->red_channel_dst, ipd_config.red_channel_dst);
+  UpdateCACColorChannelRect(config->green_channel_src, ipd_config.green_channel_src);
+  UpdateCACColorChannelRect(config->green_channel_dst, ipd_config.green_channel_dst);
+  UpdateCACColorChannelRect(config->blue_channel_src, ipd_config.blue_channel_src);
+  UpdateCACColorChannelRect(config->blue_channel_dst, ipd_config.blue_channel_dst);
+
+  if (IsScaled(config->green_channel_src, config->green_channel_dst)) {
+    DLOGE("Scaling not allowed on green channel");
+    return -1;
+  }
+
+  return 0;
+}
+
+Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
+                                            const IDisplayConfig::CacEyeConfig &left_config,
+                                            const IDisplayConfig::CacEyeConfig &right_config) {
+  int disp_idx = GetDisplayIndex(disp_id);
+  int32_t error = -EINVAL;
+  CACEyeConfig left_eye = {};
+  CACEyeConfig right_eye = {};
+
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    DLOGE("Invalid display = %d", disp_id);
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (!hwc_display_[disp_idx]) {
+      DLOGW("Display is not connected");
+      error = -ENODEV;
+      return error;
+    }
+  }
+
+  error = UpdateCACEyeConfig(&left_eye, left_config);
+  if (error) {
+    DLOGE("Failed to set CAC IPD left eye config err = %d, desc = %s",  error, strerror(error));
+    return error;
+  }
+  error = UpdateCACEyeConfig(&right_eye, right_config);
+  if (error) {
+    DLOGE("Failed to set CAC IPD right eye config err = %d, desc = %s",  error, strerror(error));
+    return error;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_display_[disp_idx]) {
+      error = hwc_display_[disp_idx]->SetCACEyeConfig(left_eye, right_eye);
+      if (error) {
+        DLOGE("Failed to set CAC IPD config err = %d, desc = %s",  error, strerror(error));
+      }
+    }
+  }
+
+  return error;
+}
+
+#endif
 
 }  // namespace sdm

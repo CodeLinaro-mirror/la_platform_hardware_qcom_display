@@ -21,6 +21,41 @@
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <stdio.h>
 #include <utils/constants.h>
@@ -99,6 +134,7 @@ DisplayError DisplayBase::Init() {
   Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_on_external_);
   uint32_t active_index = 0;
   int drop_vsync = 0;
+  int32_t enable_wb_cac = 0;
   hw_intf_->GetActiveConfig(&active_index);
   hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
   fb_config_ = display_attributes_;
@@ -133,8 +169,10 @@ DisplayError DisplayBase::Init() {
   // ColorManager supported for built-in display.
   // ColorManager also supported for pluggable dispaly if ENABLE_QDCM_COLORMODES_ON_EXTERNAL
   // vendor property is set.
-  if ((kBuiltIn == display_type_) ||
-     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1))) {
+  DebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac);
+  // if CAC using WB is enabled disable DSPP and SSPP gamut conversion blocks
+  if (!enable_wb_cac && ((kBuiltIn == display_type_) ||
+     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1)))) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_,
@@ -526,6 +564,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->partial_update = hw_panel_info_.partial_update;
   fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
   fixed_info->fsc_rgb_order = hw_panel_info_.fsc_rgb_order;
+  fixed_info->panel_orientation = hw_panel_info_.panel_orientation;
 
   return kErrorNone;
 }
@@ -780,7 +819,8 @@ std::string DisplayBase::Dump() {
   LayerBuffer *out_buffer = hw_layers_.info.stack->output_buffer;
   if (out_buffer) {
     os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
+       << " format: " << GetFormatString(out_buffer->format) << " buffer_id:" << std::hex << "0x" <<
+       out_buffer->buffer_id;
   }
   HWLayersInfo &layer_info = hw_layers_.info;
   for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
@@ -1282,6 +1322,11 @@ DisplayError DisplayBase::SetVSyncState(bool enable) {
   vsync_enable_pending_ = !enable ? false : vsync_enable_pending_;
 
   return error;
+}
+
+DisplayError DisplayBase::SetLinePtrState(bool enable, uint32_t line_count) {
+  return hw_events_intf_->SetEventState(HWEvent::LINEPTR, enable,
+                                        reinterpret_cast<void *>(line_count));
 }
 
 DisplayError DisplayBase::ReconfigureDisplay() {
@@ -2137,6 +2182,31 @@ bool DisplayBase::GameEnhanceSupported() {
 DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
+}
+
+DisplayError DisplayBase::SetCAC(bool enable, float red, float green, float blue,
+                                 PanelOrientation orientation) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError error = comp_manager_->SetCAC(display_comp_ctx_, enable, red, green, blue,
+                                             orientation);
+  if (error) {
+    return kErrorNotSupported;
+  }
+  enable_cac_ = enable;
+  error = hw_intf_->SetCAC(enable_cac_, orientation);
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBase::SetCACEyeConfig(const CACEyeConfig &left,
+                                          const CACEyeConfig &right) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError error = comp_manager_->SetCACEyeConfig(display_comp_ctx_, left, right);
+  if (error) {
+    return kErrorNotSupported;
+  }
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -68,6 +69,7 @@ namespace sdm {
                                      float *dst_width, float *dst_height);
   DisplayError GetScaleFactor(const LayerRect &crop, const LayerRect &dst, bool rotate90,
                               float *scale_x, float *scale_y);
+  bool IsScaled(const LayerRect &src, const LayerRect &dst);
 }  // namespace sdm
 
 #endif  // __RECT_H__

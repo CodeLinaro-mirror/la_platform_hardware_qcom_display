@@ -43,6 +43,7 @@ LOCAL_SHARED_LIBRARIES        := libhistogram libbinder libhardware libutils lib
                                  libdrm libthermalclient \
                                  libdisplayconfig.qti
 
+
 LOCAL_SRC_FILES               := QtiComposer.cpp QtiComposerClient.cpp service.cpp \
                                  QtiComposerHandleImporter.cpp \
                                  hwc_session.cpp \

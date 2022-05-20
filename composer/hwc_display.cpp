@@ -16,6 +16,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <cutils/properties.h>
 #include <errno.h>
@@ -532,6 +567,7 @@ int HWCDisplay::Init() {
   is_cmd_mode_ = fixed_info.is_cmdmode;
   partial_update_enabled_ = fixed_info.partial_update || (!fixed_info.is_cmdmode);
   fsc_rgb_order_ = (sdm::HWCDisplay::FscRgbOrder)fixed_info.fsc_rgb_order;
+  panel_orientation_ = fixed_info.panel_orientation;
   client_target_->SetPartialUpdate(partial_update_enabled_);
 
   int disable_fast_path = 0;
@@ -617,6 +653,7 @@ HWC2::Error HWCDisplay::CreateLayer(hwc2_layer_t *out_layer_id) {
   validated_ = false;
   layer_stack_invalid_ = true;
   layer->SetPartialUpdate(partial_update_enabled_);
+  ResetCacCommit();
 
   return HWC2::Error::None;
 }
@@ -651,6 +688,7 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
   geometry_changes_ |= GeometryChanges::kRemoved;
   validated_ = false;
   layer_stack_invalid_ = true;
+  ResetCacCommit();
 
   return HWC2::Error::None;
 }
@@ -826,6 +864,9 @@ void HWCDisplay::BuildLayerStack() {
   SetClientTargetDataSpace(client_target_dataspace);
   layer_stack_.layers.push_back(sdm_client_target);
 
+  // Set split rect to LS
+  layer_stack_.frame_split = frame_split_rect_;
+
   // fall back frame composition to GPU when client target is 10bit
   // TODO(user): clarify the behaviour from Client(SF) and SDM Extn -
   // when handling 10bit FBT, as it would affect blending
@@ -906,7 +947,9 @@ HWC2::Error HWCDisplay::SetVsyncEnabled(HWC2::Vsync enabled) {
   else
     return HWC2::Error::BadParameter;
 
-  error = display_intf_->SetVSyncState(state);
+  if (state) {  // TODO(CAC_Skip_Hidl): Only enable vsync, revisit
+    error = display_intf_->SetVSyncState(state);
+  }
 
   if (error != kErrorNone) {
     if (error == kErrorShutDown) {
@@ -917,6 +960,7 @@ HWC2::Error HWCDisplay::SetVsyncEnabled(HWC2::Vsync enabled) {
     return HWC2::Error::BadDisplay;
   }
 
+  vsync_enabled_ = state;  // TODO(CAC_Skip_Hidl): revisit Vsync always on
   return HWC2::Error::None;
 }
 
@@ -1299,7 +1343,9 @@ HWC2::PowerMode HWCDisplay::GetCurrentPowerMode() {
 }
 
 DisplayError HWCDisplay::VSync(const DisplayEventVSync &vsync) {
-  callbacks_->Vsync(id_, vsync.timestamp);
+  if (vsync_enabled_) {  // TODO(CAC_Skip_Hidl): revisit vsync always on
+    callbacks_->Vsync(id_, vsync.timestamp);
+  }
   return kErrorNone;
 }
 
@@ -1355,6 +1401,11 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
         DLOGW("Cannot execute DisplayPowerReset (client_id = %" PRId64 "), event_handler_ is null",
               id_);
       }
+    } break;
+    case kLinePtrEvent: {
+      // Handle line-ptr event.
+      HandleLinePtrEvent();
+      DLOGI_IF(kTagDisplay, "Line ptr event on display %d-%d", sdm_id_, type_);
     } break;
     default:
       DLOGW("Unknown event: %d", event);
@@ -1843,6 +1894,7 @@ void HWCDisplay::DumpInputBuffers() {
   }
 }
 
+static uint32_t dump_index = 0;  // Used to dump WB Op Buffer of CAC
 void HWCDisplay::DumpOutputBuffer(const BufferInfo &buffer_info, void *base, int fence) {
   char dir_path[PATH_MAX];
   int  status;
@@ -1877,7 +1929,8 @@ void HWCDisplay::DumpOutputBuffer(const BufferInfo &buffer_info, void *base, int
     snprintf(dump_file_name, sizeof(dump_file_name), "%s/output_layer_%dx%d_%s_frame%d.raw",
              dir_path, buffer_info.alloc_buffer_info.aligned_width,
              buffer_info.alloc_buffer_info.aligned_height,
-             GetFormatString(buffer_info.buffer_config.format), dump_frame_index_);
+             GetFormatString(buffer_info.buffer_config.format), (dump_frame_index_) ?
+             dump_frame_index_ : dump_index++);
 
     FILE *fp = fopen(dump_file_name, "w+");
     if (fp) {
@@ -1949,6 +2002,11 @@ int HWCDisplay::SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels) {
   DLOGI("New framebuffer resolution (%dx%d)", fb_config.x_pixels, fb_config.y_pixels);
 
   return 0;
+}
+
+bool HWCDisplay::IsWBCacInUse() {
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  return hwc_session->wb_display_ ? true : false;
 }
 
 int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
@@ -2337,24 +2395,26 @@ std::string HWCDisplay::Dump() {
   std::ostringstream os;
   os << "\n------------HWC----------------\n";
   os << "HWC2 display_id: " << id_ << std::endl;
-  for (auto layer : layer_set_) {
-    auto sdm_layer = layer->GetSDMLayer();
-    auto transform = sdm_layer->transform;
-    os << "layer: " << std::setw(4) << layer->GetId();
-    os << " z: " << layer->GetZ();
-    os << " composition: " <<
-          to_string(layer->GetClientRequestedCompositionType()).c_str();
-    os << "/" <<
-          to_string(layer->GetDeviceSelectedCompositionType()).c_str();
-    os << " alpha: " << std::to_string(sdm_layer->plane_alpha).c_str();
-    os << " format: " << std::setw(22) << GetFormatString(sdm_layer->input_buffer.format);
-    os << " dataspace:" << std::hex << "0x" << std::setw(8) << std::setfill('0')
-       << layer->GetLayerDataspace() << std::dec << std::setfill(' ');
-    os << " transform: " << transform.rotation << "/" << transform.flip_horizontal <<
-          "/"<< transform.flip_vertical;
-    os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec;
-    os << " secure: " << layer->IsProtected()
-       << std::endl;
+  if (type_ != kVirtual) {  // TODO(CAC): Fix this
+    for (auto layer : layer_set_) {
+      auto sdm_layer = layer->GetSDMLayer();
+      auto transform = sdm_layer->transform;
+      os << "layer: " << std::setw(4) << layer->GetId();
+      os << " z: " << layer->GetZ();
+      os << " composition: " <<
+            to_string(layer->GetClientRequestedCompositionType()).c_str();
+      os << "/" <<
+            to_string(layer->GetDeviceSelectedCompositionType()).c_str();
+      os << " alpha: " << std::to_string(sdm_layer->plane_alpha).c_str();
+      os << " format: " << std::setw(22) << GetFormatString(sdm_layer->input_buffer.format);
+      os << " dataspace:" << std::hex << "0x" << std::setw(8) << std::setfill('0')
+         << layer->GetLayerDataspace() << std::dec << std::setfill(' ');
+      os << " transform: " << transform.rotation << "/" << transform.flip_horizontal <<
+            "/"<< transform.flip_vertical;
+      os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec;
+      os << " secure: " << layer->IsProtected()
+         << std::endl;
+    }
   }
 
   if (has_client_composition_) {
@@ -2389,9 +2449,9 @@ std::string HWCDisplay::Dump() {
 }
 
 bool HWCDisplay::CanSkipValidate() {
-  if (!validated_ || solid_fill_enable_) {
-    return false;
-  }
+  if (IsWBCacInUse()|| !validated_ || solid_fill_enable_) {
+     return false;
+   }
 
   if ((tone_mapper_ && tone_mapper_->IsActive()) ||
       layer_stack_.flags.single_buffered_layer_present) {
@@ -2595,6 +2655,31 @@ void HWCDisplay::UpdateActiveConfig() {
 
   // Reset pending config.
   pending_config_ = false;
+}
+
+int32_t HWCDisplay::SetCAC(bool enable, float red, float green, float blue,
+                           PanelOrientation orientation) {
+  DisplayError error = display_intf_->SetCAC(enable, red, green, blue, orientation);
+  if (error != kErrorNone) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f",
+          id_, sdm_id_, type_, enable, red, green, blue);
+    return -1;
+  }
+  enable_cac_ = enable;
+  validated_ = false;
+
+  return 0;
+}
+
+int32_t HWCDisplay::SetCACEyeConfig(const CACEyeConfig &left,
+                                    const CACEyeConfig &right) {
+  DisplayError error = display_intf_->SetCACEyeConfig(left, right);
+  if (error != kErrorNone) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d", id_, sdm_id_, type_);
+    return -1;
+  }
+
+  return 0;
 }
 
 }  // namespace sdm

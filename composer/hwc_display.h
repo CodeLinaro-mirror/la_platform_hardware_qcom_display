@@ -16,6 +16,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #ifndef __HWC_DISPLAY_H__
 #define __HWC_DISPLAY_H__
@@ -406,9 +441,19 @@ class HWCDisplay : public DisplayEventHandler {
       uint64_t max_frames, uint64_t timestamp, uint64_t *numFrames,
       int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
       uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
+  virtual void SetFrameSplitRect(const LayerRect &rect) {
+    frame_split_rect_ = rect;
+  }
   HWC2::Error SetDisplayElapseTime(uint64_t time);
   virtual bool HasReadBackBufferSupport() { return false; }
+  virtual int32_t SetCAC(bool enable, float red, float green, float blue,
+                         PanelOrientation orientation);
+  virtual int32_t SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
+  bool IsCACEnabled() { return enable_cac_; }
+  PanelOrientation GetPanelOrientation() { return panel_orientation_; }
+  virtual bool IsCacCommitDone() { return false; }
+  virtual void ResetCacCommit() { return; }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -431,6 +476,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual DisplayError DisablePartialUpdateOneFrame() {
     return kErrorNotSupported;
   }
+  virtual void HandleLinePtrEvent() { return; }
   const char *GetDisplayString();
   void MarkLayersForGPUBypass(void);
   void MarkLayersForClientComposition(void);
@@ -442,6 +488,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetUnderScanConfig() { }
   int32_t SetClientTargetDataSpace(int32_t dataspace);
   int SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels);
+  bool IsWBCacInUse();
 
   bool validated_ = false;
   bool layer_stack_invalid_ = true;
@@ -501,6 +548,15 @@ class HWCDisplay : public DisplayEventHandler {
   LayerRect window_rect_ = {};
   bool windowed_display_ = false;
   uint32_t active_refresh_rate_ = 0;
+  bool enable_cac_ = false;  // Indicates if CAC is in progress
+  bool animating_ = false;
+  bool fast_path_enabled_ = true;
+  bool game_supported_ = false;
+  DisplayValidateState validate_state_ = kNormalValidate;
+  uint32_t geometry_changes_ = GeometryChanges::kNone;
+  uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
+  LayerRect frame_split_rect_ = {};
+  bool vsync_enabled_ = false;    // TODO(CAC_Skip_Hidl): revisit vsync always on
 
  private:
   void DumpInputBuffers(void);
@@ -510,22 +566,17 @@ class HWCDisplay : public DisplayEventHandler {
   void UpdateActiveConfig();
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
-  uint32_t geometry_changes_ = GeometryChanges::kNone;
-  uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
-  bool animating_ = false;
   int null_display_mode_ = 0;
-  DisplayValidateState validate_state_ = kNormalValidate;
-  bool fast_path_enabled_ = true;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
   int fbt_release_fence_ = -1;
   int release_fence_ = -1;
   hwc2_config_t pending_config_index_ = 0;
   bool pending_first_commit_config_ = false;
   hwc2_config_t pending_first_commit_config_index_ = 0;
-  bool game_supported_ = false;
   uint64_t elapse_timestamp_ = 0;
   int async_power_mode_ = 0;
   FscRgbOrder fsc_rgb_order_ = kFscUnknown;
+  PanelOrientation panel_orientation_ = {};
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

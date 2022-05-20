@@ -21,6 +21,42 @@
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 
 /*! @file layer_stack.h
   @brief File for display layer stack structure which represents a drawing buffer.
@@ -61,6 +97,10 @@ enum LayerBlending {
   kBlendingCoverage,        //!< Pixel color is expressed using straight alpha in color tuples. If
                             //!< plane alpha is less than 0xff, apply modulation as well.
                             //!<   pixel.rgb = src.rgb x src.a + dest.rgb x (1 - src.a)
+
+  kBlendingLayerColor,      //!< Pixel color is indicated by the layer_color property,
+                            //!< consider other color components as alpha opaque(0xff)
+
 };
 
 /*! @brief This enum represents display layer composition types.
@@ -175,6 +215,16 @@ struct LayerFlags {
 
       uint32_t is_game : 1;  //!< This flag shall be set by client to indicate that this layer
                              //!< is a game layer.
+
+      uint32_t is_color_red : 1;  //!< This flag shall be set by client to indicate that extract
+                                  //!< only red color from layer
+
+      uint32_t is_color_green : 1;  //!< This flag shall be set by client to indicate that extract
+                                    //!< only green color from layer
+
+      uint32_t is_color_blue : 1;  //!< This flag shall be set by client to indicate that extract
+                                   //!< only blue color from layer
+
     };
 
     uint32_t flags = 0;       //!< For initialization purpose only.
@@ -447,6 +497,10 @@ struct LayerStack {
   PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
 
   uint64_t elapse_timestamp = 0;       //!< system time until which display commit needs to be held
+
+  LayerRect frame_split = {};          //!< Specifies if frame to be split left/right (portrait) or
+                                       //!< top/bottom (landscape).
+                                       //!< Mainly used for CAC split, T/B or L/R split frame.
 };
 
 }  // namespace sdm

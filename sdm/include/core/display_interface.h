@@ -21,6 +21,41 @@
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 /*! @file display_interface.h
   @brief Interface file for display device which represents a physical panel or an output buffer
@@ -149,6 +184,7 @@ enum DisplayEvent {
   kPanelDeadEvent,          // Event triggered by ESD.
   kDisplayPowerResetEvent,  // Event triggered by Hardware Recovery.
   kInvalidateDisplay,       // Event triggered to Invalidate display.
+  kLinePtrEvent,            // Event triggered by Line Counter.
 };
 
 /*! @brief This enum represents the secure events received by Display HAL. */
@@ -194,6 +230,28 @@ enum FscRgbOrder {
   kFscGrb,
 };
 
+
+/*! @brief This enum defines the panel orientation. */
+struct PanelOrientation {
+  bool rotation = false;
+  bool flip_horizontal = false;
+  bool flip_vertical = false;
+};
+
+/*! @brief This structure defines a IPD(Inter Pupillary Distance) config that contains src and dst
+  rects per-color-layer to set IPD config.
+
+  @sa DisplayInterface::SetCACEyeConfig
+*/
+struct CACEyeConfig {
+  LayerRect red_channel_src;
+  LayerRect red_channel_dst;
+  LayerRect green_channel_src;
+  LayerRect green_channel_dst;
+  LayerRect blue_channel_src;
+  LayerRect blue_channel_dst;
+};
+
 /*! @brief This structure defines configuration for fixed properties of a display device.
 
   @sa DisplayInterface::GetConfig
@@ -213,6 +271,7 @@ struct DisplayConfigFixedInfo {
   bool partial_update = false;         //!< If display supports Partial Update.
   bool readback_supported = false;     //!< If display supports buffer readback.
   FscRgbOrder fsc_rgb_order = kFscUnkown;  //!< FSC Panel's RGB order.
+  PanelOrientation panel_orientation = {};  //!< Panel's mount orientation
 };
 
 /*! @brief This structure defines configuration for variable properties of a display device.
@@ -492,6 +551,16 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError SetVSyncState(bool enable) = 0;
+
+  /*! @brief Method to set Line Counter event state. Default event state is disabled.
+
+    @param[in] enable true to activate line counter event.
+
+    @param[in] line_count value in "y" line number at which to trigger event.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetLinePtrState(bool enable, uint32_t line_count) = 0;
 
   /*! @brief Method to set idle timeout value. Idle fallback is disabled with timeout value 0.
 
@@ -942,6 +1011,28 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode) = 0;
+
+  /*! @brief Method to set CAC color offsets and CAC enable flag
+
+    @param[in] red green blue offsets
+
+    @param[in] cac enable flag
+
+    @param[in] orientation - to handle flips during CAC
+
+    @return \link void \endlink
+  */
+  virtual DisplayError SetCAC(bool enable, float red, float green, float blue,
+                              PanelOrientation orientation) = 0;
+
+  /*! @brief Method to set src and dst rects per color layer of CAC to set CACEyeConfig
+
+    @param[in] left and right eye parameters
+
+    @return \link void \endlink
+  */
+  virtual DisplayError SetCACEyeConfig(const CACEyeConfig &left,
+                                       const CACEyeConfig &right) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

@@ -182,6 +182,12 @@ enum struct DRMOps {
    */
   PLANE_SET_POST_PROC,
   /*
+   * Op: Sets layer flag
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - layer color flag
+   */
+  PLANE_SET_LAYER_COLOR_FLAG,
+  /*
    * Op: Activate or deactivate a CRTC
    * Arg: uint32_t - CRTC ID
    *      uint32_t - 1 to enable, 0 to disable
@@ -429,6 +435,7 @@ enum struct DRMBlendType {
   OPAQUE = 1,
   PREMULTIPLIED = 2,
   COVERAGE = 3,
+  LAYER_COLOR = 4,
 };
 
 enum struct DRMSrcConfig {
@@ -830,6 +837,13 @@ enum struct DRMSecureMode {
 enum struct DRMSecurityLevel {
   SECURE_NON_SECURE,
   SECURE_ONLY,
+};
+
+enum struct DRMReserveColor {
+  NONE = 0,
+  RED = 1,
+  GREEN = 2,
+  BLUE = 3,
 };
 
 enum struct DRMMultiRectMode {

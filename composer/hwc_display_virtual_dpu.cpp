@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +26,41 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <hwc_display_virtual_dpu.h>
 
@@ -51,6 +86,7 @@ int HWCDisplayVirtualDPU::Init() {
   if (max_lum_ != -1.0 || min_lum_ != -1.0) {
     SetPanelLuminanceAttributes(min_lum_, max_lum_);
   }
+  DebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac_);
 
   status = SetConfig(width_, height_);
   if (status) {
@@ -110,13 +146,15 @@ HWC2::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf, int32_t r
     buffer_allocator_->GetAlignedWidthAndHeight(INT(active_width), INT(active_height),
                                                 output_handle_format, 0, &active_aligned_w,
                                                 &active_aligned_h);
-    if (new_aligned_w != active_aligned_w  || new_aligned_h != active_aligned_h) {
-      int status = SetConfig(UINT32(new_width), UINT32(new_height));
-      if (status) {
-        DLOGE("SetConfig failed custom WxH %dx%d", new_width, new_height);
-        return HWC2::Error::BadParameter;
+    if (!enable_wb_cac_) {
+      if (new_aligned_w != active_aligned_w  || new_aligned_h != active_aligned_h) {
+        int status = SetConfig(UINT32(new_width), UINT32(new_height));
+        if (status) {
+          DLOGE("SetConfig failed custom WxH %dx%d", new_width, new_height);
+          return HWC2::Error::BadParameter;
+        }
+        validated_ = false;
       }
-      validated_ = false;
     }
 
     output_buffer_.width = UINT32(new_aligned_w);
@@ -184,6 +222,34 @@ HWC2::Error HWCDisplayVirtualDPU::SetPanelLuminanceAttributes(float min_lum, flo
   if (err != kErrorNone) {
     return HWC2::Error::BadParameter;
   }
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayVirtualDPU::SetFrameRate(uint32_t fps) {
+  DisplayConfigVariableInfo variable_info = {};
+  DisplayConfigVariableInfo curr_variable_info = {};
+
+  if (enable_wb_cac_) {
+    uint32_t config_index = 0;
+
+    GetActiveConfig(&config_index);
+    GetDisplayAttributesForConfig(INT(config_index), &curr_variable_info);
+    variable_info.x_pixels = curr_variable_info.x_pixels;
+    variable_info.y_pixels = curr_variable_info.y_pixels;
+    variable_info.fps = fps;
+  }
+
+  if (curr_variable_info.fps != variable_info.fps) {
+    DisplayError err = display_intf_->SetActiveConfig(&variable_info);
+    if (err != kErrorNone) {
+      DLOGE("SetActiveConfig on display %" PRIu64 " %d-%d failed to update fps = %d", id_, sdm_id_,
+            type_, fps);
+      return HWC2::Error::Unsupported;
+    }
+    DLOGI_IF(kTagClient, "SetActiveConfig on display %" PRIu64 " %d-%d updated WB display fps = %d",
+             id_, sdm_id_, type_, variable_info.fps);
+  }
+
   return HWC2::Error::None;
 }
 
