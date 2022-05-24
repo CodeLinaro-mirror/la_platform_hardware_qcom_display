@@ -63,6 +63,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <private/color_interface.h>
 #include <private/panel_feature_property_intf.h>
 #include <utils/constants.h>
+#include <drm_interface.h>
 #include <string>
 
 #include "hw_info_interface.h"
@@ -83,6 +84,15 @@ struct HWScanInfo {
 
   HWScanInfo() : pt_scan_support(kScanNotSupported), it_scan_support(kScanNotSupported),
                  cea_scan_support(kScanNotSupported) { }
+  bool operator != (const HWScanInfo& hw_scan_info) {
+    return pt_scan_support != hw_scan_info.pt_scan_support ||
+           it_scan_support != hw_scan_info.it_scan_support ||
+           cea_scan_support != hw_scan_info.cea_scan_support;
+  }
+
+  bool operator == (const HWScanInfo& hw_scan_info) {
+    return !(operator !=(hw_scan_info));
+  }
 };
 
 enum HWFeature {
@@ -178,6 +188,8 @@ class HWInterface {
   virtual DisplayError SetAlternateDisplayConfig(uint32_t *alt_config) = 0;
   virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) = 0;
   virtual DisplayError CancelDeferredPowerMode() = 0;
+  virtual void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const = 0;
+  virtual bool IsPrimaryDisplay() const = 0;
 
  protected:
   virtual ~HWInterface() { }

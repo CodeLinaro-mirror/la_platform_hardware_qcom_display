@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <algorithm>
@@ -51,16 +57,17 @@ DisplayVirtual::DisplayVirtual(DisplayId display_id, DisplayEventHandler *event_
 DisplayError DisplayVirtual::Init() {
   ClientLock lock(disp_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_info_.GetConnId(), kVirtual,
-                                           hw_info_intf_[primary_core_id_],
-                                           buffer_allocator_, &hw_intf_);
+  DisplayError error = kErrorNone;
+  dpu_core_mux_ = new DPUCoreMux(display_id_info_, kVirtual, hw_info_intf_, buffer_allocator_);
 
   if (error != kErrorNone) {
     return error;
   }
 
-  if (-1 == display_id_) {
-    hw_intf_->GetDisplayId(&display_id_);
+  dpu_core_mux_->GetHWInterface(&hw_intf_);
+
+  if (-1 == display_id_info_.GetDisplayId()) {
+    dpu_core_mux_->GetDisplayId(&display_id_);
     display_id_info_ = DisplayId(primary_core_id_, display_id_);
     display_id_ = display_id_info_.GetDisplayId();
   }
@@ -152,12 +159,12 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
     return kErrorNone;
   }
 
-  error = hw_intf_->SetDisplayAttributes(display_attributes);
+  error = dpu_core_mux_->SetDisplayAttributes(display_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
-  hw_intf_->GetHWPanelInfo(&hw_panel_info);
+  dpu_core_mux_->GetHWPanelInfo(&hw_panel_info);
 
   if (set_max_lum_ != -1.0 || set_min_lum_ != -1.0) {
     hw_panel_info.peak_luminance = set_max_lum_;
@@ -166,7 +173,7 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
           hw_panel_info.blackness_level);
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes);
+  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes);
   if (error != kErrorNone) {
     return error;
   }

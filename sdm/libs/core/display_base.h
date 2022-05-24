@@ -82,6 +82,7 @@
 #include "comp_manager.h"
 #include "color_manager.h"
 #include "hw_events_interface.h"
+#include "dpu_core_mux.h"
 
 #define GET_PANEL_FEATURE_FACTORY "GetPanelFeatureFactoryIntf"
 
@@ -342,7 +343,7 @@ class DisplayBase : public DisplayInterface {
   void CheckMMRMState();
   DisplayError SetVSyncStateLocked(bool enable);
   virtual DisplayError SetUpCommit(LayerStack *layer_stack);
-  DisplayError PerformCommit(HWLayersInfo *hw_layers_info);
+  DisplayError PerformCommit(std::vector<HWLayersInfo> &hw_layers_info);
   virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
   bool IsPrimaryDisplayLocked();
   virtual DisplayError CommitLocked(LayerStack *layer_stack);
@@ -362,6 +363,7 @@ class DisplayBase : public DisplayInterface {
   DisplayType display_type_;
   DisplayEventHandler *event_handler_ = NULL;
   HWDeviceType hw_device_type_;
+  DPUCoreMux *dpu_core_mux_ = NULL;
   HWInterface *hw_intf_ = NULL;
   HWPanelInfo hw_panel_info_;
   std::vector<HWResourceInfo> hw_resource_info_;
@@ -455,7 +457,7 @@ class DisplayBase : public DisplayInterface {
   DisplayError GetNoisePluginParams(LayerStack *layer_stack);
   DisplayError InsertNoiseLayer(LayerStack *layer_stack);
   void WaitForCompletion(SyncPoints *sync_points);
-  DisplayError PerformHwCommit(HWLayersInfo *hw_layers_info);
+  DisplayError PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_info);
   void CacheRetireFence();
   void CacheFrameBuffer();
   void CacheDisplayComposition();
