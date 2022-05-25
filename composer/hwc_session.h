@@ -279,6 +279,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t SetDisplayBrightnessScale(const android::Parcel *input_parcel);
   int32_t SetCAC(const android::Parcel *input_parcel);
   int32_t CreateVirtualDisplayForCAC(int disp_idx);
+  int32_t SetSkewVsync(const android::Parcel *input_parcel);
 
   // Layer functions
   int32_t SetLayerBuffer(hwc2_display_t display, hwc2_layer_t layer, buffer_handle_t buffer,

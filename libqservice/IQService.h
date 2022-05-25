@@ -20,7 +20,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -121,6 +121,7 @@ public:
       SET_UNUSED5 = 54,                        // Unused here
       SET_UNUSED6 = 55,                        // Unused here
       SET_CAC = 56,                            // Control CAC enable with Offset
+      SET_SKEW_VSYNC = 57,                     // Control CAC enable with Offset
       COMMAND_LIST_END = 400,
     };
 

@@ -100,6 +100,7 @@ static const int kSolidFillDelay = 100 * 1000;
 int HWCSession::null_display_mode_ = 0;
 static const uint32_t kBrightnessScaleMax = 100;
 static const uint32_t kSvBlScaleMax = 65535;
+static const uint32_t kSkewVsyncMax = 75;
 
 // Map the known color modes to dataspace.
 int32_t GetDataspaceFromColorMode(ColorMode mode) {
@@ -1716,6 +1717,14 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
         break;
       }
       status = SetCAC(input_parcel);
+      break;
+
+    case qService::IQService::SET_SKEW_VSYNC:
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = SetSkewVsync(input_parcel);
       break;
 
     default:
@@ -3607,6 +3616,40 @@ bool HWCSession::IsWBCacInProgress(hwc2_display_t display) {
   }
 
   return in_progress;
+}
+
+int32_t HWCSession::SetSkewVsync(const android::Parcel *input_parcel) {
+  int32_t error = -EINVAL;
+  int32_t err = -1;
+  auto disp_id = static_cast<int>(input_parcel->readInt32());
+  auto skew_vsync_val = static_cast<uint32_t>(input_parcel->readInt32());
+
+  int disp_idx = GetDisplayIndex(disp_id);
+  if (disp_idx == -1) {
+    DLOGE("Invalid display = %d", disp_id);
+    return -EINVAL;
+  }
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  if (skew_vsync_val > kSkewVsyncMax) {
+    DLOGE("Invalid skew vync value %d on disp_id %d", skew_vsync_val, disp_id);
+    return -EINVAL;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_display_[disp_idx]) {
+      error = hwc_display_[disp_idx]->SetSkewVsync(skew_vsync_val);
+      if (error) {
+        DLOGE("SetSkewVsync Failed: disp_id = %d skew_vsync_val = %d, errno = %d, desc = %s",
+              disp_id, skew_vsync_val, error, strerror(error));
+      }
+    }
+  }
+
+  return INT32(err);
 }
 
 }  // namespace sdm
