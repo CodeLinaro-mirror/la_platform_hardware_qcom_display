@@ -1275,7 +1275,7 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
     }
   }
 
-  if (enable == true) {
+  if (enable == true && enable_wb_cac_) {
     error = CreateVirtualDisplayForCAC(disp_idx);
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
