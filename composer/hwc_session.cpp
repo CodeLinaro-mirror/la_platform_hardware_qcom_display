@@ -3482,8 +3482,8 @@ int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
   float blue_offset = static_cast<float>(input_parcel->readDouble());
 
   DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
-
   if (enable && enable_wb_cac_) {
+    hwc_display_[HWC_DISPLAY_PRIMARY]->SetVsyncEnabled(HWC2::Vsync::Enable);
     error = CreateVirtualDisplayForCAC(display);
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
