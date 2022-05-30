@@ -1220,10 +1220,28 @@ int HWCSession::DisplayConfigImpl::ControlQsyncCallback(bool enable) {
   return 0;
 }
 
-#if 0  // TODO(user): Enable after porting CAC API's
-Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, float green,
-                                      float blue) {
-  int disp_idx = GetDisplayIndex(disp_id);
+int HWCSession::DisplayConfigImpl::GetFSCRGBOrder(DisplayConfig::DisplayType dpy,
+                                                  DisplayConfig::RGBOrder *fsc_rgb_color_order) {
+  int error = -EINVAL;
+  int disp_id = MapDisplayType(dpy);
+  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
+  if (disp_idx != -1) {
+    HWCDisplay *hwc_display = hwc_session_->hwc_display_[disp_idx];
+    if (!hwc_display) {
+      DLOGW("Display = %d is not connected.", disp_idx);
+      error = -ENODEV;
+    } else {
+      *fsc_rgb_color_order = (DisplayConfig::RGBOrder)hwc_display->GetFscRgbOrder();
+      error = kErrorNone;
+    }
+  }
+
+  return 0;
+}
+
+int HWCSession::DisplayConfigImpl::EnableCAC(uint32_t disp_id, bool enable, float red, float green,
+                                             float blue) {
+  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
   int32_t error = -EINVAL;
   PanelOrientation default_orientation = {};
 
@@ -1234,7 +1252,7 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
 
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
-    if (!hwc_display_[disp_idx]) {
+    if (!hwc_session_->hwc_display_[disp_idx]) {
       DLOGW("Display is not connected");
       error = -ENODEV;
       return error;
@@ -1242,7 +1260,7 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
   }
 
   if (enable == true) {
-    error = CreateVirtualDisplayForCAC(disp_idx);
+    error = hwc_session_->CreateVirtualDisplayForCAC(disp_idx);
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
       return error;
@@ -1251,15 +1269,16 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
 
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
-    if (hwc_display_[disp_idx]) {
-      error = hwc_display_[disp_idx]->SetCAC(enable, red, green, blue, default_orientation);
+    if (hwc_session_->hwc_display_[disp_idx]) {
+      error = hwc_session_->hwc_display_[disp_idx]->SetCAC(enable, red, green, blue,
+                                                           default_orientation);
       DLOGI("CAC: disp_id = %d enable = %d, red = %f, green = %f, blue = %f, errno = %d, desc = %s",
             disp_idx, enable, red, green, blue, error, strerror(error));
     }
   }
 
-  if(enable == false && wb_display_) {
-    error = DestroyVirtualDisplay(wb_display_);
+  if (enable == false && hwc_session_->wb_display_) {
+    error = hwc_session_->DestroyVirtualDisplay(hwc_session_->wb_display_);
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
       return error;
@@ -1270,15 +1289,14 @@ Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, 
 }
 
 static void UpdateCACColorChannelRect(LayerRect &config_rect,
-                                      const IDisplayConfig::CacChannelRect &ipd_channel_rect) {
+                                      const DisplayConfig::CacChannelRect &ipd_channel_rect) {
   config_rect.left = ipd_channel_rect.left;
   config_rect.top = ipd_channel_rect.top;
   config_rect.right = ipd_channel_rect.right;
   config_rect.bottom = ipd_channel_rect.bottom;
 }
 
-static int32_t UpdateCACEyeConfig(CACEyeConfig *config,
-                                  const IDisplayConfig::CacEyeConfig &ipd_config) {
+int UpdateCACEyeConfig(CACEyeConfig *config, const DisplayConfig::CacEyeConfig &ipd_config) {
   UpdateCACColorChannelRect(config->red_channel_src, ipd_config.red_channel_src);
   UpdateCACColorChannelRect(config->red_channel_dst, ipd_config.red_channel_dst);
   UpdateCACColorChannelRect(config->green_channel_src, ipd_config.green_channel_src);
@@ -1294,10 +1312,10 @@ static int32_t UpdateCACEyeConfig(CACEyeConfig *config,
   return 0;
 }
 
-Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
-                                            const IDisplayConfig::CacEyeConfig &left_config,
-                                            const IDisplayConfig::CacEyeConfig &right_config) {
-  int disp_idx = GetDisplayIndex(disp_id);
+int HWCSession::DisplayConfigImpl::SetCacEyeConfig(uint32_t disp_id,
+                                                   const DisplayConfig::CacEyeConfig &left_config,
+                                                   const DisplayConfig::CacEyeConfig &right_config) {
+  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
   int32_t error = -EINVAL;
   CACEyeConfig left_eye = {};
   CACEyeConfig right_eye = {};
@@ -1309,7 +1327,7 @@ Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
 
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
-    if (!hwc_display_[disp_idx]) {
+    if (!hwc_session_->hwc_display_[disp_idx]) {
       DLOGW("Display is not connected");
       error = -ENODEV;
       return error;
@@ -1329,8 +1347,8 @@ Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
 
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
-    if (hwc_display_[disp_idx]) {
-      error = hwc_display_[disp_idx]->SetCACEyeConfig(left_eye, right_eye);
+    if (hwc_session_->hwc_display_[disp_idx]) {
+      error = hwc_session_->hwc_display_[disp_idx]->SetCACEyeConfig(left_eye, right_eye);
       if (error) {
         DLOGE("Failed to set CAC IPD config err = %d, desc = %s",  error, strerror(error));
       }
@@ -1339,7 +1357,5 @@ Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
 
   return error;
 }
-
-#endif
 
 }  // namespace sdm

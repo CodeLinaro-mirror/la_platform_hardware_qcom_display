@@ -408,6 +408,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     virtual int IsSmartPanelConfig(uint32_t disp_id, uint32_t config_id, bool *is_smart);
     virtual int IsRotatorSupportedFormat(int hal_format, bool ubwc, bool *supported);
     virtual int ControlQsyncCallback(bool enable);
+    virtual int GetFSCRGBOrder(DisplayConfig::DisplayType dpy,
+                               DisplayConfig::RGBOrder *fsc_rgb_color_order);
+    virtual int EnableCAC(uint32_t disp_id, bool enable, float red, float green, float blue);
+    virtual int SetCacEyeConfig(uint32_t disp_id, const DisplayConfig::CacEyeConfig &left,
+                                const DisplayConfig::CacEyeConfig &right);
 
     std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
     HWCSession *hwc_session_ = nullptr;
