@@ -17,6 +17,13 @@
  * limitations under the License.
  */
 
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __TONEMAPPER_GLENGINE_H__
 #define __TONEMAPPER_GLENGINE_H__
 #include <EGL/egl.h>
@@ -25,7 +32,6 @@
 #include <GLES3/gl31.h>
 #define GL_GLEXT_PROTOTYPES
 #include <GLES2/gl2ext.h>
-#include <GLES3/gl3ext.h>
 
 #if defined(CHECK_GL_ERRORS)
 #define GL(func) func;

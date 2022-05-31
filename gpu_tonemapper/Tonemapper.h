@@ -17,6 +17,13 @@
  * limitations under the License.
  */
 
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __TONEMAPPER_TONEMAP_H__
 #define __TONEMAPPER_TONEMAP_H__
 
@@ -41,7 +48,7 @@ class Tonemapper {
   ~Tonemapper();
   static Tonemapper *build(int type, void *colorMap, int colorMapSize, void *lutXform,
                            int lutXformSize, bool isSecure);
-  int blit(const void *dst, const void *src, int srcFenceFd);
+  int blit(void *dst, void *src, int srcFenceFd, void *userdata, void *userdata2);
 };
 
 #endif  //__TONEMAPPER_TONEMAP_H__

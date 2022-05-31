@@ -16,7 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <utils/Log.h>
+
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include "EGLImageWrapper.h"
 #include "Tonemapper.h"
@@ -65,7 +71,7 @@ Tonemapper *Tonemapper::build(int type, void *colorMap, int colorMapSize, void *
 //-----------------------------------------------------------------------------
 {
   if (colorMapSize <= 0) {
-      ALOGE("Invalid Color Map size = %d", colorMapSize);
+      fprintf(stderr, "Invalid Color Map size = %d", colorMapSize);
       return NULL;
   }
 
@@ -116,15 +122,15 @@ Tonemapper *Tonemapper::build(int type, void *colorMap, int colorMapSize, void *
 }
 
 //-----------------------------------------------------------------------------
-int Tonemapper::blit(const void *dst, const void *src, int srcFenceFd)
+int Tonemapper::blit(void *dst, void *src, int srcFenceFd, void *userdata, void *userdata2)
 //-----------------------------------------------------------------------------
 {
   // make current
   engine_bind(engineContext);
 
   // create eglimages if required
-  EGLImageBuffer *dst_buffer = eglImageWrapper->wrap(dst);
-  EGLImageBuffer *src_buffer = eglImageWrapper->wrap(src);
+  EGLImageBuffer *dst_buffer = eglImageWrapper->wrap(dst, userdata, userdata2);
+  EGLImageBuffer *src_buffer = eglImageWrapper->wrap(src, userdata, userdata2);
 
   // bind the program
   engine_setProgram(programID);
@@ -149,6 +155,13 @@ int Tonemapper::blit(const void *dst, const void *src, int srcFenceFd)
   engine_set3DInputBuffer(1, tonemapTexture);
   // set non-uniform xform
   engine_set2DInputBuffer(2, lutXformTexture);
+
+  // TODO: Check if needed
+  // set dimensions
+  float dimensions[2] = { 0.0f, 0.0f };
+  dimensions[0] = dst_buffer->getWidth();
+  dimensions[1] = dst_buffer->getHeight();
+  engine_setData2f(5, dimensions);
 
   // perform
   int fenceFD = engine_blit(srcFenceFd);

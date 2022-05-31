@@ -17,39 +17,30 @@
  * limitations under the License.
  */
 
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __TONEMAPPER_EGLIMAGEWRAPPER_H__
 #define __TONEMAPPER_EGLIMAGEWRAPPER_H__
 
-#include <utils/LruCache.h>
-#include <string>
 #include <map>
-#include <gr_utils.h>
 #include "EGLImageBuffer.h"
 
-using std::string;
 using std::map;
 
 class EGLImageWrapper {
  private:
-  class DeleteEGLImageCallback : public android::OnEntryRemoved<int, EGLImageBuffer*> {
-   public:
-     explicit DeleteEGLImageCallback(map<string, int>* mapPtr) { buffStrbuffIntMapPtr = mapPtr; }
-     void operator()(int& buffInt, EGLImageBuffer*& eglImage);
-     map<string, int>* buffStrbuffIntMapPtr = nullptr;
-     bool mapClearPending = false;
-  };
-
-  android::LruCache<int, EGLImageBuffer *>* eglImageBufferCache;
-  map<string, int> buffStrbuffIntMap = {};
-  DeleteEGLImageCallback* callback = 0;
-  uint64_t buffInt = 0;
+  map<int, EGLImageBuffer *> eglImageBufferMap;
 
  public:
   EGLImageWrapper();
   ~EGLImageWrapper();
-  EGLImageBuffer* wrap(const void *pvt_handle);
-  void Init();
-  void Deinit();
+  EGLImageBuffer* wrap(void *buf_info, void *userdata, void *userdata2);
+  void destroy();
 };
 
 #endif  // __TONEMAPPER_EGLIMAGEWRAPPER_H__

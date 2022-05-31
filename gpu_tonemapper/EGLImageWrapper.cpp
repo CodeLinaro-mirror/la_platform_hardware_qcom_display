@@ -18,169 +18,54 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include "EGLImageWrapper.h"
-#include <cutils/native_handle.h>
-#include <QtiGralloc.h>
-#include <QtiGrallocPriv.h>
-#include <ui/GraphicBuffer.h>
-#include <fcntl.h>
-#include <string>
-#include <map>
-#include <utility>
-#include <sys/stat.h>
 
-using std::string;
 using std::map;
-using std::pair;
-using aidl::android::hardware::graphics::common::StandardMetadataType;
-using private_handle_t = qtigralloc::private_handle_t;
-
-static string pidString = std::to_string(getpid());
-
-//-----------------------------------------------------------------------------
-static string get_ion_buff_str(int buff_fd)
-//-----------------------------------------------------------------------------
-{
-  string retStr = {};
-  if (buff_fd >= 0) {
-    struct stat stat1;
-    fstat(buff_fd, &stat1);
-    retStr = std::to_string(stat1.st_ino);
-  }
-
-  return retStr;
-}
-
-//-----------------------------------------------------------------------------
-void EGLImageWrapper::DeleteEGLImageCallback::operator()(int& buffInt, EGLImageBuffer*& eglImage)
-//-----------------------------------------------------------------------------
-{
-  if (eglImage != 0) {
-    delete eglImage;
-  }
-
-  if (!mapClearPending) {
-    for (auto it = buffStrbuffIntMapPtr->begin(); it != buffStrbuffIntMapPtr->end(); it++) {
-      if (it->second == buffInt /* counter */) {
-        buffStrbuffIntMapPtr->erase(it);
-        return;
-      }
-    }
-  }
-}
 
 //-----------------------------------------------------------------------------
 EGLImageWrapper::EGLImageWrapper()
 //-----------------------------------------------------------------------------
 {
-  Init();
 }
 
 //-----------------------------------------------------------------------------
 EGLImageWrapper::~EGLImageWrapper()
 //-----------------------------------------------------------------------------
 {
-  Deinit();
 }
 
 //-----------------------------------------------------------------------------
-void EGLImageWrapper::Init()
+EGLImageBuffer *EGLImageWrapper::wrap(void *buf_info, void *userdata, void *userdata2)
 //-----------------------------------------------------------------------------
 {
-  eglImageBufferCache = new android::LruCache<int, EGLImageBuffer*>(32);
-  callback = new DeleteEGLImageCallback(&buffStrbuffIntMap);
-  eglImageBufferCache->setOnEntryRemovedListener(callback);
-}
+  struct gbm_buf_info *src = reinterpret_cast<struct gbm_buf_info *>(buf_info);
+  EGLImageBuffer *result = 0;
 
-//-----------------------------------------------------------------------------
-void EGLImageWrapper::Deinit()
-//-----------------------------------------------------------------------------
-{
-  if (eglImageBufferCache != 0) {
-    if (callback != 0) {
-      callback->mapClearPending = true;
-    }
-    eglImageBufferCache->clear();
-    delete eglImageBufferCache;
-    eglImageBufferCache = 0;
-    buffStrbuffIntMap.clear();
+  map<int, EGLImageBuffer *>::iterator it = eglImageBufferMap.find(src->fd);
+
+  if (it == eglImageBufferMap.end()) {
+    result = new EGLImageBuffer(src, userdata, userdata2);
+    eglImageBufferMap[src->fd] = result;
+  } else {
+    result = it->second;
   }
-
-  if (callback != 0) {
-    delete callback;
-    callback = 0;
-  }
-
-}
-
-//-----------------------------------------------------------------------------
-static EGLImageBuffer *L_wrap(const private_handle_t *src)
-//-----------------------------------------------------------------------------
-{
-  EGLImageBuffer* result = 0;
-
-  uint32_t unaligned_width = src->unaligned_width;
-  uint32_t unaligned_height = src->unaligned_height;
-  uint32_t stride = src->width;
-  native_handle_t *native_handle = const_cast<private_handle_t *>(src);
-
-  CropRectangle_t crop;
-  if (gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
-                                (int64_t)StandardMetadataType::CROP,
-                                &crop) == gralloc::Error::NONE) {
-    unaligned_width = crop.right;
-    unaligned_height = crop.bottom;
-    uint32_t aligned_height = 0;
-    gralloc::BufferInfo info(unaligned_width, unaligned_height, src->format, src->usage);
-    gralloc::GetAlignedWidthAndHeight(info, &stride, &aligned_height);
-  }
-
-  int flags = android::GraphicBuffer::USAGE_HW_TEXTURE |
-              android::GraphicBuffer::USAGE_SW_READ_NEVER |
-              android::GraphicBuffer::USAGE_SW_WRITE_NEVER;
-
-  if (src->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
-    flags |= android::GraphicBuffer::USAGE_PROTECTED;
-  }
-
-  android::sp<android::GraphicBuffer> graphicBuffer =
-    new android::GraphicBuffer(unaligned_width, unaligned_height, src->format,
-                               1,  // Layer count
-                               flags, stride /*src->stride*/,
-                               native_handle, false);
-
-  result = new EGLImageBuffer(graphicBuffer);
 
   return result;
 }
 
 //-----------------------------------------------------------------------------
-EGLImageBuffer *EGLImageWrapper::wrap(const void *pvt_handle)
+void EGLImageWrapper::destroy()
 //-----------------------------------------------------------------------------
 {
-  const private_handle_t *src = static_cast<const private_handle_t *>(pvt_handle);
-
-  string buffStr = get_ion_buff_str(src->fd);
-  EGLImageBuffer* eglImage = nullptr;
-  if (!buffStr.empty()) {
-    auto it = buffStrbuffIntMap.find(buffStr);
-    if (it != buffStrbuffIntMap.end()) {
-      eglImage = eglImageBufferCache->get(it->second);
-    } else {
-        eglImage = L_wrap(src);
-        buffStrbuffIntMap.insert(pair<string, int>(buffStr, buffInt));
-        eglImageBufferCache->put(buffInt, eglImage);
-        buffInt++;
-    }
-  } else {
-    ALOGE("Could not provide an eglImage for fd = %d, EGLImageWrapper = %p", src->fd, this);
+  map<int, EGLImageBuffer *>::iterator it = eglImageBufferMap.begin();
+  for (; it != eglImageBufferMap.end(); it++) {
+    delete it->second;
   }
-
-  return eglImage;
+  eglImageBufferMap.clear();
 }
