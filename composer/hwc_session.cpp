@@ -2191,6 +2191,11 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
       DLOGV_IF(kTagQDCM, "pending action = %d, display_id = %d", BITMAP(count), display_id);
       switch (BITMAP(count)) {
         case kInvalidating:
+          if (IsWBCacInProgress(display_id)) {
+            // reset commit_done during CAC to trigger a commit to apply changes
+            hwc_display_[display_id]->CacCommitDone(false);
+            break;
+          }
           callbacks_.Refresh(display_id);
           break;
         case kEnterQDCMMode:
