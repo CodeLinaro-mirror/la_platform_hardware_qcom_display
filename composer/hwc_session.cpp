@@ -3011,7 +3011,7 @@ HWC2::Error HWCSession::PresentDisplayInternal(hwc2_display_t display, int32_t *
   // If display is in Skip-Validate state and Validate cannot be skipped, do Internal
   // Validation to optimize for the frames which don't require the Client composition.
   if ((hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) ||
-       hwc_display->IsCACEnabled()) {
+      hwc_display->IsWBCacInUse()) {
     uint32_t out_num_types = 0, out_num_requests = 0;
     hwc_display->SetFastPathComposition(true);
     HWC2::Error error = ValidateDisplayInternal(display, &out_num_types, &out_num_requests);

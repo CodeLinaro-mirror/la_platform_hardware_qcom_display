@@ -454,6 +454,7 @@ class HWCDisplay : public DisplayEventHandler {
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }
   virtual void CacCommitDone(bool cac_commit_done) { return; }
   virtual bool IsCacCommitDone() { return false; }
+  bool IsWBCacInUse();
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -488,7 +489,6 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetUnderScanConfig() { }
   int32_t SetClientTargetDataSpace(int32_t dataspace);
   int SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels);
-  bool IsWBCacInUse();
 
   bool validated_ = false;
   bool layer_stack_invalid_ = true;
