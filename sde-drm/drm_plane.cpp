@@ -564,7 +564,8 @@ void DRMPlane::GetTypeInfo(const PropertyMap &prop_map) {
 // max_linewidth can be smaller than 2560 for few target, so make sure to assign the minimum of both
   info->max_scaler_linewidth = (info->qseed3_version < QSEEDStepVersion::V4) ? info->max_linewidth :
                                std::min((uint32_t)MAX_SCALER_LINEWIDTH, info->max_linewidth);
-
+  delete[] fmt_str;
+  fmt_str = NULL;
   drmModeFreePropertyBlob(blob);
 }
 
