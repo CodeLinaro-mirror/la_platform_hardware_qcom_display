@@ -464,6 +464,7 @@ DisplayError HWEventsDRM::RegisterVSync() {
   vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT |
                                            (high_crtc & DRM_VBLANK_HIGH_CRTC_MASK));
   vblank.request.sequence = 1;
+  hw_events_drm_ = this;
   int error = drmWaitVBlank(poll_fds_[vsync_index_].fd, &vblank);
   if (error < 0) {
     DLOGE("drmWaitVBlank failed with err %d", errno);
