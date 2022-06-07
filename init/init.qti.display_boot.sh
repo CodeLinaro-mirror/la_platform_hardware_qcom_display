@@ -88,6 +88,7 @@ case "$target" in
         setprop vendor.display.idle_time 0  #disable idle fallback
         setprop vendor.display.idle_time_inactive 0  #disable idle fallback
         setprop vendor.display.use_smooth_motion 0  #disable smooth motion
+        setprop vendor.display.disable_vds_hwc 1
         ;;
     esac
     ;;
