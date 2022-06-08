@@ -275,8 +275,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   float cached_brightness_ = 0.0f;
   bool pending_brightness_ = false;
   recursive_mutex brightness_lock_;
-  LayerRect left_frame_roi_ = {};
-  LayerRect right_frame_roi_ = {};
+  vector<LayerRect> left_frame_roi_ = {};
+  vector<LayerRect> right_frame_roi_ = {};
   Locker dpps_pu_lock_;
   bool dpps_pu_nofiy_pending_ = false;
   enum class SamplingState { Off, On } samplingState = SamplingState::Off;

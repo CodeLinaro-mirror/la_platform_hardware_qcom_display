@@ -188,7 +188,9 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
   if (error != kErrorNone) {
     return error;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   display_attributes_ = display_attributes;
   mixer_attributes_ = mixer_attributes;

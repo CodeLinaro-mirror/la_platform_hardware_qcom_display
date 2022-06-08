@@ -2013,7 +2013,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   reset_planes_luts_ = false;
   first_cycle_ = false;
   update_mode_ = false;
-  hw_layers_info->common_info->updates_mask = 0;
   pending_power_state_ = kPowerStateNone;
   pending_cwb_teardown_ = false;
   // Inherently a real commit ensures null commit properties have happened, so update the member

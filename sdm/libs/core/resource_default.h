@@ -123,15 +123,14 @@ class ResourceDefault : public ResourceInterface {
   DisplayError SetDisplayState(DisplayId display_id, DisplayState state) { return kErrorNone; }
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) { return false; }
   virtual DisplayError FreeDemuraFetchResources(const int32_t &display_id) { return kErrorNone; }
-  virtual DisplayError GetDemuraFetchResourceCount(
-                       std::map<uint32_t, uint8_t> *fetch_resource_cnt) {
+  virtual DisplayError GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt) {
     return kErrorNone;
   }
   virtual DisplayError ReserveDemuraFetchResources(const int32_t &display_id,
                                                    const int8_t &preferred_rect) {
     return kErrorNone;
   }
-  virtual DisplayError GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl) {
+  virtual DisplayError GetDemuraFetchResources(Handle display_ctx, vector<FetchResourceList> *frl) {
     return kErrorNone;
   }
   virtual DisplayError SetMaxSDEClk(Handle display_ctx, uint32_t clk) { return kErrorNotSupported; }
@@ -149,12 +148,15 @@ class ResourceDefault : public ResourceInterface {
   virtual DisplayError AllocateVirtualDisplayId(int32_t *vdisp_id) { return kErrorResources; }
   virtual DisplayError DeallocateVirtualDisplayId(int32_t vdisp_id) { return kErrorResources; }
   virtual void HandleSkipValidate(Handle display_ctx);
-  virtual std::string Dump();
-  virtual uint32_t GetMixerCount();
+  virtual std::string Dump(DisplayId display_id);
+  virtual uint32_t GetMixerCount(DisplayId display_id);
   virtual DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
   virtual void HandleTUITransition(Handle display_ctx, bool tui_active);
   virtual void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map) { return; }
   virtual bool IsDisplayHWAvailable() { return true; }
+  virtual DisplayError GetDefaultQoSData(Handle display_ctx, vector <HWQosData> *default_qos_data) {
+    return kErrorNone;
+  }
 
  private:
   enum PipeOwner {
@@ -201,7 +203,7 @@ class ResourceDefault : public ResourceInterface {
     HWBlockContext() : is_in_use(false) { }
   };
 
-  explicit ResourceDefault(const HWResourceInfo &hw_res_info);
+  explicit ResourceDefault(const std::vector<HWResourceInfo> &hw_res_info);
   DisplayError Init();
   DisplayError Deinit();
   uint32_t NextPipe(PipeType pipe_type, HWBlockType hw_block_type);
@@ -232,11 +234,16 @@ class ResourceDefault : public ResourceInterface {
   void ResourceStateLog(void);
   DisplayError CalculateDecimation(float downscale, uint8_t *decimation);
   DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
-
-  HWResourceInfo hw_res_info_;
+  void CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
+                                LayerRect *in_rect, LayerRect *out_rect);
+  void CalculateSrcRect(float split_ratio, float src_width,
+                                LayerRect *in_rect, LayerRect *out_rect);
+  vector<HWMixerAttributes> mixer_attributes_;
+  vector<HWResourceInfo> hw_res_info_;
   HWBlockContext hw_block_ctx_[kHWBlockMax];
-  std::vector<SourcePipe> src_pipes_;
-  uint32_t num_pipe_ = 0;
+  vector<std::vector<SourcePipe>> src_pipes_;
+  vector<uint32_t> num_pipe_;
+  int core_id_;
 };
 
 }  // namespace sdm

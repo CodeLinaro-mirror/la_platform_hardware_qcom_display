@@ -310,6 +310,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   DisplayError ValidateDataspace(const ColorMetaData &color_metadata);
   void HwRecovery(const HWRecoveryEvent sdm_event_code);
 
+  const char *GetName(const LayerComposition &composition);
   bool NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *new_mixer_width,
                                  uint32_t *new_mixer_height);
   DisplayError ReconfigureMixer(uint32_t width, uint32_t height);
@@ -384,6 +385,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   std::vector<HWInfoInterface*> hw_info_intf_;
   std::bitset<32> core_id_;
   uint32_t primary_core_id_ = 0;
+  int core_count_ = 0;
   ColorManagerProxy *color_mgr_ = NULL;  // each display object owns its ColorManagerProxy
   bool partial_update_control_ = true;
   HWEventsInterface *hw_events_intf_ = NULL;
@@ -410,8 +412,8 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   int disable_hw_recovery_dump_ = 0;
   uint32_t hw_recovery_count_ = 0;
   uint32_t hw_recovery_threshold_ = 1;
-  HWQosData cached_qos_data_;
-  uint32_t default_clock_hz_ = 0;
+  std::vector<HWQosData> cached_qos_data_;
+  std::vector<uint32_t> default_clock_hz_;
   bool drop_hw_vsync_ = false;
   uint32_t current_refresh_rate_ = 0;
   bool drop_skewed_vsync_ = false;
@@ -498,7 +500,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   uint32_t retire_fence_offset_ = 0;
   std::mutex power_mutex_;
   std::condition_variable cv_;
-  LayerBuffer cached_framebuffer_ = {};
+  std::vector<LayerBuffer> cached_framebuffer_ = {};
   Layer noise_layer_ = {};
   DisplayError ConfigureCwbForIdleFallback(LayerStack *layer_stack);
   bool cwb_fence_wait_ = false;

@@ -97,11 +97,11 @@ class ResourceInterface {
   virtual DisplayError Perform(int cmd, ...) = 0;
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) = 0;
   virtual DisplayError FreeDemuraFetchResources(const int32_t &display_id) = 0;
-  virtual DisplayError GetDemuraFetchResourceCount(
-                       std::map<uint32_t, uint8_t> *fetch_resource_cnt) = 0;
+  virtual DisplayError GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt) = 0;
   virtual DisplayError ReserveDemuraFetchResources(const int32_t &display_id,
                                                    const int8_t &preferred_rect) = 0;
-  virtual DisplayError GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl) = 0;
+  virtual DisplayError GetDemuraFetchResources(Handle display_ctx,
+                                               std::vector<FetchResourceList> *frl) = 0;
   virtual ~ResourceInterface() {}
   virtual DisplayError SetMaxSDEClk(Handle display_ctx, uint32_t clk) = 0;
   virtual DisplayError ForceToneMapConfigure(Handle display_ctx,
@@ -113,12 +113,14 @@ class ResourceInterface {
   virtual DisplayError AllocateVirtualDisplayId(int32_t *vdisp_id) = 0;
   virtual DisplayError DeallocateVirtualDisplayId(int32_t vdisp_id) = 0;
   virtual void HandleSkipValidate(Handle display_ctx) = 0;
-  virtual std::string Dump() = 0;
-  virtual uint32_t GetMixerCount() = 0;
+  virtual std::string Dump(DisplayId display_id) = 0;
+  virtual uint32_t GetMixerCount(DisplayId display_id) = 0;
   virtual DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space) = 0;
   virtual void HandleTUITransition(Handle display_ctx, bool tui_active) = 0;
   virtual void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map) = 0;
   virtual bool IsDisplayHWAvailable() = 0;
+  virtual DisplayError GetDefaultQoSData(Handle display_ctx,
+                                         vector <HWQosData> *default_qos_data) = 0;
 };
 
 }  // namespace sdm

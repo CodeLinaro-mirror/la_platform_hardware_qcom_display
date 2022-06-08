@@ -566,11 +566,28 @@ DisplayError CoreImpl::ReserveDemuraResources() {
     DLOGI("Demura is enabled");
     comp_mgr_.SetDemuraStatus(true);
   }
-  std::map<uint32_t, uint8_t> required_demura_fetch_cnt;  // display_id, count
+
+  // TODO(user): get demura fetch resouce count for multi-dpu
+  std::map<uint32_t, uint8_t> dpu_required_demura_fetch_cnt;  // display_id, count
   if ((err = hw_info_intf_[0]->
-             GetRequiredDemuraFetchResourceCount(&required_demura_fetch_cnt)) != kErrorNone) {
+        GetRequiredDemuraFetchResourceCount(&dpu_required_demura_fetch_cnt)) != kErrorNone) {
     DLOGE("Unable to get required demura pipes count");
     return err;
+  }
+
+  // TODO(user): Workaround to append core_id to get display_id
+  // to be removed after making changes for Demura on multi-dpu
+  std::map<uint32_t, uint8_t> required_demura_fetch_cnt;
+  for (auto r = dpu_required_demura_fetch_cnt.begin();
+       r != dpu_required_demura_fetch_cnt.end(); r++) {
+    uint32_t disp_id = r->first;
+    for (auto display_info : hw_displays_info_) {
+      if (DisplayId::GetConnId(display_info.first) == r->first) {
+        disp_id = display_info.first;
+      }
+    }
+
+    required_demura_fetch_cnt.insert({disp_id, r->second});
   }
 
   if (!required_demura_fetch_cnt.size()) {
@@ -586,13 +603,7 @@ DisplayError CoreImpl::ReserveDemuraResources() {
 
   int available_blocks = hw_resource_[0].demura_count;
   for (auto r = required_demura_fetch_cnt.begin(); r != required_demura_fetch_cnt.end();) {
-    uint32_t disp_id = 0;
-    for (auto display_info : hw_displays_info_) {
-      if (DisplayId::GetConnId(display_info.first) == r->first) {
-        disp_id = display_info.first;
-      }
-    }
-    HWDisplayInfo &info = hw_displays_info_[disp_id];
+    HWDisplayInfo &info = hw_displays_info_[r->first];
     DLOGI("[%d] is_primary = %d, p_off = %d, s_off = %d", r->first, info.is_primary, primary_off,
           secondary_off);
     if (info.is_primary && primary_off) {
@@ -611,13 +622,16 @@ DisplayError CoreImpl::ReserveDemuraResources() {
     ++r;
   }
 
-  std::map<uint32_t, uint8_t> fetch_resource_cnt;  // display id, count
+  // map(display id, map(core_id, count))
+  MultiDpuDemuraMap fetch_resource_cnt;
   comp_mgr_.GetDemuraFetchResourceCount(&fetch_resource_cnt);
+
   for (auto &req : required_demura_fetch_cnt) {
     uint8_t cnt = 0;
     auto it = fetch_resource_cnt.find(req.first);
     if (it != fetch_resource_cnt.end()) {
-      cnt = it->second;
+      // ToDo(devanshi): modify required_demura_fetch_cnt to include count for every DPU
+      cnt = it->second[0];
     }
     uint8_t req_cnt = req.second;
     if (req_cnt != cnt && cnt != 0) {
@@ -632,13 +646,7 @@ DisplayError CoreImpl::ReserveDemuraResources() {
       // For rest of the topology return error as they are not supported for demura.
       int8_t preferred_rect = -1;
       if (req_cnt == 1) {
-        uint32_t disp_id = 0;
-        for (auto display_info : hw_displays_info_) {
-          if (DisplayId::GetConnId(display_info.first) == req.first) {
-            disp_id = display_info.first;
-          }
-        }
-        HWDisplayInfo &info = hw_displays_info_[disp_id];
+        HWDisplayInfo &info = hw_displays_info_[req.first];
         preferred_rect = info.is_primary ? 0 : 1;
         DLOGI("[%u] is single LM. Requesting Demura rect %d", req.first, preferred_rect);
       } else if (req_cnt == 2) {

@@ -106,7 +106,7 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
                                           const HWPanelInfo &hw_panel_info,
                                           const HWMixerAttributes &mixer_attributes,
                                           const DisplayConfigVariableInfo &fb_config,
-                                          Handle *display_ctx, HWQosData*default_qos_data,
+                                          Handle *display_ctx, vector<HWQosData> *default_qos_data,
                                           CompManagerEventHandler *event_handler) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
 
@@ -147,8 +147,8 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
     return error;
   }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                  display_comp_ctx->display_resource_ctx, default_qos_data);
+  error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                            default_qos_data);
   if (error != kErrorNone) {
     strategy->Deinit();
     delete strategy;
@@ -240,7 +240,7 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
                                              const HWPanelInfo &hw_panel_info,
                                              const HWMixerAttributes &mixer_attributes,
                                              const DisplayConfigVariableInfo &fb_config,
-                                             HWQosData*default_qos_data) {
+                                             vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DTRACE_SCOPED();
 
@@ -259,8 +259,8 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
     return error;
   }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                  display_comp_ctx->display_resource_ctx, default_qos_data);
+  error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                            default_qos_data);
   if (error != kErrorNone) {
     DLOGW("GetDefaultQosData Data on display %d-%d returned error=%d",
           display_comp_ctx->display_id.GetDisplayId(), display_comp_ctx->display_type, error);
@@ -478,8 +478,17 @@ DisplayError CompManager::Commit(Handle display_ctx, DispLayerStack *disp_layer_
   if (error != kErrorNone) {
     return error;
   }
+  vector<HWQosData> default_qos_data;
   if (secure_event_ == kTUITransitionStart) {
-    return GetDefaultQosData(display_ctx, &disp_layer_stack->info.qos_data);
+    error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                              &default_qos_data);
+    if (error != kErrorNone) {
+      return error;
+    }
+
+    for (int i = 0; i < default_qos_data.size(); i++) {
+      disp_layer_stack->info[i].qos_data = default_qos_data[i];
+    }
   }
   return kErrorNone;
 }
@@ -871,8 +880,7 @@ DisplayError CompManager::FreeDemuraFetchResources(const uint32_t &display_id) {
   return resource_intf_->FreeDemuraFetchResources(display_id);
 }
 
-DisplayError CompManager::GetDemuraFetchResourceCount(
-                          std::map<uint32_t, uint8_t> *fetch_resource_cnt) {
+DisplayError CompManager::GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   return resource_intf_->GetDemuraFetchResourceCount(fetch_resource_cnt);
 }
@@ -883,7 +891,8 @@ DisplayError CompManager::ReserveDemuraFetchResources(const uint32_t &display_id
   return resource_intf_->ReserveDemuraFetchResources(display_id, preferred_rect);
 }
 
-DisplayError CompManager::GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl) {
+DisplayError CompManager::GetDemuraFetchResources(Handle display_ctx,
+                                                  vector<FetchResourceList> *frl) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
@@ -948,12 +957,13 @@ DisplayError CompManager::ForceToneMapConfigure(Handle display_ctx,
                                                disp_layer_stack);
 }
 
-DisplayError CompManager::GetDefaultQosData(Handle display_ctx, HWQosData *qos_data) {
+DisplayError CompManager::GetDefaultQosData(Handle display_ctx,
+                                            vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-  return resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                 display_comp_ctx->display_resource_ctx, qos_data);
+  return resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                           default_qos_data);
 }
 
 DisplayError CompManager::HandleCwbFrequencyBoost(bool isRequest) {
@@ -982,9 +992,9 @@ bool CompManager::IsSafeMode() {
   return safe_mode_;
 }
 
-std::string CompManager::Dump() {
+std::string CompManager::Dump(DisplayId display_id) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
-  return resource_intf_->Dump();
+  return resource_intf_->Dump(display_id);
 }
 
 DppsControlInterface* CompManager::GetDppsControlIntf() {
@@ -1057,10 +1067,10 @@ DisplayError CompManager::DeallocateVirtualDisplayId(int32_t vdisp_id) {
   return resource_intf_->DeallocateVirtualDisplayId(vdisp_id);
 }
 
-uint32_t CompManager::GetMixerCount() {
+uint32_t CompManager::GetMixerCount(DisplayId display_id) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
 
-  return resource_intf_->GetMixerCount();
+  return resource_intf_->GetMixerCount(display_id);
 }
 
 void CompManager::SetDisplayLayerStack(Handle display_ctx, DispLayerStack *disp_layer_stack) {

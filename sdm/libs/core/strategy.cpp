@@ -151,27 +151,36 @@ DisplayError Strategy::GetNextStrategy() {
     layer_stack->layers.at(i)->request.flags.request_flags = 0;  // Reset layer request
   }
 
+  for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
+    disp_layer_stack_->info[i].hw_layers.clear();
+    disp_layer_stack_->info[i].index.clear();
+    disp_layer_stack_->info[i].roi_index.clear();
+  }
+
   // When mixer resolution and panel resolutions are same (1600x2560) and FB resolution is
   // 1080x1920 FB_Target destination coordinates(mapped to FB resolution 1080x1920) need to
   // be mapped to destination coordinates of mixer resolution(1600x2560).
-  Layer *gpu_target_layer = layer_stack->layers.at(disp_layer_stack_->stack_info.gpu_target_index);
-  float layer_mixer_width = FLOAT(mixer_attributes_.width);
-  float layer_mixer_height = FLOAT(mixer_attributes_.height);
-  float fb_width = FLOAT(fb_config_.x_pixels);
-  float fb_height = FLOAT(fb_config_.y_pixels);
-  LayerRect src_domain = (LayerRect){0.0f, 0.0f, fb_width, fb_height};
-  LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
+  for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
+    Layer *gpu_target_layer =
+        layer_stack->layers.at(disp_layer_stack_->stack_info.gpu_target_index);
+    float layer_mixer_width = FLOAT(mixer_attributes_.width);
+    float layer_mixer_height = FLOAT(mixer_attributes_.height);
+    float fb_width = FLOAT(fb_config_.x_pixels);
+    float fb_height = FLOAT(fb_config_.y_pixels);
+    LayerRect src_domain = (LayerRect){0.0f, 0.0f, fb_width, fb_height};
+    LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
 
-  Layer layer = *gpu_target_layer;
-  disp_layer_stack_->info.index.push_back(disp_layer_stack_->stack_info.gpu_target_index);
-  disp_layer_stack_->info.roi_index.push_back(0);
-  layer.transform.flip_horizontal ^= hw_panel_info_.panel_orientation.flip_horizontal;
-  layer.transform.flip_vertical ^= hw_panel_info_.panel_orientation.flip_vertical;
-  // Flip rect to match transform.
-  TransformHV(src_domain, layer.dst_rect, layer.transform, &layer.dst_rect);
-  // Scale to mixer resolution.
-  MapRect(src_domain, dst_domain, layer.dst_rect, &layer.dst_rect);
-  disp_layer_stack_->info.hw_layers.push_back(layer);
+    Layer layer = *gpu_target_layer;
+    disp_layer_stack_->info[i].index.push_back(disp_layer_stack_->stack_info.gpu_target_index);
+    disp_layer_stack_->info[i].roi_index.push_back(0);
+    layer.transform.flip_horizontal ^= hw_panel_info_.panel_orientation.flip_horizontal;
+    layer.transform.flip_vertical ^= hw_panel_info_.panel_orientation.flip_vertical;
+    // Flip rect to match transform.
+    TransformHV(src_domain, layer.dst_rect, layer.transform, &layer.dst_rect);
+    // Scale to mixer resolution.
+    MapRect(src_domain, dst_domain, layer.dst_rect, &layer.dst_rect);
+    disp_layer_stack_->info[i].hw_layers.push_back(layer);
+  }
 
   return kErrorNone;
 }
