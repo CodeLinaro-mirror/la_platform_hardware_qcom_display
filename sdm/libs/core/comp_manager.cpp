@@ -125,7 +125,8 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
                                           const HWPanelInfo &hw_panel_info,
                                           const HWMixerAttributes &mixer_attributes,
                                           const DisplayConfigVariableInfo &fb_config,
-                                          Handle *display_ctx, HWQosData*default_qos_data) {
+                                          Handle *display_ctx,
+                                          vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
 
   DisplayError error = kErrorNone;
@@ -165,8 +166,8 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
     return error;
   }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                  display_comp_ctx->display_resource_ctx, default_qos_data);
+  error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                            default_qos_data);
   if (error != kErrorNone) {
     strategy->Deinit();
     delete strategy;
@@ -256,7 +257,7 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
                                              const HWPanelInfo &hw_panel_info,
                                              const HWMixerAttributes &mixer_attributes,
                                              const DisplayConfigVariableInfo &fb_config,
-                                             HWQosData*default_qos_data) {
+                                             vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DTRACE_SCOPED();
 
@@ -274,8 +275,8 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
     return error;
   }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                  display_comp_ctx->display_resource_ctx, default_qos_data);
+  error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                            default_qos_data);
   if (error != kErrorNone) {
     DLOGW("GetDefaultQosData Data returned error=%d", error);
     return error;
@@ -483,8 +484,17 @@ DisplayError CompManager::Commit(Handle display_ctx, DispLayerStack *disp_layer_
   if (error != kErrorNone) {
     return error;
   }
+  vector<HWQosData> default_qos_data;
   if (secure_event_ == kTUITransitionStart) {
-    return GetDefaultQosData(display_ctx, &disp_layer_stack->info.qos_data);
+    error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                              &default_qos_data);
+    if (error != kErrorNone) {
+      return error;
+    }
+
+    for (int i = 0; i < default_qos_data.size(); i++) {
+      disp_layer_stack->info[i].qos_data = default_qos_data[i];
+    }
   }
   return kErrorNone;
 }
@@ -793,13 +803,19 @@ bool CompManager::CheckResourceState(Handle display_ctx, bool *res_exhausted,
   return res_wait_needed;
 }
 
-DisplayError CompManager::GetConcurrencyFps(DisplayConcurrencyType type, float *fps) {
+DisplayError CompManager::GetConcurrencyFps(Handle display_ctx, DisplayConcurrencyType type,
+                                            float *fps) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  DisplayCompositionContext *display_comp_ctx =
+                  reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+
   ResourceConstraintsIn res_constraints_in;
   res_constraints_in.concurrency_type = type;
   ResourceConstraintsOut res_constraints_out;
 
   auto error = resource_intf_->Perform(ResourceInterface::kCmdGetResourceConstraints,
+                                       display_comp_ctx->display_resource_ctx,
                                        &res_constraints_in, &res_constraints_out);
   *fps = res_constraints_out.fps;
   return error;
@@ -836,8 +852,7 @@ DisplayError CompManager::FreeDemuraFetchResources(const uint32_t &display_id) {
   return resource_intf_->FreeDemuraFetchResources(display_id);
 }
 
-DisplayError CompManager::GetDemuraFetchResourceCount(
-                          std::map<uint32_t, uint8_t> *fetch_resource_cnt) {
+DisplayError CompManager::GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   return resource_intf_->GetDemuraFetchResourceCount(fetch_resource_cnt);
 }
@@ -848,7 +863,8 @@ DisplayError CompManager::ReserveDemuraFetchResources(const uint32_t &display_id
   return resource_intf_->ReserveDemuraFetchResources(display_id, preferred_rect);
 }
 
-DisplayError CompManager::GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl) {
+DisplayError CompManager::GetDemuraFetchResources(Handle display_ctx,
+                                                  vector<FetchResourceList> *frl) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
@@ -909,12 +925,13 @@ DisplayError CompManager::ForceToneMapConfigure(Handle display_ctx,
                                                disp_layer_stack);
 }
 
-DisplayError CompManager::GetDefaultQosData(Handle display_ctx, HWQosData *qos_data) {
+DisplayError CompManager::GetDefaultQosData(Handle display_ctx,
+                                            vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-  return resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                 display_comp_ctx->display_resource_ctx, qos_data);
+  return resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                           default_qos_data);
 }
 
 DisplayError CompManager::HandleCwbFrequencyBoost(bool isRequest) {

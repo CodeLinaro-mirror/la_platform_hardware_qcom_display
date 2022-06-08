@@ -89,15 +89,17 @@ class ResourceInterface {
   virtual DisplayError Perform(int cmd, ...) = 0;
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) = 0;
   virtual DisplayError FreeDemuraFetchResources(const int32_t &display_id) = 0;
-  virtual DisplayError GetDemuraFetchResourceCount(
-                       std::map<uint32_t, uint8_t> *fetch_resource_cnt) = 0;
+  virtual DisplayError GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt) = 0;
   virtual DisplayError ReserveDemuraFetchResources(const int32_t &display_id,
                                                    const int8_t &preferred_rect) = 0;
-  virtual DisplayError GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl) = 0;
+  virtual DisplayError GetDemuraFetchResources(Handle display_ctx,
+                                               std::vector<FetchResourceList> *frl) = 0;
   virtual ~ResourceInterface() {}
   virtual DisplayError SetMaxSDEClk(Handle display_ctx, uint32_t clk) = 0;
   virtual DisplayError ForceToneMapConfigure(Handle display_ctx,
                                              DispLayerStack *disp_layer_stack) = 0;
+  virtual DisplayError GetDefaultQoSData(Handle display_ctx,
+                                         vector <HWQosData> *default_qos_data) = 0;
 };
 
 }  // namespace sdm

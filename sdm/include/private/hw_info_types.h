@@ -884,7 +884,7 @@ struct HWLayersInfo {
 struct DispLayerStack {
   LayerStack *stack = NULL;          // Input layer stack. Set by the caller.
   LayerStackInfo stack_info = {};  // Composition layer stack as seen by client
-  HWLayersInfo info {};  // Vector of HWLayers Info
+  std::vector<HWLayersInfo> info;
 };
 
 struct HWDisplayAttributes : DisplayConfigVariableInfo {
@@ -996,6 +996,7 @@ class DisplayId {
   uint32_t conn_id_ = -1;
 };
 
+typedef std::map<uint32_t, std::map<uint32_t, uint8_t>> MultiDpuDemuraMap;
 }  // namespace sdm
 
 #endif  // __HW_INFO_TYPES_H__

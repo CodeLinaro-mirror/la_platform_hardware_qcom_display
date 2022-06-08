@@ -153,6 +153,7 @@ DisplayError DisplayPluggable::Prepare(LayerStack *layer_stack) {
 
   // Clean display layer stack for reuse.
   disp_layer_stack_ = DispLayerStack();
+  disp_layer_stack_.info.resize(core_count_, {});
 
   return DisplayBase::Prepare(layer_stack);
 }

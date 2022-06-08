@@ -239,6 +239,9 @@ DisplayError DisplayBuiltIn::Init() {
   NoiseInit();
   InitCWBBuffer();
 
+  left_frame_roi_.resize(core_count_);
+  right_frame_roi_.resize(core_count_);
+
   return error;
 }
 
@@ -342,6 +345,7 @@ DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
   DTRACE_BEGIN("Reset DispLayerStack");
   // Clean display layer stack for reuse.
   disp_layer_stack_ = DispLayerStack();
+  disp_layer_stack_.info.resize(core_count_, {});
   DTRACE_END();
 
   error = HandleSPR();
@@ -378,14 +382,14 @@ void DisplayBuiltIn::NotifyDppsHdrPresent(LayerStack *layer_stack) {
 }
 
 void DisplayBuiltIn::CacheFrameROI() {
-  left_frame_roi_ = {};
-  right_frame_roi_ = {};
-
-  // Cache the Frame ROI.
-  if (disp_layer_stack_.info.left_frame_roi.size() &&
-      disp_layer_stack_.info.right_frame_roi.size()) {
-    left_frame_roi_ = disp_layer_stack_.info.left_frame_roi.at(0);
-    right_frame_roi_ = disp_layer_stack_.info.right_frame_roi.at(0);
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    left_frame_roi_[i] = {};
+    right_frame_roi_[i] = {};
+    if (disp_layer_stack_.info[i].left_frame_roi.size() &&
+      disp_layer_stack_.info[i].right_frame_roi.size()) {
+      left_frame_roi_[i] = disp_layer_stack_.info[i].left_frame_roi.at(0);
+      right_frame_roi_[i] = disp_layer_stack_.info[i].right_frame_roi.at(0);
+    }
   }
 }
 
@@ -535,7 +539,7 @@ DisplayError DisplayBuiltIn::SetupDemura() {
   }
 
   if (value > 0) {
-    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
+    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetDisplayId());
     comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
     return kErrorNone;
   } else if (value == 0) {
@@ -545,8 +549,11 @@ DisplayError DisplayBuiltIn::SetupDemura() {
     hw_intf_->GetPanelBrightnessBasePath(&brightness_base);
     input_cfg.brightness_path = brightness_base+"brightness";
 
-    FetchResourceList frl;
-    comp_manager_->GetDemuraFetchResources(display_comp_ctx_, &frl);
+    std::vector<FetchResourceList> frlv;
+    frlv.resize(core_count_);
+    comp_manager_->GetDemuraFetchResources(display_comp_ctx_, &frlv);
+    // ToDo(devanshi) : handle for all DPU instead of DPU 0
+    auto frl = frlv[0];
     for (auto &fr : frl) {
       int i = std::get<1>(fr);  // fetch resource index
       input_cfg.resources.set(i);
@@ -1541,155 +1548,158 @@ std::string DisplayBuiltIn::Dump() {
      << current_color_mode_.gamma << " intent " << current_color_mode_.intent << " Dynamice_range"
      << (curr_dynamic_range == kSdrType ? " SDR" : " HDR");
 
-  uint32_t num_hw_layers = UINT32(disp_layer_stack_.info.hw_layers.size());
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    uint32_t num_hw_layers = UINT32(disp_layer_stack_.info[j].hw_layers.size());
 
-  if (num_hw_layers == 0) {
-    os << "\nNo hardware layers programmed";
-    return os.str();
-  }
-
-  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
-  if (out_buffer) {
-    os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
-  }
-  HWLayersInfo &layer_info = disp_layer_stack_.info;
-  for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
-    LayerRect &l_roi = layer_info.left_frame_roi.at(i);
-    LayerRect &r_roi = layer_info.right_frame_roi.at(i);
-
-    os << "\nROI(LTRB)#" << i << " LEFT(" << INT(l_roi.left) << " " << INT(l_roi.top) << " " <<
-      INT(l_roi.right) << " " << INT(l_roi.bottom) << ")";
-    if (IsValid(r_roi)) {
-    os << " RIGHT(" << INT(r_roi.left) << " " << INT(r_roi.top) << " " << INT(r_roi.right) << " "
-      << INT(r_roi.bottom) << ")";
-    }
-  }
-
-  LayerRect &fb_roi = disp_layer_stack_.stack_info.partial_fb_roi;
-  if (IsValid(fb_roi)) {
-    os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
-      INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
-  }
-
-  AppendRCMaskData(os);
-
-  const char *header  = "\n| Idx |   Comp Type   |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
-  const char *newline = "\n|-----|---------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
-  const char *format  = "\n| %3s | %13s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
-
-  os << "\n";
-  os << newline;
-  os << header;
-  os << newline;
-
-  for (uint32_t i = 0; i < num_hw_layers; i++) {
-    uint32_t layer_index = disp_layer_stack_.info.index.at(i);
-    // hw-layer from hw layers info
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
-    LayerBuffer *input_buffer = &hw_layer.input_buffer;
-    HWLayerConfig &layer_config = disp_layer_stack_.info.config[i];
-    HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
-
-    const char *comp_type = GetName(hw_layer.composition);
-    const char *buffer_format = GetFormatString(input_buffer->format);
-    const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
-    const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
-    char idx[8];
-
-    snprintf(idx, sizeof(idx), "%d", layer_index);
-
-    for (uint32_t count = 0; count < hw_rotator_session.hw_block_count; count++) {
-      char row[1024];
-      HWRotateInfo &rotate = hw_rotator_session.hw_rotate_info[count];
-      LayerRect &src_roi = rotate.src_roi;
-      LayerRect &dst_roi = rotate.dst_roi;
-      char rot[12] = { 0 };
-
-      snprintf(rot, sizeof(rot), "Rot-%s-%d", layer_config.use_inline_rot ?
-               "inl" : "off", count + 1);
-
-      snprintf(row, sizeof(row), format, idx, comp_type, rot,
-               0, input_buffer->width, input_buffer->height, buffer_format,
-               INT(src_roi.left), INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
-               INT(dst_roi.left), INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
-               "-", "-    ", "-    ", "-", "-", "-");
-      os << row;
-      // print the below only once per layer block, fill with spaces for rest.
-      idx[0] = 0;
-      comp_type = "";
+    if (num_hw_layers == 0) {
+      os << "\nNo hardware layers programmed";
+      return os.str();
     }
 
-    if (hw_rotator_session.hw_block_count > 0) {
-      input_buffer = &hw_rotator_session.output_buffer;
-      buffer_format = GetFormatString(input_buffer->format);
+    os << "\n\n Table for DPU - " << j << "\n";
+    LayerBuffer *out_buffer = disp_layer_stack_.info[j].output_buffer;
+    if (out_buffer) {
+      os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
+         << " format: " << GetFormatString(out_buffer->format);
+    }
+    HWLayersInfo &layer_info = disp_layer_stack_.info[j];
+    for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
+      LayerRect &l_roi = layer_info.left_frame_roi.at(i);
+      LayerRect &r_roi = layer_info.right_frame_roi.at(i);
+
+      os << "\nROI(LTRB)#" << i << " LEFT(" << INT(l_roi.left) << " " << INT(l_roi.top) << " " <<
+        INT(l_roi.right) << " " << INT(l_roi.bottom) << ")";
+      if (IsValid(r_roi)) {
+      os << " RIGHT(" << INT(r_roi.left) << " " << INT(r_roi.top) << " " << INT(r_roi.right) << " "
+        << INT(r_roi.bottom) << ")";
+      }
     }
 
-    if (layer_config.use_solidfill_stage) {
-      LayerRect src_roi = layer_config.hw_solidfill_stage.roi;
-      const char *decimation = "";
-      char flags[16] = { 0 };
-      char z_order[8] = { 0 };
-      const char *color_primary = "";
-      const char *range = "";
-      const char *transfer = "";
-      char row[1024] = { 0 };
-
-      snprintf(z_order, sizeof(z_order), "%d", layer_config.hw_solidfill_stage.z_order);
-      snprintf(flags, sizeof(flags), "0x%08x", hw_layer.flags.flags);
-      snprintf(row, sizeof(row), format, idx, comp_type, pipe_split[0],
-               0, INT(src_roi.right), INT(src_roi.bottom),
-               buffer_format, INT(src_roi.left), INT(src_roi.top),
-               INT(src_roi.right), INT(src_roi.bottom), INT(src_roi.left),
-               INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
-               z_order, flags, decimation, color_primary, range, transfer);
-      os << row;
-      continue;
+    LayerRect &fb_roi = disp_layer_stack_.stack_info.partial_fb_roi;
+    if (IsValid(fb_roi)) {
+      os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
+        INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
     }
 
-    for (uint32_t count = 0; count < 2; count++) {
-      char decimation[16] = { 0 };
-      char flags[16] = { 0 };
-      char z_order[8] = { 0 };
-      char color_primary[8] = { 0 };
-      char range[8] = { 0 };
-      char transfer[8] = { 0 };
-      bool rot = layer_config.use_inline_rot;
+    AppendRCMaskData(os);
 
-      HWPipeInfo &pipe = (count == 0) ? layer_config.left_pipe : layer_config.right_pipe;
+    const char *header  = "\n| Idx |   Comp Type   |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
+    const char *newline = "\n|-----|---------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
+    const char *format  = "\n| %3s | %13s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
 
-      if (!pipe.valid) {
+    os << "\n";
+    os << newline;
+    os << header;
+    os << newline;
+
+    for (uint32_t i = 0; i < num_hw_layers; i++) {
+      uint32_t layer_index = disp_layer_stack_.info[j].index.at(i);
+      // hw-layer from hw layers info
+      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      LayerBuffer *input_buffer = &hw_layer.input_buffer;
+      HWLayerConfig &layer_config = disp_layer_stack_.info[j].config[i];
+      HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
+
+      const char *comp_type = GetName(hw_layer.composition);
+      const char *buffer_format = GetFormatString(input_buffer->format);
+      const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
+      const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
+      char idx[8];
+
+      snprintf(idx, sizeof(idx), "%d", layer_index);
+
+      for (uint32_t count = 0; count < hw_rotator_session.hw_block_count; count++) {
+        char row[1024];
+        HWRotateInfo &rotate = hw_rotator_session.hw_rotate_info[count];
+        LayerRect &src_roi = rotate.src_roi;
+        LayerRect &dst_roi = rotate.dst_roi;
+        char rot[12] = { 0 };
+
+        snprintf(rot, sizeof(rot), "Rot-%s-%d", layer_config.use_inline_rot ?
+                 "inl" : "off", count + 1);
+
+        snprintf(row, sizeof(row), format, idx, comp_type, rot,
+                 0, input_buffer->width, input_buffer->height, buffer_format,
+                 INT(src_roi.left), INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
+                 INT(dst_roi.left), INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
+                 "-", "-    ", "-    ", "-", "-", "-");
+        os << row;
+        // print the below only once per layer block, fill with spaces for rest.
+        idx[0] = 0;
+        comp_type = "";
+      }
+
+      if (hw_rotator_session.hw_block_count > 0) {
+        input_buffer = &hw_rotator_session.output_buffer;
+        buffer_format = GetFormatString(input_buffer->format);
+      }
+
+      if (layer_config.use_solidfill_stage) {
+        LayerRect src_roi = layer_config.hw_solidfill_stage.roi;
+        const char *decimation = "";
+        char flags[16] = { 0 };
+        char z_order[8] = { 0 };
+        const char *color_primary = "";
+        const char *range = "";
+        const char *transfer = "";
+        char row[1024] = { 0 };
+
+        snprintf(z_order, sizeof(z_order), "%d", layer_config.hw_solidfill_stage.z_order);
+        snprintf(flags, sizeof(flags), "0x%08x", hw_layer.flags.flags);
+        snprintf(row, sizeof(row), format, idx, comp_type, pipe_split[0],
+                 0, INT(src_roi.right), INT(src_roi.bottom),
+                 buffer_format, INT(src_roi.left), INT(src_roi.top),
+                 INT(src_roi.right), INT(src_roi.bottom), INT(src_roi.left),
+                 INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
+                 z_order, flags, decimation, color_primary, range, transfer);
+        os << row;
         continue;
       }
 
-      LayerRect src_roi = pipe.src_roi;
-      LayerRect &dst_roi = pipe.dst_roi;
+      for (uint32_t count = 0; count < 2; count++) {
+        char decimation[16] = { 0 };
+        char flags[16] = { 0 };
+        char z_order[8] = { 0 };
+        char color_primary[8] = { 0 };
+        char range[8] = { 0 };
+        char transfer[8] = { 0 };
+        bool rot = layer_config.use_inline_rot;
 
-      snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
-      snprintf(flags, sizeof(flags), "0x%08x", pipe.flags);
-      snprintf(decimation, sizeof(decimation), "%3d x %3d", pipe.horizontal_decimation,
-               pipe.vertical_decimation);
-      ColorMetaData &color_metadata = hw_layer.input_buffer.color_metadata;
-      snprintf(color_primary, sizeof(color_primary), "%d", color_metadata.colorPrimaries);
-      snprintf(range, sizeof(range), "%d", color_metadata.range);
-      snprintf(transfer, sizeof(transfer), "%d", color_metadata.transfer);
+        HWPipeInfo &pipe = (count == 0) ? layer_config.left_pipe : layer_config.right_pipe;
 
-      char row[1024];
-      snprintf(row, sizeof(row), format, idx, comp_type, rot ? rot_pipe[count] : pipe_split[count],
-               pipe.pipe_id, input_buffer->width, input_buffer->height,
-               buffer_format, INT(src_roi.left), INT(src_roi.top),
-               INT(src_roi.right), INT(src_roi.bottom), INT(dst_roi.left),
-               INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
-               z_order, flags, decimation, color_primary, range, transfer);
+        if (!pipe.valid) {
+          continue;
+        }
 
-      os << row;
-      // print the below only once per layer block, fill with spaces for rest.
-      idx[0] = 0;
-      comp_type = "";
+        LayerRect src_roi = pipe.src_roi;
+        LayerRect &dst_roi = pipe.dst_roi;
+
+        snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
+        snprintf(flags, sizeof(flags), "0x%08x", pipe.flags);
+        snprintf(decimation, sizeof(decimation), "%3d x %3d", pipe.horizontal_decimation,
+                 pipe.vertical_decimation);
+        ColorMetaData &color_metadata = hw_layer.input_buffer.color_metadata;
+        snprintf(color_primary, sizeof(color_primary), "%d", color_metadata.colorPrimaries);
+        snprintf(range, sizeof(range), "%d", color_metadata.range);
+        snprintf(transfer, sizeof(transfer), "%d", color_metadata.transfer);
+
+        char row[1024];
+        snprintf(row, sizeof(row), format, idx, comp_type, rot ? rot_pipe[count] :
+                 pipe_split[count], pipe.pipe_id, input_buffer->width, input_buffer->height,
+                 buffer_format, INT(src_roi.left), INT(src_roi.top),
+                 INT(src_roi.right), INT(src_roi.bottom), INT(dst_roi.left),
+                 INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
+                 z_order, flags, decimation, color_primary, range, transfer);
+
+        os << row;
+        // print the below only once per layer block, fill with spaces for rest.
+        idx[0] = 0;
+        comp_type = "";
+      }
     }
-  }
 
-  os << newline << "\n";
+    os << newline << "\n";
+  }
 
   return os.str();
 }
@@ -1927,26 +1937,36 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
     return false;
   }
 
-  disp_layer_stack_.info.left_frame_roi.clear();
-  disp_layer_stack_.info.right_frame_roi.clear();
-  disp_layer_stack_.info.dest_scale_info_map.clear();
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    disp_layer_stack_.info[i].left_frame_roi.clear();
+    disp_layer_stack_.info[i].right_frame_roi.clear();
+    disp_layer_stack_.info[i].dest_scale_info_map.clear();
+  }
   comp_manager_->GenerateROI(display_comp_ctx_, &disp_layer_stack_);
 
-  if (!disp_layer_stack_.info.left_frame_roi.size() ||
-      !disp_layer_stack_.info.right_frame_roi.size()) {
-    return false;
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    if (!disp_layer_stack_.info[i].left_frame_roi.size() ||
+        !disp_layer_stack_.info[i].right_frame_roi.size()) {
+      return false;
+    }
+
+    // Compare the cached and calculated Frame ROIs.
+    bool same_roi = IsCongruent(left_frame_roi_[i],
+                                disp_layer_stack_.info[i].left_frame_roi.at(0)) &&
+                    IsCongruent(right_frame_roi_[i],
+                                disp_layer_stack_.info[i].right_frame_roi.at(0));
+
+    if (!same_roi) {
+      return same_roi;
+    }
   }
 
-  // Compare the cached and calculated Frame ROIs.
-  bool same_roi = IsCongruent(left_frame_roi_, disp_layer_stack_.info.left_frame_roi.at(0)) &&
-                  IsCongruent(right_frame_roi_, disp_layer_stack_.info.right_frame_roi.at(0));
-
-  if (same_roi) {
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
     // Update Surface Damage rectangle(s) in HW layers.
-    uint32_t hw_layer_count = UINT32(disp_layer_stack_.info.hw_layers.size());
+    uint32_t hw_layer_count = UINT32(disp_layer_stack_.info[i].hw_layers.size());
     for (uint32_t j = 0; j < hw_layer_count; j++) {
-      Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(j);
-      Layer *sdm_layer = layer_stack->layers.at(disp_layer_stack_.info.index.at(j));
+      Layer &hw_layer = disp_layer_stack_.info[i].hw_layers.at(j);
+      Layer *sdm_layer = layer_stack->layers.at(disp_layer_stack_.info[i].index.at(j));
       if (hw_layer.dirty_regions.size() != sdm_layer->dirty_regions.size()) {
         return false;
       }
@@ -1964,12 +1984,12 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
     if (disp_layer_stack_.stack_info.common_info.flags.noise_present)
       size_ff++;
 
-    for (uint32_t i = 0; i < (layer_stack->layers.size() - size_ff); i++) {
-      layer_stack->layers.at(i)->composition = kCompositionSDE;
+    for (uint32_t j = 0; j < (layer_stack->layers.size() - size_ff); j++) {
+      layer_stack->layers.at(j)->composition = kCompositionSDE;
     }
   }
 
-  return same_roi;
+  return true;
 }
 
 DisplayError DisplayBuiltIn::HandleDemuraLayer(LayerStack *layer_stack) {
@@ -1978,7 +1998,6 @@ DisplayError DisplayBuiltIn::HandleDemuraLayer(LayerStack *layer_stack) {
     return kErrorParameters;
   }
   std::vector<Layer *> &layers = layer_stack->layers;
-
   if (comp_manager_->GetDemuraStatus() &&
       comp_manager_->GetDemuraStatusForDisplay(display_id_) &&
       demura_layer_.input_buffer.planes[0].fd > 0) {
@@ -2135,7 +2154,9 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
   if (error != kErrorNone) {
     return error;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   // Disable Partial Update for one frame as PU not supported during modeset.
   DisablePartialUpdateOneFrameInternal();

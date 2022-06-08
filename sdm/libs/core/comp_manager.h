@@ -89,13 +89,13 @@ class CompManager {
                                const HWPanelInfo &hw_panel_info,
                                const HWMixerAttributes &mixer_attributes,
                                const DisplayConfigVariableInfo &fb_config, Handle *display_ctx,
-                               HWQosData *qos_data);
+                               std::vector<HWQosData> *default_qos_data);
   DisplayError UnregisterDisplay(Handle display_ctx);
   DisplayError ReconfigureDisplay(Handle display_ctx, const HWDisplayAttributes &display_attributes,
                                   const HWPanelInfo &hw_panel_info,
                                   const HWMixerAttributes &mixer_attributes,
                                   const DisplayConfigVariableInfo &fb_config,
-                                  HWQosData *qos_data);
+                                  std::vector<HWQosData> *default_qos_data);
   DisplayError PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Commit(Handle display_ctx, DispLayerStack *disp_layer_stack);
@@ -128,14 +128,14 @@ class CompManager {
   DisplayError CheckEnforceSplit(Handle comp_handle, uint32_t new_refresh_rate);
   DppsControlInterface* GetDppsControlIntf();
   bool CheckResourceState(Handle display_ctx, bool *res_exhausted, HWDisplayAttributes attr);
-  DisplayError GetConcurrencyFps(DisplayConcurrencyType type, float *fps);
+  DisplayError GetConcurrencyFps(Handle display_ctx, DisplayConcurrencyType type, float *fps);
   bool IsRotatorSupportedFormat(LayerBufferFormat format);
   DisplayError SetDrawMethod(Handle display_ctx, const DisplayDrawMethod &draw_method);
   DisplayError FreeDemuraFetchResources(const uint32_t &display_id);
-  DisplayError GetDemuraFetchResourceCount(std::map<uint32_t, uint8_t> *fetch_resource_cnt);
+  DisplayError GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt);
   DisplayError ReserveDemuraFetchResources(const uint32_t &display_id,
                                            const int8_t &preferred_rect);
-  DisplayError GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl);
+  DisplayError GetDemuraFetchResources(Handle display_ctx, std::vector<FetchResourceList> *frl);
   void SetDemuraStatus(bool status);
   bool GetDemuraStatus();
   void SetDemuraStatusForDisplay(const int32_t &display_id, bool status);
@@ -146,7 +146,7 @@ class CompManager {
   DisplayError SetBacklightLevel(Handle display_ctx, const uint32_t &backlight_level);
   DisplayError GetHDR10PlusCapability(bool *hdr_plus_support);
   DisplayError ForceToneMapConfigure(Handle display_ctx, DispLayerStack *disp_layer_stack);
-  DisplayError GetDefaultQosData(Handle display_ctx, HWQosData *qos_data);
+  DisplayError GetDefaultQosData(Handle display_ctx, std::vector<HWQosData> *default_qos_data);
   DisplayError HandleCwbFrequencyBoost(bool isRequest);
 
  private:

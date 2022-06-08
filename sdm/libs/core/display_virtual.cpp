@@ -104,7 +104,8 @@ DisplayError DisplayVirtual::Deinit() {
   DisplayError error = DisplayBase::Deinit();
   float fps = 0;
   if (async_vds_creation_ && !disable_mitigated_fps_) {
-    comp_manager_->GetConcurrencyFps(DisplayConcurrencyType::kConcurrencyWfd, &fps);
+    comp_manager_->GetConcurrencyFps(display_comp_ctx_,
+                                     DisplayConcurrencyType::kConcurrencyWfd, &fps);
     if (fps != 0.0) {
       event_handler_->NotifyFpsMitigation(fps, DisplayConcurrencyType::kConcurrencyWfd, false);
     }
@@ -191,13 +192,16 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
 
   if (async_vds_creation_ && !disable_mitigated_fps_) {
     float fps = 0;
-    comp_manager_->GetConcurrencyFps(DisplayConcurrencyType::kConcurrencyWfd, &fps);
+    comp_manager_->GetConcurrencyFps(display_comp_ctx_,
+                                     DisplayConcurrencyType::kConcurrencyWfd, &fps);
     if (fps != 0.0) {
       event_handler_->NotifyFpsMitigation(fps, DisplayConcurrencyType::kConcurrencyWfd, true);
     }
   }
 
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   display_attributes_ = display_attributes;
   mixer_attributes_ = mixer_attributes;
@@ -224,7 +228,7 @@ DisplayError DisplayVirtual::Prepare(LayerStack *layer_stack) {
 
   // Clean display layer stack for reuse.
   disp_layer_stack_ = DispLayerStack();
-
+  disp_layer_stack_.info.resize(core_count_, {});
   return DisplayBase::Prepare(layer_stack);
 }
 

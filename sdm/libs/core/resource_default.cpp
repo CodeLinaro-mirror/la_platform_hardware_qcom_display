@@ -43,7 +43,7 @@ DisplayError ResourceDefault::CreateResourceDefault(const
                                                     ResourceInterface **resource_intf) {
   DisplayError error = kErrorNone;
 
-  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info[0]);
+  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info);
   if (!resource_default) {
     return kErrorNone;
   }
@@ -67,67 +67,72 @@ DisplayError ResourceDefault::DestroyResourceDefault(ResourceInterface *resource
   return kErrorNone;
 }
 
-ResourceDefault::ResourceDefault(const HWResourceInfo &hw_res_info)
+ResourceDefault::ResourceDefault(const vector<HWResourceInfo> &hw_res_info)
   : hw_res_info_(hw_res_info) {
 }
 
 DisplayError ResourceDefault::Init() {
   DisplayError error = kErrorNone;
 
-  num_pipe_ = hw_res_info_.num_vig_pipe + hw_res_info_.num_rgb_pipe + hw_res_info_.num_dma_pipe;
+  for (uint32_t j = 0; j < hw_res_info_.size(); j++) {
+    uint32_t *num_pipe = &num_pipe_.at(j);
+    HWResourceInfo *hw_res_info = &hw_res_info_.at(j);
+    vector<SourcePipe> *src_pipes = &src_pipes_.at(j);
+    *num_pipe = hw_res_info->num_vig_pipe + hw_res_info->num_rgb_pipe + hw_res_info->num_dma_pipe;
 
-  if (!num_pipe_) {
-    DLOGE("Number of H/W pipes is Zero!");
-    return kErrorParameters;
-  }
-
-  src_pipes_.resize(num_pipe_);
-
-  // Priority order of pipes: VIG, RGB, DMA
-  uint32_t vig_index = 0;
-  uint32_t rgb_index = hw_res_info_.num_vig_pipe;
-  uint32_t dma_index = rgb_index + hw_res_info_.num_rgb_pipe;
-
-  for (uint32_t i = 0; i < num_pipe_; i++) {
-    const HWPipeCaps &pipe_caps = hw_res_info_.hw_pipes.at(i);
-    if (pipe_caps.type == kPipeTypeVIG) {
-      src_pipes_[vig_index].type = kPipeTypeVIG;
-      src_pipes_[vig_index].index = i;
-      src_pipes_[vig_index].mdss_pipe_id = pipe_caps.id;
-      vig_index++;
-    } else if (pipe_caps.type == kPipeTypeRGB) {
-      src_pipes_[rgb_index].type = kPipeTypeRGB;
-      src_pipes_[rgb_index].index = i;
-      src_pipes_[rgb_index].mdss_pipe_id = pipe_caps.id;
-      rgb_index++;
-    } else if (pipe_caps.type == kPipeTypeDMA) {
-      src_pipes_[dma_index].type = kPipeTypeDMA;
-      src_pipes_[dma_index].index = i;
-      src_pipes_[dma_index].mdss_pipe_id = pipe_caps.id;
-      dma_index++;
+    if (*num_pipe) {
+      DLOGE("Number of H/W pipes is Zero!");
+      return kErrorParameters;
     }
-  }
 
-  for (uint32_t i = 0; i < num_pipe_; i++) {
-    src_pipes_[i].priority = INT(i);
-  }
+    src_pipes->resize(*num_pipe);
 
-  DLOGI("hw_ver=%x, DMA=%d RGB=%d VIG=%d", hw_res_info_.hw_version, hw_res_info_.num_dma_pipe,
-    hw_res_info_.num_rgb_pipe, hw_res_info_.num_vig_pipe);
+    // Priority order of pipes: VIG, RGB, DMA
+    uint32_t vig_index = 0;
+    uint32_t rgb_index = hw_res_info->num_vig_pipe;
+    uint32_t dma_index = rgb_index + hw_res_info->num_rgb_pipe;
 
-  if (hw_res_info_.max_scale_down < 1 || hw_res_info_.max_scale_up < 1) {
-    DLOGE("Max scaling setting is invalid! max_scale_down = %d, max_scale_up = %d",
-          hw_res_info_.max_scale_down, hw_res_info_.max_scale_up);
-    hw_res_info_.max_scale_down = 1;
-    hw_res_info_.max_scale_up = 1;
-  }
+    for (uint32_t i = 0; i < *num_pipe; i++) {
+      const HWPipeCaps &pipe_caps = hw_res_info->hw_pipes.at(i);
+      if (pipe_caps.type == kPipeTypeVIG) {
+        src_pipes->at(vig_index).type = kPipeTypeVIG;
+        src_pipes->at(vig_index).index = i;
+        src_pipes->at(vig_index).mdss_pipe_id = pipe_caps.id;
+        vig_index++;
+      } else if (pipe_caps.type == kPipeTypeRGB) {
+        src_pipes->at(rgb_index).type = kPipeTypeRGB;
+        src_pipes->at(rgb_index).index = i;
+        src_pipes->at(rgb_index).mdss_pipe_id = pipe_caps.id;
+        rgb_index++;
+      } else if (pipe_caps.type == kPipeTypeDMA) {
+        src_pipes->at(dma_index).type = kPipeTypeDMA;
+        src_pipes->at(dma_index).index = i;
+        src_pipes->at(dma_index).mdss_pipe_id = pipe_caps.id;
+        dma_index++;
+      }
+    }
 
-  // TODO(user): clean it up, query from driver for initial pipe status.
+    for (uint32_t i = 0; i < *num_pipe; i++) {
+      src_pipes->at(i).priority = INT(i);
+    }
+
+    DLOGI("hw_ver=%x, DMA=%d RGB=%d VIG=%d", hw_res_info->hw_version, hw_res_info->num_dma_pipe,
+      hw_res_info->num_rgb_pipe, hw_res_info->num_vig_pipe);
+
+    if (hw_res_info->max_scale_down < 1 || hw_res_info->max_scale_up < 1) {
+      DLOGE("Max scaling setting is invalid! max_scale_down = %d, max_scale_up = %d",
+            hw_res_info->max_scale_down, hw_res_info->max_scale_up);
+      hw_res_info->max_scale_down = 1;
+      hw_res_info->max_scale_up = 1;
+    }
+
+    // TODO(user): clean it up, query from driver for initial pipe status.
 #ifndef SDM_VIRTUAL_DRIVER
-  rgb_index = hw_res_info_.num_vig_pipe;
-  src_pipes_[rgb_index].owner = kPipeOwnerKernelMode;
-  src_pipes_[rgb_index + 1].owner = kPipeOwnerKernelMode;
+    rgb_index = hw_res_info->num_vig_pipe;
+    src_pipes->at(rgb_index).owner = kPipeOwnerKernelMode;
+    src_pipes->at(rgb_index + 1).owner = kPipeOwnerKernelMode;
 #endif
+  }
 
   return error;
 }
@@ -136,16 +141,23 @@ DisplayError ResourceDefault::Deinit() {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::RegisterDisplay(DisplayId display_id, DisplayType type,
+DisplayError ResourceDefault::RegisterDisplay(DisplayId disp_id, DisplayType type,
                                               const HWDisplayAttributes &display_attributes,
                                               const HWPanelInfo &hw_panel_info,
                                               const HWMixerAttributes &mixer_attributes,
                                               const Resolution &fb_resolution,
                                               Handle *display_ctx) {
-  DisplayError error = kErrorNone;
+  int core_id = disp_id.GetCoreIdMap();
+  std::bitset<32> core_id_bitset = std::bitset<32>(core_id);
+  DisplayResourceContext *display_resource_ctx = new DisplayResourceContext();
+  if (!display_resource_ctx) {
+    return kErrorMemory;
+  }
 
   HWBlockType hw_block_type = kHWBlockMax;
-  switch (type) {
+  DisplayError error = kErrorNone;
+  for (int core_num = 0; core_num < core_id_bitset.size(); core_num++) {
+    switch (type) {
     case kBuiltIn:
       if (!hw_block_ctx_[kHWBuiltIn].is_in_use) {
         hw_block_type = kHWBuiltIn;
@@ -161,18 +173,18 @@ DisplayError ResourceDefault::RegisterDisplay(DisplayId display_id, DisplayType 
     default:
       DLOGW("RegisterDisplay, invalid type %d", type);
       return kErrorParameters;
-  }
+    }
 
-  if (hw_block_type == kHWBlockMax) {
-    return kErrorResources;
-  }
+    if (hw_block_type == kHWBlockMax) {
+      return kErrorResources;
+    }
 
-  DisplayResourceContext *display_resource_ctx = new DisplayResourceContext();
-  if (!display_resource_ctx) {
-    return kErrorMemory;
+    hw_block_ctx_[hw_block_type].is_in_use = true;
+    HWMixerAttributes mixer = mixer_attributes;
+    mixer.width /= 2;
+    mixer.height /= 2;
+    mixer_attributes_.push_back(mixer);
   }
-
-  hw_block_ctx_[hw_block_type].is_in_use = true;
 
   display_resource_ctx->display_attributes = display_attributes;
   display_resource_ctx->hw_block_type = hw_block_type;
@@ -228,104 +240,137 @@ DisplayError ResourceDefault::SetDrawMethod(Handle display_ctx,
   return kErrorNone;
 }
 
+void ResourceDefault::CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
+                                       LayerRect *in_rect, LayerRect *out_rect) {
+  float right = (in_rect->right > (dpu_offset +  mixer_width) ?
+                 dpu_offset + mixer_width : in_rect->right);
+  *out_rect = {in_rect->left - dpu_offset, in_rect->top, right - dpu_offset, in_rect->bottom};
+  in_rect->left = right;
+}
+
+void ResourceDefault::CalculateSrcRect(float split_ratio, float src_width,
+                                       LayerRect *in_rect, LayerRect *out_rect) {
+  float dpu_width = split_ratio * src_width;
+  *out_rect = {in_rect->left, in_rect->top, in_rect->left + dpu_width, in_rect->bottom};
+  in_rect->left = out_rect->right;
+}
+
 DisplayError ResourceDefault::Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack,
                                       LayerFeedback *feedback) {
   DisplayResourceContext *display_resource_ctx =
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
 
-  DisplayError error = kErrorNone;
-  const struct HWLayersInfo &layer_info = disp_layer_stack->info;
   HWBlockType hw_block_type = display_resource_ctx->hw_block_type;
-  *feedback = LayerFeedback(0);
-
-  DLOGV_IF(kTagResources, "==== Resource reserving start: hw_block_type = %d ====", hw_block_type);
-
-  if (layer_info.hw_layers.size() > 1) {
-    DLOGV_IF(kTagResources, "More than one FB layers");
-    return kErrorResources;
+  DisplayError error = kErrorNone;
+  LayerRect src_rect = disp_layer_stack->info[0].hw_layers[0].src_rect;
+  LayerRect dst_rect = disp_layer_stack->info[0].hw_layers[0].dst_rect;
+  float src_width = src_rect.right - src_rect.left;
+  float dst_width = dst_rect.right - dst_rect.left;
+  uint32_t dpu_offset = 0;  // mixer start inedx for any DPU
+  for (int j = 0; j < disp_layer_stack->info.size(); j++) {
+    struct HWLayersInfo layer_info = disp_layer_stack->info[j];
+    Layer *hw_layer = &disp_layer_stack->info[j].hw_layers.at(0);
+    CalculateDstRect(dpu_offset, mixer_attributes_[j].width, &dst_rect, &hw_layer->dst_rect);
+    float split_ratio = ((hw_layer->dst_rect.right - hw_layer->dst_rect.left) / dst_width);
+    CalculateSrcRect(split_ratio, src_width, &hw_layer->src_rect, &src_rect);
   }
 
-  const Layer &layer = layer_info.hw_layers.at(0);
+  for (int j = 0; j < disp_layer_stack->info.size(); j++) {
+    const struct HWLayersInfo &layer_info = disp_layer_stack->info[j];
+    *feedback = LayerFeedback(0);
+    core_id_ = j;
+    DLOGV_IF(kTagResources, "==== Resource reserving start: hw_block_type = %d ====",
+             hw_block_type);
 
-  if (layer.composition != kCompositionGPUTarget) {
-    DLOGV_IF(kTagResources, "Not an FB layer");
-    return kErrorParameters;
-  }
-
-  error = Config(display_resource_ctx, disp_layer_stack);
-  if (error != kErrorNone) {
-    DLOGV_IF(kTagResources, "Resource config failed");
-    return error;
-  }
-
-  for (uint32_t i = 0; i < num_pipe_; i++) {
-    if (src_pipes_[i].hw_block_type == hw_block_type && src_pipes_[i].owner == kPipeOwnerUserMode) {
-      src_pipes_[i].ResetState();
+    if (layer_info.hw_layers.size() > 1) {
+      DLOGV_IF(kTagResources, "More than one FB layers");
+      return kErrorResources;
     }
-  }
 
-  uint32_t left_index = num_pipe_;
-  uint32_t right_index = num_pipe_;
-  bool need_scale = false;
+    const Layer &layer = layer_info.hw_layers.at(0);
 
-  struct HWLayerConfig &layer_config = disp_layer_stack->info.config[0];
+    if (layer.composition != kCompositionGPUTarget) {
+      DLOGV_IF(kTagResources, "Not an FB layer");
+      return kErrorParameters;
+    }
 
-  HWPipeInfo *left_pipe = &layer_config.left_pipe;
-  HWPipeInfo *right_pipe = &layer_config.right_pipe;
+    error = Config(display_resource_ctx, disp_layer_stack);
+    if (error != kErrorNone) {
+      DLOGV_IF(kTagResources, "Resource config failed");
+      return error;
+    }
 
-  // left pipe is needed
-  if (left_pipe->valid) {
-    need_scale = IsScalingNeeded(left_pipe);
-    left_index = GetPipe(hw_block_type, need_scale);
-    if (left_index >= num_pipe_) {
-      DLOGV_IF(kTagResources, "Get left pipe failed: hw_block_type = %d, need_scale = %d",
+    uint32_t num_pipe = num_pipe_[j];
+    std::vector<SourcePipe> *src_pipes = &src_pipes_[j];
+    for (uint32_t i = 0; i < num_pipe; i++) {
+      if (src_pipes->at(i).hw_block_type == hw_block_type &&
+          src_pipes->at(i).owner == kPipeOwnerUserMode) {
+        src_pipes->at(i).ResetState();
+      }
+    }
+
+    uint32_t left_index = num_pipe;
+    uint32_t right_index = num_pipe;
+    bool need_scale = false;
+
+    struct HWLayerConfig &layer_config = disp_layer_stack->info[j].config[0];
+
+    HWPipeInfo *left_pipe = &layer_config.left_pipe;
+    HWPipeInfo *right_pipe = &layer_config.right_pipe;
+
+    // left pipe is needed
+    if (left_pipe->valid) {
+      need_scale = IsScalingNeeded(left_pipe);
+      left_index = GetPipe(hw_block_type, need_scale);
+      if (left_index >= num_pipe) {
+        DLOGV_IF(kTagResources, "Get left pipe failed: hw_block_type = %d, need_scale = %d",
+                 hw_block_type, need_scale);
+        ResourceStateLog();
+        goto CleanupOnError;
+      }
+    }
+
+    error = SetDecimationFactor(left_pipe);
+    if (error != kErrorNone) {
+      goto CleanupOnError;
+    }
+
+    if (!right_pipe->valid) {
+      // assign single pipe
+      if (left_index < num_pipe) {
+        left_pipe->pipe_id = src_pipes->at(left_index).mdss_pipe_id;
+      }
+      DLOGV_IF(kTagResources, "1 pipe acquired for FB layer, left_pipe = %x", left_pipe->pipe_id);
+      return kErrorNone;
+    }
+
+    need_scale = IsScalingNeeded(right_pipe);
+
+    right_index = GetPipe(hw_block_type, need_scale);
+    if (right_index >= num_pipe) {
+      DLOGV_IF(kTagResources, "Get right pipe failed: hw_block_type = %d, need_scale = %d",
                hw_block_type, need_scale);
       ResourceStateLog();
       goto CleanupOnError;
     }
-  }
 
-  error = SetDecimationFactor(left_pipe);
-  if (error != kErrorNone) {
-    goto CleanupOnError;
-  }
-
-  if (!right_pipe->valid) {
-    // assign single pipe
-    if (left_index < num_pipe_) {
-      left_pipe->pipe_id = src_pipes_[left_index].mdss_pipe_id;
+    if (src_pipes->at(right_index).priority < src_pipes->at(left_index).priority) {
+      // Swap pipe based on priority
+      std::swap(left_index, right_index);
     }
-    DLOGV_IF(kTagResources, "1 pipe acquired for FB layer, left_pipe = %x", left_pipe->pipe_id);
-    return kErrorNone;
+
+    // assign dual pipes
+    left_pipe->pipe_id = src_pipes->at(left_index).mdss_pipe_id;
+    right_pipe->pipe_id = src_pipes->at(right_index).mdss_pipe_id;
+
+    error = SetDecimationFactor(right_pipe);
+    if (error != kErrorNone) {
+      goto CleanupOnError;
+    }
+
+    DLOGV_IF(kTagResources, "2 pipes acquired for FB layer, left_pipe = %x, right_pipe = %x",
+             left_pipe->pipe_id,  right_pipe->pipe_id);
   }
-
-  need_scale = IsScalingNeeded(right_pipe);
-
-  right_index = GetPipe(hw_block_type, need_scale);
-  if (right_index >= num_pipe_) {
-    DLOGV_IF(kTagResources, "Get right pipe failed: hw_block_type = %d, need_scale = %d",
-             hw_block_type, need_scale);
-    ResourceStateLog();
-    goto CleanupOnError;
-  }
-
-  if (src_pipes_[right_index].priority < src_pipes_[left_index].priority) {
-    // Swap pipe based on priority
-    std::swap(left_index, right_index);
-  }
-
-  // assign dual pipes
-  left_pipe->pipe_id = src_pipes_[left_index].mdss_pipe_id;
-  right_pipe->pipe_id = src_pipes_[right_index].mdss_pipe_id;
-
-  error = SetDecimationFactor(right_pipe);
-  if (error != kErrorNone) {
-    goto CleanupOnError;
-  }
-
-  DLOGV_IF(kTagResources, "2 pipes acquired for FB layer, left_pipe = %x, right_pipe = %x",
-           left_pipe->pipe_id,  right_pipe->pipe_id);
-
   return kErrorNone;
 
 CleanupOnError:
@@ -351,12 +396,16 @@ DisplayError ResourceDefault::PostCommit(Handle display_ctx, DispLayerStack *dis
   DLOGV_IF(kTagResources, "Resource for hw_block = %d, frame_count = %" PRIu64 , hw_block_type,
            frame_count);
 
-  // handoff pipes which are used by splash screen
-  if ((frame_count == 0) && (hw_block_type == kHWBuiltIn)) {
-    for (uint32_t i = 0; i < num_pipe_; i++) {
-      if (src_pipes_[i].hw_block_type == hw_block_type &&
-          src_pipes_[i].owner == kPipeOwnerKernelMode) {
-        src_pipes_[i].owner = kPipeOwnerUserMode;
+  for (int j = 0; j < disp_layer_stack->info.size(); j++) {
+    // handoff pipes which are used by splash screen
+    uint32_t num_pipe = num_pipe_[j];
+    std::vector<SourcePipe> *src_pipes = &src_pipes_[j];
+    if ((frame_count == 0) && (hw_block_type == kHWBuiltIn)) {
+      for (uint32_t i = 0; i < num_pipe; i++) {
+        if (src_pipes->at(i).hw_block_type == hw_block_type &&
+            src_pipes->at(i).owner == kPipeOwnerKernelMode) {
+          src_pipes->at(i).owner = kPipeOwnerUserMode;
+        }
       }
     }
   }
@@ -371,9 +420,14 @@ void ResourceDefault::Purge(Handle display_ctx) {
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
   HWBlockType hw_block_type = display_resource_ctx->hw_block_type;
 
-  for (uint32_t i = 0; i < num_pipe_; i++) {
-    if (src_pipes_[i].hw_block_type == hw_block_type && src_pipes_[i].owner == kPipeOwnerUserMode) {
-      src_pipes_[i].ResetState();
+  for (int j = 0; j < src_pipes_.size(); j++) {
+    std::vector<SourcePipe> *src_pipes = &src_pipes_[j];
+    uint32_t num_pipe = num_pipe_[j];
+    for (uint32_t i = 0; i < num_pipe; i++) {
+      if (src_pipes->at(i).hw_block_type == hw_block_type &&
+          src_pipes->at(i).owner == kPipeOwnerUserMode) {
+        src_pipes->at(i).ResetState();
+      }
     }
   }
   DLOGV_IF(kTagResources, "display hw_block_type = %d", display_resource_ctx->hw_block_type);
@@ -385,7 +439,7 @@ DisplayError ResourceDefault::SetMaxMixerStages(Handle display_ctx, uint32_t max
 
 uint32_t ResourceDefault::SearchPipe(HWBlockType hw_block_type, SourcePipe *src_pipes,
                                      uint32_t num_pipe) {
-  uint32_t index = num_pipe_;
+  uint32_t index = num_pipe_[core_id_];
   SourcePipe *src_pipe;
 
   // search the pipe being used
@@ -407,17 +461,18 @@ uint32_t ResourceDefault::NextPipe(PipeType type, HWBlockType hw_block_type) {
 
   switch (type) {
   case kPipeTypeVIG:
-    src_pipes = &src_pipes_[0];
-    num_pipe = hw_res_info_.num_vig_pipe;
+    src_pipes = &src_pipes_[core_id_][0];
+    num_pipe = hw_res_info_[core_id_].num_vig_pipe;
     break;
   case kPipeTypeRGB:
-    src_pipes = &src_pipes_[hw_res_info_.num_vig_pipe];
-    num_pipe = hw_res_info_.num_rgb_pipe;
+    src_pipes = &src_pipes_[core_id_][hw_res_info_[core_id_].num_vig_pipe];
+    num_pipe = hw_res_info_[core_id_].num_rgb_pipe;
     break;
   case kPipeTypeDMA:
   default:
-    src_pipes = &src_pipes_[hw_res_info_.num_vig_pipe + hw_res_info_.num_rgb_pipe];
-    num_pipe = hw_res_info_.num_dma_pipe;
+    src_pipes = &src_pipes_[core_id_][hw_res_info_[core_id_].num_vig_pipe +
+                                      hw_res_info_[core_id_].num_rgb_pipe];
+    num_pipe = hw_res_info_[core_id_].num_dma_pipe;
     break;
   }
 
@@ -425,18 +480,19 @@ uint32_t ResourceDefault::NextPipe(PipeType type, HWBlockType hw_block_type) {
 }
 
 uint32_t ResourceDefault::GetPipe(HWBlockType hw_block_type, bool need_scale) {
-  uint32_t index = num_pipe_;
+  uint32_t index = num_pipe_[core_id_];
 
   // The default behavior is to assume RGB and VG pipes have scalars
   if (!need_scale) {
     index = NextPipe(kPipeTypeDMA, hw_block_type);
   }
 
-  if ((index >= num_pipe_) && (!need_scale || !hw_res_info_.has_non_scalar_rgb)) {
+  if ((index >= num_pipe_[core_id_]) && (!need_scale ||
+      !hw_res_info_[core_id_].has_non_scalar_rgb)) {
     index = NextPipe(kPipeTypeRGB, hw_block_type);
   }
 
-  if (index >= num_pipe_) {
+  if (index >= num_pipe_[core_id_]) {
     index = NextPipe(kPipeTypeVIG, hw_block_type);
   }
 
@@ -453,12 +509,14 @@ bool ResourceDefault::IsScalingNeeded(const HWPipeInfo *pipe_info) {
 
 void ResourceDefault::ResourceStateLog() {
   DLOGV_IF(kTagResources, "==== resource manager pipe state ====");
-  uint32_t i;
-  for (i = 0; i < num_pipe_; i++) {
-    SourcePipe *src_pipe = &src_pipes_[i];
-    DLOGV_IF(kTagResources, "index = %d, id = %x, hw_block_type = %d, owner = %s", src_pipe->index,
-             src_pipe->mdss_pipe_id, src_pipe->hw_block_type,
-             (src_pipe->owner == kPipeOwnerUserMode) ? "user mode" : "kernel mode");
+  for (int j = 0; j < num_pipe_.size(); j++) {
+    uint32_t i;
+    for (i = 0; i < num_pipe_[j]; i++) {
+      SourcePipe *src_pipe = &src_pipes_[j][i];
+      DLOGV_IF(kTagResources, "index = %d, id = %x, hw_block_type = %d, owner = %s",
+               src_pipe->index, src_pipe->mdss_pipe_id, src_pipe->hw_block_type,
+               (src_pipe->owner == kPipeOwnerUserMode) ? "user mode" : "kernel mode");
+    }
   }
 }
 
@@ -467,12 +525,12 @@ DisplayError ResourceDefault::SrcSplitConfig(DisplayResourceContext *display_res
                                         HWLayerConfig *layer_config) {
   HWPipeInfo *left_pipe = &layer_config->left_pipe;
   HWPipeInfo *right_pipe = &layer_config->right_pipe;
-  uint32_t max_pipe_width = hw_res_info_.max_pipe_width;
+  uint32_t max_pipe_width = hw_res_info_[core_id_].max_pipe_width;
   uint32_t src_width = (uint32_t)(src_rect.right - src_rect.left);
   uint32_t dst_width = (uint32_t)(dst_rect.right - dst_rect.left);
 
   if (src_width != dst_width) {
-    max_pipe_width =  hw_res_info_.max_scaler_pipe_width;
+    max_pipe_width =  hw_res_info_[core_id_].max_scaler_pipe_width;
   }
 
   // Layer cannot qualify for SrcSplit if source or destination width exceeds max pipe width.
@@ -544,63 +602,65 @@ DisplayError ResourceDefault::DisplaySplitConfig(DisplayResourceContext *display
 
 DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ctx,
                                      DispLayerStack *disp_layer_stack) {
-  HWLayersInfo &layer_info = disp_layer_stack->info;
   DisplayError error = kErrorNone;
-  const Layer &layer = layer_info.hw_layers.at(0);
+  for (int j = 0; j < disp_layer_stack->info.size(); j++) {
+    HWLayersInfo &layer_info = disp_layer_stack->info[j];
+    const Layer &layer = layer_info.hw_layers.at(0);
 
-  error = ValidateLayerParams(&layer);
-  if (error != kErrorNone) {
-    return error;
-  }
+    error = ValidateLayerParams(&layer);
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  struct HWLayerConfig *layer_config = &disp_layer_stack->info.config[0];
-  HWPipeInfo &left_pipe = layer_config->left_pipe;
-  HWPipeInfo &right_pipe = layer_config->right_pipe;
+    struct HWLayerConfig *layer_config = &disp_layer_stack->info[j].config[0];
+    HWPipeInfo &left_pipe = layer_config->left_pipe;
+    HWPipeInfo &right_pipe = layer_config->right_pipe;
 
-  LayerRect src_rect = layer.src_rect;
-  LayerRect dst_rect = layer.dst_rect;
+    LayerRect src_rect = layer.src_rect;
+    LayerRect dst_rect = layer.dst_rect;
 
-  error = ValidateDimensions(src_rect, dst_rect);
-  if (error != kErrorNone) {
-    return error;
-  }
+    error = ValidateDimensions(src_rect, dst_rect);
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  BufferLayout layout = GetBufferLayout(layer.input_buffer.format);
-  error = ValidateScaling(src_rect, dst_rect, false /*rotated90 */, layout,
-                          false /* use_rotator_downscale */);
-  if (error != kErrorNone) {
-    return error;
-  }
+    BufferLayout layout = GetBufferLayout(layer.input_buffer.format);
+    error = ValidateScaling(src_rect, dst_rect, false /*rotated90 */, layout,
+                            false /* use_rotator_downscale */);
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  if (hw_res_info_.is_src_split) {
-    error = SrcSplitConfig(display_resource_ctx, src_rect, dst_rect, layer_config);
-  } else {
-    error = DisplaySplitConfig(display_resource_ctx, src_rect, dst_rect, layer_config);
-  }
+    if (hw_res_info_[j].is_src_split) {
+      error = SrcSplitConfig(display_resource_ctx, src_rect, dst_rect, layer_config);
+    } else {
+      error = DisplaySplitConfig(display_resource_ctx, src_rect, dst_rect, layer_config);
+    }
 
-  if (error != kErrorNone) {
-    return error;
-  }
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  error = AlignPipeConfig(&layer, &left_pipe, &right_pipe);
-  if (error != kErrorNone) {
-    return error;
-  }
+    error = AlignPipeConfig(&layer, &left_pipe, &right_pipe);
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  // set z_order, left_pipe should always be valid
-  left_pipe.z_order = 0;
+    // set z_order, left_pipe should always be valid
+    left_pipe.z_order = 0;
 
-  DLOGV_IF(kTagResources, "==== FB layer Config ====");
-  Log(kTagResources, "input layer src_rect", layer.src_rect);
-  Log(kTagResources, "input layer dst_rect", layer.dst_rect);
-  Log(kTagResources, "cropped src_rect", src_rect);
-  Log(kTagResources, "cropped dst_rect", dst_rect);
-  Log(kTagResources, "left pipe src", layer_config->left_pipe.src_roi);
-  Log(kTagResources, "left pipe dst", layer_config->left_pipe.dst_roi);
-  if (right_pipe.valid) {
-    right_pipe.z_order = 0;
-    Log(kTagResources, "right pipe src", layer_config->right_pipe.src_roi);
-    Log(kTagResources, "right pipe dst", layer_config->right_pipe.dst_roi);
+    DLOGV_IF(kTagResources, "==== FB layer Config ====");
+    Log(kTagResources, "input layer src_rect", layer.src_rect);
+    Log(kTagResources, "input layer dst_rect", layer.dst_rect);
+    Log(kTagResources, "cropped src_rect", src_rect);
+    Log(kTagResources, "cropped dst_rect", dst_rect);
+    Log(kTagResources, "left pipe src", layer_config->left_pipe.src_roi);
+    Log(kTagResources, "left pipe dst", layer_config->left_pipe.dst_roi);
+    if (right_pipe.valid) {
+      right_pipe.z_order = 0;
+      Log(kTagResources, "right pipe src", layer_config->right_pipe.src_roi);
+      Log(kTagResources, "right pipe dst", layer_config->right_pipe.dst_roi);
+    }
   }
 
   return error;
@@ -772,17 +832,17 @@ DisplayError ResourceDefault::ValidateScaling(const LayerRect &crop, const Layer
 
 DisplayError ResourceDefault::ValidateDownScaling(float scale_x, float scale_y, bool ubwc_tiled) {
   if ((UINT32(scale_x) > 1) || (UINT32(scale_y) > 1)) {
-    float max_scale_down = FLOAT(hw_res_info_.max_scale_down);
+    float max_scale_down = FLOAT(hw_res_info_[core_id_].max_scale_down);
 
     // MDP H/W cannot apply decimation on UBWC tiled framebuffer
-    if (!ubwc_tiled && hw_res_info_.has_decimation) {
+    if (!ubwc_tiled && hw_res_info_[core_id_].has_decimation) {
       max_scale_down *= FLOAT(kMaxDecimationDownScaleRatio);
     }
 
     if (scale_x > max_scale_down || scale_y > max_scale_down) {
       DLOGV_IF(kTagResources,
                "Scaling down is over the limit: scale_x = %.0f, scale_y = %.0f, " \
-               "has_deci = %d", scale_x, scale_y, hw_res_info_.has_decimation);
+               "has_deci = %d", scale_x, scale_y, hw_res_info_[core_id_].has_decimation);
       return kErrorNotSupported;
     }
   }
@@ -793,7 +853,7 @@ DisplayError ResourceDefault::ValidateDownScaling(float scale_x, float scale_y, 
 }
 
 DisplayError ResourceDefault::ValidateUpScaling(float scale_x, float scale_y) {
-  float max_scale_up = FLOAT(hw_res_info_.max_scale_up);
+  float max_scale_up = FLOAT(hw_res_info_[core_id_].max_scale_up);
 
   if (UINT32(scale_x) < 1 && scale_x > 0.0f) {
     if ((1.0f / scale_x) > max_scale_up) {
@@ -912,12 +972,12 @@ PipeConfigExit:
 }
 
 DisplayError ResourceDefault::CalculateDecimation(float downscale, uint8_t *decimation) {
-  float max_down_scale = FLOAT(hw_res_info_.max_scale_down);
+  float max_down_scale = FLOAT(hw_res_info_[core_id_].max_scale_down);
 
   if (downscale <= max_down_scale) {
     *decimation = 0;
     return kErrorNone;
-  } else if (!hw_res_info_.has_decimation) {
+  } else if (!hw_res_info_[core_id_].has_decimation) {
     DLOGE("Downscaling exceeds the maximum MDP downscale limit but decimation not enabled");
     return kErrorNotSupported;
   }

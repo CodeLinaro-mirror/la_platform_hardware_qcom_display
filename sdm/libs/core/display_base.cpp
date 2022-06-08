@@ -118,6 +118,12 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
   // ready to process commit requests.
   lock_guard<recursive_mutex> client_lock(disp_mutex_.client_mutex);
 
+  // TODO(user): fix after enabling virtual driver for multi-dpu usecase
+  core_count_ = 1;
+  default_clock_hz_.resize(1);
+  disp_layer_stack_.info.resize(1, {});
+  cached_framebuffer_.resize(1);
+
   // Start commit worker thread and wait for thread response.
   DLOGI("Starting commit thread for display: %d", display_type);
 
@@ -137,6 +143,11 @@ DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
   display_id_info_ = display_id;
   display_id_ = display_id_info_.GetDisplayId();
   core_id_ = display_id_info_.GetCoreIdMap();
+  std::bitset<32> core_id_bitset = std::bitset<32>(core_id_);
+  core_count_ = core_id_bitset.count();
+  disp_layer_stack_.info.resize(core_count_, {});
+  cached_framebuffer_.resize(core_count_);
+  default_clock_hz_.resize(core_count_);
 }
 
 DisplayBase::~DisplayBase() {
@@ -224,7 +235,9 @@ DisplayError DisplayBase::Init() {
     DLOGW("Display %d comp manager registration failed!", display_id_);
     goto CleanupOnError;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   if (color_modes_cs_.size() > 0) {
     error = comp_manager_->SetColorModesInfo(display_comp_ctx_, color_modes_cs_);
@@ -390,7 +403,9 @@ DisplayError DisplayBase::Deinit() {
     noise_plugin_intf_ = nullptr;
   }
 
-  CloseFd(&cached_framebuffer_.planes[0].fd);
+  for (int i = 0; i < cached_framebuffer_.size(); i++) {
+    CloseFd(&cached_framebuffer_[i].planes[0].fd);
+  }
 #ifdef TRUSTED_VM
   // release free memory from the heap, needed for Trusted_VM due to the limited
   // carveout size
@@ -841,22 +856,24 @@ DisplayError DisplayBase::ForceToneMapUpdate(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   DisplayError error = kErrorNotSupported;
 
-  for (size_t hw_index = 0; hw_index < disp_layer_stack_.info.index.size(); hw_index++) {
-    size_t layer_index = disp_layer_stack_.info.index.at(hw_index);
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    for (size_t hw_index = 0; hw_index < disp_layer_stack_.info[i].index.size(); hw_index++) {
+      size_t layer_index = disp_layer_stack_.info[i].index.at(hw_index);
 
-    if (layer_index >= layer_stack->layers.size()) {
-      DLOGE("Error forcing TM update. Layer stack appears to have changed");
-      return error;
+      if (layer_index >= layer_stack->layers.size()) {
+        DLOGE("Error forcing TM update. Layer stack appears to have changed");
+        return error;
+      }
+
+      Layer *stack_layer = layer_stack->layers.at(layer_index);
+      Layer &cached_layer = disp_layer_stack_.info[i].hw_layers.at(hw_index);
+      HWLayerConfig &hw_config = disp_layer_stack_.info[i].config[hw_index];
+
+      cached_layer.input_buffer.hist_data = stack_layer->input_buffer.hist_data;
+      cached_layer.input_buffer.color_metadata = stack_layer->input_buffer.color_metadata;
+      hw_config.left_pipe.lut_info.clear();
+      hw_config.right_pipe.lut_info.clear();
     }
-
-    Layer *stack_layer = layer_stack->layers.at(layer_index);
-    Layer &cached_layer = disp_layer_stack_.info.hw_layers.at(hw_index);
-    HWLayerConfig &hw_config = disp_layer_stack_.info.config[hw_index];
-
-    cached_layer.input_buffer.hist_data = stack_layer->input_buffer.hist_data;
-    cached_layer.input_buffer.color_metadata = stack_layer->input_buffer.color_metadata;
-    hw_config.left_pipe.lut_info.clear();
-    hw_config.right_pipe.lut_info.clear();
   }
 
   error = comp_manager_->ForceToneMapConfigure(display_comp_ctx_, &disp_layer_stack_);
@@ -935,7 +952,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
     // Trigger validate only if needed.
     if (disp_layer_stack_.stack_info.do_hw_validate) {
-      error = hw_intf_->Validate(&disp_layer_stack_.info);
+      error = hw_intf_->Validate(&disp_layer_stack_.info[0]);
     }
 
     if (error == kErrorNone) {
@@ -1387,7 +1404,7 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
 void DisplayBase::HandleAsyncCommit() {
   // Do not acquire mutexes here.
   // Perform hw commit here.
-  PerformHwCommit(&disp_layer_stack_.info);
+  PerformHwCommit(&disp_layer_stack_.info[0]);
 }
 
 void DisplayBase::CommitThread() {
@@ -1452,15 +1469,21 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   }
 #endif
 
-  disp_layer_stack_.info.output_buffer = layer_stack->output_buffer;
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    disp_layer_stack_.info[i].output_buffer = layer_stack->output_buffer;
+  }
   if (layer_stack->request_flags.trigger_refresh) {
-    if (!disable_cwb_idle_fallback_ && disp_layer_stack_.info.output_buffer) {
-      cwb_fence_wait_ = true;
+    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+      if (!disable_cwb_idle_fallback_ && disp_layer_stack_.info[i].output_buffer) {
+        cwb_fence_wait_ = true;
+      }
     }
     layer_stack->output_buffer = nullptr;
   }
 
-  disp_layer_stack_.info.retire_fence_offset = retire_fence_offset_;
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    disp_layer_stack_.info[i].retire_fence_offset = retire_fence_offset_;
+  }
   // Regiser for power events on first cycle in unified draw.
   if (first_cycle_ && (draw_method_ != kDrawDefault) && (display_type_ != kVirtual) &&
       !hw_panel_info_.is_primary_panel && (display_type_ != kHDMI)) {
@@ -1542,7 +1565,7 @@ DisplayError DisplayBase::CommitLocked(LayerStack *layer_stack) {
     return error;
   }
 
-  error = PerformHwCommit(&disp_layer_stack_.info);
+  error = PerformHwCommit(&disp_layer_stack_.info[0]);
   if (error != kErrorNone) {
     DLOGE("HwCommit failed %d", error);
   }
@@ -1587,8 +1610,10 @@ DisplayError DisplayBase::PerformHwCommit(HWLayersInfo *hw_layers_info) {
 
 void DisplayBase::CleanupOnError() {
   // Buffer Fd's are duped for async thread operation.
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    CloseFd(&hw_layer.input_buffer.planes[0].fd);
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    for (auto &hw_layer : disp_layer_stack_.info[i].hw_layers) {
+      CloseFd(&hw_layer.input_buffer.planes[0].fd);
+    }
   }
 }
 
@@ -1638,8 +1663,10 @@ DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
 
   CacheFrameBuffer();
 
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    CloseFd(&hw_layer.input_buffer.planes[0].fd);
+  for (int j = 0; j < disp_layer_stack_.info.size(); j++) {
+    for (auto &hw_layer : disp_layer_stack_.info[j].hw_layers) {
+      CloseFd(&hw_layer.input_buffer.planes[0].fd);
+    }
   }
 
   first_cycle_ = false;
@@ -1657,17 +1684,19 @@ void DisplayBase::CacheFrameBuffer() {
   }
 
   // Close current fd.
-  CloseFd(&cached_framebuffer_.planes[0].fd);
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    if (hw_layer.composition == kCompositionGPUTarget) {
-      cached_framebuffer_ = hw_layer.input_buffer;
-      break;
+  for (int i = 0; i < cached_framebuffer_.size(); i++) {
+    CloseFd(&cached_framebuffer_[i].planes[0].fd);
+    for (auto &hw_layer : disp_layer_stack_.info[i].hw_layers) {
+      if (hw_layer.composition == kCompositionGPUTarget) {
+        cached_framebuffer_[i] = hw_layer.input_buffer;
+        break;
+      }
     }
-  }
 
-  // Replace buffer fd with duped fd.
-  int new_fd = Sys::dup_(cached_framebuffer_.planes[0].fd);
-  cached_framebuffer_.planes[0].fd = new_fd;
+    // Replace buffer fd with duped fd.
+    int new_fd = Sys::dup_(cached_framebuffer_[i].planes[0].fd);
+    cached_framebuffer_[i].planes[0].fd = new_fd;
+  }
 }
 
 void DisplayBase::CacheDisplayComposition() {
@@ -1694,9 +1723,12 @@ DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
   if (!active_) {
     return kErrorPermission;
   }
-  disp_layer_stack_.info.hw_layers.clear();
+
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    disp_layer_stack_.info[i].hw_layers.clear();
+  }
   disp_layer_stack_.stack = layer_stack;
-  error = hw_intf_->Flush(&disp_layer_stack_.info);
+  error = hw_intf_->Flush(&disp_layer_stack_.info[0]);
   if (error == kErrorNone) {
     comp_manager_->Purge(display_comp_ctx_);
     validated_ = false;
@@ -1705,7 +1737,7 @@ DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
     DLOGW("Unable to flush display %d-%d", display_id_, display_type_);
   }
   if (layer_stack) {
-    layer_stack->retire_fence = disp_layer_stack_.info.retire_fence;
+    layer_stack->retire_fence = disp_layer_stack_.info[0].retire_fence;
   }
 
   return error;
@@ -1868,7 +1900,9 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   switch (state) {
   case kStateOff:
-    disp_layer_stack_.info.hw_layers.clear();
+    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+      disp_layer_stack_.info[i].hw_layers.clear();
+    }
     error = hw_intf_->PowerOff(teardown, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
@@ -1881,7 +1915,10 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       pending_power_state_ = kPowerStateNone;
     }
     cached_qos_data_ = {};
-    cached_qos_data_.clock_hz = default_clock_hz_;
+    cached_qos_data_.resize(core_count_);
+    for (int i = 0; i < default_clock_hz_.size(); i++) {
+      cached_qos_data_[i].clock_hz = default_clock_hz_[i];
+    }
     break;
 
   case kStateOn:
@@ -1889,7 +1926,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
     }
 
-    error = hw_intf_->PowerOn(cached_qos_data_, &sync_points);
+    error = hw_intf_->PowerOn(cached_qos_data_[0], &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateOn;
@@ -1907,13 +1944,15 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     if (error != kErrorNone) {
       return error;
     }
-    default_clock_hz_ = cached_qos_data_.clock_hz;
+    for (int i = 0; i < cached_qos_data_.size(); i++) {
+      default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+    }
 
     active = true;
     break;
 
   case kStateDoze:
-    error = hw_intf_->Doze(cached_qos_data_, &sync_points);
+    error = hw_intf_->Doze(cached_qos_data_[0], &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDoze;
@@ -1928,7 +1967,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateDozeSuspend:
-    error = hw_intf_->DozeSuspend(cached_qos_data_, &sync_points);
+    error = hw_intf_->DozeSuspend(cached_qos_data_[0], &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDozeSuspend;
@@ -2076,8 +2115,8 @@ std::string DisplayBase::Dump() {
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
   if (disp_layer_stack_.stack_info.noise_layer_info.enable) {
-    os << "\nNoise z-orders: [" << disp_layer_stack_.stack_info.noise_layer_info.zpos_noise << ","
-       << disp_layer_stack_.stack_info.noise_layer_info.zpos_attn << "]";
+    os << "\nNoise z-orders: [" << disp_layer_stack_.stack_info.noise_layer_info.zpos_noise
+       << "," << disp_layer_stack_.stack_info.noise_layer_info.zpos_attn << "]";
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
@@ -2128,155 +2167,158 @@ std::string DisplayBase::Dump() {
     os << "\n";
   }
 
-  uint32_t num_hw_layers = UINT32(disp_layer_stack_.info.hw_layers.size());
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    uint32_t num_hw_layers = UINT32(disp_layer_stack_.info[j].hw_layers.size());
 
-  if (num_hw_layers == 0) {
-    os << "\nNo hardware layers programmed";
-    return os.str();
-  }
-
-  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
-  if (out_buffer) {
-    os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
-  }
-  HWLayersInfo &layer_info = disp_layer_stack_.info;
-  for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
-    LayerRect &l_roi = layer_info.left_frame_roi.at(i);
-    LayerRect &r_roi = layer_info.right_frame_roi.at(i);
-
-    os << "\nROI(LTRB)#" << i << " LEFT(" << INT(l_roi.left) << " " << INT(l_roi.top) << " " <<
-      INT(l_roi.right) << " " << INT(l_roi.bottom) << ")";
-    if (IsValid(r_roi)) {
-    os << " RIGHT(" << INT(r_roi.left) << " " << INT(r_roi.top) << " " << INT(r_roi.right) << " "
-      << INT(r_roi.bottom) << ")";
-    }
-  }
-
-  LayerRect &fb_roi = disp_layer_stack_.stack_info.partial_fb_roi;
-  if (IsValid(fb_roi)) {
-    os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
-      INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
-  }
-
-  AppendRCMaskData(os);
-
-  const char *header  = "\n| Idx |   Comp Type   |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
-  const char *newline = "\n|-----|---------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
-  const char *format  = "\n| %3s | %13s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
-
-  os << "\n";
-  os << newline;
-  os << header;
-  os << newline;
-
-  for (uint32_t i = 0; i < num_hw_layers; i++) {
-    uint32_t layer_index = disp_layer_stack_.info.index.at(i);
-    // hw-layer from hw layers info
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
-    LayerBuffer *input_buffer = &hw_layer.input_buffer;
-    HWLayerConfig &layer_config = disp_layer_stack_.info.config[i];
-    HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
-
-    const char *comp_type = GetName(hw_layer.composition);
-    const char *buffer_format = GetFormatString(input_buffer->format);
-    const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
-    const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
-    char idx[8];
-
-    snprintf(idx, sizeof(idx), "%d", layer_index);
-
-    for (uint32_t count = 0; count < hw_rotator_session.hw_block_count; count++) {
-      char row[1024];
-      HWRotateInfo &rotate = hw_rotator_session.hw_rotate_info[count];
-      LayerRect &src_roi = rotate.src_roi;
-      LayerRect &dst_roi = rotate.dst_roi;
-      char rot[12] = { 0 };
-
-      snprintf(rot, sizeof(rot), "Rot-%s-%d", layer_config.use_inline_rot ?
-               "inl" : "off", count + 1);
-
-      snprintf(row, sizeof(row), format, idx, comp_type, rot,
-               0, input_buffer->width, input_buffer->height, buffer_format,
-               INT(src_roi.left), INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
-               INT(dst_roi.left), INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
-               "-", "-    ", "-    ", "-", "-", "-");
-      os << row;
-      // print the below only once per layer block, fill with spaces for rest.
-      idx[0] = 0;
-      comp_type = "";
+    if (num_hw_layers == 0) {
+      os << "\nNo hardware layers programmed";
+      return os.str();
     }
 
-    if (hw_rotator_session.hw_block_count > 0) {
-      input_buffer = &hw_rotator_session.output_buffer;
-      buffer_format = GetFormatString(input_buffer->format);
+    os << "\n\n Table for DPU - " << j << "\n";
+    LayerBuffer *out_buffer = disp_layer_stack_.info[j].output_buffer;
+    if (out_buffer) {
+      os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
+         << " format: " << GetFormatString(out_buffer->format);
+    }
+    HWLayersInfo &layer_info = disp_layer_stack_.info[j];
+    for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
+      LayerRect &l_roi = layer_info.left_frame_roi.at(i);
+      LayerRect &r_roi = layer_info.right_frame_roi.at(i);
+
+      os << "\nROI(LTRB)#" << i << " LEFT(" << INT(l_roi.left) << " " << INT(l_roi.top) << " " <<
+        INT(l_roi.right) << " " << INT(l_roi.bottom) << ")";
+      if (IsValid(r_roi)) {
+      os << " RIGHT(" << INT(r_roi.left) << " " << INT(r_roi.top) << " " << INT(r_roi.right) << " "
+        << INT(r_roi.bottom) << ")";
+      }
     }
 
-    if (layer_config.use_solidfill_stage) {
-      LayerRect src_roi = layer_config.hw_solidfill_stage.roi;
-      const char *decimation = "";
-      char flags[16] = { 0 };
-      char z_order[8] = { 0 };
-      const char *color_primary = "";
-      const char *range = "";
-      const char *transfer = "";
-      char row[1024] = { 0 };
-
-      snprintf(z_order, sizeof(z_order), "%d", layer_config.hw_solidfill_stage.z_order);
-      snprintf(flags, sizeof(flags), "0x%08x", hw_layer.flags.flags);
-      snprintf(row, sizeof(row), format, idx, comp_type, pipe_split[0],
-               0, INT(src_roi.right), INT(src_roi.bottom),
-               buffer_format, INT(src_roi.left), INT(src_roi.top),
-               INT(src_roi.right), INT(src_roi.bottom), INT(src_roi.left),
-               INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
-               z_order, flags, decimation, color_primary, range, transfer);
-      os << row;
-      continue;
+    LayerRect &fb_roi = disp_layer_stack_.stack_info.partial_fb_roi;
+    if (IsValid(fb_roi)) {
+      os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
+        INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
     }
 
-    for (uint32_t count = 0; count < 2; count++) {
-      char decimation[16] = { 0 };
-      char flags[16] = { 0 };
-      char z_order[8] = { 0 };
-      char color_primary[8] = { 0 };
-      char range[8] = { 0 };
-      char transfer[8] = { 0 };
-      bool rot = layer_config.use_inline_rot;
+    AppendRCMaskData(os);
 
-      HWPipeInfo &pipe = (count == 0) ? layer_config.left_pipe : layer_config.right_pipe;
+    const char *header  = "\n| Idx |   Comp Type   |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
+    const char *newline = "\n|-----|---------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
+    const char *format  = "\n| %3s | %13s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
 
-      if (!pipe.valid) {
+    os << "\n";
+    os << newline;
+    os << header;
+    os << newline;
+
+    for (uint32_t i = 0; i < num_hw_layers; i++) {
+      uint32_t layer_index = disp_layer_stack_.info[j].index.at(i);
+      // hw-layer from hw layers info
+      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      LayerBuffer *input_buffer = &hw_layer.input_buffer;
+      HWLayerConfig &layer_config = disp_layer_stack_.info[j].config[i];
+      HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
+
+      const char *comp_type = GetName(hw_layer.composition);
+      const char *buffer_format = GetFormatString(input_buffer->format);
+      const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
+      const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
+      char idx[8];
+
+      snprintf(idx, sizeof(idx), "%d", layer_index);
+
+      for (uint32_t count = 0; count < hw_rotator_session.hw_block_count; count++) {
+        char row[1024];
+        HWRotateInfo &rotate = hw_rotator_session.hw_rotate_info[count];
+        LayerRect &src_roi = rotate.src_roi;
+        LayerRect &dst_roi = rotate.dst_roi;
+        char rot[12] = { 0 };
+
+        snprintf(rot, sizeof(rot), "Rot-%s-%d", layer_config.use_inline_rot ?
+                 "inl" : "off", count + 1);
+
+        snprintf(row, sizeof(row), format, idx, comp_type, rot,
+                 0, input_buffer->width, input_buffer->height, buffer_format,
+                 INT(src_roi.left), INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
+                 INT(dst_roi.left), INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
+                 "-", "-    ", "-    ", "-", "-", "-");
+        os << row;
+        // print the below only once per layer block, fill with spaces for rest.
+        idx[0] = 0;
+        comp_type = "";
+      }
+
+      if (hw_rotator_session.hw_block_count > 0) {
+        input_buffer = &hw_rotator_session.output_buffer;
+        buffer_format = GetFormatString(input_buffer->format);
+      }
+
+      if (layer_config.use_solidfill_stage) {
+        LayerRect src_roi = layer_config.hw_solidfill_stage.roi;
+        const char *decimation = "";
+        char flags[16] = { 0 };
+        char z_order[8] = { 0 };
+        const char *color_primary = "";
+        const char *range = "";
+        const char *transfer = "";
+        char row[1024] = { 0 };
+
+        snprintf(z_order, sizeof(z_order), "%d", layer_config.hw_solidfill_stage.z_order);
+        snprintf(flags, sizeof(flags), "0x%08x", hw_layer.flags.flags);
+        snprintf(row, sizeof(row), format, idx, comp_type, pipe_split[0],
+                 0, INT(src_roi.right), INT(src_roi.bottom),
+                 buffer_format, INT(src_roi.left), INT(src_roi.top),
+                 INT(src_roi.right), INT(src_roi.bottom), INT(src_roi.left),
+                 INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
+                 z_order, flags, decimation, color_primary, range, transfer);
+        os << row;
         continue;
       }
 
-      LayerRect src_roi = pipe.src_roi;
-      LayerRect &dst_roi = pipe.dst_roi;
+      for (uint32_t count = 0; count < 2; count++) {
+        char decimation[16] = { 0 };
+        char flags[16] = { 0 };
+        char z_order[8] = { 0 };
+        char color_primary[8] = { 0 };
+        char range[8] = { 0 };
+        char transfer[8] = { 0 };
+        bool rot = layer_config.use_inline_rot;
 
-      snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
-      snprintf(flags, sizeof(flags), "0x%08x", pipe.flags);
-      snprintf(decimation, sizeof(decimation), "%3d x %3d", pipe.horizontal_decimation,
-               pipe.vertical_decimation);
-      ColorMetaData &color_metadata = hw_layer.input_buffer.color_metadata;
-      snprintf(color_primary, sizeof(color_primary), "%d", color_metadata.colorPrimaries);
-      snprintf(range, sizeof(range), "%d", color_metadata.range);
-      snprintf(transfer, sizeof(transfer), "%d", color_metadata.transfer);
+        HWPipeInfo &pipe = (count == 0) ? layer_config.left_pipe : layer_config.right_pipe;
 
-      char row[1024];
-      snprintf(row, sizeof(row), format, idx, comp_type, rot ? rot_pipe[count] : pipe_split[count],
-               pipe.pipe_id, input_buffer->width, input_buffer->height,
-               buffer_format, INT(src_roi.left), INT(src_roi.top),
-               INT(src_roi.right), INT(src_roi.bottom), INT(dst_roi.left),
-               INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
-               z_order, flags, decimation, color_primary, range, transfer);
+        if (!pipe.valid) {
+          continue;
+        }
 
-      os << row;
-      // print the below only once per layer block, fill with spaces for rest.
-      idx[0] = 0;
-      comp_type = "";
+        LayerRect src_roi = pipe.src_roi;
+        LayerRect &dst_roi = pipe.dst_roi;
+
+        snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
+        snprintf(flags, sizeof(flags), "0x%08x", pipe.flags);
+        snprintf(decimation, sizeof(decimation), "%3d x %3d", pipe.horizontal_decimation,
+                 pipe.vertical_decimation);
+        ColorMetaData &color_metadata = hw_layer.input_buffer.color_metadata;
+        snprintf(color_primary, sizeof(color_primary), "%d", color_metadata.colorPrimaries);
+        snprintf(range, sizeof(range), "%d", color_metadata.range);
+        snprintf(transfer, sizeof(transfer), "%d", color_metadata.transfer);
+
+        char row[1024];
+        snprintf(row, sizeof(row), format, idx, comp_type, rot ? rot_pipe[count] :
+                 pipe_split[count], pipe.pipe_id, input_buffer->width, input_buffer->height,
+                 buffer_format, INT(src_roi.left), INT(src_roi.top),
+                 INT(src_roi.right), INT(src_roi.bottom), INT(dst_roi.left),
+                 INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
+                 z_order, flags, decimation, color_primary, range, transfer);
+
+        os << row;
+        // print the below only once per layer block, fill with spaces for rest.
+        idx[0] = 0;
+        comp_type = "";
+      }
     }
-  }
 
-  os << newline << "\n";
+    os << newline << "\n";
+  }
 
   return os.str();
 }
@@ -2660,7 +2702,7 @@ DisplayError DisplayBase::SetCursorPosition(int x, int y) {
   DisplayError error = comp_manager_->ValidateAndSetCursorPosition(display_comp_ctx_,
                                                                    &disp_layer_stack_, x, y);
   if (error == kErrorNone) {
-    return hw_intf_->SetCursorPosition(&disp_layer_stack_.info, x, y);
+    return hw_intf_->SetCursorPosition(&disp_layer_stack_.info[0], x, y);
   }
 
   return kErrorNone;
@@ -2844,7 +2886,9 @@ DisplayError DisplayBase::ReconfigureDisplay() {
   if (error != kErrorNone) {
     return error;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   // Disable Partial Update for one frame as PU not supported during modeset.
   DisablePartialUpdateOneFrameInternal();
@@ -3079,7 +3123,9 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
   if (error != kErrorNone) {
     return error;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   fb_config_.x_pixels = width;
   fb_config_.y_pixels = height;
@@ -3191,31 +3237,33 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   }
 
   // Copy the acquire fence from clients layers  to HWLayers
-  uint32_t hw_layers_count = UINT32(disp_layer_stack_.info.hw_layers.size());
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    uint32_t hw_layers_count = UINT32(disp_layer_stack_.info[j].hw_layers.size());
 
-  for (uint32_t i = 0; i < hw_layers_count; i++) {
-    uint32_t sdm_layer_index = disp_layer_stack_.info.index.at(i);
-    Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
+    for (uint32_t i = 0; i < hw_layers_count; i++) {
+      uint32_t sdm_layer_index = disp_layer_stack_.info[j].index.at(i);
+      Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
+      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
 
-    hw_layer.input_buffer.planes[0].fd = Sys::dup_(sdm_layer->input_buffer.planes[0].fd);
-    hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
-    hw_layer.input_buffer.planes[0].stride = sdm_layer->input_buffer.planes[0].stride;
-    hw_layer.input_buffer.size = sdm_layer->input_buffer.size;
-    hw_layer.input_buffer.acquire_fence = sdm_layer->input_buffer.acquire_fence;
-    hw_layer.input_buffer.handle_id = sdm_layer->input_buffer.handle_id;
-    // All app buffer handles are set prior to prepare.
-    // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
-    // secure display flags are also updated during SetClientTarget() called between validate and
-    // commit. Need to revist this and update it accordingly for FBT layer.
-    if (disp_layer_stack_.stack_info.gpu_target_index > 0 &&
+      hw_layer.input_buffer.planes[0].fd = Sys::dup_(sdm_layer->input_buffer.planes[0].fd);
+      hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
+      hw_layer.input_buffer.planes[0].stride = sdm_layer->input_buffer.planes[0].stride;
+      hw_layer.input_buffer.size = sdm_layer->input_buffer.size;
+      hw_layer.input_buffer.acquire_fence = sdm_layer->input_buffer.acquire_fence;
+      hw_layer.input_buffer.handle_id = sdm_layer->input_buffer.handle_id;
+      // All app buffer handles are set prior to prepare.
+      // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
+      // secure display flags are also updated during SetClientTarget() called between validate and
+      // commit. Need to revist this and update it accordingly for FBT layer.
+      if (disp_layer_stack_.stack_info.gpu_target_index > 0 &&
        (static_cast<uint32_t>(disp_layer_stack_.stack_info.gpu_target_index) == sdm_layer_index)) {
-      hw_layer.input_buffer.flags.secure = sdm_layer->input_buffer.flags.secure;
-      hw_layer.input_buffer.format = sdm_layer->input_buffer.format;
-      hw_layer.input_buffer.width = sdm_layer->input_buffer.width;
-      hw_layer.input_buffer.height = sdm_layer->input_buffer.height;
-      hw_layer.input_buffer.unaligned_width = sdm_layer->input_buffer.unaligned_width;
-      hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
+        hw_layer.input_buffer.flags.secure = sdm_layer->input_buffer.flags.secure;
+        hw_layer.input_buffer.format = sdm_layer->input_buffer.format;
+        hw_layer.input_buffer.width = sdm_layer->input_buffer.width;
+        hw_layer.input_buffer.height = sdm_layer->input_buffer.height;
+        hw_layer.input_buffer.unaligned_width = sdm_layer->input_buffer.unaligned_width;
+        hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
+      }
     }
   }
 
@@ -3234,33 +3282,38 @@ void DisplayBase::UpdateFrameBuffer() {
   }
 
   bool client_target_present = false;
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    if (hw_layer.composition == kCompositionGPUTarget) {
-      client_target_present = true;
-      break;
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    for (auto &hw_layer : disp_layer_stack_.info[j].hw_layers) {
+      if (hw_layer.composition == kCompositionGPUTarget) {
+        client_target_present = true;
+        break;
+      }
     }
   }
-
   bool need_cached_fb = !gpu_comp_frame_ && client_target_present;
   if (!need_cached_fb) {
     return;
   }
 
-  uint32_t hw_layers_count = disp_layer_stack_.info.hw_layers.size();
-  for (uint32_t i = 0; i < hw_layers_count; i++) {
-    uint32_t sdm_layer_index = disp_layer_stack_.info.index.at(i);
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
-    if (disp_layer_stack_.stack_info.gpu_target_index == sdm_layer_index) {
-      // Update GPU target buffer with cached fd.
-      CloseFd(&hw_layer.input_buffer.planes[0].fd);
-      hw_layer.input_buffer = cached_framebuffer_;
-      hw_layer.input_buffer.planes[0].fd = Sys::dup_(hw_layer.input_buffer.planes[0].fd);
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    uint32_t hw_layers_count = disp_layer_stack_.info[j].hw_layers.size();
+    for (uint32_t i = 0; i < hw_layers_count; i++) {
+      uint32_t sdm_layer_index = disp_layer_stack_.info[j].index.at(i);
+      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      if (disp_layer_stack_.stack_info.gpu_target_index == sdm_layer_index) {
+        // Update GPU target buffer with cached fd.
+        CloseFd(&hw_layer.input_buffer.planes[0].fd);
+        hw_layer.input_buffer = cached_framebuffer_[j];
+        hw_layer.input_buffer.planes[0].fd = Sys::dup_(hw_layer.input_buffer.planes[0].fd);
+      }
     }
   }
 }
 
 void DisplayBase::PostCommitLayerParams() {
-  cached_qos_data_ = disp_layer_stack_.info.qos_data;
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    cached_qos_data_[i] = disp_layer_stack_.info[i].qos_data;
+  }
 }
 
 DisplayError DisplayBase::InitializeColorModes() {
@@ -3866,7 +3919,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
     SetPendingPowerState(state);
   }
 
-  err = hw_intf_->HandleSecureEvent(secure_event, cached_qos_data_);
+  err = hw_intf_->HandleSecureEvent(secure_event, cached_qos_data_[0]);
   if (err != kErrorNone) {
     return err;
   }
@@ -3913,7 +3966,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
 
 DisplayError DisplayBase::GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence) {
   ClientLock lock(disp_mutex_);
-  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
+  LayerBuffer *out_buffer = disp_layer_stack_.stack_info.output_buffer;
   if (out_buffer == nullptr) {
     return kErrorNotSupported;
   }
@@ -4032,7 +4085,7 @@ void DisplayBase::ProcessPowerEvent() {
 
 void DisplayBase::CacheRetireFence() {
   if (draw_method_ == kDrawDefault) {
-    retire_fence_ = disp_layer_stack_.info.retire_fence;
+    retire_fence_ = disp_layer_stack_.info[0].retire_fence;
   } else {
     // For displays in unified draw, wait on cached retire fence in steady state.
     comp_manager_->GetRetireFence(display_comp_ctx_, &retire_fence_);
@@ -4256,7 +4309,9 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
 
   disp_layer_stack_.stack_info.hw_cwb_config = cwb_config_;
   if (cwb_config_) {
-    disp_layer_stack_.info.hw_cwb_config = *cwb_config_;
+    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+      disp_layer_stack_.info[i].hw_cwb_config = *cwb_config_;
+    }
   }
   error = ValidateCwbConfigInfo(disp_layer_stack_.stack_info.hw_cwb_config,
                                 layer_stack->output_buffer->format);
