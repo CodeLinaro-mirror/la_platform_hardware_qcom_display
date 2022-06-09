@@ -106,6 +106,7 @@ struct HWDisplayInterfaceInfo {
 */
 struct HWDisplayInfo {
   int32_t display_id = -1;                     //!< ID of this display (Display ID).
+  uint32_t display_type_id;                    //!< ID of this type display>
   DisplayType display_type = kDisplayTypeMax;  //!< Type of display: BuiltIn/Pluggable/Virtual
   bool is_connected = false;                   //!< Connection status of the display.
   bool is_primary = false;                     //!< True only if this is the main display of the
