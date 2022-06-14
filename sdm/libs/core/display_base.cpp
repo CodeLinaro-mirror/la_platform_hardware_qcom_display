@@ -80,6 +80,7 @@ namespace sdm {
 
 bool DisplayBase::display_power_reset_pending_ = false;
 Locker DisplayBase::display_power_reset_lock_;
+DisplayType DisplayBase::first_display_type_ = kBuiltIn;
 
 static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
   if (gamut.find(kDisplayP3) != std::string::npos || gamut.find(kDcip3) != std::string::npos) {
@@ -129,6 +130,11 @@ DisplayError DisplayBase::Init() {
   if (hw_info_intf_) {
     hw_info_intf_->GetHWResourceInfo(&hw_resource_info_);
   }
+
+  HWDisplayInterfaceInfo hw_disp_info = {};
+  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
+  first_display_type_ = hw_disp_info.type;
+
   auto max_mixer_stages = hw_resource_info_.num_blending_stages;
   int property_value = Debug::GetMaxPipesPerMixer(display_type_);
   Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_on_external_);
@@ -534,11 +540,10 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
 
   HWResourceInfo hw_resource_info = HWResourceInfo();
   hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-  bool hdr_supported = hw_resource_info.has_hdr;
+  bool hdr_supported = hw_resource_info.has_hdr;  // Always report HDR supported
   bool hdr_plus_supported = false;
-  HWDisplayInterfaceInfo hw_disp_info = {};
-  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
-  if (hw_disp_info.type == kHDMI) {
+  if (first_display_type_ == kHDMI) {
+    // For DP/HDMI as primary report supported only when panel supports.
     hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
   }
 
