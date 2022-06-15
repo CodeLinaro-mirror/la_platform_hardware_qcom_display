@@ -58,6 +58,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 /*! @file layer_stack.h
   @brief File for display layer stack structure which represents a drawing buffer.
 
@@ -448,7 +455,8 @@ struct LayerSolidFill {
 };
 
 struct LayerBufferMap {
-  std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> buffer_map;
+  std::unordered_map<uint64_t, std::unordered_map<uint32_t,
+                                                  std::shared_ptr<LayerBufferObject>>> buffer_map;
 };
 
 /*! @brief This structure defines display layer object which contains layer properties and a drawing

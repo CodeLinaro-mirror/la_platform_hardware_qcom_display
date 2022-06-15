@@ -305,10 +305,12 @@ class HWDeviceDRM : public HWInterface {
     uint32_t GetFbId(Layer *layer, uint64_t handle_id);
     // Find fb_id for given handle_id in output buffer map.
     uint32_t GetOutputFbId(uint64_t handle_id);
+    uint32_t core_id_;
 
    private:
     bool disable_fbid_cache_ = false;
-    std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> output_buffer_map_ {};
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>>>
+                                                              output_buffer_map_;
     BufferAllocator *buffer_allocator_ = {};
     uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
     Handle master_ = nullptr;
