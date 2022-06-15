@@ -314,7 +314,8 @@ int engine_blit(int srcFenceFd)
 void checkGlError(const char *file, int line)
 //-----------------------------------------------------------------------------
 {
-  for (GLint error = glGetError(); error; error = glGetError()) {
+  GLint error = glGetError();
+  if (error) {
     char *pError;
     switch (error) {
       case GL_NO_ERROR:
@@ -351,12 +352,8 @@ void checkGlError(const char *file, int line)
 void checkEglError(const char *file, int line)
 //-----------------------------------------------------------------------------
 {
-  for (int i = 0; i < 5; i++) {
-    const EGLint error = eglGetError();
-    if (error == EGL_SUCCESS) {
-      break;
-    }
-
+  const EGLint error = eglGetError();
+  if (error != EGL_SUCCESS) {
     char *pError;
     switch (error) {
       case EGL_SUCCESS:
