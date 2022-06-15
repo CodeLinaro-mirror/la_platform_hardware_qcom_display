@@ -863,11 +863,10 @@ void HWCSession::HandlePendingRefresh() {
     return;
   }
 
-  for (size_t i = 0; i < pending_refresh_.size(); i++) {
-    if (pending_refresh_.test(i)) {
-      callbacks_.Refresh(i);
+  if (pending_refresh_.size() > 0) {
+    if (pending_refresh_.test(0)) {
+      callbacks_.Refresh(0);
     }
-    break;
   }
 
   pending_refresh_.reset();
