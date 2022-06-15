@@ -403,13 +403,17 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
   } else {
     auto it = layer->buffer_map->buffer_map.find(handle_id);
     if (it != layer->buffer_map->buffer_map.end()) {
-      FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(it->second.get());
-      if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height)) {
-        // Found fb_id for given handle_id key
-        return;
-      } else {
-        // Erase from fb_id map if format or size have been modified
-        layer->buffer_map->buffer_map.erase(it);
+      std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map = it->second;
+      auto itr = dpu_buffer_map.find(core_id_);
+      if (itr != dpu_buffer_map.end()) {
+        FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second.get());
+        if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height)) {
+          // Found fb_id for given handle_id key
+          return;
+        } else {
+          // Erase from fb_id map if format or size have been modified
+          layer->buffer_map->buffer_map.erase(it);
+        }
       }
     }
 
@@ -421,10 +425,19 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
 
   uint32_t fb_id = 0;
   if (CreateFbId(buffer, &fb_id) >= 0) {
-    // Create and cache the fb_id in map
-    layer->buffer_map->buffer_map[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
-        reinterpret_cast<DRMMaster*>(master_),
-        buffer.format, buffer.width, buffer.height);
+    auto it = layer->buffer_map->buffer_map.find(handle_id);
+    if (it != layer->buffer_map->buffer_map.end()) {
+      it->second.insert({core_id_, std::make_shared<FrameBufferObject>(fb_id,
+                                                     reinterpret_cast<DRMMaster*>(master_),
+                                                     buffer.format, buffer.width, buffer.height)});
+    } else {
+      // Create and cache the fb_id in map
+      std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map;
+      dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id,
+          reinterpret_cast<DRMMaster*>(master_),
+          buffer.format, buffer.width, buffer.height);
+      layer->buffer_map->buffer_map[handle_id] = dpu_buffer_map;
+    }
   }
 }
 
@@ -469,8 +482,12 @@ void HWDeviceDRM::Registry::Clear() {
 uint32_t HWDeviceDRM::Registry::GetFbId(Layer *layer, uint64_t handle_id) {
   auto it = layer->buffer_map->buffer_map.find(handle_id);
   if (it != layer->buffer_map->buffer_map.end()) {
-    FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(it->second.get());
-    return fb_obj->GetFbId();
+    std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map = it->second;
+    auto itr = dpu_buffer_map.find(core_id_);
+    if (itr != dpu_buffer_map.end()) {
+      FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second.get());
+      return fb_obj->GetFbId();
+    }
   }
 
   return 0;
@@ -523,6 +540,7 @@ DisplayError HWDeviceDRM::Init() {
 
   registry_.Init(drm_master);
   display_id_ = static_cast<int32_t>(token_.conn_id);
+  registry_.core_id_ = core_id_;
 
   ret = drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
   if (ret) {
