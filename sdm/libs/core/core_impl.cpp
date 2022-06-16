@@ -408,7 +408,9 @@ void CoreImpl::InitializeSDMUtils() {
   }
 
   sdm_utils_factory_intf_ = get_sdm_utils_f_ptr();
-  sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[0]);
+  for (int i = 0; i < hw_resource_.size(); i++) {
+    sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[i], i);
+  }
 }
 
 void CoreImpl::OverRideDemuraPanelIds(std::vector<uint64_t> *panel_ids) {
