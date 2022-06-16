@@ -1163,6 +1163,12 @@ int32_t HWCSession::SetVsyncEnabled(hwc2_display_t display, int32_t int_enabled)
 
   auto enabled = static_cast<HWC2::Vsync>(int_enabled);
   DLOGV("Enable vsync : display = %d, enable = %d",(int)(display),int_enabled);
+  if (!pluggable_is_primary_) {
+    if (int_enabled == HWC2_VSYNC_ENABLE) {
+      callbacks_.UpdateVsyncSource(display);
+    }
+    return CallDisplayFunction(display, &HWCDisplay::SetVsyncEnabled, enabled);
+  }
   if (int_enabled == HWC2_VSYNC_ENABLE) {
   /* To avoid the race conditions for hotplugs of all displays,
      before enabling vsyncs on any displays, disable vsyncs on

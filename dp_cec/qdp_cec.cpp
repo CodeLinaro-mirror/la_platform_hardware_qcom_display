@@ -25,10 +25,40 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
-/*
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
 * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #define DEBUG 0
@@ -53,6 +83,7 @@ namespace qdpcec {
 
 const int NUM_HDMI_PORTS = 1;
 const int MAX_SEND_MESSAGE_RETRIES = 1;
+const int MAX_CEC_DEVICES = 6;
 
 const int MAX_PATH_LENGTH = 128;
 const char* CEC_PATH_BASE = "/dev/cec";
@@ -63,7 +94,7 @@ enum {
 };
 
 //Forward declarations
-static int cec_init_device(cec_context_t *ctx);
+static int cec_init_device(cec_context_t *ctx, int hardware_intf);
 static int cec_close_device(cec_context_t *ctx);
 static void cec_close_context(cec_context_t* ctx __unused);
 static int cec_enable(cec_context_t *ctx, int enable);
@@ -357,7 +388,8 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
     // initialise the device on connect
     ctx->node.is_connected = connected;
     if (connected) {
-        cec_init_device(ctx);
+        //TODO: Need to call cec_init_device for the correct hardware interface
+        cec_init_device(ctx, 0);
     } else {
         cec_close_device(ctx);
     }
@@ -482,33 +514,31 @@ static int cec_close_device(cec_context_t *ctx)
     return ret;
 }
 
-static int cec_init_device(cec_context_t *ctx)
+static int cec_init_device(cec_context_t *ctx, int hardware_intf)
 {
-    const int MAX_CEC_DEVICES = 6;
     int err = -EINVAL;
     char value[PROPERTY_VALUE_MAX] = {0};
-    int num = 0;
+    int num = hardware_intf;
 
     char cec_dev_path[MAX_PATH_LENGTH];
 
-    if(property_get("vendor.display.enable_cec_node", value, "0") > 0) {
+    if(property_get("vendor.display.enable_cec_node", value, "-1") > 0) {
         num = atoi(value);
-        if(num <= 0 || num >= MAX_CEC_DEVICES)
-            num = 0;
+        if(num < 0 || num >= MAX_CEC_DEVICES)
+            num = hardware_intf;
+        else if(num != hardware_intf)
+            return err;
         else
             ALOGI("%s: vendor.display.enable_cec_node property enabled!", __FUNCTION__);
     }
 
-    for(; num < MAX_CEC_DEVICES; num++) {
-        snprintf(cec_dev_path, sizeof(cec_dev_path), "%s%d",
-                CEC_PATH_BASE, num);
-        ALOGD_IF(DEBUG, "%s: Trying num: %d cec_dev_path: %s", __FUNCTION__, num, cec_dev_path);
+    snprintf(cec_dev_path, sizeof(cec_dev_path), "%s%d",
+             CEC_PATH_BASE, num);
+    ALOGD_IF(DEBUG, "%s: Trying num: %d cec_dev_path: %s", __FUNCTION__, num, cec_dev_path);
 
-        if ((ctx->node.fd = open(cec_dev_path, O_RDWR)) >= 0) {
+    if ((ctx->node.fd = open(cec_dev_path, O_RDWR)) >= 0) {
             ALOGD_IF(DEBUG, "%s: Found CEC device path at %s", __FUNCTION__, cec_dev_path);
             ctx->node.device = cec_dev_path;
-            break;
-        }
     }
 
     if (ctx->node.fd < 0) {
@@ -553,7 +583,7 @@ static int cec_init_device(cec_context_t *ctx)
 
 //TODO: Create a cleanup function
 
-static int cec_init_context(cec_context_t *ctx)
+static int cec_init_context(cec_context_t *ctx, int hardware_intf)
 {
     int err = -EINVAL;
 
@@ -575,7 +605,7 @@ static int cec_init_context(cec_context_t *ctx)
     ctx->cec_monitor = std::thread(event_monitor, ctx);
 
     // TODO: check for failed to open error
-    if (cec_init_device(ctx) != 0) {
+    if (cec_init_device(ctx, hardware_intf) != 0) {
         ALOGE("Failed to open cec device, will wait for hpd.");
     }
 
@@ -621,14 +651,33 @@ static int cec_device_open(const struct hw_module_t* module,
 {
     ALOGD_IF(DEBUG, "%s: name: %s", __FUNCTION__, name);
     int status = -EINVAL;
-    if (!strcmp(name, HDMI_CEC_HARDWARE_INTERFACE )) {
+    char buf[4];
+
+    if (strlen(name) < strlen(HDMI_CEC_HARDWARE_INTERFACE)) {
+        return status;
+    }
+
+    if (strncmp(name, HDMI_CEC_HARDWARE_INTERFACE, strlen(HDMI_CEC_HARDWARE_INTERFACE)))
+        return status;
+
+    snprintf(buf, sizeof(buf), "%s",
+             name + strlen(HDMI_CEC_HARDWARE_INTERFACE));
+
+    for (int i = 0; i < strlen(buf); i++)
+        if (!isdigit(buf[i]))
+            return status;
+
+    int hardware_intf = atoi(buf);
+
+    if (hardware_intf < MAX_CEC_DEVICES) {
         struct cec_context_t *dev;
         dev = (cec_context_t *) calloc (1, sizeof(*dev));
         if (dev) {
-            status = cec_init_context(dev);
+            status = cec_init_context(dev, hardware_intf);
 
             if (status < 0) {
                 ALOGE("%s: Initializing failed.", __FUNCTION__);
+                free(dev);
                 return status;
             }
 
@@ -823,7 +872,7 @@ static int uevent_init(int *uevent_fd) {
 
     memset(&addr, 0, sizeof(addr));
     addr.nl_family = AF_NETLINK;
-    addr.nl_pid = getpid();
+    addr.nl_pid = 0;
     addr.nl_groups = 0xffffffff;
 
     s = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
