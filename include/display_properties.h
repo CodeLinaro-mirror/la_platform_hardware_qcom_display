@@ -171,6 +171,8 @@
  */
 #define DISPLAY_REBOOT_STRATEGY         DISPLAY_PROP("display_reboot_strategy")
 
+#define DISABLE_CONT_SPLASH_HANDOFF         DISPLAY_PROP("disable_cont_splash_handoff")
+
 // Add all vendor.display properties above
 
 #define DISABLE_UBWC_PROP                    GRALLOC_PROP("disable_ubwc")

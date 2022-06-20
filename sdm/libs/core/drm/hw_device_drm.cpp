@@ -488,6 +488,9 @@ DisplayError HWDeviceDRM::Init() {
   drm_master->GetHandle(&dev_fd_);
   DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
 
+  Debug::GetProperty(DISABLE_CONT_SPLASH_HANDOFF, &disable_cont_splash_handoff_);
+  DLOGI("Disable continuous splash handoff = %d", disable_cont_splash_handoff_);
+
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {
       DLOGE("RegisterDisplay (by type) failed for %s", device_name_);
@@ -1520,7 +1523,7 @@ DisplayError HWDeviceDRM::DefaultCommit(HWLayers *hw_layers) {
 
 DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
-  if (first_cycle_ && IsPrimaryDisplay()) {
+  if (first_cycle_ && IsPrimaryDisplay() && !disable_cont_splash_handoff_) {
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
     int ret = NullCommit(true /* synchronous */, false /* retain_planes */);
     if (ret) {
