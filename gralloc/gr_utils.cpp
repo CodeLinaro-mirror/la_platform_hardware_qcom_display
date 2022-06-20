@@ -1239,8 +1239,14 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
       AdrenoMemInfo::GetInstance()->AlignUnCompressedRGB(width, height, format, tile, alignedw,
                                                          alignedh);
     } else {
-      alignment = GetBppForUncompressedRGB(format) * 8;
-      *alignedw = ALIGN(width, alignment);
+      unsigned int bpp = GetBppForUncompressedRGB(format);
+      alignment = 256;  // Based on mmm_color_fmt.h
+      // When bpp is 3, width is directly aligned to 256
+      if (bpp == 3) {
+        *alignedw = ALIGN(width, alignment);
+      } else {
+        *alignedw = ALIGN((width * bpp), alignment) / bpp;
+      }
       *alignedh = height;
     }
 
