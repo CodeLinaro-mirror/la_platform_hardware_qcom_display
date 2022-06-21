@@ -442,6 +442,29 @@ DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
     hw_displays_info->insert(display_infos.begin(), display_infos.end());
   }
 
+  // To-Do: Merge two display ids if the one display has two DPU
+  std::map<uint32_t , std::pair<int32_t, HWDisplayInfo>> conn_to_dispinfo;
+  for (auto disp_id_to_disp_info_pair : *hw_displays_info) {
+    uint32_t disp_id = disp_id_to_disp_info_pair.first;
+    uint32_t conn_id = DisplayId(disp_id).GetConnId();
+
+    if (conn_to_dispinfo.find(conn_id) == conn_to_dispinfo.end()) {
+    conn_to_dispinfo[conn_id] = disp_id_to_disp_info_pair;
+    continue;
+    }
+
+    uint32_t cached_disp_id = conn_to_dispinfo[conn_id].first;
+    HWDisplayInfo cached_disp_info = conn_to_dispinfo[conn_id].second;
+    cached_disp_info.display_id = disp_id | cached_disp_id;
+
+    conn_to_dispinfo[conn_id] = std::make_pair(disp_id | cached_disp_id, cached_disp_info);
+  }
+
+  hw_displays_info->clear();
+  for (auto val : conn_to_dispinfo) {
+    hw_displays_info->insert(val.second);
+  }
+
   hw_displays_info_ = *hw_displays_info;
 
   return kErrorNone;
