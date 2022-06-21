@@ -21,6 +21,10 @@
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Not a Contribution.
+*/
 
 #ifndef __HW_INFO_TYPES_H__
 #define __HW_INFO_TYPES_H__
@@ -513,6 +517,7 @@ struct HWDisplayAttributes : DisplayConfigVariableInfo {
   uint32_t v_pulse_width = 0;  //!< Vertical pulse width of panel
   uint32_t h_total = 0;        //!< Total width of panel (hActive + hFP + hBP + hPulseWidth)
   uint32_t v_total = 0;        //!< Total height of panel (vActive + vFP + vBP + vPulseWidth)
+  uint32_t clock_khz = 0;      //!< Stores the pixel clock of panel in khz
   std::bitset<32> s3d_config;  //!< Stores the bit mask of S3D modes
 
   void Reset() { *this = HWDisplayAttributes(); }
@@ -529,6 +534,8 @@ struct HWDisplayAttributes : DisplayConfigVariableInfo {
             (v_back_porch != display_attributes.v_back_porch) ||
             (v_pulse_width != display_attributes.v_pulse_width) ||
             (h_total != display_attributes.h_total) ||
+            (pixel_formats != display_attributes.pixel_formats) ||
+            (clock_khz != display_attributes.clock_khz) ||
             (is_yuv != display_attributes.is_yuv));
   }
 

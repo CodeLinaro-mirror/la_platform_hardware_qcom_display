@@ -21,6 +21,10 @@
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Not a Contribution.
+*/
 
 /*! @file display_interface.h
   @brief Interface file for display device which represents a physical panel or an output buffer
@@ -164,6 +168,7 @@ struct DisplayConfigVariableInfo {
   uint32_t fps = 0;               //!< Frame rate per second.
   uint32_t vsync_period_ns = 0;   //!< VSync period in nanoseconds.
   bool is_yuv = false;            //!< If the display output is in YUV format.
+  uint32_t pixel_formats = 0;
   uint32_t bits_per_pixel = 0;    //!< Total number of pixels in X-direction on the display panel.
 };
 
