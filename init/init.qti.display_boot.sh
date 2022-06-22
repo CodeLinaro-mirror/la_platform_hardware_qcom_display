@@ -71,13 +71,15 @@ fi
 
 case "$target" in
     "taro")
-    #Set property to differentiate Waipio
-    #SOC ID for Waipio is 457
+    #Set property to differentiate Taro
+    #SOC ID for Taro is 457
+    #SOC ID for Taro P is 482
+    #SOC ID for Taro 4g is 552
     #SOC ID for Cape MSM is 530
     #SOC ID for Cape APQ is 531
     #SOC ID for Cape 4g is 540
     case "$soc_hwid" in
-        457|552)
+        457|482|552)
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
@@ -134,8 +136,10 @@ case "$target" in
         setprop vendor.display.enable_rc_support 1
         setprop vendor.display.target.version 2
         setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.disable_mitigated_fps 1
         setprop vendor.display.secure_preview_buffer_format 420_sp
         setprop vendor.gralloc.secure_preview_buffer_format 420_sp
+        setprop vendor.display.disable_vds_hwc 1
         ;;
     esac
     ;;
