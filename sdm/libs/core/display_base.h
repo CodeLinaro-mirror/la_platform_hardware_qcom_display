@@ -299,6 +299,7 @@ class DisplayBase : public DisplayInterface {
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;
+  static sdm::DisplayType first_display_type_;  // Used to track the first DisplayType
 
  private:
   bool StartDisplayPowerReset();
