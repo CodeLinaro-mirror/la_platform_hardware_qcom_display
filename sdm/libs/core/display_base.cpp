@@ -538,9 +538,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
 
-  HWResourceInfo hw_resource_info = HWResourceInfo();
-  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-  bool hdr_supported = hw_resource_info.has_hdr;  // Always report HDR supported
+  bool hdr_supported = hw_resource_info_.has_hdr;  // Always report HDR supported
   bool hdr_plus_supported = false;
   if (first_display_type_ == kHDMI) {
     // For DP/HDMI as primary report supported only when panel supports.
@@ -564,7 +562,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
   fixed_info->partial_update = hw_panel_info_.partial_update;
-  fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+  fixed_info->readback_supported = hw_resource_info_.has_concurrent_writeback;
   fixed_info->fsc_rgb_order = hw_panel_info_.fsc_rgb_order;
   fixed_info->panel_orientation = hw_panel_info_.panel_orientation;
 
