@@ -11,7 +11,7 @@ LOCAL_HEADER_LIBRARIES        := display_headers
 LOCAL_SHARED_LIBRARIES        := libdrm libdl libdisplaydebug
 LOCAL_CFLAGS                  := -DLOG_TAG=\"DRMUTILS\" -Wall  -Werror -fno-operator-names
 LOCAL_CLANG                   := true
-ifeq ($(PLATFORM_VERSION), Tiramisu)
+ifneq (,$(filter Tiramisu 13, $(PLATFORM_VERSION)))
 LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
 LOCAL_CFLAGS                  += -D__ANDROID_T__
 endif

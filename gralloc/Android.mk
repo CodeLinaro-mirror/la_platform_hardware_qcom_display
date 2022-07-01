@@ -40,7 +40,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libdl  \
 LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
-ifeq ($(PLATFORM_VERSION), Tiramisu)
+ifneq (,$(filter Tiramisu 13, $(PLATFORM_VERSION)))
 LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
 LOCAL_CFLAGS                  += -D__ANDROID_T__
 endif
@@ -71,7 +71,7 @@ ifneq ($(TARGET_USES_GRALLOC4),false)
 LOCAL_CFLAGS                  += -DTARGET_USES_GRALLOC4
 endif
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
-ifeq ($(PLATFORM_VERSION), Tiramisu)
+ifneq (,$(filter Tiramisu 13, $(PLATFORM_VERSION)))
 LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
 LOCAL_CFLAGS                  += -D__ANDROID_T__
 endif
