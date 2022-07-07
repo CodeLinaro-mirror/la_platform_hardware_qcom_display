@@ -30,7 +30,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -233,7 +234,8 @@ DisplayError HWPeripheralDRM::Commit(HWLayers *hw_layers) {
   bool has_fence = SetupConcurrentWriteback(hw_layer_info, false, &cwb_fence_fd);
 
   SetIdlePCState();
-
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_EPT, token_.conn_id,
+                            hw_layer_info.expected_present_time);
   DisplayError error = HWDeviceDRM::Commit(hw_layers);
   if (error != kErrorNone) {
     return error;

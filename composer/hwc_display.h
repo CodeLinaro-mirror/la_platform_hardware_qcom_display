@@ -20,7 +20,8 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -482,6 +483,7 @@ class HWCDisplay : public DisplayEventHandler {
                                       uint32_t *out_num_types, uint32_t *out_num_requests,
                                       bool *needs_commit);
   virtual HWC3::Error PreValidateDisplay(bool *exit_validate) { return HWC3::Error::None; }
+  virtual void SetExpectedPresentTime(uint64_t time) { expected_present_time_ = time; }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -634,6 +636,7 @@ class HWCDisplay : public DisplayEventHandler {
   uint64_t elapse_timestamp_ = 0;
   int async_power_mode_ = 0;
   bool client_target_3_1_set_ = false;
+  uint64_t expected_present_time_ = 0;  // Expected Present time for current frame
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

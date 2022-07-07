@@ -27,10 +27,18 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include "drm_property.h"
 
 namespace sde_drm {
 
+// clang-format off
 DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "type") { return DRMProperty::TYPE; }
   if (name == "FB_ID") { return DRMProperty::FB_ID; }
@@ -165,8 +173,10 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "sspp_layout") { return DRMProperty::SDE_SSPP_LAYOUT; }
   if (name == "dspp_caps") { return DRMProperty::DSPP_CAPABILITIES; }
   if (name == "SDE_DSPP_RC_MASK_V1") { return DRMProperty::DSPP_RC_MASK_V1; }
+  if (name == "EPT") { return DRMProperty::EPT; }
 
   return DRMProperty::INVALID;
 }
+// clang-format on
 
 }  // namespace sde_drm

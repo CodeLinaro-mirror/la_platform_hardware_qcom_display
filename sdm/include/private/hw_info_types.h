@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_INFO_TYPES_H__
 #define __HW_INFO_TYPES_H__
 
@@ -715,6 +722,7 @@ struct HWLayersInfo {
   bool game_present = false;  // Indicates there is game layer or not
   bool rc_config = false;
   RCLayersInfo rc_layers_info = {};
+  uint64_t expected_present_time = 0;
 };
 
 struct HWQosData {

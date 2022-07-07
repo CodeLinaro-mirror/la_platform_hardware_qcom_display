@@ -30,7 +30,8 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1002,6 +1003,17 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       } else {
         DRM_LOGE("Invalid colorspace %d", colorspace);
       }
+    } break;
+
+    case DRMOps::CONNECTOR_SET_EPT: {
+      if (!prop_mgr_.IsPropertyAvailable(DRMProperty::EPT)) {
+        return;
+      }
+
+      uint64_t expected_present_time = va_arg(args, uint64_t);
+      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::EPT),
+                               expected_present_time);
+      DRM_LOGD("Connector %d: Setting ePT = %llu", obj_id, expected_present_time);
     } break;
 
     default:

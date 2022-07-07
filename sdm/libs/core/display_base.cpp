@@ -25,7 +25,8 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1876,6 +1877,8 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   if (layer_stack->elapse_timestamp) {
     hw_layers_.elapse_timestamp = layer_stack->elapse_timestamp;
   }
+
+  hw_layers_.info.expected_present_time = layer_stack->expected_present_time;
 
   return;
 }

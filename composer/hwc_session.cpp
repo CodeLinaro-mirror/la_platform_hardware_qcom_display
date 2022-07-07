@@ -3749,11 +3749,12 @@ HWC3::Error HWCSession::TryDrawMethod(Display display, DrawMethod drawMethod) {
 }
 
 HWC3::Error HWCSession::SetExpectedPresentTime(Display display, uint64_t expectedPresentTime) {
-  // Dummy Function: add implementation on need basis
   Locker::ScopeLock lock_d(locker_[display]);
   if (!hwc_display_[display]) {
     return HWC3::Error::BadDisplay;
   }
+  hwc_display_[display]->SetExpectedPresentTime(expectedPresentTime);
+
   return HWC3::Error::None;
 }
 

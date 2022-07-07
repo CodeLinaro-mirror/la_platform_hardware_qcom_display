@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 /*! @file layer_stack.h
   @brief File for display layer stack structure which represents a drawing buffer.
 
@@ -469,6 +476,7 @@ struct LayerStack {
 
   uint64_t elapse_timestamp = 0;       //!< system time until which display commit needs to be held
 
+  uint64_t expected_present_time = 0;  //!< Expected Present timestamp for current frame.
 };
 
 }  // namespace sdm
