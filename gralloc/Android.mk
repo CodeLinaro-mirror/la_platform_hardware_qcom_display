@@ -40,6 +40,10 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libdl  \
 LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
+ifeq ($(PLATFORM_VERSION), Tiramisu)
+LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
+LOCAL_CFLAGS                  += -D__ANDROID_T__
+endif
 LOCAL_SRC_FILES               := gr_utils.cpp gr_adreno_info.cpp
 include $(BUILD_SHARED_LIBRARY)
 
@@ -52,20 +56,26 @@ LOCAL_C_INCLUDES              := $(common_includes) \
                                  $(LIBION_HEADER_PATHS) \
                                  $(kernel_includes)
 
-LOCAL_HEADER_LIBRARIES        := display_headers
+LOCAL_HEADER_LIBRARIES        := display_headers libvmmem_headers
 LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libdl libgrallocutils libion libgralloctypes \
                                   libgralloc.qti libhidlbase \
                                   android.hardware.graphics.mapper@2.1 \
                                   android.hardware.graphics.mapper@3.0 \
-                                  android.hardware.graphics.mapper@4.0
+                                  android.hardware.graphics.mapper@4.0 \
+                                  libdmabufheap libvmmem
 LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
-                                 -D__QTI_DISPLAY_GRALLOC__
+                                 -D__QTI_DISPLAY_GRALLOC__ -Wno-unused-variable \
+                                 -Wunused-but-set-variable  -Wno-unused-parameter
 
 ifneq ($(TARGET_USES_GRALLOC4),false)
 LOCAL_CFLAGS                  += -DTARGET_USES_GRALLOC4
 endif
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
-LOCAL_SRC_FILES               := gr_allocator.cpp gr_buf_mgr.cpp gr_ion_alloc.cpp
+ifeq ($(PLATFORM_VERSION), Tiramisu)
+LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
+LOCAL_CFLAGS                  += -D__ANDROID_T__
+endif
+LOCAL_SRC_FILES               := gr_allocator.cpp gr_buf_mgr.cpp gr_dma_legacy_mgr.cpp gr_dma_mgr.cpp gr_alloc_interface.cpp
 include $(BUILD_SHARED_LIBRARY)
 
 #mapper
@@ -87,7 +97,8 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                   android.hardware.graphics.mapper@2.0 \
                                   android.hardware.graphics.mapper@2.1 \
                                   vendor.qti.hardware.display.mapperextensions@1.1 \
-                                  android.hardware.graphics.mapper@3.0
+                                  android.hardware.graphics.mapper@3.0 \
+                                  libdmabufheap
 LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
@@ -118,7 +129,8 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                   android.hardware.graphics.mapper@2.1 \
                                   vendor.qti.hardware.display.mapperextensions@1.1 \
                                   android.hardware.graphics.mapper@3.0 \
-                                  android.hardware.graphics.mapper@4.0
+                                  android.hardware.graphics.mapper@4.0 \
+                                  libdmabufheap
 LOCAL_CFLAGS                  := $(common_flags) $(qmaa_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
@@ -150,7 +162,8 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                  android.hardware.graphics.allocator@4.0 \
                                  android.hardware.graphics.allocator@3.0 \
                                  vendor.qti.hardware.display.mapperextensions@1.0 \
-                                 vendor.qti.hardware.display.mapperextensions@1.1
+                                 vendor.qti.hardware.display.mapperextensions@1.1 \
+                                 libdmabufheap
 LOCAL_CFLAGS                  := -DLOG_TAG=\"qdgralloc\" $(common_flags)
 ifneq ($(TARGET_USES_GRALLOC4),false)
 LOCAL_CFLAGS                  += -DTARGET_USES_GRALLOC4

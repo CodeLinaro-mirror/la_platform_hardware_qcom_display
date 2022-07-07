@@ -31,7 +31,9 @@
 #include <vector>
 
 #include "hw_events_interface.h"
+#ifndef __ANDROID_T__
 #include "fb/hw_events.h"
+#endif
 #include "drm/hw_events_drm.h"
 
 #define __CLASS__ "HWEventsInterface"
@@ -45,7 +47,9 @@ DisplayError HWEventsInterface::Create(int display_id, DisplayType display_type,
   DisplayError error = kErrorNone;
   HWEventsInterface *hw_events = nullptr;
   if (GetDriverType() == DriverType::FB) {
+#ifndef __ANDROID_T__
     hw_events = new HWEvents();
+#endif
   } else {
     hw_events = new HWEventsDRM();
   }

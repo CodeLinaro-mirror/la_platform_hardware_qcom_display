@@ -33,7 +33,11 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#ifdef __ANDROID_T__
+#include <display/drm/sde_drm.h>
+#else
 #include <drm/sde_drm.h>
+#endif
 
 // Intentionally included after xf86 headers so that they in-turn include libdrm version of drm.h
 // that doesn't use keyword "virtual" for a variable name. Not doing so leads to the kernel version

@@ -39,8 +39,13 @@
 #include "xf86drm.h"
 #include "xf86drmMode.h"
 #include <drm/msm_drm.h>
+#ifdef __ANDROID_T__
+#include <display/drm/msm_drm_pp.h>
+#include <display/drm/sde_drm.h>
+#else
 #include <drm/msm_drm_pp.h>
 #include <drm/sde_drm.h>
+#endif
 
 namespace sde_drm {
 
