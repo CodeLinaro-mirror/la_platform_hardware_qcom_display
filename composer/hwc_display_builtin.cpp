@@ -1903,8 +1903,10 @@ int HWCDisplayBuiltIn::Deinit() {
 
   histogram.stop();
 
-  // free the WB buffer
-  buffer_allocator_->FreeBuffer(&wb_buffer_info_);
+  // Free the WB buffer
+  if (wb_buffer_info_.alloc_buffer_info.size) {
+    buffer_allocator_->FreeBuffer(&wb_buffer_info_);
+  }
 
   // stop the WB kickoff thread
   pthread_mutex_lock(&wb_lock_);
@@ -1914,8 +1916,15 @@ int HWCDisplayBuiltIn::Deinit() {
 
   pthread_join(wb_kickoff_thread_, NULL);
 
-  delete wb_op_layer_;
-  delete new_client_target_;
+  if (wb_op_layer_) {
+    delete wb_op_layer_;
+    wb_op_layer_ = NULL;
+  }
+
+  if (new_client_target_) {
+    delete new_client_target_;
+    new_client_target_ = NULL;
+  }
 
   sec_layer_map_.clear();
   sec_layer_set_.clear();
@@ -2126,6 +2135,24 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
       wb_display->GetLayerStack(&primary_layer_stack);
       wb_display->ClearLayerStack();
       SetLayerStack(&primary_layer_stack);
+      // Free CACResources when CAC is disabled
+      // Free the WB buffer
+      if (wb_buffer_info_.alloc_buffer_info.size) {
+        buffer_allocator_->FreeBuffer(&wb_buffer_info_);
+      }
+
+      if (wb_op_layer_) {
+        delete wb_op_layer_;
+        wb_op_layer_ = NULL;
+      }
+
+      if (new_client_target_) {
+        delete new_client_target_;
+        new_client_target_ = NULL;
+      }
+
+      sec_layer_map_.clear();
+      sec_layer_set_.clear();
     }
   } else {
     // Enable lineptr events at every y_pixels/2 on this display.
