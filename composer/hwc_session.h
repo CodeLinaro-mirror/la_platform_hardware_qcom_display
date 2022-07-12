@@ -270,6 +270,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t SetDisplayBrightnessScale(const android::Parcel *input_parcel);
   int32_t SetCAC(const android::Parcel *input_parcel);
   int32_t CreateVirtualDisplayForCAC(int disp_idx);
+  int32_t SetSkewVsync(const android::Parcel *input_parcel);
 
   // Layer functions
   int32_t SetLayerBuffer(hwc2_display_t display, hwc2_layer_t layer, buffer_handle_t buffer,
@@ -413,6 +414,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     virtual int EnableCAC(uint32_t disp_id, bool enable, float red, float green, float blue);
     virtual int SetCacEyeConfig(uint32_t disp_id, const DisplayConfig::CacEyeConfig &left,
                                 const DisplayConfig::CacEyeConfig &right);
+    virtual int SetSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val);
 
     std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
     HWCSession *hwc_session_ = nullptr;

@@ -70,6 +70,7 @@
 #include <utils/rect.h>
 #include <stdarg.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
 #include <pthread.h>
 
 #include <map>
@@ -926,8 +927,8 @@ HWC2::Error HWCDisplayBuiltIn::SetPowerMode(HWC2::PowerMode mode, bool teardown)
   }
 
   if (enable_cac_ && cac_commit_done_) {
-    DLOGI("Resetting Commit done.... mode = %d", mode);
-    cac_commit_done_ = false;
+    DLOGI("Resetting CAC Commit done.... mode = %d", mode);
+    CacCommitDone(false);
   }
 
   return HWC2::Error::None;
@@ -981,7 +982,7 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
   CloseFd(&output_buffer_.acquire_fence_fd);
   pending_commit_ = false;
   if (enable_cac_ && IsWBCacInUse()) {
-    cac_commit_done_ = true;
+    CacCommitDone(true);
   }
   return status;
 }
@@ -1279,7 +1280,7 @@ int HWCDisplayBuiltIn::Perform(uint32_t operation, ...) {
   }
   va_end(args);
   validated_ = false;
-  cac_commit_done_ = false;
+  CacCommitDone(false);
 
   return 0;
 }
@@ -2139,7 +2140,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
 
   validated_ = false;
   frame_split_rect_ = {};  // clear the frame_split_rect_
-  cac_commit_done_ = false;
+  CacCommitDone(false);
   callbacks_->Refresh(id_);
 
   return 0;
@@ -2160,7 +2161,8 @@ void HWCDisplayBuiltIn::UpdateFramerateForCAC(uint32_t fps) {
           type_, fps, error);
     return;
   }
-
+  // Re-constitue WB CAC cache for the new fps.
+  wb_display->CacCommitDone(IsCacCommitDone());
   return;
 }
 
@@ -2187,6 +2189,10 @@ void HWCDisplayBuiltIn::HandleLinePtrEvent() {
 }
 
 void *HWCDisplayBuiltIn::PerformWBKickOff() {
+
+  struct sched_param param = {};
+  param.sched_priority = 50;
+  pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
   while (1) {
     pthread_mutex_lock(&wb_lock_);
     pthread_cond_wait(&wb_cv_, &wb_lock_);
@@ -2200,7 +2206,7 @@ void *HWCDisplayBuiltIn::PerformWBKickOff() {
       auto layer = hwc_layer->GetSDMLayer();
       if (layer->update_mask[kSecurity])  {
         DLOGI_IF(kTagClient, "Display %d-%d Security level changed", sdm_id_, type_);
-        cac_commit_done_ = false;
+        CacCommitDone(false);
       }
     }
     if (cac_commit_done_) {
@@ -2211,8 +2217,20 @@ void *HWCDisplayBuiltIn::PerformWBKickOff() {
   return nullptr;
 }
 
-void HWCDisplayBuiltIn::ResetCacCommit() {
-  cac_commit_done_ = false;
+void HWCDisplayBuiltIn::CacCommitDone(bool cac_commit_done) {
+  DLOGI("Setting CAC Commit done = %s.", cac_commit_done ? "true" : "false");
+  cac_commit_done_ = cac_commit_done;
+  if (IsWBCacInUse()) {
+    HWCSession *hwc_session = HWCSession::GetInstance();
+    HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                                       (hwc_session->GetDisplay(hwc_session->wb_display_));
+    if (!wb_display) {
+      DLOGE("Return no WB display for display = %lu", id_);
+      return;
+    }
+
+    wb_display->CacCommitDone(cac_commit_done);
+  }
 }
 
 bool HWCDisplayBuiltIn::IsCacCommitDone() {
@@ -2236,25 +2254,32 @@ int32_t HWCDisplayBuiltIn::SetCACEyeConfig(const CACEyeConfig &left,
   }
 
   HWCSession *hwc_session = HWCSession::GetInstance();
-  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
-                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
-  if (!wb_display) {
-    DLOGE("Return no WB display for display = %lu", id_);
-    return -1;
+  if (IsWBCacInUse()) {
+    HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                          (hwc_session->GetDisplay(hwc_session->wb_display_));
+    error = wb_display->SetCACEyeConfig(left, right);
+    if (error != kErrorNone) {
+      DLOGE("Failed to set IPD params for display %" PRIu64 " %d-%d, errno = %d", id_, sdm_id_,
+            type_, error);
+      return -1;
+    }
   }
-
-  error = wb_display->SetCACEyeConfig(left, right);
-  if (error != kErrorNone) {
-    DLOGE("Failed to set IPD params for display %" PRIu64 " %d-%d, errno = %d", id_, sdm_id_,
-          type_, error);
-    return -1;
-  }
-
   validated_ = false;
-  cac_commit_done_ = false;
+  CacCommitDone(false);
   callbacks_->Refresh(id_);
 
   return 0;
 }
+
+int32_t HWCDisplayBuiltIn::SetSkewVsync(uint32_t skew_vsync_val) {
+  DisplayError error = display_intf_->SetSkewVsync(skew_vsync_val);
+  if (error != kErrorNone) {
+    DLOGE("Failed for display %" PRIu64 " %d-%d, skew_vsync = %d", id_, sdm_id_, type_,
+          skew_vsync_val);
+    return -1;
+  }
+
+  return 0;
+};
 
 }  // namespace sdm

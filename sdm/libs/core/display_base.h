@@ -202,6 +202,8 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError colorSamplingOff();
   virtual DisplayError ReconfigureDisplay();
   virtual DisplayError SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
+  virtual DisplayError WbCacPerf(bool enable) { return kErrorNone; };
+  virtual DisplayError SetSkewVsync(uint32_t skew_vsync_val) { return kErrorNotSupported; };
 
  protected:
   const char *kBt2020Pq = "bt2020_pq";
@@ -255,6 +257,7 @@ class DisplayBase : public DisplayInterface {
   Handle hw_device_ = 0;
   Handle display_comp_ctx_ = 0;
   HWLayers hw_layers_;
+  HWLayers *p_hw_layers_ = &hw_layers_;
   bool needs_validate_ = true;
   bool vsync_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
@@ -297,6 +300,7 @@ class DisplayBase : public DisplayInterface {
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;
+  static sdm::DisplayType first_display_type_;  // Used to track the first DisplayType
 
  private:
   bool StartDisplayPowerReset();

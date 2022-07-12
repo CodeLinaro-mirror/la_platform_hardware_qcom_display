@@ -652,8 +652,9 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
       (topology == DRMTopology::DUAL_LM || topology == DRMTopology::DUAL_LM_MERGE ||
        topology == DRMTopology::DUAL_LM_MERGE_DSC || topology == DRMTopology::DUAL_LM_DSC ||
        topology == DRMTopology::DUAL_LM_DSCMERGE || topology == DRMTopology::QUAD_LM_MERGE ||
-       topology == DRMTopology::QUAD_LM_DSCMERGE || topology == DRMTopology::QUAD_LM_MERGE_DSC ||
-       topology == DRMTopology::QUAD_LM_DSC4HSMERGE);
+       topology == DRMTopology::QUAD_LM_DSCMERGE ||
+       topology == DRMTopology::QUAD_LM_DSCMERGE_DUALCTL ||
+       topology == DRMTopology::QUAD_LM_MERGE_DSC || topology == DRMTopology::QUAD_LM_DSC4HSMERGE);
   display_attributes_[index].clock_khz = mode.clock;
 
   // If driver doesn't return panel width/height information, default to 320 dpi
@@ -2042,6 +2043,7 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
     mixer_attributes_.split_type = kDualSplit;
     if (display_attributes_[index].topology == kQuadLMMerge ||
         display_attributes_[index].topology == kQuadLMDSCMerge ||
+        display_attributes_[index].topology == kQuadLMDSCMergeDualCtl ||
         display_attributes_[index].topology == kQuadLMMergeDSC ||
         display_attributes_[index].topology == kQuadLMDSC4HSMerge) {
       mixer_attributes_.split_type = kQuadSplit;
@@ -2136,6 +2138,7 @@ void HWDeviceDRM::UpdateMixerAttributes() {
     mixer_attributes_.split_type = kDualSplit;
     if (display_attributes_[index].topology == kQuadLMMerge ||
         display_attributes_[index].topology == kQuadLMDSCMerge ||
+        display_attributes_[index].topology == kQuadLMDSCMergeDualCtl ||
         display_attributes_[index].topology == kQuadLMMergeDSC ||
         display_attributes_[index].topology == kQuadLMDSC4HSMerge) {
       mixer_attributes_.split_type = kQuadSplit;
@@ -2175,19 +2178,20 @@ void HWDeviceDRM::SetSecureConfig(const LayerBuffer &input_buffer, DRMSecureMode
 
 void HWDeviceDRM::SetTopology(sde_drm::DRMTopology drm_topology, HWTopology *hw_topology) {
   switch (drm_topology) {
-    case DRMTopology::SINGLE_LM:            *hw_topology = kSingleLM;           break;
-    case DRMTopology::SINGLE_LM_DSC:        *hw_topology = kSingleLMDSC;        break;
-    case DRMTopology::DUAL_LM:              *hw_topology = kDualLM;             break;
-    case DRMTopology::DUAL_LM_DSC:          *hw_topology = kDualLMDSC;          break;
-    case DRMTopology::DUAL_LM_MERGE:        *hw_topology = kDualLMMerge;        break;
-    case DRMTopology::DUAL_LM_MERGE_DSC:    *hw_topology = kDualLMMergeDSC;     break;
-    case DRMTopology::DUAL_LM_DSCMERGE:     *hw_topology = kDualLMDSCMerge;     break;
-    case DRMTopology::QUAD_LM_MERGE:        *hw_topology = kQuadLMMerge;        break;
-    case DRMTopology::QUAD_LM_DSCMERGE:     *hw_topology = kQuadLMDSCMerge;     break;
-    case DRMTopology::QUAD_LM_MERGE_DSC:    *hw_topology = kQuadLMMergeDSC;     break;
-    case DRMTopology::QUAD_LM_DSC4HSMERGE:  *hw_topology = kQuadLMDSC4HSMerge;  break;
-    case DRMTopology::PPSPLIT:              *hw_topology = kPPSplit;            break;
-    default:                                *hw_topology = kUnknown;            break;
+    case DRMTopology::SINGLE_LM:                 *hw_topology = kSingleLM;               break;
+    case DRMTopology::SINGLE_LM_DSC:             *hw_topology = kSingleLMDSC;            break;
+    case DRMTopology::DUAL_LM:                   *hw_topology = kDualLM;                 break;
+    case DRMTopology::DUAL_LM_DSC:               *hw_topology = kDualLMDSC;              break;
+    case DRMTopology::DUAL_LM_MERGE:             *hw_topology = kDualLMMerge;            break;
+    case DRMTopology::DUAL_LM_MERGE_DSC:         *hw_topology = kDualLMMergeDSC;         break;
+    case DRMTopology::DUAL_LM_DSCMERGE:          *hw_topology = kDualLMDSCMerge;         break;
+    case DRMTopology::QUAD_LM_MERGE:             *hw_topology = kQuadLMMerge;            break;
+    case DRMTopology::QUAD_LM_DSCMERGE:          *hw_topology = kQuadLMDSCMerge;         break;
+    case DRMTopology::QUAD_LM_DSCMERGE_DUALCTL:  *hw_topology = kQuadLMDSCMergeDualCtl;  break;
+    case DRMTopology::QUAD_LM_MERGE_DSC:         *hw_topology = kQuadLMMergeDSC;         break;
+    case DRMTopology::QUAD_LM_DSC4HSMERGE:       *hw_topology = kQuadLMDSC4HSMerge;      break;
+    case DRMTopology::PPSPLIT:                   *hw_topology = kPPSplit;                break;
+    default:                                     *hw_topology = kUnknown;                break;
   }
 }
 

@@ -78,6 +78,8 @@
 
 namespace sdm {
 
+static const uint32_t kSkewVsyncMax = 75;
+
 void HWCSession::StartServices() {
   int error = DisplayConfig::DeviceInterface::RegisterDevice(this);
   if (error) {
@@ -1259,7 +1261,7 @@ int HWCSession::DisplayConfigImpl::EnableCAC(uint32_t disp_id, bool enable, floa
     }
   }
 
-  if (enable == true) {
+  if (enable == true && hwc_session_->enable_wb_cac_) {
     error = hwc_session_->CreateVirtualDisplayForCAC(disp_idx);
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
@@ -1351,6 +1353,43 @@ int HWCSession::DisplayConfigImpl::SetCacEyeConfig(uint32_t disp_id,
       error = hwc_session_->hwc_display_[disp_idx]->SetCACEyeConfig(left_eye, right_eye);
       if (error) {
         DLOGE("Failed to set CAC IPD config err = %d, desc = %s",  error, strerror(error));
+      }
+    }
+  }
+
+  return error;
+}
+
+int HWCSession::DisplayConfigImpl::SetSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val) {
+  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
+  int32_t error = -EINVAL;
+
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    DLOGE("Invalid display = %d", disp_id);
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (!hwc_session_->hwc_display_[disp_idx]) {
+      DLOGW("Display %d is not connected", disp_id);
+      error = -ENODEV;
+      return error;
+    }
+  }
+
+  if (skew_vsync_val > kSkewVsyncMax) {
+    DLOGE("Invalid skew vync value %d", skew_vsync_val);
+    return -EINVAL;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_session_->hwc_display_[disp_idx]) {
+      error = hwc_session_->hwc_display_[disp_idx]->SetSkewVsync(skew_vsync_val);
+      if (error) {
+        DLOGE("SetSkewVsync Failed: disp_id = %d skew_vsync_val = %d, errno = %d, desc = %s",
+              disp_id, skew_vsync_val, error, strerror(error));
       }
     }
   }

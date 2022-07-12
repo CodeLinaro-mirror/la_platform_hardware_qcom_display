@@ -100,6 +100,7 @@ static const int kSolidFillDelay = 100 * 1000;
 int HWCSession::null_display_mode_ = 0;
 static const uint32_t kBrightnessScaleMax = 100;
 static const uint32_t kSvBlScaleMax = 65535;
+static const uint32_t kSkewVsyncMax = 75;
 
 // Map the known color modes to dataspace.
 int32_t GetDataspaceFromColorMode(ColorMode mode) {
@@ -1708,6 +1709,14 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       status = SetCAC(input_parcel);
       break;
 
+    case qService::IQService::SET_SKEW_VSYNC:
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = SetSkewVsync(input_parcel);
+      break;
+
     default:
       DLOGW("QService command = %d is not supported.", command);
       break;
@@ -2181,6 +2190,11 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
       DLOGV_IF(kTagQDCM, "pending action = %d, display_id = %d", BITMAP(count), display_id);
       switch (BITMAP(count)) {
         case kInvalidating:
+          if (IsWBCacInProgress(display_id)) {
+            // reset commit_done during CAC to trigger a commit to apply changes
+            hwc_display_[display_id]->CacCommitDone(false);
+            break;
+          }
           callbacks_.Refresh(display_id);
           break;
         case kEnterQDCMMode:
@@ -2996,7 +3010,7 @@ HWC2::Error HWCSession::PresentDisplayInternal(hwc2_display_t display, int32_t *
   // If display is in Skip-Validate state and Validate cannot be skipped, do Internal
   // Validation to optimize for the frames which don't require the Client composition.
   if ((hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) ||
-       hwc_display->IsCACEnabled()) {
+      hwc_display->IsWBCacInUse()) {
     uint32_t out_num_types = 0, out_num_requests = 0;
     hwc_display->SetFastPathComposition(true);
     HWC2::Error error = ValidateDisplayInternal(display, &out_num_types, &out_num_requests);
@@ -3467,8 +3481,8 @@ int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
   float blue_offset = static_cast<float>(input_parcel->readDouble());
 
   DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
-
   if (enable && enable_wb_cac_) {
+    hwc_display_[HWC_DISPLAY_PRIMARY]->SetVsyncEnabled(HWC2::Vsync::Enable);
     error = CreateVirtualDisplayForCAC(display);
     if (error) {
       DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
@@ -3592,6 +3606,40 @@ bool HWCSession::IsWBCacInProgress(hwc2_display_t display) {
   }
 
   return in_progress;
+}
+
+int32_t HWCSession::SetSkewVsync(const android::Parcel *input_parcel) {
+  int32_t error = -EINVAL;
+  int32_t err = -1;
+  auto disp_id = static_cast<int>(input_parcel->readInt32());
+  auto skew_vsync_val = static_cast<uint32_t>(input_parcel->readInt32());
+
+  int disp_idx = GetDisplayIndex(disp_id);
+  if (disp_idx == -1) {
+    DLOGE("Invalid display = %d", disp_id);
+    return -EINVAL;
+  }
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  if (skew_vsync_val > kSkewVsyncMax) {
+    DLOGE("Invalid skew vync value %d on disp_id %d", skew_vsync_val, disp_id);
+    return -EINVAL;
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    if (hwc_display_[disp_idx]) {
+      error = hwc_display_[disp_idx]->SetSkewVsync(skew_vsync_val);
+      if (error) {
+        DLOGE("SetSkewVsync Failed: disp_id = %d skew_vsync_val = %d, errno = %d, desc = %s",
+              disp_id, skew_vsync_val, error, strerror(error));
+      }
+    }
+  }
+
+  return INT32(err);
 }
 
 }  // namespace sdm

@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -159,7 +159,8 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::CONNECTOR_SET_QSYNC_MODE:
     case DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL:
     case DRMOps::CONNECTOR_SET_FRAME_TRIGGER:
-    case DRMOps::CONNECTOR_SET_COLORSPACE: {
+    case DRMOps::CONNECTOR_SET_COLORSPACE:
+    case DRMOps::CONNECTOR_SET_SKEW_VSYNC: {
       drm_mgr_->GetConnectorMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
     } break;
     case DRMOps::DPPS_CACHE_FEATURE: {
@@ -176,6 +177,7 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
 }
 
 int DRMAtomicReq::Validate() {
+  DTRACE_SCOPED();
   // Call UnsetUnusedPlanes to find planes that need to be unset. Do not call CommitPlaneState,
   // because we just want to validate, not actually mark planes as removed
   drm_mgr_->GetPlaneMgr()->UnsetUnusedResources(token_.crtc_id, false/*is_commit*/,

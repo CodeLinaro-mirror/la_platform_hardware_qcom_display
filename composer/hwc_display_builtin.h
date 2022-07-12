@@ -190,9 +190,10 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual void HandleLinePtrEvent();
   static void* WBKickOffThread(void *context);
   void* PerformWBKickOff();
-  void ResetCacCommit();
+  virtual void CacCommitDone(bool cac_commit_done);
   virtual bool IsCacCommitDone();
   virtual int32_t SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
+  virtual int32_t SetSkewVsync(uint32_t skew_vsync_val);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,

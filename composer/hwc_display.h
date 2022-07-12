@@ -452,8 +452,12 @@ class HWCDisplay : public DisplayEventHandler {
   FscRgbOrder GetFscRgbOrder() { return fsc_rgb_order_;}
   bool IsCACEnabled() { return enable_cac_; }
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }
+  virtual void CacCommitDone(bool cac_commit_done) { return; }
   virtual bool IsCacCommitDone() { return false; }
-  virtual void ResetCacCommit() { return; }
+  bool IsWBCacInUse();
+  virtual int32_t SetSkewVsync(uint32_t skew_vsync_val) {
+    return kErrorNotSupported;
+  };
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -488,7 +492,6 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetUnderScanConfig() { }
   int32_t SetClientTargetDataSpace(int32_t dataspace);
   int SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels);
-  bool IsWBCacInUse();
 
   bool validated_ = false;
   bool layer_stack_invalid_ = true;

@@ -29,7 +29,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -107,6 +107,7 @@ class HWPeripheralDRM : public HWDeviceDRM {
   virtual void GetHWPanelMaxBrightness();
   virtual DisplayError SetBLScale(uint32_t level);
   virtual DisplayError GetPanelBrightnessBasePath(std::string *base_path);
+  virtual DisplayError SetSkewVsync(uint32_t skew_vsync_val);
 
  private:
   void InitDestScaler();
@@ -138,6 +139,7 @@ class HWPeripheralDRM : public HWDeviceDRM {
   void PopulateBitClkRates();
   std::vector<uint64_t> bitclk_rates_;
   std::string brightness_base_path_ = "";
+  uint32_t skew_vsync_val_ = 0;
 };
 
 }  // namespace sdm

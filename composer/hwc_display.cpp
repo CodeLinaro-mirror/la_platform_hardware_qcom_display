@@ -653,7 +653,7 @@ HWC2::Error HWCDisplay::CreateLayer(hwc2_layer_t *out_layer_id) {
   validated_ = false;
   layer_stack_invalid_ = true;
   layer->SetPartialUpdate(partial_update_enabled_);
-  ResetCacCommit();
+  CacCommitDone(false);
 
   return HWC2::Error::None;
 }
@@ -688,7 +688,7 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
   geometry_changes_ |= GeometryChanges::kRemoved;
   validated_ = false;
   layer_stack_invalid_ = true;
-  ResetCacCommit();
+  CacCommitDone(false);
 
   return HWC2::Error::None;
 }
@@ -946,11 +946,10 @@ HWC2::Error HWCDisplay::SetVsyncEnabled(HWC2::Vsync enabled) {
     state = false;
   else
     return HWC2::Error::BadParameter;
-
-  if (state) {  // TODO(CAC_Skip_Hidl): Only enable vsync, revisit
-    error = display_intf_->SetVSyncState(state);
+  if(IsWBCacInUse()) {
+    state = true;
   }
-
+  error = display_intf_->SetVSyncState(state);
   if (error != kErrorNone) {
     if (error == kErrorShutDown) {
       shutdown_pending_ = true;
@@ -960,7 +959,7 @@ HWC2::Error HWCDisplay::SetVsyncEnabled(HWC2::Vsync enabled) {
     return HWC2::Error::BadDisplay;
   }
 
-  vsync_enabled_ = state;  // TODO(CAC_Skip_Hidl): revisit Vsync always on
+  vsync_enabled_ = state;
   return HWC2::Error::None;
 }
 
@@ -1343,7 +1342,7 @@ HWC2::PowerMode HWCDisplay::GetCurrentPowerMode() {
 }
 
 DisplayError HWCDisplay::VSync(const DisplayEventVSync &vsync) {
-  if (vsync_enabled_) {  // TODO(CAC_Skip_Hidl): revisit vsync always on
+  if (vsync_enabled_) {
     callbacks_->Vsync(id_, vsync.timestamp);
   }
   return kErrorNone;
@@ -2395,26 +2394,24 @@ std::string HWCDisplay::Dump() {
   std::ostringstream os;
   os << "\n------------HWC----------------\n";
   os << "HWC2 display_id: " << id_ << std::endl;
-  if (type_ != kVirtual) {  // TODO(CAC): Fix this
-    for (auto layer : layer_set_) {
-      auto sdm_layer = layer->GetSDMLayer();
-      auto transform = sdm_layer->transform;
-      os << "layer: " << std::setw(4) << layer->GetId();
-      os << " z: " << layer->GetZ();
-      os << " composition: " <<
-            to_string(layer->GetClientRequestedCompositionType()).c_str();
-      os << "/" <<
-            to_string(layer->GetDeviceSelectedCompositionType()).c_str();
-      os << " alpha: " << std::to_string(sdm_layer->plane_alpha).c_str();
-      os << " format: " << std::setw(22) << GetFormatString(sdm_layer->input_buffer.format);
-      os << " dataspace:" << std::hex << "0x" << std::setw(8) << std::setfill('0')
-         << layer->GetLayerDataspace() << std::dec << std::setfill(' ');
-      os << " transform: " << transform.rotation << "/" << transform.flip_horizontal <<
-            "/"<< transform.flip_vertical;
-      os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec;
-      os << " secure: " << layer->IsProtected()
-         << std::endl;
-    }
+  for (auto layer : layer_set_) {
+    auto sdm_layer = layer->GetSDMLayer();
+    auto transform = sdm_layer->transform;
+    os << "layer: " << std::setw(4) << layer->GetId();
+    os << " z: " << layer->GetZ();
+    os << " composition: " <<
+          to_string(layer->GetClientRequestedCompositionType()).c_str();
+    os << "/" <<
+          to_string(layer->GetDeviceSelectedCompositionType()).c_str();
+    os << " alpha: " << std::to_string(sdm_layer->plane_alpha).c_str();
+    os << " format: " << std::setw(22) << GetFormatString(sdm_layer->input_buffer.format);
+    os << " dataspace:" << std::hex << "0x" << std::setw(8) << std::setfill('0')
+        << layer->GetLayerDataspace() << std::dec << std::setfill(' ');
+    os << " transform: " << transform.rotation << "/" << transform.flip_horizontal <<
+          "/"<< transform.flip_vertical;
+    os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec;
+    os << " secure: " << layer->IsProtected()
+        << std::endl;
   }
 
   if (has_client_composition_) {
