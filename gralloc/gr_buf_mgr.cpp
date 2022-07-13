@@ -1115,7 +1115,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
                           descriptor.GetWidth(), descriptor.GetHeight(), format, buffer_type,
                           data.size, usage);
 
-  hnd->reserved_size = static_cast<unsigned int>(descriptor.GetReservedSize());
+  hnd->reserved_size = descriptor.GetReservedSize();
   hnd->id = ++next_id_;
   hnd->base = 0;
   hnd->base_metadata = 0;
