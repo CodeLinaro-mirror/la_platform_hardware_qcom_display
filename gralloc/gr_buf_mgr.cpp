@@ -400,7 +400,7 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
     return Error::BAD_BUFFER;
   }
 
-  auto meta_size = GetMetaDataSize(hnd->reserved_size);
+  auto meta_size = GetMetaDataSize(hnd->reserved_size, buf->custom_content_md_size);
 
   if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset, hnd->fd,
                              buf->ion_handle_main) != 0) {
@@ -520,7 +520,7 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
     bufferid_view_map_.erase(hnd->id());
   }
 
-  auto meta_size = GetMetaDataSize(hnd->reserved_size());
+  auto meta_size = GetMetaDataSize(hnd->reserved_size(), buf->custom_content_md_size);
 
   if (allocator_->FreeBuffer(
       reinterpret_cast<void *>(hnd->base()), hnd->size(), hnd->offset(), hnd->fd(),
