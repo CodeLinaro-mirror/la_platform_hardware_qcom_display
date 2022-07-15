@@ -1454,7 +1454,9 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     LayerComposition &composition = layer->composition;
 
     if (composition == kCompositionSDE || composition == kCompositionStitch) {
-      layer_requests_[hwc_layer->GetId()] = HWC2::LayerRequest::ClearClientTarget;
+      if (!hwc_layer->IsTunneled()) {
+        layer_requests_[hwc_layer->GetId()] = HWC2::LayerRequest::ClearClientTarget;
+      }
     }
 
     HWC2::Composition requested_composition = hwc_layer->GetClientRequestedCompositionType();
