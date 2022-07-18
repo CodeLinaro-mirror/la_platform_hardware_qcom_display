@@ -16,6 +16,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <QService.h>
 #include <binder/Parcel.h>
@@ -33,6 +68,7 @@
 #include <utils/debug.h>
 #include <QService.h>
 #include <utils/utils.h>
+#include <utils/rect.h>
 #include <algorithm>
 #include <utility>
 #include <bitset>
@@ -175,6 +211,7 @@ int HWCSession::Init() {
   HWCDebugHandler::Get()->GetProperty(ENABLE_NULL_DISPLAY_PROP, &null_display_mode_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_HOTPLUG_BWCHECK, &disable_hotplug_bwcheck_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_MASK_LAYER_HINT, &disable_mask_layer_hint_);
+  HWCDebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac_);
 
   if (!null_display_mode_) {
     g_hwc_uevent_.Register(this);
@@ -552,7 +589,21 @@ uint32_t HWCSession::GetMaxVirtualDisplayCount() {
 }
 
 int32_t HWCSession::GetActiveConfig(hwc2_display_t display, hwc2_config_t *out_config) {
-  return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, out_config);
+  DTRACE_SCOPED();
+  if (IsWBCacInProgress(display)) {
+    // when WB CAC is in progress, GetActiveConfig unlocked
+    if (display >= HWCCallbacks::kNumDisplays) {
+      return HWC2_ERROR_BAD_DISPLAY;
+    }
+    auto status = HWC2::Error::BadDisplay;
+    if (hwc_display_[display]) {
+      auto hwc_display = hwc_display_[display];
+      status = hwc_display->GetActiveConfig(out_config);
+    }
+    return INT32(status);
+  } else {
+    return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, out_config);
+  }
 }
 
 int32_t HWCSession::GetChangedCompositionTypes(hwc2_display_t display, uint32_t *out_num_elements,
@@ -742,7 +793,6 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, int32_t *out_retire_f
   }
 
   HandleSecureSession();
-
 
   hwc2_display_t target_display = display;
 
@@ -1117,6 +1167,13 @@ int32_t HWCSession::SetVsyncEnabled(hwc2_display_t display, int32_t int_enabled)
     callbacks_.UpdateVsyncSource(display);
   }
 
+  if (IsWBCacInProgress(display)) {
+    // when WB CAC is in progress, Vsync is always enabled
+    if (display >= HWCCallbacks::kNumDisplays) {
+      return HWC2_ERROR_BAD_DISPLAY;
+    }
+     return INT32(0);
+  }
   return CallDisplayFunction(display, &HWCDisplay::SetVsyncEnabled, enabled);
 }
 
@@ -1641,6 +1698,14 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
         break;
       }
       status = SetDisplayBrightnessScale(input_parcel);
+      break;
+
+    case qService::IQService::SET_CAC:
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = SetCAC(input_parcel);
       break;
 
     default:
@@ -2930,7 +2995,8 @@ HWC2::Error HWCSession::PresentDisplayInternal(hwc2_display_t display, int32_t *
   DTRACE_SCOPED();
   // If display is in Skip-Validate state and Validate cannot be skipped, do Internal
   // Validation to optimize for the frames which don't require the Client composition.
-  if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
+  if ((hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) ||
+       hwc_display->IsCACEnabled()) {
     uint32_t out_num_types = 0, out_num_requests = 0;
     hwc_display->SetFastPathComposition(true);
     HWC2::Error error = ValidateDisplayInternal(display, &out_num_types, &out_num_requests);
@@ -3342,6 +3408,10 @@ android::status_t HWCSession::SetIdlePC(const android::Parcel *input_parcel) {
   return static_cast<android::status_t>(ControlIdlePowerCollapse(enable, synchronous));
 }
 
+HWCDisplay *HWCSession::GetDisplay(hwc2_display_t display) {
+  return hwc_display_[display];
+}
+
 hwc2_display_t HWCSession::GetActiveBuiltinDisplay() {
   hwc2_display_t active_display = HWCCallbacks::kNumDisplays;
   // Get first active display among primary and built-in displays.
@@ -3382,6 +3452,49 @@ int32_t HWCSession::SetDisplayBrightnessScale(const android::Parcel *input_parce
   return INT32(error);
 }
 
+int32_t HWCSession::SetCAC(const android::Parcel *input_parcel) {
+  int32_t error = -EINVAL;
+  int32_t err = -1;
+  PanelOrientation default_orientation = {};
+  auto display = input_parcel->readInt32();
+  if (display != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
+  }
+
+  bool enable = (input_parcel->readInt32() == 1);
+  float red_offset = static_cast<float>(input_parcel->readDouble());
+  float green_offset = static_cast<float>(input_parcel->readDouble());
+  float blue_offset = static_cast<float>(input_parcel->readDouble());
+
+  DLOGI("Enable = %d, r = %f, g = %f, b = %f", enable, red_offset, green_offset, blue_offset);
+
+  if (enable && enable_wb_cac_) {
+    error = CreateVirtualDisplayForCAC(display);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
+  }
+
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+    if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+      err = hwc_display_[HWC_DISPLAY_PRIMARY]->SetCAC(enable, red_offset, green_offset,
+                                                      blue_offset, default_orientation);
+    }
+  }
+
+  if(enable == false && wb_display_) {
+    error = DestroyVirtualDisplay(wb_display_);
+    if (error) {
+      DLOGE("CAC: enable = %d, error = %d, desc = %s", enable, error, strerror(error));
+      return error;
+    }
+  }
+
+  return INT32(err);
+}
+
 void HWCSession::NotifyClientStatus(bool connected) {
   for (uint32_t i = 0; i < HWCCallbacks::kNumDisplays; i++) {
     if (!hwc_display_[i]) {
@@ -3413,6 +3526,72 @@ void HWCSession::WaitForResources(bool wait_for_resources, hwc2_display_t active
       res_wait = hwc_display_[display_id]->CheckResourceState();
     } while (res_wait);
   }
+}
+
+int32_t HWCSession::CreateVirtualDisplayForCAC(int disp_idx) {
+  DisplayConfigVariableInfo display_attributes;
+  uint32_t config_index = 0;
+  uint32_t width = 0, height = 0;
+  int32_t error = -EINVAL;
+  // Use RGB888 format for WB CAC
+  int32_t format = sdm::kFormatRGB888;
+
+  auto err = hwc_display_[disp_idx]->GetActiveConfig(&config_index);
+  if (err != HWC2::Error::None) {
+    DLOGE("GetActiveConfig() failed on disp idx %d.", disp_idx);
+    return INT32(err);
+  }
+
+  error = hwc_display_[disp_idx]->GetDisplayAttributesForConfig(INT(config_index),
+                                                                &display_attributes);
+  if (!error) {
+    width = display_attributes.x_pixels;
+    height = display_attributes.y_pixels;
+  } else {
+    DLOGE("GetDisplayAttributesForConfig() failed on disp idx %d for config index %d.", disp_idx,
+          config_index);
+    return INT32(error);
+  }
+
+  // The WB display size (width x height) must be half of primary panel,
+  // Ex: Portrait Primary panel -> top-bottom split => WB is (pri_width x pri_height/2)
+  //     Landscape Primary panel -> left-right split => WB is (pri_width/2 x pri_height)
+  LayerRect primary_res = { 0, 0, FLOAT(width), FLOAT(height)};
+  RectOrientation orientation = GetOrientation(primary_res);
+  if (orientation == kOrientationLandscape) {
+    width = width/2;
+  } else if (orientation == kOrientationPortrait) {
+    height = height/2;
+  }
+
+  error = CreateVirtualDisplay(width, height, &format, &wb_display_);
+  if (static_cast<HWC2::Error>(error) != HWC2::Error::None) {
+    DLOGE("CreateVirtualDisplay %dx%d format = %d FAILED!", width, height, format);
+    return error;
+  } else {
+    hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+    if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays) {
+      WaitForResources(true, active_builtin_disp_id, wb_display_);
+    }
+    DLOGI("Created WB display %dx%d format = %d", width, height, format);
+  }
+
+  return error;
+}
+
+// Used to check WBCacInProgress - returns true when WB Pipeline is setup and Primary
+// Commit has been issued once
+bool HWCSession::IsWBCacInProgress(hwc2_display_t display) {
+  if (display >= HWCCallbacks::kNumDisplays) {
+    return HWC2_ERROR_BAD_DISPLAY;
+  }
+
+  bool in_progress = false;
+  if (hwc_display_[display]) {
+    in_progress  = hwc_display_[display]->IsCacCommitDone();
+  }
+
+  return in_progress;
 }
 
 }  // namespace sdm

@@ -26,6 +26,41 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <drm_master.h>
 #include <errno.h>
@@ -146,6 +181,16 @@ DisplayError HWEventsDRM::InitializePollFd() {
         poll_fds_[i].events = POLLIN | POLLPRI | POLLERR;
         histogram_index_ = i;
       } break;
+      case HWEvent::LINEPTR: {
+        poll_fds_[i].fd = Sys::open_(sysfs_lineptr_event_.c_str(), O_RDONLY);
+        if (poll_fds_[i].fd < 0) {
+          DLOGE("Failed opening \"%s\". Error %d (%s).", sysfs_lineptr_event_.c_str(), errno,
+                strerror(errno));
+          return kErrorResources;
+        }
+        poll_fds_[i].events = POLLPRI | POLLERR;
+        lineptr_index_ = i;
+      } break;
       case HWEvent::CEC_READ_MESSAGE:
       case HWEvent::SHOW_BLANK_EVENT:
       case HWEvent::THERMAL_LEVEL:
@@ -192,6 +237,9 @@ DisplayError HWEventsDRM::SetEventParser() {
       case HWEvent::HISTOGRAM:
         event_data.event_parser = &HWEventsDRM::HandleHistogram;
         break;
+      case HWEvent::LINEPTR:
+        event_data.event_parser = &HWEventsDRM::HandleLinePtr;
+        break;
       default:
         error = kErrorParameters;
         break;
@@ -227,6 +275,13 @@ DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
   event_handler_ = event_handler;
   poll_fds_.resize(event_list.size());
   event_thread_name_ += " - " + std::to_string(display_id) + "-" + std::to_string(display_type);
+
+  sysfs_lineptr_value_ = "/sys/class/drm/sde-crtc-" + std::to_string(token_.crtc_index)
+                         + "/lineptr_value";
+  sysfs_lineptr_event_ = "/sys/class/drm/sde-crtc-" + std::to_string(token_.crtc_index)
+                         + "/lineptr_event";
+  DLOGI("Configuring lineptr events for display %d-%d from \"/sys/class/drm/sde-crtc-%d\".",
+        display_id, display_type, token_.crtc_index);
 
   PopulateHWEventData(event_list);
 
@@ -294,12 +349,15 @@ DisplayError HWEventsDRM::SetEventState(HWEvent event, bool enable, void *arg) {
         vsync_registered_ = false;
       }
     } break;
+    case HWEvent::LINEPTR: {
+      error = RegisterLinePtr(enable, reinterpret_cast<uint64_t>(arg));
+    } break;
     default:
       DLOGE("Event not supported");
       return kErrorNotSupported;
   }
 
-  return kErrorNone;
+  return error;
 }
 
 void HWEventsDRM::WakeUpEventThread() {
@@ -326,6 +384,7 @@ DisplayError HWEventsDRM::CloseFds() {
         poll_fds_[i].fd = -1;
         break;
       case HWEvent::EXIT:
+      case HWEvent::LINEPTR:
         Sys::close_(poll_fds_[i].fd);
         poll_fds_[i].fd = -1;
         break;
@@ -401,6 +460,7 @@ void *HWEventsDRM::DisplayEventHandler() {
         case HWEvent::SHOW_BLANK_EVENT:
         case HWEvent::THERMAL_LEVEL:
         case HWEvent::PINGPONG_TIMEOUT:
+        case HWEvent::LINEPTR:
           if ((poll_fd.revents & POLLPRI) &&
               (Sys::pread_(poll_fd.fd, data, kMaxStringLength, 0) > 0)) {
             (this->*(event_data_list_[i]).event_parser)(data);
@@ -559,6 +619,50 @@ DisplayError HWEventsDRM::RegisterHwRecovery(bool enable) {
     return kErrorResources;
   }
 
+  return kErrorNone;
+}
+
+DisplayError HWEventsDRM::RegisterLinePtr(bool enable, uint32_t line_count) {
+  char line_count_str[64];
+  int fd = Sys::open_(sysfs_lineptr_value_.c_str(), O_WRONLY);
+  if (-1 == fd) {
+    DLOGE("Failed opening \"%s\". Error %d (%s).", sysfs_lineptr_value_.c_str(), errno,
+          strerror(errno));
+    return kErrorResources;
+  }
+
+  char vblankoffdelay_str[64];
+  int fdv = Sys::open_(sysfs_vblankoffdelay_.c_str(), O_WRONLY);
+  if (-1 == fdv) {
+    DLOGE("Failed opening \"%s\". Error %d (%s).", sysfs_vblankoffdelay_.c_str(), errno,
+          strerror(errno));
+    Sys::close_(fd);
+    return kErrorResources;
+  }
+
+  line_count = enable ? line_count : 0;  // Write 0 to disable LINEPTR events.
+  snprintf(line_count_str, sizeof(line_count_str), "%d", line_count);
+  if (-1 == Sys::write_(fd, line_count_str, strlen(line_count_str) + 1)) {
+    DLOGE("Failed writing to \"%s\". Error %d (%s).", sysfs_lineptr_value_.c_str(), errno,
+          strerror(errno));
+    Sys::close_(fd);
+    Sys::close_(fdv);
+    return kErrorResources;
+  }
+  DLOGI("Set \"%s=%s\"!", sysfs_lineptr_value_.c_str(), line_count_str);
+
+  snprintf(vblankoffdelay_str, sizeof(vblankoffdelay_str), "%s", enable ? "0" : "-1");
+  if (-1 == Sys::write_(fdv, vblankoffdelay_str, strlen(vblankoffdelay_str) + 1)) {
+    DLOGE("Failed writing to \"%s\". Error %d (%s).", sysfs_vblankoffdelay_.c_str(), errno,
+          strerror(errno));
+    Sys::close_(fd);
+    Sys::close_(fdv);
+    return kErrorResources;
+  }
+  DLOGI("Set \"%s=%s\"!", sysfs_vblankoffdelay_.c_str(), vblankoffdelay_str);
+
+  Sys::close_(fd);
+  Sys::close_(fdv);
   return kErrorNone;
 }
 
@@ -822,6 +926,14 @@ int HWEventsDRM::SetHwRecoveryEvent(const uint32_t hw_event_code, HWRecoveryEven
   }
 
   return 0;
+}
+
+void HWEventsDRM::HandleLinePtr(char *data) {
+  DTRACE_SCOPED();
+  int64_t timestamp = 0;
+  // Read format e.g., LINEPTR=2942653502261
+  sscanf(data, "LINEPTR=%" SCNd64, &timestamp);
+  event_handler_->LinePtr(timestamp);
 }
 
 }  // namespace sdm

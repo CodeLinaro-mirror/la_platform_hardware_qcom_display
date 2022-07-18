@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -1133,7 +1134,12 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, int *release_fe
 }
 
 void HWDeviceDRM::SetQOSData(const HWQosData &qos_data) {
-  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_CLK, token_.crtc_id, qos_data.clock_hz);
+  if (disp_type_ == sde_drm::DRMDisplayType::VIRTUAL && enable_cac_) {
+    // Since WB is half size of primary during DPU CAC, double the clock
+    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_CLK, token_.crtc_id, (qos_data.clock_hz * 2));
+  } else {
+    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_CLK, token_.crtc_id, qos_data.clock_hz);
+  }
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_AB, token_.crtc_id, qos_data.core_ab_bps);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_IB, token_.crtc_id, qos_data.core_ib_bps);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_LLCC_AB, token_.crtc_id, qos_data.llcc_ab_bps);
@@ -1229,7 +1235,25 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ZORDER, pipe_id, pipe_info->z_order);
 
+          // Update Layer color flag
+          sde_drm::DRMReserveColor color_reserve = sde_drm::DRMReserveColor::NONE;
+          if (layer.flags.is_color_red) {
+            color_reserve = sde_drm::DRMReserveColor::RED;
+          } else if (layer.flags.is_color_green) {
+            color_reserve = sde_drm::DRMReserveColor::GREEN;
+          } else if (layer.flags.is_color_blue) {
+            color_reserve = sde_drm::DRMReserveColor::BLUE;
+          }
+
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_LAYER_COLOR_FLAG, pipe_id, color_reserve);
+
           DRMBlendType blending = {};
+
+          // update blend type if layer color flag is set
+          if (color_reserve != sde_drm::DRMReserveColor::NONE) {
+            layer.blending = kBlendingLayerColor;
+          }
+
           SetBlending(layer.blending, &blending);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_BLEND_TYPE, pipe_id, blending);
 
@@ -1591,7 +1615,10 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
     if (hw_rotator_session->mode == kRotatorOffline) {
       hw_rotator_session->output_buffer.release_fence_fd = Sys::dup_(release_fence);
     } else {
-      layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
+      layer.input_buffer.release_fence_fd = -1;
+      if (!enable_cac_) {
+        layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
+      }
     }
   }
 
@@ -1669,6 +1696,9 @@ void HWDeviceDRM::SetBlending(const LayerBlending &source, DRMBlendType *target)
       break;
     case kBlendingCoverage:
       *target = DRMBlendType::COVERAGE;
+      break;
+    case kBlendingLayerColor:
+      *target = DRMBlendType::LAYER_COLOR;
       break;
     default:
       *target = DRMBlendType::UNDEFINED;
@@ -2319,8 +2349,9 @@ void HWDeviceDRM::DumpHWLayers(HWLayers *hw_layers) {
   uint32_t hw_layer_count = UINT32(hw_layer_info.hw_layers.size());
   std::vector<LayerRect> &left_frame_roi = hw_layer_info.left_frame_roi;
   std::vector<LayerRect> &right_frame_roi = hw_layer_info.right_frame_roi;
-  DLOGI("HWLayers Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
-         hw_layer_count, hw_layer_info.app_layer_count, hw_layer_info.gpu_target_index);
+  DLOGI("Display: %d:%d HWLayer Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
+         display_id_, disp_type_, hw_layer_count, hw_layer_info.app_layer_count,
+         hw_layer_info.gpu_target_index);
   DLOGI("LayerStackFlags = 0x%" PRIu32 ",  blend_cs = {primaries = %d, transfer = %d}",
          UINT32(stack->flags.flags), UINT32(stack->blend_cs.primaries),
          UINT32(stack->blend_cs.transfer));
@@ -2419,6 +2450,38 @@ void HWDeviceDRM::DumpHWLayers(HWLayers *hw_layers) {
 
 DisplayError HWDeviceDRM::SetBlendSpace(const PrimariesTransfer &blend_space) {
   blend_space_ = blend_space;
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::SetCAC(bool enable, PanelOrientation orientation) {
+  enable_cac_ = enable;
+  cac_orientation_ = orientation;
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::SetFrameTrigger(FrameTriggerMode mode) {
+  sde_drm::DRMFrameTriggerMode drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_DEFAULT;
+  switch (mode) {
+  case kFrameTriggerDefault:
+    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_DEFAULT;
+    break;
+  case kFrameTriggerSerialize:
+    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_SERIALIZE;
+    break;
+  case kFrameTriggerPostedStart:
+    drm_mode = sde_drm::DRMFrameTriggerMode::FRAME_DONE_WAIT_POSTED_START;
+    break;
+  default:
+    DLOGE("Invalid frame trigger mode %d", (int32_t)mode);
+    return kErrorParameters;
+  }
+
+  int ret = drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_FRAME_TRIGGER,
+                                      token_.conn_id, drm_mode);
+  if (ret) {
+    DLOGE("Failed to perform CONNECTOR_SET_FRAME_TRIGGER, drm_mode %d, ret %d", drm_mode, ret);
+    return kErrorUndefined;
+  }
   return kErrorNone;
 }
 

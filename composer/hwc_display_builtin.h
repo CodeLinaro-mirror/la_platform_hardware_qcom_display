@@ -26,6 +26,41 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #ifndef __HWC_DISPLAY_BUILTIN_H__
 #define __HWC_DISPLAY_BUILTIN_H__
@@ -34,6 +69,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
 
 #include "utils/sync_task.h"
 #include "utils/constants.h"
@@ -62,6 +99,10 @@ struct LayerStitchContext : public SyncTask<LayerStitchTaskCode>::TaskContext {
 
 class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode>::TaskHandler {
  public:
+  private_handle_t *wb_pvt_handle_ = nullptr;
+  buffer_handle_t wb_buffer_handle_ = nullptr;
+  BufferInfo wb_buffer_info_ = {};
+
   enum {
     SET_METADATA_DYN_REFRESH_RATE,
     SET_BINDER_DYN_REFRESH_RATE,
@@ -143,6 +184,15 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual HWC2::Error SetPowerMode(HWC2::PowerMode mode, bool teardown);
   std::string Dump() override;
   virtual bool HasReadBackBufferSupport();
+  virtual int32_t SetCAC(bool enable, float red, float green, float blue,
+                         PanelOrientation orientation);
+  virtual void UpdateFramerateForCAC(uint32_t fps);
+  virtual void HandleLinePtrEvent();
+  static void* WBKickOffThread(void *context);
+  void* PerformWBKickOff();
+  void ResetCacCommit();
+  virtual bool IsCacCommitDone();
+  virtual int32_t SetCACEyeConfig(const CACEyeConfig &left, const CACEyeConfig &right);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
@@ -172,6 +222,15 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   int GetBwCode(const DisplayConfigVariableInfo &attr);
   void SetBwLimitHint(bool enable);
   void SetPartialUpdate(DisplayConfigFixedInfo fixed_info);
+  void InitCacResources(uint32_t x_pixels, uint32_t y_pixels);
+  int AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels, bool secure);
+  int ReAllocateWBOutputBuffer(bool secure);  // TODO(use:cac): handle new size
+  bool SecureLayerPresent();
+  HWC2::Error ValidateWB(bool first);
+  HWC2::Error PresentWB(bool first, int32_t *out_retire_fence);
+  HWC2::Error ValidateAndCommitWB();
+  void BuildLayerStackFromWB();
+  void DumpOutputWB(int32_t out_wb_release);
 
   // SyncTask methods.
   void OnTask(const LayerStitchTaskCode &task_code,
@@ -222,6 +281,18 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool is_smart_panel_ = false;
   const char *kDisplayBwName = "display_bw";
   bool enable_bw_limits_ = false;
+
+  // Used for WB in primary display path
+  HWCLayer *wb_op_layer_ = {};  // App layer(WB o/p) for the primary builtin
+  HWCLayer *new_client_target_ = {};  // New client target(dummy), just w/h no buffer
+  std::map<hwc2_layer_t, HWCLayer *> sec_layer_map_;
+  std::multiset<HWCLayer *, SortLayersByZ> sec_layer_set_;
+  bool cac_commit_done_ = false;
+
+  pthread_cond_t wb_cv_ = {};
+  pthread_mutex_t wb_lock_ = {};
+  bool exit_wb_thread_ = false;
+  pthread_t wb_kickoff_thread_{};
 };
 
 }  // namespace sdm

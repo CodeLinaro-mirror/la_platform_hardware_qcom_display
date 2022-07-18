@@ -26,20 +26,58 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <cutils/properties.h>
 #include <sync/sync.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/utils.h>
+#include <utils/rect.h>
 #include <stdarg.h>
 #include <sys/mman.h>
+#include <pthread.h>
 
 #include <map>
 #include <string>
 #include <vector>
 
 #include "hwc_display_builtin.h"
+#include "hwc_display_virtual_dpu.h"
 #include "hwc_debugger.h"
 #include "hwc_session.h"
 
@@ -54,6 +92,33 @@ static void SetRect(LayerRect &src_rect, GLRect *target) {
   target->bottom = src_rect.bottom;
 }
 
+LayerRect GetFrameRect(bool first, uint32_t x_pixels, uint32_t y_pixels) {
+  LayerRect primary_res = { 0, 0, FLOAT(x_pixels), FLOAT(y_pixels)};
+  RectOrientation orientation = GetOrientation(primary_res);
+  LayerRect rect = {};
+  if (orientation == kOrientationPortrait) {
+    if (first) {  // top
+      rect.left = 0; rect.top = 0;
+      rect.right = FLOAT(x_pixels); rect.bottom = FLOAT(y_pixels/2);
+      Log(kTagClient, "FrameRect Top", rect);
+    } else {  // bottom
+      rect.left = 0; rect.top = FLOAT(y_pixels/2);
+      rect.right = FLOAT(x_pixels); rect.bottom = FLOAT(y_pixels);
+      Log(kTagClient, "FrameRect Bottom", rect);
+    }
+  } else if (orientation == kOrientationLandscape) {
+    if (first) {  // Left
+      rect.left = 0; rect.top = 0;
+      rect.right = FLOAT(x_pixels/2); rect.bottom = FLOAT(y_pixels);
+      Log(kTagClient, "FrameRect Left", rect);
+    } else {  // right
+      rect.left = FLOAT(x_pixels/2); rect.top = 0;
+      rect.right = FLOAT(x_pixels); rect.bottom = FLOAT(y_pixels);
+      Log(kTagClient, "FrameRect Right", rect);
+    }
+  }
+  return rect;
+}
 int HWCDisplayBuiltIn::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                               HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                               qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
@@ -162,6 +227,10 @@ int HWCDisplayBuiltIn::Init() {
   GetDisplayAttributesForConfig(INT(config_index), &attr);
   active_refresh_rate_ = attr.fps;
 
+  if (pthread_create(&wb_kickoff_thread_, NULL, &HWCDisplayBuiltIn::WBKickOffThread, this)) {
+    DLOGI("Failed to start %s, error = %s", "WB kickoff thread", strerror(errno));
+  }
+
   DLOGI("active_refresh_rate: %d", active_refresh_rate_);
 
   return status;
@@ -171,11 +240,414 @@ std::string HWCDisplayBuiltIn::Dump() {
   return HWCDisplay::Dump() + histogram.Dump();
 }
 
-HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  auto status = HWC2::Error::None;
-  DisplayError error = kErrorNone;
+void HWCDisplayBuiltIn::InitCacResources(uint32_t x_pixels, uint32_t y_pixels) {
+  // Allocate o/p buffer and client target for WB
+  int ret = AllocateWbBuffer(x_pixels, y_pixels, false);
+  if (ret) {
+    DLOGE("Error allocating WB buffers");
+    return;
+  }
+  // allocate the sec layers for main builtin display
+  // 1 layer + 1 GPU target and populate the LS
+  HWCLayer *layer = *sec_layer_set_.emplace(new HWCLayer(id_,
+    reinterpret_cast<HWCBufferAllocator *>(buffer_allocator_)));
+  sec_layer_map_.emplace(std::make_pair(layer->GetId(), layer));
+  wb_op_layer_ = layer;
+  wb_op_layer_->SetLayerBuffer(wb_buffer_handle_, -1);
+  hwc_rect_t rect = {0, 0, static_cast<int>(x_pixels), static_cast<int>(y_pixels) };
+  wb_op_layer_->SetLayerDisplayFrame(rect);
+  hwc_frect_t rect_f = { 0.0, 0.0, FLOAT(x_pixels), FLOAT(y_pixels) };
+  wb_op_layer_->SetLayerSourceCrop(rect_f);
+
+
+  // Dummy Client target(unused, no backing buffer_fd) on Primary
+  new_client_target_ = new HWCLayer(id_,
+     reinterpret_cast<HWCBufferAllocator *>(buffer_allocator_));
+
+  Layer *sdm_layer = new_client_target_->GetSDMLayer();
+  LayerRect pri_fb_rect = { 0, 0, FLOAT(x_pixels), FLOAT(y_pixels) };  // taken from primary
+  sdm_layer->src_rect = pri_fb_rect;
+  sdm_layer->dst_rect = pri_fb_rect;
+  sdm_layer->input_buffer.unaligned_width = x_pixels;
+  sdm_layer->input_buffer.unaligned_height = y_pixels;
+  sdm_layer->input_buffer.width = x_pixels;   // aligned and unaligned are same, as its not used
+  sdm_layer->input_buffer.height = x_pixels;  // aligned and unaligned are same, as its not used
+}
+
+int HWCDisplayBuiltIn::AllocateWbBuffer(uint32_t x_pixels, uint32_t y_pixels, bool secure) {
+  wb_buffer_info_ = {};
+  wb_buffer_info_.buffer_config.width = x_pixels;
+  wb_buffer_info_.buffer_config.height = y_pixels;
+  wb_buffer_info_.buffer_config.format = sdm::kFormatRGB888;
+  wb_buffer_info_.buffer_config.cache = true;
+  wb_buffer_info_.buffer_config.secure = secure;
+
+  if (buffer_allocator_->AllocateBuffer(&wb_buffer_info_) != 0) {
+    DLOGE("Error allocating WB out_put buffer");
+    return -1;
+  }
+
+  wb_buffer_handle_ = static_cast<buffer_handle_t>(wb_buffer_info_.private_data);
+  wb_pvt_handle_ = reinterpret_cast<private_handle_t *>(wb_buffer_info_.private_data);
+  DLOGI("handle of o/p buff = %lu fd = %d", wb_pvt_handle_->id, wb_pvt_handle_->fd);
+  return 0;
+}
+
+int HWCDisplayBuiltIn::ReAllocateWBOutputBuffer(bool secure) {
+  if (wb_buffer_info_.buffer_config.secure != secure) {
+    // Reallocate the the o/p buffer (same size) with secure attribute
+    DLOGI_IF(kTagClient, "For display %d-%d allocating WB buffer with secure = %s", sdm_id_, type_,
+             secure ? "true" : "false");
+    buffer_allocator_->FreeBuffer(&wb_buffer_info_);
+    wb_buffer_info_.buffer_config.secure = secure;
+    if (buffer_allocator_->AllocateBuffer(&wb_buffer_info_) != 0) {
+      DLOGE("WB Display: Reallocation failed");
+      return -1;
+    }
+
+    wb_buffer_handle_ = static_cast<buffer_handle_t>(wb_buffer_info_.private_data);
+    wb_pvt_handle_ = reinterpret_cast<private_handle_t *>(wb_buffer_info_.private_data);
+    wb_op_layer_->SetLayerBuffer(wb_buffer_handle_, -1);
+  }
+
+  return 0;
+}
+
+bool HWCDisplayBuiltIn::SecureLayerPresent() {
+  for (auto hwc_layer : layer_set_) {
+    Layer *layer = hwc_layer->GetSDMLayer();
+    if (layer->input_buffer.flags.secure) {
+      return true;
+    }
+  }
+  return false;
+}
+
+HWC2::Error HWCDisplayBuiltIn::ValidateAndCommitWB() {
+  if (!enable_cac_) {
+    return HWC2::Error::None;
+  }
+  // Sequence is for 0 deg panel.
+  // Validate top/left
+  // commit top/left
+  // Validate bottom/right
+  // Commit bottom/right
+  int32_t rel_fence = -1;
+  HWC2::Error err = HWC2::Error::None;
 
   DTRACE_SCOPED();
+
+  // true -> top/left
+  err = ValidateWB(true);
+  if (err != HWC2::Error::None) {
+    DLOGE("ValidateWB top/left failed");
+    return err;
+  }
+  rel_fence = -1;
+  err = PresentWB(true, &rel_fence);
+  if (err == HWC2::Error::None) {
+    CloseFd(&rel_fence);
+  } else {
+    DLOGE("Present top/left failed");
+    return err;
+  }
+
+  // Bottom/right
+  err = ValidateWB(false);
+  if (err != HWC2::Error::None) {
+    DLOGE("ValidateWB bottom/right failed");
+    return err;
+  }
+  rel_fence = -1;
+  err = PresentWB(false, &rel_fence);
+  if (err == HWC2::Error::None) {
+    CloseFd(&rel_fence);
+  } else {
+    DLOGE("Present bottom/right failed");
+    return err;
+  }
+
+  return err;
+}
+
+HWC2::Error HWCDisplayBuiltIn::ValidateWB(bool first) {
+  HWC2::Error err = HWC2::Error::None;
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
+  if (!wb_display) {
+    DLOGE("Return no WB display for display = %lu", id_);
+    return HWC2::Error::Unsupported;
+  }
+
+  DTRACE_SCOPED();
+  uint32_t x_pixels, y_pixels = 0;
+  GetMixerResolution(&x_pixels, &y_pixels);
+  LayerRect frame_split_rect = GetFrameRect(first, x_pixels, y_pixels);
+  wb_display->SetFrameSplitRect(frame_split_rect);
+  HWCLayerStack pri_layer_stack;
+  GetLayerStack(&pri_layer_stack);
+  wb_display->SetLayerStack(&pri_layer_stack);
+  bool secure = SecureLayerPresent();
+  ReAllocateWBOutputBuffer(secure);
+  err = wb_display->SetOutputBuffer(wb_buffer_handle_, -1);
+  uint32_t out_num_types;
+  uint32_t out_num_requests;
+  err = wb_display->Validate(&out_num_types, &out_num_requests);
+  if (err != HWC2::Error::None && err != HWC2::Error::HasChanges) {
+    DLOGE("Failed err = %d", err);
+    return err;
+  }
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayBuiltIn::PresentWB(bool first, int32_t *out_wb_release) {
+  HWC2::Error err = HWC2::Error::None;
+  HWCSession *hwc_session = HWCSession::GetInstance();
+
+  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
+  if (!wb_display) {
+    DLOGE("Return no WB display for display = %lu", id_);
+    return HWC2::Error::Unsupported;
+  }
+  DTRACE_SCOPED();
+
+  err = wb_display->Present(out_wb_release);
+  if (err != HWC2::Error::None) {
+    DLOGE("WB Present failed: err = %d", err);
+    return err;
+  }
+
+  // DumpOutputWB(*out_wb_release);  // Uncomment to dump the WB o/p in CAC
+
+  return HWC2::Error::None;
+}
+
+void HWCDisplayBuiltIn::DumpOutputWB(int32_t out_wb_release) {
+  if (wb_pvt_handle_) {
+    const private_handle_t *output_handle =
+        reinterpret_cast<const private_handle_t *>(wb_pvt_handle_);
+    DisplayError error = kErrorNone;
+    HWCBufferAllocator *buffer_allocator =
+        reinterpret_cast<HWCBufferAllocator *>(buffer_allocator_);
+    if (!output_handle->base) {
+      error = buffer_allocator->MapBuffer(wb_pvt_handle_, out_wb_release);
+      if (error != kErrorNone) {
+        DLOGE("Failed to map output buffer, error = %d", error);
+        return;
+      }
+    }
+    DumpOutputBuffer(wb_buffer_info_, reinterpret_cast<void *>(output_handle->base),
+                     out_wb_release);
+
+    int release_fence = -1;
+    error = buffer_allocator->UnmapBuffer(output_handle, &release_fence);
+    if (error != kErrorNone) {
+      DLOGE("Failed to unmap buffer, error = %d", error);
+      return;
+    }
+  } else {
+    DLOGE("No WB Output Buffer to dump!!");
+  }
+}
+
+void HWCDisplayBuiltIn::BuildLayerStackFromWB() {
+  layer_stack_ = LayerStack();
+  display_rect_ = LayerRect();
+  metadata_refresh_rate_ = 0;
+  layer_stack_.flags.animating = animating_;
+  layer_stack_.flags.fast_path = fast_path_enabled_ && fast_path_composition_;
+
+  DTRACE_SCOPED();
+  // Add one layer for fb target
+  for (auto hwc_layer : sec_layer_set_) {
+    // Reset layer data which SDM may change
+    hwc_layer->ResetPerFrameData();
+    Layer *layer = hwc_layer->GetSDMLayer();
+    layer->flags = {};   // Reset earlier flags
+    // Mark all layers to skip, when client target handle is NULL
+    if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Client ||
+        !client_target_->GetSDMLayer()->input_buffer.buffer_id) {
+      layer->flags.skip = true;
+    } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::SolidColor) {
+      layer->flags.solid_fill = true;
+    }
+
+    if (!hwc_layer->IsDataSpaceSupported()) {
+      layer->flags.skip = true;
+    }
+
+    // set default composition as GPU for SDM
+    layer->composition = kCompositionGPU;
+
+    if (swap_interval_zero_) {
+      if (layer->input_buffer.acquire_fence_fd >= 0) {
+        close(layer->input_buffer.acquire_fence_fd);
+        layer->input_buffer.acquire_fence_fd = -1;
+      }
+    }
+
+    bool is_secure = false;
+    bool is_video = false;
+    const private_handle_t *handle =
+        reinterpret_cast<const private_handle_t *>(layer->input_buffer.buffer_id);
+    if (handle) {
+      if (handle->buffer_type == BUFFER_TYPE_VIDEO) {
+        layer_stack_.flags.video_present = true;
+        is_video = true;
+      }
+      // TZ Protected Buffer - L1
+      // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
+      if (handle->flags & private_handle_t::PRIV_FLAGS_PROTECTED_BUFFER ||
+          handle->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
+        layer_stack_.flags.secure_present = true;
+        is_secure = true;
+      }
+      // UBWC PI format
+      if (handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED_PI) {
+        layer->input_buffer.flags.ubwc_pi = true;
+      }
+    }
+    if (layer->input_buffer.flags.secure_display) {
+      layer_stack_.flags.secure_present = true;
+      is_secure = true;
+    }
+
+    if (hwc_layer->IsSingleBuffered() &&
+       !(hwc_layer->IsRotationPresent() || hwc_layer->IsScalingPresent())) {
+      layer->flags.single_buffer = true;
+      layer_stack_.flags.single_buffered_layer_present = true;
+    }
+
+    bool hdr_layer = layer->input_buffer.color_metadata.colorPrimaries == ColorPrimaries_BT2020 &&
+                     (layer->input_buffer.color_metadata.transfer == Transfer_SMPTE_ST2084 ||
+                     layer->input_buffer.color_metadata.transfer == Transfer_HLG);
+    if (hdr_layer && !disable_hdr_handling_) {
+      // Dont honor HDR when its handling is disabled
+      layer->input_buffer.flags.hdr = true;
+      layer_stack_.flags.hdr_present = true;
+    }
+
+    if (hwc_layer->IsNonIntegralSourceCrop() && !is_secure && !hdr_layer &&
+        !layer->flags.single_buffer && !layer->flags.solid_fill && !is_video) {
+      layer->flags.skip = true;
+    }
+
+    if (!layer->flags.skip &&
+        (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Cursor)) {
+      // Currently we support only one HWCursor & only at top most z-order
+      if ((*sec_layer_set_.rbegin())->GetId() == hwc_layer->GetId()) {
+        layer->flags.cursor = true;
+        layer_stack_.flags.cursor_present = true;
+      }
+    }
+
+    if (layer->flags.skip) {
+      layer_stack_.flags.skip_present = true;
+    }
+
+    // TODO(user): Move to a getter if this is needed at other places
+    hwc_rect_t scaled_display_frame = {INT(layer->dst_rect.left), INT(layer->dst_rect.top),
+                                       INT(layer->dst_rect.right), INT(layer->dst_rect.bottom)};
+    if (hwc_layer->GetGeometryChanges() & kDisplayFrame) {
+      ApplyScanAdjustment(&scaled_display_frame);
+    }
+    hwc_layer->SetLayerDisplayFrame(scaled_display_frame);
+    hwc_layer->ResetPerFrameData();
+    // SDM requires these details even for solid fill
+    if (layer->flags.solid_fill) {
+      LayerBuffer *layer_buffer = &layer->input_buffer;
+      layer_buffer->width = UINT32(layer->dst_rect.right - layer->dst_rect.left);
+      layer_buffer->height = UINT32(layer->dst_rect.bottom - layer->dst_rect.top);
+      layer_buffer->unaligned_width = layer_buffer->width;
+      layer_buffer->unaligned_height = layer_buffer->height;
+      layer_buffer->acquire_fence_fd = -1;
+      layer_buffer->release_fence_fd = -1;
+      layer->src_rect.left = 0;
+      layer->src_rect.top = 0;
+      layer->src_rect.right = layer_buffer->width;
+      layer->src_rect.bottom = layer_buffer->height;
+    }
+
+    if (hwc_layer->HasMetaDataRefreshRate() && layer->frame_rate > metadata_refresh_rate_) {
+      metadata_refresh_rate_ = SanitizeRefreshRate(layer->frame_rate);
+    }
+
+    display_rect_ = Union(display_rect_, layer->dst_rect);
+    geometry_changes_ |= hwc_layer->GetGeometryChanges();
+
+    layer->flags.updating = true;
+    if (sec_layer_set_.size() <= kMaxLayerCount) {
+      layer->flags.updating = IsLayerUpdating(hwc_layer);
+    }
+
+    if (hwc_layer->IsColorTransformSet()) {
+      layer->flags.color_transform = true;
+    }
+
+    layer_stack_.flags.mask_present |= layer->input_buffer.flags.mask_layer;
+
+    if ((hwc_layer->GetDeviceSelectedCompositionType() != HWC2::Composition::Device) ||
+        (hwc_layer->GetClientRequestedCompositionType() != HWC2::Composition::Device) ||
+        layer->flags.skip) {
+      layer->update_mask.set(kClientCompRequest);
+    }
+
+    if (game_supported_ && (hwc_layer->GetType() == kLayerGame)) {
+      layer->flags.is_game = true;
+      layer->input_buffer.flags.game = true;
+    }
+
+    layer_stack_.layers.push_back(layer);
+  }
+
+  // If layer stack needs Client composition, HWC display gets into InternalValidate state. If
+  // validation gets reset by any other thread in this state, enforce Geometry change to ensure
+  // that Client target gets composed by SF.
+  bool enforce_geometry_change = (validate_state_ == kInternalValidate) && !validated_;
+
+  // TODO(user): Set correctly when SDM supports geometry_changes as bitmask
+
+  layer_stack_.flags.geometry_changed = UINT32((geometry_changes_ || enforce_geometry_change ||
+                                                geometry_changes_on_doze_suspend_) > 0);
+  layer_stack_.flags.config_changed = !validated_;
+  // Append client target to the layer stack
+  Layer *wb_client_target = new_client_target_->GetSDMLayer();
+  wb_client_target->composition = kCompositionGPUTarget;
+  wb_client_target->flags.updating = IsLayerUpdating(client_target_);
+  // Derive client target dataspace based on the color mode - bug/115482728
+  new_client_target_->SetLayerDataspace(client_target_->GetLayerDataspace());
+  layer_stack_.layers.push_back(wb_client_target);
+
+  // Set split rect to LS - for completion
+  layer_stack_.frame_split = frame_split_rect_;
+#if 0
+  // fall back frame composition to GPU when client target is 10bit
+  // TODO(user): clarify the behaviour from Client(SF) and SDM Extn -
+  // when handling 10bit FBT, as it would affect blending
+  if (Is10BitFormat(sdm_client_target->input_buffer.format)) {
+    // Must fall back to client composition
+    MarkLayersForClientComposition();
+  }
+#endif
+}
+
+HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  DisplayError error = kErrorNone;
+  auto status = HWC2::Error::None;
+
+  DTRACE_SCOPED();
+
+  bool is_wb_cac_in_use = IsWBCacInUse();
+  if (enable_cac_ && is_wb_cac_in_use) {
+    status = ValidateAndCommitWB();
+    if (status != HWC2::Error::None) {
+      DLOGE("ValidateWB failed");
+      return status;
+    }
+  }
 
   if (display_paused_ || (!is_primary_ && active_secure_sessions_[kSecureDisplay])) {
     MarkLayersForGPUBypass();
@@ -187,8 +659,13 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
     MarkLayersForClientComposition();
   }
 
-  // Fill in the remaining blanks in the layers and add them to the SDM layerstack
-  BuildLayerStack();
+  // If WB is not used for CAC not need to BuildLS from WB
+  if (enable_cac_ && is_wb_cac_in_use) {
+    // Call new BuildLayerStack, which populates layers from secondary set
+    BuildLayerStackFromWB();
+  } else {
+    BuildLayerStack();
+  }
 
   // Add stitch layer to layer stack.
   AppendStitchLayer();
@@ -252,6 +729,9 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
     }
     // On success, set current refresh rate to new refresh rate.
     current_refresh_rate_ = refresh_rate;
+    if (enable_cac_ && is_wb_cac_in_use) {
+      UpdateFramerateForCAC(current_refresh_rate_);
+    }
   }
 
   if (layer_set_.empty()) {
@@ -445,6 +925,11 @@ HWC2::Error HWCDisplayBuiltIn::SetPowerMode(HWC2::PowerMode mode, bool teardown)
     SetBwLimitHint(false);
   }
 
+  if (enable_cac_ && cac_commit_done_) {
+    DLOGI("Resetting Commit done.... mode = %d", mode);
+    cac_commit_done_ = false;
+  }
+
   return HWC2::Error::None;
 }
 
@@ -452,6 +937,11 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
   auto status = HWC2::Error::None;
 
   DTRACE_SCOPED();
+
+  if (cac_commit_done_) {
+    // No need to call present on primary for every frame
+    return status;
+  }
 
   if (!is_primary_ && active_secure_sessions_[kSecureDisplay]) {
     return status;
@@ -490,6 +980,9 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
 
   CloseFd(&output_buffer_.acquire_fence_fd);
   pending_commit_ = false;
+  if (enable_cac_ && IsWBCacInUse()) {
+    cac_commit_done_ = true;
+  }
   return status;
 }
 
@@ -786,6 +1279,7 @@ int HWCDisplayBuiltIn::Perform(uint32_t operation, ...) {
   }
   va_end(args);
   validated_ = false;
+  cac_commit_done_ = false;
 
   return 0;
 }
@@ -1407,6 +1901,24 @@ int HWCDisplayBuiltIn::Deinit() {
   }
 
   histogram.stop();
+
+  // free the WB buffer
+  buffer_allocator_->FreeBuffer(&wb_buffer_info_);
+
+  // stop the WB kickoff thread
+  pthread_mutex_lock(&wb_lock_);
+  exit_wb_thread_ = true;
+  pthread_cond_signal(&wb_cv_);
+  pthread_mutex_unlock(&wb_lock_);
+
+  pthread_join(wb_kickoff_thread_, NULL);
+
+  delete wb_op_layer_;
+  delete new_client_target_;
+
+  sec_layer_map_.clear();
+  sec_layer_set_.clear();
+
   return HWCDisplay::Deinit();
 }
 
@@ -1559,6 +2071,190 @@ bool HWCDisplayBuiltIn::HasReadBackBufferSupport() {
   display_intf_->GetConfig(&fixed_info);
 
   return fixed_info.readback_supported;
+}
+
+int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blue,
+                                  PanelOrientation orientation) {
+  uint32_t config_index = 0;
+  DisplayConfigVariableInfo attr = {};
+  GetDisplayAttributesForConfig(INT(config_index), &attr);
+
+  // Turn off CAC 4k@120Hz under landscape case
+  if (current_refresh_rate_ >= 120 && attr.x_pixels >= 4320
+      && (attr.x_pixels > attr.y_pixels)) {
+    DLOGW("Display %d-%d, Current refresh rate is %d, resolution is %dx%d",
+          sdm_id_, type_, current_refresh_rate_, attr.x_pixels, attr.y_pixels);
+    return -1;
+  }
+
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  HWCDisplayVirtualDPU *wb_display = nullptr;
+  if (hwc_session->wb_display_) {
+    InitCacResources(attr.x_pixels, attr.y_pixels);
+    wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+      (hwc_session->GetDisplay(hwc_session->wb_display_));
+
+    auto err = wb_display->SetFrameRate(current_refresh_rate_);
+    if (err != HWC2::Error::None) {
+      DLOGE("Failed for display %" PRIu64 " %d-%d, fps = %d, errno = %d", id_, sdm_id_, type_,
+            current_refresh_rate_, err);
+    }
+
+    int32_t error = wb_display->SetCAC(enable, red, green, blue, GetPanelOrientation());
+    if (error != kErrorNone) {
+      DLOGE("Failed for display %" PRIu64 " %d-%d, enable = %d, red = %f, green = %f, blue = %f, "
+            "errno = %d, desc = %s", id_, sdm_id_, type_, enable, red, green, blue, error,
+            strerror(error));
+      return -1;
+    }
+  }
+
+  // Pass CAC enablement info to Builtin for fence management
+  display_intf_->SetCAC(enable, red, green, blue, orientation);
+
+  enable_cac_ = enable;
+  bool is_wb_cac_in_use = IsWBCacInUse();
+  if (!enable_cac_) {
+    // Disable lineptr events on this display when wb is in use.
+    if (is_wb_cac_in_use) {
+      display_intf_->SetLinePtrState(false, 0);
+    }
+    if (wb_display != nullptr) {
+      // Reset layer stack of WB display to allow it to be safely destroyed.
+      HWCDisplay::HWCLayerStack primary_layer_stack = {};
+      wb_display->GetLayerStack(&primary_layer_stack);
+      wb_display->ClearLayerStack();
+      SetLayerStack(&primary_layer_stack);
+    }
+  } else {
+    // Enable lineptr events at every y_pixels/2 on this display.
+    uint32_t config_index = 0;
+    GetActiveDisplayConfig(&config_index);
+    DisplayConfigVariableInfo attr = {};
+    GetDisplayAttributesForConfig(INT(config_index), &attr);
+    if (is_wb_cac_in_use) {
+      display_intf_->SetLinePtrState(true, attr.y_pixels/2);
+    }
+  }
+
+  validated_ = false;
+  frame_split_rect_ = {};  // clear the frame_split_rect_
+  cac_commit_done_ = false;
+  callbacks_->Refresh(id_);
+
+  return 0;
+}
+
+void HWCDisplayBuiltIn::UpdateFramerateForCAC(uint32_t fps) {
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
+  if (!wb_display) {
+    DLOGE("Return no WB display for display = %lu", id_);
+    return;
+  }
+
+  auto error = wb_display->SetFrameRate(fps);
+  if (error != HWC2::Error::None) {
+    DLOGE("Failed to set fps for display %" PRIu64 " %d-%d, fps = %d, errno = %d", id_, sdm_id_,
+          type_, fps, error);
+    return;
+  }
+
+  return;
+}
+
+void *HWCDisplayBuiltIn::WBKickOffThread(void *context) {
+  if (context) {
+    return reinterpret_cast<HWCDisplayBuiltIn *>(context)->PerformWBKickOff();
+  }
+  return NULL;
+}
+
+void HWCDisplayBuiltIn::HandleLinePtrEvent() {
+  if (!enable_cac_) {
+    return;
+  }
+
+  if (!cac_commit_done_) {
+    callbacks_->Refresh(id_);
+    return;
+  }
+
+  pthread_mutex_lock(&wb_lock_);
+  pthread_cond_signal(&wb_cv_);
+  pthread_mutex_unlock(&wb_lock_);
+}
+
+void *HWCDisplayBuiltIn::PerformWBKickOff() {
+  while (1) {
+    pthread_mutex_lock(&wb_lock_);
+    pthread_cond_wait(&wb_cv_, &wb_lock_);
+    if (exit_wb_thread_) {
+      pthread_mutex_unlock(&wb_lock_);
+      return nullptr;
+    }
+    DTRACE_SCOPED();
+    SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
+    for (auto hwc_layer : layer_set_) {
+      auto layer = hwc_layer->GetSDMLayer();
+      if (layer->update_mask[kSecurity])  {
+        DLOGI_IF(kTagClient, "Display %d-%d Security level changed", sdm_id_, type_);
+        cac_commit_done_ = false;
+      }
+    }
+    if (cac_commit_done_) {
+      ValidateAndCommitWB();
+    }
+    pthread_mutex_unlock(&wb_lock_);
+  }
+  return nullptr;
+}
+
+void HWCDisplayBuiltIn::ResetCacCommit() {
+  cac_commit_done_ = false;
+}
+
+bool HWCDisplayBuiltIn::IsCacCommitDone() {
+  if (cac_commit_done_) {
+    for (auto hwc_layer : layer_set_) {
+      auto layer = hwc_layer->GetSDMLayer();
+      layer->composition = kCompositionSDE;
+    }
+    DLOGI("cac commit done - Marking layers for GPU Bypass");
+  }
+  return cac_commit_done_;
+}
+
+int32_t HWCDisplayBuiltIn::SetCACEyeConfig(const CACEyeConfig &left,
+                                           const CACEyeConfig &right) {
+  int32_t error = HWCDisplay::SetCACEyeConfig(left, right);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set IPD params for display %" PRIu64 " %d-%d, errno = %d", id_, sdm_id_,
+          type_, error);
+    return -1;
+  }
+
+  HWCSession *hwc_session = HWCSession::GetInstance();
+  HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
+                                     (hwc_session->GetDisplay(hwc_session->wb_display_));
+  if (!wb_display) {
+    DLOGE("Return no WB display for display = %lu", id_);
+    return -1;
+  }
+
+  error = wb_display->SetCACEyeConfig(left, right);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set IPD params for display %" PRIu64 " %d-%d, errno = %d", id_, sdm_id_,
+          type_, error);
+    return -1;
+  }
+
+  validated_ = false;
+  cac_commit_done_ = false;
+  callbacks_->Refresh(id_);
+
+  return 0;
 }
 
 }  // namespace sdm

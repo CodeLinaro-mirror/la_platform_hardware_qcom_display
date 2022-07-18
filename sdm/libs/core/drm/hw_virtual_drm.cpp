@@ -26,11 +26,47 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <stdio.h>
 #include <ctype.h>
 #include <drm_logger.h>
 #include <utils/debug.h>
+#include <utils/rect.h>
 #include <utils/utils.h>
 #include <algorithm>
 #include <vector>
@@ -64,12 +100,44 @@ void HWVirtualDRM::ConfigureWbConnectorFbId(uint32_t fb_id) {
   return;
 }
 
-void HWVirtualDRM::ConfigureWbConnectorDestRect() {
+void HWVirtualDRM::ConfigureWbConnectorDestRect(HWLayers *hw_layers) {
   DRMRect dst = {};
   dst.left = 0;
   dst.bottom = display_attributes_[current_mode_index_].y_pixels;
   dst.top = 0;
   dst.right = display_attributes_[current_mode_index_].x_pixels;
+
+  LayerRect display_rect = { 0.0, 0.0, FLOAT(dst.right), FLOAT(dst.bottom) };
+  LayerRect &frame_split = hw_layers->info.stack->frame_split;
+  if (IsValid(frame_split)) {
+    if (cac_orientation_.flip_horizontal && cac_orientation_.flip_vertical) {
+      // On inverse mounted pri-panel(most likely portrait), handle flips in WB pass
+      if (IsCongruent(frame_split, display_rect)) {
+        // WB top half to bottom
+        dst.left = 0;
+        // TODO(cac): Make this generic instead of (*2)
+        dst.bottom = display_attributes_[current_mode_index_].y_pixels * 2;
+        dst.top = display_attributes_[current_mode_index_].y_pixels;
+        dst.right = display_attributes_[current_mode_index_].x_pixels;
+      } else {
+        // WB bottom half at top
+        dst.left = 0;
+        dst.bottom = display_attributes_[current_mode_index_].y_pixels;
+        dst.top = 0;
+        dst.right = display_attributes_[current_mode_index_].x_pixels;
+      }
+    } else {
+      // Frame_split is used Used for CAC use-case, where WB is half size of primary
+      dst.left = frame_split.left;
+      dst.bottom = frame_split.bottom;
+      dst.top = frame_split.top;
+      dst.right = frame_split.right;
+    }
+  }
+
+  DLOGV_IF(kTagDriverConfig, "flip_h = %d flip_v = %d DstRect l = %d t = %d r = %d b = %d",
+           cac_orientation_.flip_horizontal, cac_orientation_.flip_vertical, dst.left, dst.top,
+           dst.right, dst.bottom);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_RECT, token_.conn_id, dst);
   return;
 }
@@ -141,12 +209,23 @@ DisplayError HWVirtualDRM::Commit(HWLayers *hw_layers) {
   uint32_t fb_id = registry_.GetOutputFbId(output_buffer->handle_id);
 
   ConfigureWbConnectorFbId(fb_id);
-  ConfigureWbConnectorDestRect();
+  ConfigureWbConnectorDestRect(hw_layers);
   ConfigureWbConnectorSecureMode(output_buffer->flags.secure);
-
+  if (enable_cac_) {
+    SetFrameTrigger(kFrameTriggerPostedStart);
+  } else {
+    SetFrameTrigger(kFrameTriggerDefault);
+  }
   err = HWDeviceDRM::AtomicCommit(hw_layers);
   if (err != kErrorNone) {
     DLOGE("Atomic commit failed for crtc_id %d conn_id %d", token_.crtc_id, token_.conn_id);
+  }
+  // Close the WB retire fence in CAC mode
+  LayerRect &frame_split = hw_layers->info.stack->frame_split;
+  // frame_Split is hint for CAC mode, close retire fence
+  if (IsValid(frame_split) || enable_cac_) {
+    LayerStack *stack = hw_layers->info.stack;
+    CloseFd(&stack->retire_fence_fd);
   }
 
   return(err);
@@ -172,8 +251,13 @@ DisplayError HWVirtualDRM::Validate(HWLayers *hw_layers) {
   uint32_t fb_id = registry_.GetOutputFbId(output_buffer->handle_id);
 
   ConfigureWbConnectorFbId(fb_id);
-  ConfigureWbConnectorDestRect();
+  ConfigureWbConnectorDestRect(hw_layers);
   ConfigureWbConnectorSecureMode(output_buffer->flags.secure);
+  if (enable_cac_) {
+    SetFrameTrigger(kFrameTriggerPostedStart);
+  } else {
+    SetFrameTrigger(kFrameTriggerDefault);
+  }
 
   return HWDeviceDRM::Validate(hw_layers);
 }
