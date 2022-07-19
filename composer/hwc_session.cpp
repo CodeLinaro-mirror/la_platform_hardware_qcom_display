@@ -3045,7 +3045,9 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
               info.display_id, UINT32(client_id));
         CreateDummyDisplay(client_id);
       }
-
+      if (null_display_active_)  {
+        SetVsyncEnabled(client_id, HWC2_VSYNC_ENABLE);
+      }
       map_info.disp_type = info.display_type;
       map_info.sdm_id = info.display_id;
 
