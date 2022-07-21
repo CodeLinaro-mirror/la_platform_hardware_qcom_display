@@ -580,7 +580,8 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
       info->dyn_bitclk_support = (string(line, dyn_bitclk_support.length()) == "true");
     }
   }
-
+  delete[] fmt_str;
+  fmt_str = NULL;
   drmModeFreePropertyBlob(blob);
 }
 
@@ -673,7 +674,8 @@ void DRMConnector::ParseModeProperties(uint64_t blob_id, DRMConnectorInfo *info)
       mode_item->transfer_time_us = std::stoi(string(line, mdp_transfer_time_us.length()));
     }
   }
-
+  delete[] fmt_str;
+  fmt_str = NULL;
   drmModeFreePropertyBlob(blob);
 }
 
