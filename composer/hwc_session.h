@@ -620,6 +620,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   bool null_display_active_ = false;
   static int null_display_mode_;
   hwc2_layer_t tunnelled_layer_ = -1;
+  int tunneled_layer_rf_ = -1; // tunneled layer's release fence
 };
 }  // namespace sdm
 
