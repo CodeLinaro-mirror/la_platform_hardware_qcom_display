@@ -1133,6 +1133,7 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
   uint32_t index = current_mode_index_;
   drmModeModeInfo current_mode = connector_info_.modes[index].mode;
   uint64_t current_bit_clk = connector_info_.modes[index].bit_clk_rate;
+  DRMTopology topology = connector_info_.modes[index].topology;
 
   solid_fills_.clear();
   bool resource_update = hw_layers->updates_mask.test(kUpdateResources);
@@ -1194,7 +1195,18 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
       if (pipe_info->valid && fb_id) {
         uint32_t pipe_id = pipe_info->pipe_id;
-
+        if (topology == DRMTopology::SINGLE_LM || topology == DRMTopology::DUAL_LM_MERGE ||
+            update_config) {
+          if (hw_scale_) {
+            SDEScaler scaler_output = {};
+            hw_scale_->SetScaler(pipe_info->scale_data, &scaler_output);
+            // TODO(user): Remove qseed3 and add version check, then send appropriate scaler object
+            if (hw_resource_.has_qseed3) {
+              drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
+                                        reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
+            }
+          }
+        }
         if (update_config) {
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ALPHA, pipe_id, layer.plane_alpha);
 
@@ -1262,16 +1274,6 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           uint32_t config = 0;
           SetSrcConfig(layer.input_buffer, hw_rotator_session->mode, &config);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SRC_CONFIG, pipe_id, config);;
-
-          if (hw_scale_) {
-            SDEScaler scaler_output = {};
-            hw_scale_->SetScaler(pipe_info->scale_data, &scaler_output);
-            // TODO(user): Remove qseed3 and add version check, then send appropriate scaler object
-            if (hw_resource_.has_qseed3) {
-              drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
-                                        reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
-            }
-          }
 
           DRMCscType csc_type = DRMCscType::kCscTypeMax;
           SelectCscType(layer.input_buffer, &csc_type);
