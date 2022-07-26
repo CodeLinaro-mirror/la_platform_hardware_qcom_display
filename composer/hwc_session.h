@@ -55,7 +55,7 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.15/IDisplayConfig.h>
+#include <vendor/display/config/1.21/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
@@ -88,7 +88,7 @@
 namespace sdm {
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_15::IDisplayConfig;
+using vendor::display::config::V1_21::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -296,6 +296,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t SetLayerSourceCrop(hwc2_display_t display, hwc2_layer_t layer, hwc_frect_t crop);
   int32_t SetLayerTransform(hwc2_display_t display, hwc2_layer_t layer, int32_t int_transform);
   int32_t SetLayerZOrder(hwc2_display_t display, hwc2_layer_t layer, uint32_t z);
+  int32_t SetLayerIsTunneled(hwc2_display_t display, hwc2_layer_t layer, bool tunneled);
+  int32_t IsTunnelledLayerPresent(hwc2_display_t display, bool *tunnelled_layer_present);
   int32_t SetLayerType(hwc2_display_t display, hwc2_layer_t layer,
                        IQtiComposerClient::LayerType type);
   int32_t SetLayerSurfaceDamage(hwc2_display_t display, hwc2_layer_t layer, hwc_region_t damage);
@@ -452,6 +454,22 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<void> getHDRCapabilities(IDisplayConfig::DisplayType dpy,
                                   getHDRCapabilities_cb _hidl_cb) override;
   Return<int32_t> setCameraLaunchStatus(uint32_t on) override;
+  Return<int32_t> tunnellingInit() override;
+  Return<int32_t> allowIdleFallback() override;
+  Return<void> getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
+                              getFSCRGBOrder_cb _hidl_cb) override;
+  Return<int32_t> enableCAC(uint32_t disp_id, bool enable,
+                            float red, float green, float blue) override;
+  Return<int32_t> setCacEyeConfig(uint32_t disp_id, const IDisplayConfig::CacEyeConfig& left,
+                                  const IDisplayConfig::CacEyeConfig& right) override;
+  Return<int32_t> setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val) override;
+  Return<int32_t> createTunnelledLayer(const IDisplayConfig::LayerInfo& layer) override;
+  Return<void> dequeueTunnelledBuffer(const hidl_handle& buffer, dequeueTunnelledBuffer_cb _hidl_cb)
+                                                                 override;
+  Return<int32_t> queueTunnelledBuffer(const hidl_handle& buffer, const hidl_handle& fence)
+                                                                  override;
+  Return<int32_t> destroyTunnelledLayer() override;
+  Return<int32_t> tunnellingDeinit() override;
   Return<void> displayBWTransactionPending(displayBWTransactionPending_cb _hidl_cb) override;
   Return<int32_t> IdlePowerCollapse(bool enable, bool synchronous);
 
@@ -558,6 +576,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   bool update_vsync_on_doze_ = false;
   std::vector<bool> is_hdr_display_;    // info on HDR supported
   std::map <hwc2_display_t, hwc2_display_t> map_hwc_display_;  // Real and dummy display pairs.
+  std::map <uint64_t, int32_t> tunnelling_map_buffer_release_fence_; // stores mapping between
+                                                                     // buffer id and release fence
+  // stores mapping between buffer id and native handle
+  std::map <uint64_t, const native_handle_t *> tunnelling_map_buffer_native_handle_;
   bool reset_panel_ = false;
   bool client_connected_ = false;
   bool new_bw_mode_ = false;
@@ -579,6 +601,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t disable_mask_layer_hint_ = 0;
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
+  bool tunnelling_enabled_ = false;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
   CWB cwb_;
@@ -596,6 +619,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int display_reboot_strategy_ = kRebootStrategyDefault;
   bool null_display_active_ = false;
   static int null_display_mode_;
+  hwc2_layer_t tunnelled_layer_ = -1;
 };
 }  // namespace sdm
 

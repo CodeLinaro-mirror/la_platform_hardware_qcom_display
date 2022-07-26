@@ -1068,6 +1068,15 @@ int32_t HWCSession::SetLayerZOrder(hwc2_display_t display, hwc2_layer_t layer, u
   return CallDisplayFunction(display, &HWCDisplay::SetLayerZOrder, layer, z);
 }
 
+int32_t HWCSession::SetLayerIsTunneled(hwc2_display_t display, hwc2_layer_t layer, bool tunneled) {
+  return CallDisplayFunction(display, &HWCDisplay::SetLayerIsTunneled, layer, tunneled);
+}
+
+int32_t HWCSession::IsTunnelledLayerPresent(hwc2_display_t display, bool *tunnelled_layer_present) {
+  return CallDisplayFunction(display, &HWCDisplay::IsTunnelledLayerPresent,
+                             tunnelled_layer_present);
+}
+
 int32_t HWCSession::SetLayerType(hwc2_display_t display, hwc2_layer_t layer,
                                  IQtiComposerClient::LayerType type) {
   return CallDisplayFunction(display, &HWCDisplay::SetLayerType, layer, type);

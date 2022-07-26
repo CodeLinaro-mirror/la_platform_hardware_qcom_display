@@ -31,6 +31,7 @@ PRODUCT_PACKAGES += \
     vendor.display.config@1.13.vendor \
     vendor.display.config@1.14.vendor \
     vendor.display.config@1.15.vendor \
+    vendor.display.config@1.21.vendor \
     vendor.qti.hardware.display.mapper@2.0.vendor \
     vendor.qti.hardware.display.mapper@3.0.vendor \
     modetest
