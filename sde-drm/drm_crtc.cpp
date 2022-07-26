@@ -527,6 +527,8 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
       crtc_info_.ubwc_version = (std::stoi(string(line, ubwc_version.length()))) >> 28;
     }
   }
+  delete[] fmt_str;
+  fmt_str = NULL;
   drmModeFreePropertyBlob(blob);
 }
 
