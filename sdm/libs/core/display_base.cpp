@@ -2076,8 +2076,8 @@ std::string DisplayBase::Dump() {
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
   if (disp_layer_stack_.stack_info.noise_layer_info.enable) {
-    os << "\nNoise z-orders: [" << disp_layer_stack_.stack_info.noise_layer_info.zpos_noise << "," <<
-        disp_layer_stack_.stack_info.noise_layer_info.zpos_attn << "]";
+    os << "\nNoise z-orders: [" << disp_layer_stack_.stack_info.noise_layer_info.zpos_noise << ","
+       << disp_layer_stack_.stack_info.noise_layer_info.zpos_attn << "]";
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
