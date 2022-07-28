@@ -48,7 +48,11 @@
 #include <utils/debug.h>
 #include <utils/formats.h>
 #include <utils/sys.h>
+#ifdef __ANDROID_T__
+#include <display/drm/sde_drm.h>
+#else
 #include <drm/sde_drm.h>
+#endif
 #include <private/color_params.h>
 #include <utils/rect.h>
 #include <utils/utils.h>

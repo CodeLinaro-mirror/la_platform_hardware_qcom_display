@@ -30,7 +30,11 @@
 #ifndef __GR_ADRENO_INFO_H__
 #define __GR_ADRENO_INFO_H__
 
+#ifdef __ANDROID_T__
+#include <display/media/mmm_color_fmt.h>
+#else
 #include <media/msm_media_info.h>
+#endif
 
 #include "gr_utils.h"
 
