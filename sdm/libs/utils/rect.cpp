@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <math.h>
 #include <utils/rect.h>
 #include <utils/constants.h>
@@ -348,6 +355,78 @@ DisplayError GetScaleFactor(const LayerRect &crop, const LayerRect &dst,
   *scale_y = crop_height / dst_height;
 
   return kErrorNone;
+}
+
+int ComputeTransform(const LayerTransform &transform) {
+  int out_transform = kTransformNone;
+  int rotation = static_cast<int>(transform.rotation);
+  if (transform.flip_horizontal) {
+    switch (rotation) {
+      case 90:
+        out_transform = kTransform270;
+        break;
+      case 270:
+        out_transform = kTransform90;
+        break;
+      case 180:
+        out_transform = kTransformFlipVertical;
+        break;
+      default:
+        out_transform = kTransformFlipHorizontal;
+        break;
+    }
+  } else if (rotation) {
+    switch (rotation) {
+      case 90:
+        out_transform = kTransform90;
+        break;
+      case 270:
+        out_transform = kTransform270;
+        break;
+      case 180:
+        out_transform = kTransform180;
+        break;
+      default:
+        out_transform = kTransformNone;
+        break;
+    }
+  } else if (transform.flip_vertical) {
+    out_transform = kTransformFlipVertical;
+  }
+  return out_transform;
+}
+
+void SplitFromLeft(float split_factor, const Layer &layer, const float start_index,
+                   LayerRect *out_rect) {
+  float total_layer_width = layer.src_rect.right - layer.src_rect.left;
+  float dpu_layer_width = split_factor * total_layer_width;
+  *out_rect = {start_index, layer.src_rect.top, start_index + dpu_layer_width,
+               layer.src_rect.bottom};
+}
+
+void SplitFromRight(float split_factor, const Layer &layer, const float start_index,
+                    LayerRect *out_rect) {
+  float total_layer_width = layer.src_rect.right - layer.src_rect.left;
+  float dpu_layer_width = split_factor * total_layer_width;
+  *out_rect = {start_index - dpu_layer_width, layer.src_rect.top, start_index,
+               layer.src_rect.bottom};
+}
+
+
+void SplitFromTop(float split_factor, const Layer &layer, const float start_index,
+                  LayerRect *out_rect) {
+  float total_layer_height = layer.src_rect.bottom - layer.src_rect.top;
+  float dpu_layer_height = split_factor * total_layer_height;
+  *out_rect = {layer.src_rect.left, start_index, layer.src_rect.right,
+               start_index + dpu_layer_height};
+}
+
+void SplitFromBottom(float split_factor, const Layer &layer,
+                     const float start_index, LayerRect *out_rect) {
+  float total_layer_height = layer.src_rect.bottom - layer.src_rect.top;
+  float dpu_layer_height = split_factor * total_layer_height;
+  *out_rect = {layer.src_rect.left, start_index - dpu_layer_height, layer.src_rect.right,
+               start_index};
 }
 
 }  // namespace sdm

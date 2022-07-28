@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __RECT_H__
 #define __RECT_H__
 
@@ -41,6 +48,15 @@ namespace sdm {
     kOrientationPortrait,
     kOrientationLandscape,
     kOrientationUnknown,
+  };
+
+  enum SdmTransform {
+    kTransform90,
+    kTransform180,
+    kTransform270,
+    kTransformFlipHorizontal,
+    kTransformFlipVertical,
+    kTransformNone
   };
 
   bool IsValid(const LayerRect &rect);
@@ -68,6 +84,15 @@ namespace sdm {
                                      float *dst_width, float *dst_height);
   DisplayError GetScaleFactor(const LayerRect &crop, const LayerRect &dst, bool rotate90,
                               float *scale_x, float *scale_y);
+  int ComputeTransform(const LayerTransform &transform);
+  void SplitFromLeft(float split_factor, const Layer &layer, const float start_index,
+                     LayerRect *out_rect);
+  void SplitFromRight(float split_factor, const Layer &layer, const float start_index,
+                      LayerRect *out_rect);
+  void SplitFromTop(float split_factor, const Layer &layer, const float start_index,
+                    LayerRect *out_rect);
+  void SplitFromBottom(float split_factor, const Layer &layer, const float start_index,
+                       LayerRect *out_rect);
 }  // namespace sdm
 
 #endif  // __RECT_H__
