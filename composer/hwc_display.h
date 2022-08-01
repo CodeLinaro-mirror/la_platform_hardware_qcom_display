@@ -502,6 +502,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error SetDimmingMinBl(int min_bl) {
     return HWC2::Error::Unsupported;
   }
+  virtual HWC2::Error PerformCacConfig(CacConfig config, bool enable) {
+    return HWC2::Error::Unsupported;
+  }
   virtual HWC2::Error GetClientTargetProperty(ClientTargetProperty *out_client_target_property);
   virtual void GetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo> *variable_config_map,
                              int *active_config_index, uint32_t *num_configs);
