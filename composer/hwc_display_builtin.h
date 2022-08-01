@@ -157,6 +157,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual DisplayError UpdateTransferTime(uint32_t transfer_time);
   virtual HWC3::Error SetDemuraState(int state);
   virtual HWC3::Error SetDemuraConfig(int demura_idx);
+  virtual HWC2::Error PerformCacConfig(CacConfig config, bool enable);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,

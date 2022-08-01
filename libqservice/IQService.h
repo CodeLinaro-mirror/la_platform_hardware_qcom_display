@@ -54,6 +54,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef ANDROID_IQSERVICE_H
 #define ANDROID_IQSERVICE_H
 
@@ -129,6 +136,7 @@ public:
       SET_DEMURA_STATE = 60,                   // Enable/disable demura feature
       SET_DEMURA_CONFIG = 61,                  // Set the demura configuration index
       SET_BPP_MODE = 62,                       // Set Panel bpp to 24bpp or 30bpp
+      PERFORM_CAC_CONFIG = 56,                 // Set CAC Configuration for the display
       COMMAND_LIST_END = 400,
     };
 

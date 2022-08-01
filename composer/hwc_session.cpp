@@ -1926,6 +1926,16 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       output_parcel->writeInt32(status);
     } break;
 
+    case qService::IQService::PERFORM_CAC_CONFIG: {
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = PerformCacConfig(input_parcel);
+      output_parcel->writeInt32(status);
+    }
+    break;
+
     default:
       DLOGW("QService command = %d is not supported.", command);
       break;
@@ -4606,6 +4616,68 @@ HWC3::Error HWCSession::GetOverlaySupport(OverlayProperties *supported_props) {
   supported_props->supportMixedColorSpaces = mixed_colorspaces_support;
 
   return HWC3::Error::None;
+}
+
+int32_t HWCSession::PerformCacConfig(const android::Parcel *input_parcel) {
+  int display = INT(input_parcel->readInt32());
+  int disp_idx = GetDisplayIndex(display);
+  if (disp_idx == -1) {
+    DLOGE("Invalid display = %d", display);
+    return -EINVAL;
+  }
+
+  CacConfig config = {};
+  bool cac_enable = UINT32(input_parcel->readInt32());
+
+  if (cac_enable) {
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.k0r = DOUBLE(input_parcel->readInt64());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.k1r = DOUBLE(input_parcel->readInt64());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.k0b = DOUBLE(input_parcel->readInt64());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.k1b = DOUBLE(input_parcel->readInt64());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.pixel_pitch = DOUBLE(input_parcel->readInt64());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.normalization = DOUBLE(input_parcel->readInt64());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.mid_le_y_offset = UINT32(input_parcel->readInt32());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.mid_le_x_offset = UINT32(input_parcel->readInt32());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.mid_re_y_offset = UINT32(input_parcel->readInt32());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.mid_re_x_offset = UINT32(input_parcel->readInt32());
+    }
+    if (input_parcel->dataPosition() != input_parcel->dataSize()) {
+      config.skip_inc = UINT32(input_parcel->readInt32());
+    }
+  }
+
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+  auto &hwc_display = hwc_display_[disp_idx];
+  if (!hwc_display) {
+    DLOGW("Display = %d is not connected.", disp_idx);
+    return -ENODEV;
+  }
+
+  HWC2::Error error = hwc_display->PerformCacConfig(config, cac_enable);
+  if (error != HWC2::Error::None) {
+    return -EINVAL;
+  }
+
+  return 0;
 }
 
 }  // namespace sdm
