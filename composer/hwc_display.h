@@ -454,6 +454,7 @@ class HWCDisplay : public DisplayEventHandler {
   PanelOrientation GetPanelOrientation() { return panel_orientation_; }
   virtual void CacCommitDone(bool cac_commit_done) { return; }
   virtual bool IsCacCommitDone() { return false; }
+  virtual void CloseFenceFds();
   bool IsWBCacInUse();
   virtual int32_t SetSkewVsync(uint32_t skew_vsync_val) {
     return kErrorNotSupported;

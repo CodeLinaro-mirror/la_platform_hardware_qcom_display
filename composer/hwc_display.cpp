@@ -2679,4 +2679,21 @@ int32_t HWCDisplay::SetCACEyeConfig(const CACEyeConfig &left,
   return 0;
 }
 
+void HWCDisplay::CloseFenceFds() {
+  for (auto layer : layer_set_) {
+    layer->CloseReleaseFences();
+    auto sdm_layer = layer->GetSDMLayer();
+    if (sdm_layer->input_buffer.acquire_fence_fd != -1) {
+      DLOGV_IF(kTagClient, "display %d-%d Layer_id[%" PRIu64 "] acq fence fd = %d",
+               sdm_id_, type_, layer->GetId(), sdm_layer->input_buffer.acquire_fence_fd);
+      CloseFd(&sdm_layer->input_buffer.acquire_fence_fd);
+    }
+  }
+  if (layer_stack_.retire_fence_fd != -1) {
+    DLOGV_IF(kTagClient, "display %d-%d retire fence fd = %d", sdm_id_, type_,
+             layer_stack_.retire_fence_fd);
+    CloseFd(&layer_stack_.retire_fence_fd);
+  }
+}
+
 }  // namespace sdm
