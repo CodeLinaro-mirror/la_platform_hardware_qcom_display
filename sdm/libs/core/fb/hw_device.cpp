@@ -761,9 +761,7 @@ int HWDevice::GetFBNodeIndex(HWDeviceType device_type) {
       break;
     case kDeviceHDMI:
       if (panel_info.is_pluggable == true) {
-        if (IsFBNodeConnected(i)) {
-          return i;
-        }
+        return i;
       }
       break;
     case kDeviceVirtual:

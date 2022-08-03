@@ -58,6 +58,7 @@ DisplayError DisplayHDMI::Init() {
   DisplayError error = HWInterface::Create(kHDMI, hw_info_intf_, buffer_sync_handler_,
                                            buffer_allocator_, &hw_intf_);
   if (error != kErrorNone) {
+    DLOGE("Failed to HW Intf create. Error = %d", error);
     return error;
   }
 
@@ -80,6 +81,7 @@ DisplayError DisplayHDMI::Init() {
 
   error = DisplayBase::Init();
   if (error != kErrorNone) {
+    DLOGE("Failed to Base init. Error = %d", error);
     HWInterface::Destroy(hw_intf_);
     return error;
   }
