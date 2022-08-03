@@ -117,8 +117,8 @@ class ColorManagerProxy {
    * 4. Need get panel name for hw_panel_info_.
    */
   static ColorManagerProxy *CreateColorManagerProxy(DisplayType type, HWInterface *hw_intf,
-                                                    const HWDisplayAttributes &attribute,
-                                                    const HWPanelInfo &panel_info,
+                                                    DisplayDeviceContext &device_ctx,
+                                                    DisplayClientContext &client_ctx,
                                                     DppsControlInterface *dpps_intf,
                                                     DisplayInterface *disp_intf);
 

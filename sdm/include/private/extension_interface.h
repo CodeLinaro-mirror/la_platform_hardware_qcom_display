@@ -57,19 +57,14 @@ class ExtensionInterface {
  public:
   virtual DisplayError CreatePartialUpdate(DisplayId display_id, DisplayType type,
                                            const std::vector<HWResourceInfo> &hw_resource_info,
-                                           const HWPanelInfo &hw_panel_info,
-                                           const HWMixerAttributes &mixer_attributes,
-                                           const HWDisplayAttributes &display_attributes,
-                                           const DisplayConfigVariableInfo &fb_config,
+                                           const DisplayInfoContext &info_ctx,
                                            PartialUpdateInterface **interface) = 0;
   virtual DisplayError DestroyPartialUpdate(PartialUpdateInterface *interface) = 0;
 
   virtual DisplayError CreateStrategyExtn(DisplayId display_id, DisplayType type,
                                           BufferAllocator *buffer_allocator,
                                           const std::vector<HWResourceInfo> &hw_resource_info,
-                                          const HWPanelInfo &hw_panel_info,
-                                          const HWMixerAttributes &mixer_attributes,
-                                          const DisplayConfigVariableInfo &fb_config,
+                                          const DisplayInfoContext &info_ctx,
                                           StrategyInterface **interface) = 0;
   virtual DisplayError DestroyStrategyExtn(StrategyInterface *interface) = 0;
 

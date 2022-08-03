@@ -365,7 +365,6 @@ class DisplayBase : public DisplayInterface {
   HWDeviceType hw_device_type_;
   DPUCoreMux *dpu_core_mux_ = NULL;
   HWInterface *hw_intf_ = NULL;
-  HWPanelInfo hw_panel_info_;
   std::vector<HWResourceInfo> hw_resource_info_;
   BufferAllocator *buffer_allocator_ {};
   CompManager *comp_manager_ = NULL;
@@ -397,9 +396,6 @@ class DisplayBase : public DisplayInterface {
   typedef std::map<std::string, AttrVal> ColorModeAttrMap;
   ColorModeAttrMap color_mode_attr_map_ = {};
   std::vector<PrimariesTransfer> color_modes_cs_ = {};  // Gamut+Gamma(color space) of color mode
-  HWDisplayAttributes display_attributes_ = {};
-  HWMixerAttributes mixer_attributes_ = {};
-  DisplayConfigVariableInfo fb_config_ = {};
   uint32_t req_mixer_width_ = 0;
   uint32_t req_mixer_height_ = 0;
   std::string current_color_mode_ = "hal_native";
@@ -444,6 +440,8 @@ class DisplayBase : public DisplayInterface {
   bool pending_commit_ = false;
   uint32_t active_refresh_rate_ = 0;
   bool disable_cwb_idle_fallback_ = false;
+  DisplayClientContext client_ctx_ = {};
+  DisplayDeviceContext device_ctx_;
 
  private:
   // Max tolerable power-state-change wait-times in milliseconds.

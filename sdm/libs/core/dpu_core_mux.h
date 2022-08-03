@@ -41,8 +41,10 @@ class DPUCoreMux {
   DisplayError GetDefaultConfig(uint32_t *default_config);
   DisplayError GetNumDisplayAttributes(uint32_t *count);
   DisplayError GetDisplayAttributes(uint32_t index,
-                                    HWDisplayAttributes *display_attributes);
-  DisplayError GetHWPanelInfo(HWPanelInfo *panel_info);
+                                    DisplayDeviceContext *device_ctx,
+                                    DisplayClientContext *client_ctx);
+  DisplayError GetHWPanelInfo(DisplayDeviceContext *device_ctx,
+                              DisplayClientContext *client_ctx);
   DisplayError SetDisplayAttributes(uint32_t index);
   DisplayError SetDisplayAttributes(const HWDisplayAttributes &display_attributes);
   DisplayError GetConfigIndex(char *mode, uint32_t *index);
@@ -71,7 +73,8 @@ class DPUCoreMux {
   DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
   DisplayError UnsetScaleLutConfig();
   DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes);
-  DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
+  DisplayError GetMixerAttributes(DisplayDeviceContext *device_ctx,
+                                  DisplayClientContext *client_ctx);
   DisplayError DumpDebugData();
   DisplayError SetDppsFeature(void *payload, size_t size);
   DisplayError GetDppsFeatureInfo(void *payload, size_t size);
@@ -100,9 +103,12 @@ class DPUCoreMux {
   void GetHWInterface(HWInterface **intf);
   void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const;
   bool IsPrimaryDisplay() const;
+  DisplayError GetFbConfig(uint32_t width, uint32_t height,
+                           DisplayDeviceContext *device_ctx,
+                           DisplayClientContext *client_ctx);
 
  private:
-  std::vector<HWInterface*> hw_intf_;
+  std::map<uint32_t, HWInterface*> hw_intf_;
   DisplayId display_id_ = {};
 };
 

@@ -164,8 +164,8 @@ DisplayBase::~DisplayBase() {
 DisplayError DisplayBase::Init() {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
-  hw_panel_info_ = HWPanelInfo();
-  dpu_core_mux_->GetHWPanelInfo(&hw_panel_info_);
+
+  dpu_core_mux_->GetHWPanelInfo(&device_ctx_, &client_ctx_);
   for (auto info_intf : hw_info_intf_) {
     HWResourceInfo res_info;
     info_intf->GetHWResourceInfo(&res_info);
@@ -190,24 +190,27 @@ DisplayError DisplayBase::Init() {
   int hw_recovery_threshold = 1;
   int32_t prop = 0;
   dpu_core_mux_->GetActiveConfig(&active_index);
-  dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes_);
-  fb_config_ = display_attributes_;
-  active_refresh_rate_ = display_attributes_.fps;
+  dpu_core_mux_->GetDisplayAttributes(active_index, &device_ctx_,
+                                      &client_ctx_);
 
-  if (!Debug::GetMixerResolution(&mixer_attributes_.width, &mixer_attributes_.height)) {
-    if (dpu_core_mux_->SetMixerAttributes(mixer_attributes_) == kErrorNone) {
+  active_refresh_rate_ = client_ctx_.display_attributes.fps;
+
+  if (!Debug::GetMixerResolution(&client_ctx_.mixer_attributes.width,
+                                 &client_ctx_.mixer_attributes.height)) {
+    if (dpu_core_mux_->SetMixerAttributes(client_ctx_.mixer_attributes) == kErrorNone) {
       custom_mixer_resolution_ = true;
     }
   }
 
-  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes_);
+  error = dpu_core_mux_->GetMixerAttributes(&device_ctx_,
+                                            &client_ctx_);
   if (error != kErrorNone) {
     return error;
   }
 
   // Override x_pixels and y_pixels of frame buffer with mixer width and height
-  fb_config_.x_pixels = mixer_attributes_.width;
-  fb_config_.y_pixels = mixer_attributes_.height;
+  dpu_core_mux_->GetFbConfig(client_ctx_.mixer_attributes.width,
+                             client_ctx_.mixer_attributes.height, &device_ctx_, &client_ctx_);
 
   if (IsPrimaryDisplayLocked()) {
     HWScaleLutInfo lut_info = {};
@@ -224,13 +227,11 @@ DisplayError DisplayBase::Init() {
   if (kBuiltIn == display_type_) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
-                                                            display_attributes_, hw_panel_info_,
+                                                            device_ctx_, client_ctx_,
                                                             dpps_intf, this);
   }
-
-  error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, display_attributes_,
-                                         hw_panel_info_, mixer_attributes_, fb_config_,
-                                         &display_comp_ctx_, &cached_qos_data_);
+  error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, device_ctx_,
+                                         client_ctx_, &display_comp_ctx_, &cached_qos_data_);
   if (error != kErrorNone) {
     DLOGW("Display %d comp manager registration failed!", display_id_);
     goto CleanupOnError;
@@ -289,7 +290,7 @@ CleanupOnError:
 
 DisplayError DisplayBase::InitBorderLayers() {
   // Feature is limited to primary.
-  if (!hw_panel_info_.is_primary_panel) {
+  if (!client_ctx_.hw_panel_info.is_primary_panel) {
     return kErrorNone;
   }
 
@@ -323,8 +324,8 @@ DisplayError DisplayBase::InitBorderLayers() {
 std::vector<LayerRect> DisplayBase::GetBorderRects() {
   // Window rect can result 4 regions(max) to be blacked out.
   // Horizontal strip at top and bottom, pillar-box on each side.
-  float display_width = FLOAT(display_attributes_.x_pixels);
-  float display_height = FLOAT(display_attributes_.y_pixels);
+  float display_width = FLOAT(client_ctx_.display_attributes.x_pixels);
+  float display_height = FLOAT(client_ctx_.display_attributes.y_pixels);
   LayerRect win_rect = window_rect_;
   std::vector<LayerRect> border_rects;
   if (win_rect.left) {
@@ -491,8 +492,8 @@ DisplayError DisplayBase::InitRC() {
     RCInputConfig input_cfg = {};
     input_cfg.display_id = display_id_;
     input_cfg.display_type = display_type_;
-    input_cfg.display_xres = display_attributes_.x_pixels;
-    input_cfg.display_yres = display_attributes_.y_pixels;
+    input_cfg.display_xres = client_ctx_.display_attributes.x_pixels;
+    input_cfg.display_yres = client_ctx_.display_attributes.y_pixels;
     input_cfg.max_mem_size = rc_total_mem_size;
     rc_core_ = pf_factory_->CreateRCIntf(input_cfg, prop_intf_);
     GenericPayload dummy;
@@ -766,10 +767,10 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
     return kErrorParameters;
   }
 
-  float layer_mixer_width = FLOAT(mixer_attributes_.width);
-  float layer_mixer_height = FLOAT(mixer_attributes_.height);
-  float fb_width = FLOAT(fb_config_.x_pixels);
-  float fb_height = FLOAT(fb_config_.y_pixels);
+  float layer_mixer_width = FLOAT(client_ctx_.mixer_attributes.width);
+  float layer_mixer_height = FLOAT(client_ctx_.mixer_attributes.height);
+  float fb_width = FLOAT(client_ctx_.fb_config.x_pixels);
+  float fb_height = FLOAT(client_ctx_.fb_config.y_pixels);
   LayerRect src_domain = (LayerRect){0.0f, 0.0f, fb_width, fb_height};
   LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
   LayerRect out_rect = gpu_target_layer->dst_rect;
@@ -780,11 +781,11 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
   auto gpu_target_layer_dst_xpixels = out_rect.right - out_rect.left;
   auto gpu_target_layer_dst_ypixels = out_rect.bottom - out_rect.top;
 
-  if (gpu_target_layer_dst_xpixels > mixer_attributes_.width ||
-    gpu_target_layer_dst_ypixels > mixer_attributes_.height) {
+  if (gpu_target_layer_dst_xpixels > client_ctx_.mixer_attributes.width ||
+    gpu_target_layer_dst_ypixels > client_ctx_.mixer_attributes.height) {
     DLOGE("GPU target layer dst rect is not with in limits gpu wxh %fx%f, mixer wxh %dx%d",
                   gpu_target_layer_dst_xpixels, gpu_target_layer_dst_ypixels,
-                  mixer_attributes_.width, mixer_attributes_.height);
+                  client_ctx_.mixer_attributes.width, client_ctx_.mixer_attributes.height);
     return kErrorParameters;
   }
 
@@ -1168,9 +1169,9 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
   int ret = -1;
   LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
   stack_info.spr_enable = spr_enable_;
-  DLOGI_IF(kTagDisplay, "Display resolution: %dx%d", display_attributes_.x_pixels,
-           display_attributes_.y_pixels);
-  if (rc_cached_res_width_ != display_attributes_.x_pixels) {
+  DLOGI_IF(kTagDisplay, "Display resolution: %dx%d", client_ctx_.display_attributes.x_pixels,
+           client_ctx_.display_attributes.y_pixels);
+  if (rc_cached_res_width_ != client_ctx_.display_attributes.x_pixels) {
     GenericPayload in;
     uint32_t *display_xres = nullptr;
     ret = in.CreatePayload<uint32_t>(display_xres);
@@ -1178,7 +1179,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *display_xres = rc_cached_res_width_ = display_attributes_.x_pixels;
+    *display_xres = rc_cached_res_width_ = client_ctx_.display_attributes.x_pixels;
     ret = rc_core_->SetParameter(kRCFeatureDisplayXRes, in);
     if (ret) {
       DLOGE("failed to set display X resolution. Error:%d", ret);
@@ -1186,7 +1187,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_res_height_ != display_attributes_.y_pixels) {
+  if (rc_cached_res_height_ != client_ctx_.display_attributes.y_pixels) {
     GenericPayload in;
     uint32_t *display_yres = nullptr;
     ret = in.CreatePayload<uint32_t>(display_yres);
@@ -1194,7 +1195,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *display_yres = rc_cached_res_height_ = display_attributes_.y_pixels;
+    *display_yres = rc_cached_res_height_ = client_ctx_.display_attributes.y_pixels;
     ret = rc_core_->SetParameter(kRCFeatureDisplayYRes, in);
     if (ret) {
       DLOGE("failed to set display Y resolution. Error:%d", ret);
@@ -1202,7 +1203,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_mixer_width_ != mixer_attributes_.width) {
+  if (rc_cached_mixer_width_ != client_ctx_.mixer_attributes.width) {
     GenericPayload in;
     uint32_t *mixer_width = nullptr;
     ret = in.CreatePayload<uint32_t>(mixer_width);
@@ -1210,7 +1211,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *mixer_width = rc_cached_mixer_width_ = mixer_attributes_.width;
+    *mixer_width = rc_cached_mixer_width_ = client_ctx_.mixer_attributes.width;
     ret = rc_core_->SetParameter(kRCFeatureMixerWidth, in);
     if (ret) {
       DLOGE("failed to set mixer width. Error:%d", ret);
@@ -1218,7 +1219,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_mixer_height_ != mixer_attributes_.height) {
+  if (rc_cached_mixer_height_ != client_ctx_.mixer_attributes.height) {
     GenericPayload in;
     uint32_t *mixer_height = nullptr;
     ret = in.CreatePayload<uint32_t>(mixer_height);
@@ -1226,7 +1227,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *mixer_height = rc_cached_mixer_height_ = mixer_attributes_.height;
+    *mixer_height = rc_cached_mixer_height_ = client_ctx_.mixer_attributes.height;
     ret = rc_core_->SetParameter(kRCFeatureMixerHeight, in);
     if (ret) {
       DLOGE("failed to set mixer height. Error:%d", ret);
@@ -1234,7 +1235,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_fb_width_ != fb_config_.x_pixels) {
+  if (rc_cached_fb_width_ != client_ctx_.fb_config.x_pixels) {
     GenericPayload in;
     uint32_t *fb_width = nullptr;
     ret = in.CreatePayload<uint32_t>(fb_width);
@@ -1242,7 +1243,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *fb_width = rc_cached_fb_width_ = fb_config_.x_pixels;
+    *fb_width = rc_cached_fb_width_ = client_ctx_.fb_config.x_pixels;
     ret = rc_core_->SetParameter(kRCFeatureFbWidth, in);
     if (ret) {
       DLOGE("failed to set fb width. Error:%d", ret);
@@ -1250,7 +1251,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_fb_height_ != fb_config_.y_pixels) {
+  if (rc_cached_fb_height_ != client_ctx_.fb_config.y_pixels) {
     GenericPayload in;
     uint32_t *fb_height = nullptr;
     ret = in.CreatePayload<uint32_t>(fb_height);
@@ -1258,7 +1259,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *fb_height = rc_cached_fb_height_ = fb_config_.y_pixels;
+    *fb_height = rc_cached_fb_height_ = client_ctx_.fb_config.y_pixels;
     ret = rc_core_->SetParameter(kRCFeatureFbHeight, in);
     if (ret) {
       DLOGE("failed to set mixer height. Error:%d", ret);
@@ -1486,7 +1487,7 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   }
   // Regiser for power events on first cycle in unified draw.
   if (first_cycle_ && (draw_method_ != kDrawDefault) && (display_type_ != kVirtual) &&
-      !hw_panel_info_.is_primary_panel && (display_type_ != kHDMI)) {
+      !client_ctx_.hw_panel_info.is_primary_panel && (display_type_ != kHDMI)) {
     DLOGI("Registering for power events");
     hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
   }
@@ -1764,12 +1765,15 @@ DisplayError DisplayBase::GetNumVariableInfoConfigs(uint32_t *count) {
 
 DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
-  HWDisplayAttributes attrib;
-  if (dpu_core_mux_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
-    *variable_info = attrib;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  if (dpu_core_mux_->GetDisplayAttributes(index, &device_ctx, &client_ctx) == kErrorNone) {
+    *variable_info = client_ctx.display_attributes;
+
     if (custom_mixer_resolution_) {
-      variable_info->x_pixels = fb_config_.x_pixels;
-      variable_info->y_pixels = fb_config_.y_pixels;
+      variable_info->x_pixels = client_ctx_.fb_config.x_pixels;
+      variable_info->y_pixels = client_ctx_.fb_config.y_pixels;
     }
     return kErrorNone;
   }
@@ -1779,7 +1783,7 @@ DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *v
 
 DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   ClientLock lock(disp_mutex_);
-  fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+  fixed_info->is_cmdmode = (client_ctx_.hw_panel_info.mode == kModeCommand);
   bool hdr_supported = true;
   bool has_concurrent_writeback = true;
 
@@ -1796,7 +1800,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
     HWDisplayInterfaceInfo hw_disp_info = {};
     hw_info_intf_[i]->GetFirstDisplayInterfaceType(&hw_disp_info);
     if (hw_disp_info.type == kHDMI) {
-      hdr_supported &= (hdr_supported && hw_panel_info_.hdr_enabled);
+      hdr_supported &= (hdr_supported && client_ctx_.hw_panel_info.hdr_enabled);
     }
   }
 
@@ -1807,14 +1811,17 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_supported = hdr_supported;
   // For non-builtin displays, check panel capability for HDR10+
   fixed_info->hdr_plus_supported =
-      hdr_supported && hw_panel_info_.hdr_plus_enabled && hdr_plus_supported;
+      hdr_supported && client_ctx_.hw_panel_info.hdr_plus_enabled && hdr_plus_supported;
   // Populate luminance values only if hdr will be supported on that display
-  fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
-  fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
-  fixed_info->min_luminance = fixed_info->hdr_supported ?  hw_panel_info_.blackness_level: 0;
-  fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
-  fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
-  fixed_info->partial_update = hw_panel_info_.partial_update;
+  fixed_info->max_luminance = fixed_info->hdr_supported ?
+                              client_ctx_.hw_panel_info.peak_luminance: 0;
+  fixed_info->average_luminance = fixed_info->hdr_supported ?
+                                  client_ctx_.hw_panel_info.average_luminance : 0;
+  fixed_info->min_luminance = fixed_info->hdr_supported ?
+                              client_ctx_.hw_panel_info.blackness_level: 0;
+  fixed_info->hdr_eotf = client_ctx_.hw_panel_info.hdr_eotf;
+  fixed_info->hdr_metadata_type_one = client_ctx_.hw_panel_info.hdr_metadata_type_one;
+  fixed_info->partial_update = client_ctx_.hw_panel_info.partial_update;
   fixed_info->readback_supported = has_concurrent_writeback;
   fixed_info->supports_unified_draw = unified_draw_supported_;
 
@@ -1823,9 +1830,11 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
 
 DisplayError DisplayBase::GetRealConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
-  HWDisplayAttributes attrib;
-  if (dpu_core_mux_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
-    *variable_info = attrib;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  if (dpu_core_mux_->GetDisplayAttributes(index, &device_ctx, &client_ctx) == kErrorNone) {
+    *variable_info = client_ctx.display_attributes;
     return kErrorNone;
   }
 
@@ -1942,8 +1951,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       pending_power_state_ = kPowerStateNone;
     }
 
-    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes_,
-                                              hw_panel_info_, mixer_attributes_, fb_config_,
+    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx_, client_ctx_,
                                               &cached_qos_data_);
     if (error != kErrorNone) {
       return error;
@@ -2060,9 +2068,11 @@ DisplayError DisplayBase::SetActiveConfig(uint32_t index) {
   }
 
   // Cache last refresh rate set by SF
-  HWDisplayAttributes display_attributes = {};
-  dpu_core_mux_->GetDisplayAttributes(index, &display_attributes);
-  active_refresh_rate_ = display_attributes.fps;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  dpu_core_mux_->GetDisplayAttributes(index, &device_ctx, &client_ctx);
+  active_refresh_rate_ = client_ctx.display_attributes.fps;
 
   return ReconfigureDisplay();
 }
@@ -2105,14 +2115,15 @@ void DisplayBase::AppendRCMaskData(std::ostringstream &os) {
 
 std::string DisplayBase::Dump() {
   ClientLock lock(disp_mutex_);
-  HWDisplayAttributes attrib;
   uint32_t active_index = 0;
   uint32_t num_modes = 0;
   std::ostringstream os;
 
   dpu_core_mux_->GetNumDisplayAttributes(&num_modes);
   dpu_core_mux_->GetActiveConfig(&active_index);
-  dpu_core_mux_->GetDisplayAttributes(active_index, &attrib);
+  HWPanelInfo hw_panel_info = client_ctx_.hw_panel_info;
+  HWDisplayAttributes display_attributes = client_ctx_.display_attributes;
+  HWMixerAttributes mixer_attributes = client_ctx_.mixer_attributes;
 
   os << "device type:" << display_type_;
   os << " DrawMethod: " << draw_method_;
@@ -2124,39 +2135,39 @@ std::string DisplayBase::Dump() {
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
-  os << "\n Mode:" << (hw_panel_info_.mode == kModeVideo ? "Video" : "Command");
+  os << "\n Mode:" << (hw_panel_info.mode == kModeVideo ? "Video" : "Command");
   os << std::boolalpha;
-  os << " Primary:" << hw_panel_info_.is_primary_panel;
-  os << " DynFPS:" << hw_panel_info_.dynamic_fps;
-  os << "\n HDR Panel:" << hw_panel_info_.hdr_enabled;
-  os << " QSync:" << hw_panel_info_.qsync_support;
-  os << " DynBitclk:" << hw_panel_info_.dyn_bitclk_support;
-  os << "\n Left Split:" << hw_panel_info_.split_info.left_split
-     << " Right Split:" << hw_panel_info_.split_info.right_split;
-  os << "\n PartialUpdate:" << hw_panel_info_.partial_update;
-  if (hw_panel_info_.partial_update) {
-    os << "\n ROI Min w:" << hw_panel_info_.min_roi_width;
-    os << " Min h:" << hw_panel_info_.min_roi_height;
-    os << " NeedsMerge: " << hw_panel_info_.needs_roi_merge;
-    os << " Alignment: l:" << hw_panel_info_.left_align << " w:" << hw_panel_info_.width_align;
-    os << " t:" << hw_panel_info_.top_align << " b:" << hw_panel_info_.height_align;
+  os << " Primary:" << hw_panel_info.is_primary_panel;
+  os << " DynFPS:" << hw_panel_info.dynamic_fps;
+  os << "\n HDR Panel:" << hw_panel_info.hdr_enabled;
+  os << " QSync:" << hw_panel_info.qsync_support;
+  os << " DynBitclk:" << hw_panel_info.dyn_bitclk_support;
+  os << "\n Left Split:" << hw_panel_info.split_info.left_split
+     << " Right Split:" << hw_panel_info.split_info.right_split;
+  os << "\n PartialUpdate:" << hw_panel_info.partial_update;
+  if (hw_panel_info.partial_update) {
+    os << "\n ROI Min w:" << hw_panel_info.min_roi_width;
+    os << " Min h:" << hw_panel_info.min_roi_height;
+    os << " NeedsMerge: " << hw_panel_info.needs_roi_merge;
+    os << " Alignment: l:" << hw_panel_info.left_align << " w:" << hw_panel_info.width_align;
+    os << " t:" << hw_panel_info.top_align << " b:" << hw_panel_info.height_align;
   }
-  os << "\n FPS min:" << hw_panel_info_.min_fps << " max:" << hw_panel_info_.max_fps
-     << " cur:" << display_attributes_.fps;
-  os << " TransferTime: " << hw_panel_info_.transfer_time_us << "us";
-  os << " MaxBrightness:" << hw_panel_info_.panel_max_brightness;
-  os << "\n Display WxH: " << display_attributes_.x_pixels << "x" << display_attributes_.y_pixels;
-  os << " MixerWxH: " << mixer_attributes_.width << "x" << mixer_attributes_.height;
-  os << " DPI: " << display_attributes_.x_dpi << "x" << display_attributes_.y_dpi;
-  os << " LM_Split: " << display_attributes_.is_device_split;
-  os << "\n vsync_period " << display_attributes_.vsync_period_ns;
-  os << " v_back_porch: " << display_attributes_.v_back_porch;
-  os << " v_front_porch: " << display_attributes_.v_front_porch;
-  os << " v_pulse_width: " << display_attributes_.v_pulse_width;
-  os << "\n v_total: " << display_attributes_.v_total;
-  os << " h_total: " << display_attributes_.h_total;
-  os << " clk: " << display_attributes_.clock_khz;
-  os << " Topology: " << display_attributes_.topology;
+  os << "\n FPS min:" << hw_panel_info.min_fps << " max:" << hw_panel_info.max_fps
+     << " cur:" << display_attributes.fps;
+  os << " TransferTime: " << hw_panel_info.transfer_time_us << "us";
+  os << " MaxBrightness:" << hw_panel_info.panel_max_brightness;
+  os << "\n Display WxH: " << display_attributes.x_pixels << "x" << display_attributes.y_pixels;
+  os << " MixerWxH: " << mixer_attributes.width << "x" << mixer_attributes.height;
+  os << " DPI: " << display_attributes.x_dpi << "x" << display_attributes.y_dpi;
+  os << " LM_Split: " << display_attributes.is_device_split;
+  os << "\n vsync_period " << display_attributes.vsync_period_ns;
+  os << " v_back_porch: " << display_attributes.v_back_porch;
+  os << " v_front_porch: " << display_attributes.v_front_porch;
+  os << " v_pulse_width: " << display_attributes.v_pulse_width;
+  os << "\n v_total: " << display_attributes.v_total;
+  os << " h_total: " << display_attributes.h_total;
+  os << " clk: " << display_attributes.clock_khz;
+  os << " Topology: " << display_attributes.topology;
   os << std::noboolalpha;
 
   os << "\nCurrent Color Mode: " << current_color_mode_.c_str();
@@ -2717,16 +2728,18 @@ DisplayError DisplayBase::GetRefreshRateRange(uint32_t *min_refresh_rate,
   ClientLock lock(disp_mutex_);
   // The min and max refresh rates will be same when the HWPanelInfo does not contain valid rates.
   // Usually for secondary displays, command mode panels
-  HWDisplayAttributes display_attributes;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
   uint32_t active_index = 0;
   dpu_core_mux_->GetActiveConfig(&active_index);
-  DisplayError error = dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes);
+  DisplayError error = dpu_core_mux_->GetDisplayAttributes(active_index, &device_ctx, &client_ctx);
   if (error) {
     return error;
   }
 
-  *min_refresh_rate = display_attributes.fps;
-  *max_refresh_rate = display_attributes.fps;
+  *min_refresh_rate = client_ctx.display_attributes.fps;
+  *max_refresh_rate = client_ctx.display_attributes.fps;
 
   return error;
 }
@@ -2763,8 +2776,8 @@ DisplayError DisplayBase::SetVSyncStateLocked(bool enable) {
   if (vsync_enable_ != enable) {
     error = dpu_core_mux_->SetVSyncState(enable);
     if (error == kErrorNotSupported) {
-      if (drop_skewed_vsync_ && (hw_panel_info_.mode == kModeVideo) &&
-        enable && (current_refresh_rate_ < hw_panel_info_.max_fps)) {
+      if (drop_skewed_vsync_ && (client_ctx_.hw_panel_info.mode == kModeVideo) &&
+        enable && (current_refresh_rate_ < client_ctx_.hw_panel_info.max_fps)) {
         drop_hw_vsync_ = true;
       }
       error = hw_events_intf_->SetEventState(HWEvent::VSYNC, enable);
@@ -2851,42 +2864,45 @@ DisplayError DisplayBase::SetNoisePlugInOverride(bool override_en, int32_t attn,
 DisplayError DisplayBase::ReconfigureDisplay() {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
-  HWDisplayAttributes display_attributes;
-  HWMixerAttributes mixer_attributes;
-  HWPanelInfo hw_panel_info;
   uint32_t active_index = 0;
 
   DTRACE_SCOPED();
+
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  client_ctx = client_ctx_;
+  device_ctx = device_ctx_;
 
   error = dpu_core_mux_->GetActiveConfig(&active_index);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes);
+  error = dpu_core_mux_->GetDisplayAttributes(active_index, &device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes);
+  error = dpu_core_mux_->GetMixerAttributes(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = dpu_core_mux_->GetHWPanelInfo(&hw_panel_info);
+  error = dpu_core_mux_->GetHWPanelInfo(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  bool display_unchanged = (display_attributes == display_attributes_);
-  bool mixer_unchanged = (mixer_attributes == mixer_attributes_);
-  bool panel_unchanged = (hw_panel_info == hw_panel_info_);
+  bool display_unchanged = (client_ctx.display_attributes == client_ctx_.display_attributes);
+  bool mixer_unchanged = (client_ctx.mixer_attributes == client_ctx_.mixer_attributes);
+  bool panel_unchanged = (client_ctx.hw_panel_info == client_ctx_.hw_panel_info);
   if (display_unchanged && mixer_unchanged && panel_unchanged) {
     return kErrorNone;
   }
 
-  error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes, hw_panel_info,
-                                            mixer_attributes, fb_config_, &cached_qos_data_);
+  error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx,
+                                            client_ctx, &cached_qos_data_);
   if (error != kErrorNone) {
     return error;
   }
@@ -2897,14 +2913,13 @@ DisplayError DisplayBase::ReconfigureDisplay() {
   // Disable Partial Update for one frame as PU not supported during modeset.
   DisablePartialUpdateOneFrameInternal();
 
-  display_attributes_ = display_attributes;
-  mixer_attributes_ = mixer_attributes;
-  hw_panel_info_ = hw_panel_info;
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
 
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
   SetPUonDestScaler();
-  if (hw_panel_info_.partial_update && !disable_pu_on_dest_scaler_) {
+  if (client_ctx_.hw_panel_info.partial_update && !disable_pu_on_dest_scaler_) {
     // If current panel supports Partial Update and destination scalar isn't enabled, then add
     // a pending PU request to be served in the first PU enable frame after the modeset frame.
     // Because if first PU enable frame, after transition, has a partial Frame-ROI and
@@ -2936,8 +2951,8 @@ DisplayError DisplayBase::GetMixerResolution(uint32_t *width, uint32_t *height) 
     return kErrorParameters;
   }
 
-  *width = mixer_attributes_.width;
-  *height = mixer_attributes_.height;
+  *width = client_ctx_.mixer_attributes.width;
+  *height = client_ctx_.mixer_attributes.height;
 
   return kErrorNone;
 }
@@ -2953,7 +2968,8 @@ DisplayError DisplayBase::ReconfigureMixer(uint32_t width, uint32_t height) {
 
   DLOGD_IF(kTagQDCM, "Reconfiguring mixer with width : %d, height : %d", width, height);
 
-  LayerRect fb_rect = { 0.0f, 0.0f, FLOAT(fb_config_.x_pixels), FLOAT(fb_config_.y_pixels) };
+  LayerRect fb_rect = { 0.0f, 0.0f, FLOAT(client_ctx_.fb_config.x_pixels),
+                        FLOAT(client_ctx_.fb_config.y_pixels) };
   LayerRect mixer_rect = { 0.0f, 0.0f, FLOAT(width), FLOAT(height) };
 
   error = comp_manager_->ValidateScaling(fb_rect, mixer_rect, false /* rotate90 */);
@@ -2994,12 +3010,12 @@ bool DisplayBase::NeedsDownScale(const LayerRect &src_rect, const LayerRect &dst
 bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *new_mixer_width,
                                             uint32_t *new_mixer_height) {
   ClientLock lock(disp_mutex_);
-  uint32_t mixer_width = mixer_attributes_.width;
-  uint32_t mixer_height = mixer_attributes_.height;
-  uint32_t fb_width = fb_config_.x_pixels;
-  uint32_t fb_height = fb_config_.y_pixels;
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t mixer_width = client_ctx_.mixer_attributes.width;
+  uint32_t mixer_height = client_ctx_.mixer_attributes.height;
+  uint32_t fb_width = client_ctx_.fb_config.x_pixels;
+  uint32_t fb_height = client_ctx_.fb_config.y_pixels;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
   if (HasConcurrentWriteback() && layer_stack->output_buffer) {
     DLOGV_IF(kTagDisplay, "Found concurrent writeback, configure LM width:%d height:%d",
@@ -3040,7 +3056,7 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   uint32_t max_layer_area = 0;
   uint32_t max_area_layer_index = 0;
   std::vector<Layer *> layers = layer_stack->layers;
-  uint32_t align_x = display_attributes_.is_3d_mux_used ? 4 : 2;
+  uint32_t align_x = client_ctx_.display_attributes.is_3d_mux_used ? 4 : 2;
   uint32_t align_y = 2;
 
   for (uint32_t i = 0; i < layer_count; i++) {
@@ -3110,9 +3126,16 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
     return kErrorParameters;
   }
 
+  DisplayClientContext client_ctx = client_ctx_;
+  DisplayDeviceContext device_ctx = device_ctx_;
+
+  client_ctx.fb_config = variable_info;
+  dpu_core_mux_->GetFbConfig(width, height, &device_ctx, &client_ctx);
+
   // Create rects to represent the new source and destination crops
   LayerRect crop = LayerRect(0, 0, FLOAT(width), FLOAT(height));
-  LayerRect dst = LayerRect(0, 0, FLOAT(mixer_attributes_.width), FLOAT(mixer_attributes_.height));
+  LayerRect dst = LayerRect(0, 0, FLOAT(client_ctx.mixer_attributes.width),
+                            FLOAT(client_ctx.mixer_attributes.height));
   // Set rotate90 to false since this is taken care of during regular composition.
   bool rotate90 = false;
 
@@ -3122,8 +3145,8 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
     return kErrorParameters;
   }
 
-  error =  comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes_, hw_panel_info_,
-                                             mixer_attributes_, variable_info, &cached_qos_data_);
+  error =  comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx,
+                                             client_ctx, &cached_qos_data_);
   if (error != kErrorNone) {
     return error;
   }
@@ -3131,10 +3154,11 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
     default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
   }
 
-  fb_config_.x_pixels = width;
-  fb_config_.y_pixels = height;
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
 
-  DLOGI("New framebuffer resolution (%dx%d)", fb_config_.x_pixels, fb_config_.y_pixels);
+  DLOGI("New framebuffer resolution (%dx%d)", client_ctx_.fb_config.x_pixels,
+                                              client_ctx_.fb_config.y_pixels);
 
   return kErrorNone;
 }
@@ -3146,7 +3170,7 @@ DisplayError DisplayBase::GetFrameBufferConfig(DisplayConfigVariableInfo *variab
     return kErrorParameters;
   }
 
-  *variable_info = fb_config_;
+  *variable_info = client_ctx_.fb_config;
 
   return kErrorNone;
 }
@@ -3177,7 +3201,7 @@ DisplayError DisplayBase::GetDisplayPort(DisplayPort *port) {
     return kErrorParameters;
   }
 
-  *port = hw_panel_info_.port;
+  *port = client_ctx_.hw_panel_info.port;
 
   return kErrorNone;
 }
@@ -3225,7 +3249,7 @@ bool DisplayBase::IsPrimaryDisplay() {
 }
 
 bool DisplayBase::IsPrimaryDisplayLocked() {
-  return hw_panel_info_.is_primary_panel;
+  return client_ctx_.hw_panel_info.is_primary_panel;
 }
 
 DisplayError DisplayBase::SetCompositionState(LayerComposition composition_type, bool enable) {
@@ -3445,8 +3469,8 @@ bool DisplayBase::IsSupportSsppTonemap() {
 }
 
 DisplayError DisplayBase::ValidateScaling(uint32_t width, uint32_t height) {
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
   uint32_t max_scale_down = INT_MAX;
   uint32_t max_scale_up = INT_MAX;
@@ -3517,10 +3541,10 @@ DisplayError DisplayBase::ValidateDataspace(const ColorMetaData &color_metadata)
 // TODO(user): Temporary changes, to be removed when DRM driver supports
 // Partial update with Destination scaler enabled.
 void DisplayBase::SetPUonDestScaler() {
-  uint32_t mixer_width = mixer_attributes_.width;
-  uint32_t mixer_height = mixer_attributes_.height;
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t mixer_width = client_ctx_.mixer_attributes.width;
+  uint32_t mixer_height = client_ctx_.mixer_attributes.height;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
   disable_pu_on_dest_scaler_ = (mixer_width != display_width ||
                                 mixer_height != display_height) || de_enabled_;
@@ -3764,7 +3788,8 @@ DisplayError DisplayBase::ResetPendingPowerState(const shared_ptr<Fence> &retire
 }
 
 bool DisplayBase::CheckResourceState(bool *res_exhausted) {
-  return comp_manager_->CheckResourceState(display_comp_ctx_, res_exhausted, display_attributes_);
+  return comp_manager_->CheckResourceState(display_comp_ctx_, res_exhausted,
+                                           client_ctx_.display_attributes);
 }
 DisplayError DisplayBase::colorSamplingOn() {
   return kErrorNone;
@@ -3906,7 +3931,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
       }
       vsync_enable_pending_ = true;
     }
-    *needs_refresh = (hw_panel_info_.mode == kModeCommand);
+    *needs_refresh = (client_ctx_.hw_panel_info.mode == kModeCommand);
     DisablePartialUpdateOneFrameInternal();
     err = hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, true);
     if (err != kErrorNone) {
@@ -4061,7 +4086,7 @@ void DisplayBase::WaitForCompletion(SyncPoints *sync_points) {
 
   // Wait for CRTC power event on first cycle.
   if (first_cycle_) {
-    if (hw_panel_info_.is_primary_panel) {
+    if (client_ctx_.hw_panel_info.is_primary_panel) {
       DLOGI("Sync commit on primary");
       return;
     }
@@ -4306,8 +4331,8 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
   if (layer_stack->cwb_config == NULL) {
     cwb_config_->tap_point = CwbTapPoint::kLmTapPoint;
     // Setting full frame ROI
-    cwb_config_->cwb_full_rect = LayerRect(0.0f, 0.0f, FLOAT(mixer_attributes_.width),
-                                           FLOAT(mixer_attributes_.height));
+    cwb_config_->cwb_full_rect = LayerRect(0.0f, 0.0f, FLOAT(client_ctx_.mixer_attributes.width),
+                                           FLOAT(client_ctx_.mixer_attributes.height));
     cwb_config_->cwb_roi = cwb_config_->cwb_full_rect;
   }
 

@@ -121,10 +121,8 @@ DisplayError CompManager::Deinit() {
 }
 
 DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type,
-                                          const HWDisplayAttributes &display_attributes,
-                                          const HWPanelInfo &hw_panel_info,
-                                          const HWMixerAttributes &mixer_attributes,
-                                          const DisplayConfigVariableInfo &fb_config,
+                                          DisplayDeviceContext &device_ctx,
+                                          DisplayClientContext &client_ctx,
                                           Handle *display_ctx,
                                           vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
@@ -138,8 +136,7 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
 
   Strategy *&strategy = display_comp_ctx->strategy;
   strategy = new Strategy(extension_intf_, buffer_allocator_, display_id, type,
-                          hw_res_info_, hw_panel_info, mixer_attributes, display_attributes,
-                          fb_config);
+                          hw_res_info_, client_ctx);
   if (!strategy) {
     DLOGE("Unable to create strategy");
     delete display_comp_ctx;
@@ -153,10 +150,7 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
     return error;
   }
 
-  Resolution fb_resolution = {fb_config.x_pixels, fb_config.y_pixels};
-
-  error = resource_intf_->RegisterDisplay(display_id, type, display_attributes, hw_panel_info,
-                                          mixer_attributes, fb_resolution,
+  error = resource_intf_->RegisterDisplay(display_id, type, device_ctx, client_ctx,
                                           &display_comp_ctx->display_resource_ctx);
   if (error != kErrorNone) {
     strategy->Deinit();
@@ -189,11 +183,11 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
   }
 
   registered_displays_.insert(display_id.GetDisplayId());
-  display_comp_ctx->is_primary_panel = hw_panel_info.is_primary_panel;
+  display_comp_ctx->is_primary_panel = client_ctx.hw_panel_info.is_primary_panel;
   display_comp_ctx->display_id = display_id;
   display_comp_ctx->display_type = type;
-  display_comp_ctx->fb_config = fb_config;
-  display_comp_ctx->dest_scaler_blocks_used = mixer_attributes.dest_scaler_blocks_used;
+  display_comp_ctx->fb_config = client_ctx.fb_config;
+  display_comp_ctx->dest_scaler_blocks_used = client_ctx.mixer_attributes.dest_scaler_blocks_used;
   *display_ctx = display_comp_ctx;
   // New non-primary display device has been added, so move the composition mode to safe mode until
   // resources for the added display is configured properly.
@@ -253,10 +247,8 @@ DisplayError CompManager::CheckEnforceSplit(Handle comp_handle,
 }
 
 DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
-                                             const HWDisplayAttributes &display_attributes,
-                                             const HWPanelInfo &hw_panel_info,
-                                             const HWMixerAttributes &mixer_attributes,
-                                             const DisplayConfigVariableInfo &fb_config,
+                                             DisplayDeviceContext &device_ctx,
+                                             DisplayClientContext &client_ctx,
                                              vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DTRACE_SCOPED();
@@ -265,11 +257,8 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(comp_handle);
 
-  Resolution fb_resolution = {fb_config.x_pixels, fb_config.y_pixels};
-
   error = resource_intf_->ReconfigureDisplay(display_comp_ctx->display_resource_ctx,
-                                             display_attributes, hw_panel_info, mixer_attributes,
-                                             fb_resolution);
+                                             device_ctx, client_ctx);
   if (error != kErrorNone) {
     DLOGW("ReconfigureDisplay returned error=%d", error);
     return error;
@@ -283,15 +272,15 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
   }
 
   error = resource_intf_->Perform(ResourceInterface::kCmdCheckEnforceSplit,
-                                  display_comp_ctx->display_resource_ctx, display_attributes.fps);
+                                  display_comp_ctx->display_resource_ctx,
+                                  client_ctx.display_attributes.fps);
   if (error != kErrorNone) {
     DLOGW("CheckEnforceSplit returned error=%d", error);
     return error;
   }
 
   if (display_comp_ctx->strategy) {
-    error = display_comp_ctx->strategy->Reconfigure(hw_panel_info, display_attributes,
-                                                    mixer_attributes, fb_config);
+    error = display_comp_ctx->strategy->Reconfigure(client_ctx);
     if (error != kErrorNone) {
       DLOGE("Unable to Reconfigure strategy.");
       display_comp_ctx->strategy->Deinit();
@@ -302,7 +291,7 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
   }
 
   // Update new resolution.
-  display_comp_ctx->fb_config = fb_config;
+  display_comp_ctx->fb_config = client_ctx.fb_config;
   return error;
 }
 

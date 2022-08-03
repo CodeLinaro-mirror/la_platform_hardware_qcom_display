@@ -166,11 +166,13 @@ ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, HWInterface *
 
 ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
                                                               HWInterface *hw_intf,
-                                                              const HWDisplayAttributes &attribute,
-                                                              const HWPanelInfo &panel_info,
+                                                              DisplayDeviceContext &device_ctx,
+                                                              DisplayClientContext &client_ctx,
                                                               DppsControlInterface *dpps_intf,
                                                               DisplayInterface *disp_intf) {
   DisplayError error = kErrorNone;
+  const HWDisplayAttributes &attribute = client_ctx.display_attributes;
+  const HWPanelInfo &panel_info = client_ctx.hw_panel_info;
   PPFeatureVersion versions;
   int32_t display_id = -1;
   ColorManagerProxy *color_manager_proxy = NULL;

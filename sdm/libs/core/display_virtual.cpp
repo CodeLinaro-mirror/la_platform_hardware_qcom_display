@@ -128,7 +128,7 @@ DisplayError DisplayVirtual::GetNumVariableInfoConfigs(uint32_t *count) {
 
 DisplayError DisplayVirtual::GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
-  *variable_info = display_attributes_;
+  *variable_info = client_ctx_.display_attributes;
   return kErrorNone;
 }
 
@@ -146,51 +146,65 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
   }
 
   DisplayError error = kErrorNone;
-  HWDisplayAttributes display_attributes;
-  HWMixerAttributes mixer_attributes;
-  HWPanelInfo hw_panel_info = {};
-  DisplayConfigVariableInfo fb_config = fb_config_;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+  client_ctx = client_ctx_;
+  device_ctx = device_ctx_;
 
-  display_attributes.x_pixels = variable_info->x_pixels;
-  display_attributes.y_pixels = variable_info->y_pixels;
-  display_attributes.fps = variable_info->fps;
+  client_ctx.display_attributes.x_pixels = variable_info->x_pixels;
+  client_ctx.display_attributes.y_pixels = variable_info->y_pixels;
+  client_ctx.display_attributes.fps = variable_info->fps;
 
-  if (display_attributes == display_attributes_) {
+  if (client_ctx.display_attributes == client_ctx_.display_attributes) {
     return kErrorNone;
   }
 
-  error = dpu_core_mux_->SetDisplayAttributes(display_attributes);
+  error = dpu_core_mux_->SetDisplayAttributes(client_ctx.display_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
-  dpu_core_mux_->GetHWPanelInfo(&hw_panel_info);
-
-  if (set_max_lum_ != -1.0 || set_min_lum_ != -1.0) {
-    hw_panel_info.peak_luminance = set_max_lum_;
-    hw_panel_info.blackness_level = set_min_lum_;
-    DLOGI("set peak_luminance %f blackness_level %f", hw_panel_info.peak_luminance,
-          hw_panel_info.blackness_level);
+  for (int i = 0; i < core_count_; i++) {
+    device_ctx[i].display_attributes = client_ctx.display_attributes;
+    device_ctx[i].display_attributes.x_pixels = client_ctx.display_attributes.x_pixels /
+                                                core_count_;
   }
 
-  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes);
+  dpu_core_mux_->GetHWPanelInfo(&device_ctx, &client_ctx);
+
+  if (set_max_lum_ != -1.0 || set_min_lum_ != -1.0) {
+    client_ctx.hw_panel_info.peak_luminance = set_max_lum_;
+    client_ctx.hw_panel_info.blackness_level = set_min_lum_;
+    DLOGI("set peak_luminance %f blackness_level %f", client_ctx.hw_panel_info.peak_luminance,
+          client_ctx.hw_panel_info.blackness_level);
+  }
+
+  for (int i = 0; i < core_count_; i++) {
+    device_ctx[i].hw_panel_info.peak_luminance = set_max_lum_;
+    device_ctx[i].hw_panel_info.blackness_level = set_min_lum_;
+  }
+
+  error = dpu_core_mux_->GetMixerAttributes(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
   // fb_config will be updated only once after creation of virtual display
-  if (fb_config.x_pixels == 0 || fb_config.y_pixels == 0) {
-    fb_config = display_attributes;
+  if (client_ctx.fb_config.x_pixels == 0 || client_ctx.fb_config.y_pixels == 0) {
+    error = dpu_core_mux_->GetFbConfig(client_ctx.display_attributes.x_pixels,
+                                       client_ctx.display_attributes.y_pixels,
+                                       &device_ctx, &client_ctx);
+      if (error != kErrorNone) {
+        return error;
+      }
   }
 
   // if display is already connected, reconfigure the display with new configuration.
   if (!display_comp_ctx_) {
-    error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, display_attributes,
-                                           hw_panel_info, mixer_attributes, fb_config,
+    error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, device_ctx, client_ctx,
                                            &display_comp_ctx_, &cached_qos_data_);
   } else {
-    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes, hw_panel_info,
-                                              mixer_attributes, fb_config,
+    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx, client_ctx,
                                               &cached_qos_data_);
   }
   if (error != kErrorNone) {
@@ -210,13 +224,11 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
     default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
   }
 
-  display_attributes_ = display_attributes;
-  mixer_attributes_ = mixer_attributes;
-  hw_panel_info_ = hw_panel_info;
-  fb_config_ = fb_config;
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
 
-  DLOGI("Virtual display resolution changed to[%dx%d]", display_attributes_.x_pixels,
-        display_attributes_.y_pixels);
+  DLOGI("Virtual display resolution changed to[%dx%d]", client_ctx_.display_attributes.x_pixels,
+        client_ctx_.display_attributes.y_pixels);
 
   return kErrorNone;
 }
