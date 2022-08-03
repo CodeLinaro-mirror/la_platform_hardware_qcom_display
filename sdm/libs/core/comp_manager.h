@@ -70,17 +70,13 @@ class CompManager : public CwbCallback {
                     BufferAllocator *buffer_allocator, SocketHandler *socket_handler);
   DisplayError Deinit();
   DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
-                               const HWDisplayAttributes &display_attributes,
-                               const HWPanelInfo &hw_panel_info,
-                               const HWMixerAttributes &mixer_attributes,
-                               const DisplayConfigVariableInfo &fb_config, Handle *display_ctx,
+                               DisplayDeviceContext &device_ctx,
+                               DisplayClientContext &client_ctx, Handle *display_ctx,
                                std::vector<HWQosData> *default_qos_data,
                                CompManagerEventHandler *event_handler);
   DisplayError UnregisterDisplay(Handle display_ctx);
-  DisplayError ReconfigureDisplay(Handle display_ctx, const HWDisplayAttributes &display_attributes,
-                                  const HWPanelInfo &hw_panel_info,
-                                  const HWMixerAttributes &mixer_attributes,
-                                  const DisplayConfigVariableInfo &fb_config,
+  DisplayError ReconfigureDisplay(Handle display_ctx, DisplayDeviceContext &device_ctx,
+                                  DisplayClientContext &client_ctx,
                                   std::vector<HWQosData> *default_qos_data);
   DisplayError PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack);

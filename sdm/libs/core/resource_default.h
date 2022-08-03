@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014 - 2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
 *    * Redistributions of source code must retain the above copyright notice, this list of
@@ -28,42 +26,6 @@
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
 * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -87,17 +49,13 @@ class ResourceDefault : public ResourceInterface {
                                             ResourceInterface **resource_intf);
   static DisplayError DestroyResourceDefault(ResourceInterface *resource_intf);
   virtual DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
-                                       const HWDisplayAttributes &display_attributes,
-                                       const HWPanelInfo &hw_panel_info,
-                                       const HWMixerAttributes &mixer_attributes,
-                                       const Resolution &fb_resolution,
+                                       DisplayDeviceContext &device_ctx,
+                                       DisplayClientContext &client_ctx,
                                        Handle *display_ctx);
   virtual DisplayError UnregisterDisplay(Handle display_ctx);
   virtual DisplayError ReconfigureDisplay(Handle display_ctx,
-                                          const HWDisplayAttributes &display_attributes,
-                                          const HWPanelInfo &hw_panel_info,
-                                          const HWMixerAttributes &mixer_attributes,
-                                          const Resolution &fb_resolution);
+                                          DisplayDeviceContext &device_ctx,
+                                          DisplayClientContext &client_ctx);
   virtual DisplayError Start(Handle display_ctx, LayerStack *layer_stack);
   virtual DisplayError Stop(Handle display_ctx, DispLayerStack *disp_layer_stack);
   virtual DisplayError SetDrawMethod(Handle display_ctx, const DisplayDrawMethod &draw_method);
@@ -244,7 +202,8 @@ class ResourceDefault : public ResourceInterface {
                                 LayerRect *in_rect, LayerRect *out_rect);
   void CalculateSrcRect(float split_ratio, float src_width,
                                 LayerRect *in_rect, LayerRect *out_rect);
-  vector<HWMixerAttributes> mixer_attributes_;
+  DisplayClientContext client_ctx_;
+  DisplayDeviceContext device_ctx_;
   vector<HWResourceInfo> hw_res_info_;
   HWBlockContext hw_block_ctx_[kHWBlockMax];
   vector<std::vector<SourcePipe>> src_pipes_;

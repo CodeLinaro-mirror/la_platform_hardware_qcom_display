@@ -20,8 +20,11 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*
+*/
+
+/*
 * Changes from Qualcomm Innovation Center are provided under the following license:
+*
 * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
@@ -41,17 +44,12 @@ Strategy::Strategy(ExtensionInterface *extension_intf,
                    BufferAllocator *buffer_allocator,
                    DisplayId display_id, DisplayType type,
                    const std::vector<HWResourceInfo> &hw_resource_info,
-                   const HWPanelInfo &hw_panel_info, const HWMixerAttributes &mixer_attributes,
-                   const HWDisplayAttributes &display_attributes,
-                   const DisplayConfigVariableInfo &fb_config)
+                   DisplayInfoContext &info_ctx)
   : extension_intf_(extension_intf),
     display_id_info_(display_id),
     display_type_(type),
     hw_resource_info_(hw_resource_info),
-    hw_panel_info_(hw_panel_info),
-    mixer_attributes_(mixer_attributes),
-    display_attributes_(display_attributes),
-    fb_config_(fb_config),
+    info_ctx_(info_ctx),
     buffer_allocator_(buffer_allocator) {
     display_id_ = display_id_info_.GetDisplayId();
   }
@@ -61,17 +59,14 @@ DisplayError Strategy::Init() {
 
   if (extension_intf_) {
     error = extension_intf_->CreateStrategyExtn(display_id_info_, display_type_, buffer_allocator_,
-                                                hw_resource_info_, hw_panel_info_,
-                                                mixer_attributes_, display_attributes_, fb_config_,
-                                                &strategy_intf_);
+                                                hw_resource_info_, info_ctx_, &strategy_intf_);
     if (error != kErrorNone) {
       DLOGE("Failed to create strategy for display %d-%d", display_id_, display_type_);
       return error;
     }
 
-    error = extension_intf_->CreatePartialUpdate(
-        display_id_info_, display_type_, hw_resource_info_, hw_panel_info_, mixer_attributes_,
-        display_attributes_, fb_config_, &partial_update_intf_);
+    error = extension_intf_->CreatePartialUpdate(display_id_info_, display_type_, hw_resource_info_,
+                                                 info_ctx_, &partial_update_intf_);
   }
 
   return kErrorNone;
@@ -163,18 +158,18 @@ DisplayError Strategy::GetNextStrategy() {
   for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
     Layer *gpu_target_layer =
         layer_stack->layers.at(disp_layer_stack_->stack_info.gpu_target_index);
-    float layer_mixer_width = FLOAT(mixer_attributes_.width);
-    float layer_mixer_height = FLOAT(mixer_attributes_.height);
-    float fb_width = FLOAT(fb_config_.x_pixels);
-    float fb_height = FLOAT(fb_config_.y_pixels);
+    float layer_mixer_width = FLOAT(info_ctx_.mixer_attributes.width);
+    float layer_mixer_height = FLOAT(info_ctx_.mixer_attributes.height);
+    float fb_width = FLOAT(info_ctx_.fb_config.x_pixels);
+    float fb_height = FLOAT(info_ctx_.fb_config.y_pixels);
     LayerRect src_domain = (LayerRect){0.0f, 0.0f, fb_width, fb_height};
     LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
 
     Layer layer = *gpu_target_layer;
     disp_layer_stack_->info[i].index.push_back(disp_layer_stack_->stack_info.gpu_target_index);
     disp_layer_stack_->info[i].roi_index.push_back(0);
-    layer.transform.flip_horizontal ^= hw_panel_info_.panel_orientation.flip_horizontal;
-    layer.transform.flip_vertical ^= hw_panel_info_.panel_orientation.flip_vertical;
+    layer.transform.flip_horizontal ^= info_ctx_.hw_panel_info.panel_orientation.flip_horizontal;
+    layer.transform.flip_vertical ^= info_ctx_.hw_panel_info.panel_orientation.flip_vertical;
     // Flip rect to match transform.
     TransformHV(src_domain, layer.dst_rect, layer.transform, &layer.dst_rect);
     // Scale to mixer resolution.
@@ -192,8 +187,8 @@ void Strategy::GenerateROI() {
     return;
   }
 
-  float layer_mixer_width = mixer_attributes_.width;
-  float layer_mixer_height = mixer_attributes_.height;
+  float layer_mixer_width = info_ctx_.mixer_attributes.width;
+  float layer_mixer_height = info_ctx_.mixer_attributes.height;
 
   bool is_src_split = true;
   std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
@@ -205,7 +200,7 @@ void Strategy::GenerateROI() {
     is_src_split &= hw_resource_info_[i].is_src_split;
   }
 
-  if (!is_src_split && display_attributes_.is_device_split) {
+  if (!is_src_split && info_ctx_.display_attributes.is_device_split) {
     split_display = true;
   }
 
@@ -213,7 +208,7 @@ void Strategy::GenerateROI() {
   disp_layer_stack_->stack_info.right_frame_roi = {};
 
   if (split_display) {
-    float left_split = FLOAT(mixer_attributes_.split_left);
+    float left_split = FLOAT(info_ctx_.mixer_attributes.split_left);
     disp_layer_stack_->stack_info.left_frame_roi.push_back(LayerRect(0.0f, 0.0f,
                                 left_split, layer_mixer_height));
     disp_layer_stack_->stack_info.right_frame_roi.push_back(LayerRect(left_split,
@@ -225,10 +220,7 @@ void Strategy::GenerateROI() {
   }
 }
 
-DisplayError Strategy::Reconfigure(const HWPanelInfo &hw_panel_info,
-                                   const HWDisplayAttributes &display_attributes,
-                                   const HWMixerAttributes &mixer_attributes,
-                                   const DisplayConfigVariableInfo &fb_config) {
+DisplayError Strategy::Reconfigure(DisplayInfoContext &info_ctx) {
   DisplayError error = kErrorNone;
 
   if (!extension_intf_) {
@@ -243,19 +235,14 @@ DisplayError Strategy::Reconfigure(const HWPanelInfo &hw_panel_info,
   }
 
   extension_intf_->CreatePartialUpdate(display_id_info_, display_type_, hw_resource_info_,
-                                       hw_panel_info, mixer_attributes, display_attributes,
-                                       fb_config, &partial_update_intf_);
+                                       info_ctx, &partial_update_intf_);
 
-  error = strategy_intf_->Reconfigure(hw_panel_info, hw_resource_info_, display_attributes,
-                                      mixer_attributes, fb_config);
+  error = strategy_intf_->Reconfigure(info_ctx, hw_resource_info_);
   if (error != kErrorNone) {
     return error;
   }
 
-  hw_panel_info_ = hw_panel_info;
-  display_attributes_ = display_attributes;
-  mixer_attributes_ = mixer_attributes;
-  fb_config_ = fb_config;
+  info_ctx_ = info_ctx;
 
   return kErrorNone;
 }

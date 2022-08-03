@@ -48,9 +48,7 @@ class Strategy {
   Strategy(ExtensionInterface *extension_intf, BufferAllocator *buffer_allocator,
            DisplayId display_id, DisplayType type,
            const std::vector<HWResourceInfo> &hw_resource_info,
-           const HWPanelInfo &hw_panel_info, const HWMixerAttributes &mixer_attributes,
-           const HWDisplayAttributes &display_attributes,
-           const DisplayConfigVariableInfo &fb_config);
+           DisplayInfoContext &info_ctx);
 
   DisplayError Init();
   DisplayError Deinit();
@@ -60,10 +58,7 @@ class Strategy {
   DisplayError GetNextStrategy();
   DisplayError Stop();
   DisplayError SetDrawMethod(const DisplayDrawMethod &draw_method);
-  DisplayError Reconfigure(const HWPanelInfo &hw_panel_info,
-                           const HWDisplayAttributes &hw_display_attributes,
-                           const HWMixerAttributes &mixer_attributes,
-                           const DisplayConfigVariableInfo &fb_config);
+  DisplayError Reconfigure(DisplayInfoContext &info_ctx);
   DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
   DisplayError Purge();
   DisplayError SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms);
@@ -82,11 +77,8 @@ class Strategy {
   int32_t display_id_;
   DisplayType display_type_;
   std::vector<HWResourceInfo> hw_resource_info_;
-  HWPanelInfo hw_panel_info_;
   DispLayerStack *disp_layer_stack_ = NULL;
-  HWMixerAttributes mixer_attributes_ = {};
-  HWDisplayAttributes display_attributes_ = {};
-  DisplayConfigVariableInfo fb_config_ = {};
+  DisplayInfoContext info_ctx_;
   bool extn_start_success_ = false;
   bool disable_gpu_comp_ = false;
   BufferAllocator *buffer_allocator_ = NULL;

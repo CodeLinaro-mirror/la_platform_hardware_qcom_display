@@ -103,11 +103,11 @@ DisplayError DisplayBuiltIn::Init() {
     color_mgr_->ColorMgrGetStcModes(&stc_color_modes_);
   }
 
-  if (hw_panel_info_.mode == kModeCommand && Debug::IsVideoModeEnabled()) {
+  if (client_ctx_.hw_panel_info.mode == kModeCommand && Debug::IsVideoModeEnabled()) {
     error = dpu_core_mux_->SetDisplayMode(kModeVideo);
     if (error != kErrorNone) {
-      DLOGW("Retaining current display mode. Current = %d, Requested = %d", hw_panel_info_.mode,
-            kModeVideo);
+      DLOGW("Retaining current display mode. Current = %d, Requested = %d",
+            client_ctx_.hw_panel_info.mode, kModeVideo);
     }
   }
 
@@ -121,7 +121,7 @@ DisplayError DisplayBuiltIn::Init() {
                  HWEvent::HW_RECOVERY,      HWEvent::HISTOGRAM,
                  HWEvent::BACKLIGHT_EVENT,  HWEvent::POWER_EVENT,
                  HWEvent::MMRM,             HWEvent::VM_RELEASE_EVENT};
-  if (hw_panel_info_.mode == kModeCommand) {
+  if (client_ctx_.hw_panel_info.mode == kModeCommand) {
     event_list_.push_back(HWEvent::IDLE_POWER_COLLAPSE);
   }
 #endif
@@ -136,7 +136,7 @@ DisplayError DisplayBuiltIn::Init() {
     DLOGE("Failed to create hardware events interface on. Error = %d", error);
   }
 
-  current_refresh_rate_ = hw_panel_info_.max_fps;
+  current_refresh_rate_ = client_ctx_.hw_panel_info.max_fps;
 
   int value = 0;
   Debug::Get()->GetProperty(ENABLE_HISTOGRAM_INTR, &value);
@@ -152,7 +152,7 @@ DisplayError DisplayBuiltIn::Init() {
     // Get status of RC enablement property. Default RC is disabled.
     int rc_prop_value = 0;
     Debug::GetProperty(ENABLE_ROUNDED_CORNER, &rc_prop_value);
-    if (rc_prop_value && hw_panel_info_.is_primary_panel) {
+    if (rc_prop_value && client_ctx_.hw_panel_info.is_primary_panel) {
       // TODO(user): Get the RC count from driver and decide if RC can be enabled for
       // sec built-ins.  Currently client sends RC layers only for first builtin.
       rc_enable_prop_ = true;
@@ -185,13 +185,13 @@ DisplayError DisplayBuiltIn::Init() {
 
   value = 0;
   DebugHandler::Get()->GetProperty(ENABLE_QSYNC_IDLE, &value);
-  enable_qsync_idle_ = hw_panel_info_.qsync_support && (value == 1);
+  enable_qsync_idle_ = client_ctx_.hw_panel_info.qsync_support && (value == 1);
   if (enable_qsync_idle_) {
     DLOGI("Enabling qsync on idling");
 
-    if (hw_panel_info_.transfer_time_us_min) {
-      DLOGI("Setting transfer time to min: %d", hw_panel_info_.transfer_time_us_min);
-      UpdateTransferTime(hw_panel_info_.transfer_time_us_min);
+    if (client_ctx_.hw_panel_info.transfer_time_us_min) {
+      DLOGI("Setting transfer time to min: %d", client_ctx_.hw_panel_info.transfer_time_us_min);
+      UpdateTransferTime(client_ctx_.hw_panel_info.transfer_time_us_min);
     }
   }
 
@@ -258,8 +258,8 @@ DisplayError DisplayBuiltIn::PrePrepare(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   uint32_t new_mixer_width = 0;
   uint32_t new_mixer_height = 0;
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
   DisplayError error = HandleDemuraLayer(layer_stack);
   if (error != kErrorNone) {
@@ -378,7 +378,7 @@ void DisplayBuiltIn::CacheFrameROI() {
 }
 
 void DisplayBuiltIn::UpdateQsyncMode() {
-  if (!hw_panel_info_.qsync_support) {
+  if (!client_ctx_.hw_panel_info.qsync_support) {
     return;
   }
 
@@ -416,12 +416,12 @@ void DisplayBuiltIn::UpdateQsyncMode() {
 void DisplayBuiltIn::HandleUpdateTransferTime(QSyncMode mode) {
   if (mode == kQSyncModeNone) {
     DLOGI("Qsync mode set to %d successfully, setting transfer time to min: %d", mode,
-          hw_panel_info_.transfer_time_us_min);
-    UpdateTransferTime(hw_panel_info_.transfer_time_us_min);
+          client_ctx_.hw_panel_info.transfer_time_us_min);
+    UpdateTransferTime(client_ctx_.hw_panel_info.transfer_time_us_min);
   } else {
     DLOGI("Qsync mode set to %d successfully, setting transfer time to max: %d", mode,
-          hw_panel_info_.transfer_time_us_max);
-    UpdateTransferTime(hw_panel_info_.transfer_time_us_max);
+          client_ctx_.hw_panel_info.transfer_time_us_max);
+    UpdateTransferTime(client_ctx_.hw_panel_info.transfer_time_us_max);
   }
 }
 
@@ -456,14 +456,14 @@ DisplayError DisplayBuiltIn::setColorSamplingState(SamplingState state) {
   if (samplingState == SamplingState::On) {
     histogramCtrl.value = sde_drm::HistModes::kHistEnabled;
     histogramIRQ.value = sde_drm::HistModes::kHistEnabled;
-    if (hw_panel_info_.mode == kModeCommand) {
+    if (client_ctx_.hw_panel_info.mode == kModeCommand) {
       uint32_t pending;
       ControlPartialUpdate(false /* enable */, &pending);
     }
   } else {
     histogramCtrl.value = sde_drm::HistModes::kHistDisabled;
     histogramIRQ.value = sde_drm::HistModes::kHistDisabled;
-    if (hw_panel_info_.mode == kModeCommand) {
+    if (client_ctx_.hw_panel_info.mode == kModeCommand) {
       uint32_t pending;
       ControlPartialUpdate(true /* enable */, &pending);
     }
@@ -495,7 +495,7 @@ DisplayError DisplayBuiltIn::SetupSPR() {
 
   if (spr_prop_value) {
     SPRInputConfig spr_cfg;
-    spr_cfg.panel_name = std::string(hw_panel_info_.panel_name);
+    spr_cfg.panel_name = std::string(client_ctx_.hw_panel_info.panel_name);
     spr_cfg.spr_bypassed = (spr_bypass_prop_value) ? true : false;
     spr_ = pf_factory_->CreateSPRIntf(spr_cfg, prop_intf_);
 
@@ -678,7 +678,7 @@ void DisplayBuiltIn::PreCommit(LayerStack *layer_stack) {
   uint32_t app_layer_count = disp_layer_stack_->stack_info.app_layer_count;
 
   // Enabling auto refresh is async and needs to happen before commit ioctl
-  if (hw_panel_info_.mode == kModeCommand) {
+  if (client_ctx_.hw_panel_info.mode == kModeCommand) {
     bool enable = (app_layer_count == 1) && layer_stack->flags.single_buffered_layer_present;
     bool need_refresh = layer_stack->flags.single_buffered_layer_present && (app_layer_count > 1);
 
@@ -980,7 +980,7 @@ DisplayError DisplayBuiltIn::SetDisplayStateForDemuraTn(DisplayState state) {
 
 DisplayError DisplayBuiltIn::SetUpCommit(LayerStack *layer_stack) {
   DTRACE_SCOPED();
-  last_panel_mode_ = hw_panel_info_.mode;
+  last_panel_mode_ = client_ctx_.hw_panel_info.mode;
   PreCommit(layer_stack);
 
   return DisplayBase::SetUpCommit(layer_stack);
@@ -988,7 +988,7 @@ DisplayError DisplayBuiltIn::SetUpCommit(LayerStack *layer_stack) {
 
 DisplayError DisplayBuiltIn::CommitLocked(LayerStack *layer_stack) {
   DTRACE_SCOPED();
-  last_panel_mode_ = hw_panel_info_.mode;
+  last_panel_mode_ = client_ctx_.hw_panel_info.mode;
   PreCommit(layer_stack);
 
   return DisplayBase::CommitLocked(layer_stack);
@@ -1029,7 +1029,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
     ControlPartialUpdateLocked(true /* enable */, &pending);
   }
 
-  if (last_panel_mode_ != hw_panel_info_.mode) {
+  if (last_panel_mode_ != client_ctx_.hw_panel_info.mode) {
     UpdateDisplayModeParams();
   }
 
@@ -1037,7 +1037,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
     dpps_pu_nofiy_pending_ = false;
     dpps_pu_lock_.Broadcast();
   }
-  dpps_info_.Init(this, hw_panel_info_.panel_name, this);
+  dpps_info_.Init(this, client_ctx_.hw_panel_info.panel_name, this);
 
   if (demuratn_)
     EnableDemuraTn(true);
@@ -1085,7 +1085,7 @@ void DisplayBuiltIn::HandleQsyncPostCommit() {
 
   QsyncEventData event_data;
   event_data.enabled = qsync_enabled;
-  event_data.refresh_rate = display_attributes_.fps;
+  event_data.refresh_rate = client_ctx_.display_attributes.fps;
   dpu_core_mux_->GetQsyncFps(&event_data.qsync_refresh_rate);
   event_handler_->HandleQsyncState(event_data);
 
@@ -1093,10 +1093,10 @@ void DisplayBuiltIn::HandleQsyncPostCommit() {
 }
 
 void DisplayBuiltIn::UpdateDisplayModeParams() {
-  if (hw_panel_info_.mode == kModeVideo) {
+  if (client_ctx_.hw_panel_info.mode == kModeVideo) {
     uint32_t pending = 0;
     ControlPartialUpdateLocked(false /* enable */, &pending);
-  } else if (hw_panel_info_.mode == kModeCommand) {
+  } else if (client_ctx_.hw_panel_info.mode == kModeCommand) {
     // Flush idle timeout value currently set.
     comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0, 0);
     switch_to_cmd_ = true;
@@ -1107,7 +1107,7 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
                                              shared_ptr<Fence> *release_fence) {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
-  HWDisplayMode panel_mode = hw_panel_info_.mode;
+  HWDisplayMode panel_mode = client_ctx_.hw_panel_info.mode;
 
   if ((state == kStateOn) && deferred_config_.IsDeferredState()) {
     SetDeferredFpsConfig();
@@ -1130,7 +1130,7 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
     pending_brightness_ = false;
   }
 
-  if (hw_panel_info_.mode != panel_mode) {
+  if (client_ctx_.hw_panel_info.mode != panel_mode) {
     UpdateDisplayModeParams();
   }
 
@@ -1188,16 +1188,16 @@ DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
       return kErrorParameters;
     }
 
-    if (hw_display_mode == hw_panel_info_.mode) {
+    if (hw_display_mode == client_ctx_.hw_panel_info.mode) {
       DLOGW("Same display mode requested on display %d-%d. Current = %d, Requested = %d",
-            display_id_, display_type_, hw_panel_info_.mode, hw_display_mode);
+            display_id_, display_type_, client_ctx_.hw_panel_info.mode, hw_display_mode);
       return kErrorNone;
     }
 
     error = dpu_core_mux_->SetDisplayMode(hw_display_mode);
     if (error != kErrorNone) {
       DLOGW("Retaining current display mode on display %d-%d. Current = %d, Requested = %d",
-            display_id_, display_type_, hw_panel_info_.mode, hw_display_mode);
+            display_id_, display_type_, client_ctx_.hw_panel_info.mode, hw_display_mode);
       return error;
     }
 
@@ -1239,8 +1239,8 @@ DisplayError DisplayBuiltIn::SetPanelBrightness(float brightness) {
     level = 0;
   } else {
     // Node only supports int level, so store the float remainder for accurate GetPanelBrightness
-    float max = hw_panel_info_.panel_max_brightness;
-    float min = hw_panel_info_.panel_min_brightness;
+    float max = client_ctx_.hw_panel_info.panel_max_brightness;
+    float min = client_ctx_.hw_panel_info.panel_min_brightness;
     if (min >= max) {
       DLOGE("Minimum brightness is greater than or equal to maximum brightness");
       return kErrorDriverData;
@@ -1317,9 +1317,9 @@ DisplayError DisplayBuiltIn::GetRefreshRateRange(uint32_t *min_refresh_rate,
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
 
-  if (hw_panel_info_.min_fps && hw_panel_info_.max_fps) {
-    *min_refresh_rate = hw_panel_info_.min_fps;
-    *max_refresh_rate = hw_panel_info_.max_fps;
+  if (client_ctx_.hw_panel_info.min_fps && client_ctx_.hw_panel_info.max_fps) {
+    *min_refresh_rate = client_ctx_.hw_panel_info.min_fps;
+    *max_refresh_rate = client_ctx_.hw_panel_info.max_fps;
   } else {
     error = DisplayBase::GetRefreshRateRange(min_refresh_rate, max_refresh_rate);
   }
@@ -1331,18 +1331,19 @@ DisplayError DisplayBuiltIn::SetRefreshRate(uint32_t refresh_rate, bool final_ra
                                             bool idle_screen) {
   ClientLock lock(disp_mutex_);
 
-  if (!active_ || !hw_panel_info_.dynamic_fps || qsync_mode_ != kQSyncModeNone ||
+  if (!active_ || !client_ctx_.hw_panel_info.dynamic_fps || qsync_mode_ != kQSyncModeNone ||
       disable_dyn_fps_) {
     return kErrorNotSupported;
   }
 
-  if (refresh_rate < hw_panel_info_.min_fps || refresh_rate > hw_panel_info_.max_fps) {
+  if (refresh_rate < client_ctx_.hw_panel_info.min_fps ||
+      refresh_rate > client_ctx_.hw_panel_info.max_fps) {
     DLOGE("Invalid Fps = %d request", refresh_rate);
     return kErrorParameters;
   }
 
   if (CanLowerFps(idle_screen) && !final_rate && !enable_qsync_idle_) {
-    refresh_rate = hw_panel_info_.min_fps;
+    refresh_rate = client_ctx_.hw_panel_info.min_fps;
   }
 
   if (current_refresh_rate_ != refresh_rate) {
@@ -1361,7 +1362,8 @@ DisplayError DisplayBuiltIn::SetRefreshRate(uint32_t refresh_rate, bool final_ra
   }
 
   // Set safe mode upon success.
-  if (enhance_idle_time_ && handle_idle_timeout_ && (refresh_rate == hw_panel_info_.min_fps)) {
+  if (enhance_idle_time_ && handle_idle_timeout_ &&
+      (refresh_rate == client_ctx_.hw_panel_info.min_fps)) {
     comp_manager_->ProcessIdleTimeout(display_comp_ctx_);
   }
 
@@ -1448,7 +1450,7 @@ void DisplayBuiltIn::PingPongTimeout() {
 }
 
 void DisplayBuiltIn::IdlePowerCollapse() {
-  if (hw_panel_info_.mode == kModeCommand) {
+  if (client_ctx_.hw_panel_info.mode == kModeCommand) {
     ClientLock lock(disp_mutex_);
     validated_ = false;
     comp_manager_->ProcessIdlePowerCollapse(display_comp_ctx_);
@@ -1524,8 +1526,8 @@ DisplayError DisplayBuiltIn::GetPanelBrightness(float *brightness) {
 
 DisplayError DisplayBuiltIn::GetPanelBrightnessFromLevel(float level, float *brightness) {
   // -1.0f = off, 0.0f = min, 1.0f = max
-  float max = hw_panel_info_.panel_max_brightness;
-  float min = hw_panel_info_.panel_min_brightness;
+  float max = client_ctx_.hw_panel_info.panel_max_brightness;
+  float min = client_ctx_.hw_panel_info.panel_min_brightness;
   if (level == 0) {
     *brightness = -1.0f;
   } else if ((max > min) && (min <= level && level <= max)) {
@@ -1549,7 +1551,7 @@ DisplayError DisplayBuiltIn::GetPanelMaxBrightness(uint32_t *max_brightness_leve
     return kErrorParameters;
   }
 
-  *max_brightness_level = static_cast<uint32_t>(hw_panel_info_.panel_max_brightness);
+  *max_brightness_level = static_cast<uint32_t>(client_ctx_.hw_panel_info.panel_max_brightness);
 
   DLOGI_IF(kTagDisplay, "Get panel max_brightness_level %u", *max_brightness_level);
   return kErrorNone;
@@ -1673,12 +1675,12 @@ DisplayError DisplayBuiltIn::DppsProcessOps(enum DppsOps op, void *payload, size
         break;
       }
       info = reinterpret_cast<DppsDisplayInfo *>(payload);
-      info->width = display_attributes_.x_pixels;
-      info->height = display_attributes_.y_pixels;
+      info->width = client_ctx_.display_attributes.x_pixels;
+      info->height = client_ctx_.display_attributes.y_pixels;
       info->is_primary = IsPrimaryDisplayLocked();
       info->display_id = display_id_;
       info->display_type = display_type_;
-      info->fps = enable_dpps_dyn_fps_ ? display_attributes_.fps : 0;
+      info->fps = enable_dpps_dyn_fps_ ? client_ctx_.display_attributes.fps : 0;
 
       error = dpu_core_mux_->GetPanelBrightnessBasePath(&(info->brightness_base_path));
       if (error != kErrorNone) {
@@ -1793,15 +1795,16 @@ DisplayError DisplayBuiltIn::NotifyDisplayCalibrationMode(bool in_calibration) {
 
 std::string DisplayBuiltIn::Dump() {
   ClientLock lock(disp_mutex_);
-  HWDisplayAttributes attrib;
   uint32_t active_index = 0;
   uint32_t num_modes = 0;
   std::ostringstream os;
   char capabilities[16];
+  HWPanelInfo hw_panel_info = client_ctx_.hw_panel_info;
+  HWDisplayAttributes display_attributes = client_ctx_.display_attributes;
+  HWMixerAttributes mixer_attributes = client_ctx_.mixer_attributes;
 
   dpu_core_mux_->GetNumDisplayAttributes(&num_modes);
   dpu_core_mux_->GetActiveConfig(&active_index);
-  dpu_core_mux_->GetDisplayAttributes(active_index, &attrib);
 
   os << "device type:" << display_type_;
   os << " DrawMethod: " << draw_method_;
@@ -1813,45 +1816,45 @@ std::string DisplayBuiltIn::Dump() {
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
-  os << "\n Mode:" << (hw_panel_info_.mode == kModeVideo ? "Video" : "Command");
+  os << "\n Mode:" << (hw_panel_info.mode == kModeVideo ? "Video" : "Command");
   os << std::boolalpha;
-  os << " Primary:" << hw_panel_info_.is_primary_panel;
-  os << " DynFPS:" << hw_panel_info_.dynamic_fps;
-  os << "\n HDR Panel:" << hw_panel_info_.hdr_enabled;
-  os << " QSync:" << hw_panel_info_.qsync_support;
-  os << " DynBitclk:" << hw_panel_info_.dyn_bitclk_support;
-  os << "\n Left Split:" << hw_panel_info_.split_info.left_split
-     << " Right Split:" << hw_panel_info_.split_info.right_split;
-  os << "\n PartialUpdate:" << hw_panel_info_.partial_update;
-  if (hw_panel_info_.partial_update) {
-    os << "\n ROI Min w:" << hw_panel_info_.min_roi_width;
-    os << " Min h:" << hw_panel_info_.min_roi_height;
-    os << " NeedsMerge: " << hw_panel_info_.needs_roi_merge;
-    os << " Alignment: l:" << hw_panel_info_.left_align << " w:" << hw_panel_info_.width_align;
-    os << " t:" << hw_panel_info_.top_align << " b:" << hw_panel_info_.height_align;
+  os << " Primary:" << hw_panel_info.is_primary_panel;
+  os << " DynFPS:" << hw_panel_info.dynamic_fps;
+  os << "\n HDR Panel:" << hw_panel_info.hdr_enabled;
+  os << " QSync:" << hw_panel_info.qsync_support;
+  os << " DynBitclk:" << hw_panel_info.dyn_bitclk_support;
+  os << "\n Left Split:" << hw_panel_info.split_info.left_split
+     << " Right Split:" << hw_panel_info.split_info.right_split;
+  os << "\n PartialUpdate:" << hw_panel_info.partial_update;
+  if (hw_panel_info.partial_update) {
+    os << "\n ROI Min w:" << hw_panel_info.min_roi_width;
+    os << " Min h:" << hw_panel_info.min_roi_height;
+    os << " NeedsMerge: " << hw_panel_info.needs_roi_merge;
+    os << " Alignment: l:" << hw_panel_info.left_align << " w:" << hw_panel_info.width_align;
+    os << " t:" << hw_panel_info.top_align << " b:" << hw_panel_info.height_align;
   }
-  os << "\n FPS min:" << hw_panel_info_.min_fps << " max:" << hw_panel_info_.max_fps
-     << " cur:" << display_attributes_.fps;
-  os << " TransferTime: " << hw_panel_info_.transfer_time_us << "us";
-  os << " Min TransferTime: " << hw_panel_info_.transfer_time_us_min << "us";
-  os << " Max TransferTime: " << hw_panel_info_.transfer_time_us_max << "us";
-  os << " AllowedModeSwitch: " << hw_panel_info_.allowed_mode_switch;
+  os << "\n FPS min:" << hw_panel_info.min_fps << " max:" << hw_panel_info.max_fps
+     << " cur:" << display_attributes.fps;
+  os << " TransferTime: " << hw_panel_info.transfer_time_us << "us";
+  os << " Min TransferTime: " << hw_panel_info.transfer_time_us_min << "us";
+  os << " Max TransferTime: " << hw_panel_info.transfer_time_us_max << "us";
+  os << " AllowedModeSwitch: " << hw_panel_info.allowed_mode_switch;
   os << " PanelModeCaps: ";
-  snprintf(capabilities, sizeof(capabilities), "0x%x", hw_panel_info_.panel_mode_caps);
+  snprintf(capabilities, sizeof(capabilities), "0x%x", hw_panel_info.panel_mode_caps);
   os << capabilities;
-  os << " MaxBrightness:" << hw_panel_info_.panel_max_brightness;
-  os << "\n Display WxH: " << display_attributes_.x_pixels << "x" << display_attributes_.y_pixels;
-  os << " MixerWxH: " << mixer_attributes_.width << "x" << mixer_attributes_.height;
-  os << " DPI: " << display_attributes_.x_dpi << "x" << display_attributes_.y_dpi;
-  os << " LM_Split: " << display_attributes_.is_device_split;
-  os << "\n vsync_period " << display_attributes_.vsync_period_ns;
-  os << " v_back_porch: " << display_attributes_.v_back_porch;
-  os << " v_front_porch: " << display_attributes_.v_front_porch;
-  os << " v_pulse_width: " << display_attributes_.v_pulse_width;
-  os << "\n v_total: " << display_attributes_.v_total;
-  os << " h_total: " << display_attributes_.h_total;
-  os << " clk: " << display_attributes_.clock_khz;
-  os << " Topology: " << display_attributes_.topology;
+  os << " MaxBrightness:" << hw_panel_info.panel_max_brightness;
+  os << "\n Display WxH: " << display_attributes.x_pixels << "x" << display_attributes.y_pixels;
+  os << " MixerWxH: " << mixer_attributes.width << "x" << mixer_attributes.height;
+  os << " DPI: " << display_attributes.x_dpi << "x" << display_attributes.y_dpi;
+  os << " LM_Split: " << display_attributes.is_device_split;
+  os << "\n vsync_period " << display_attributes.vsync_period_ns;
+  os << " v_back_porch: " << display_attributes.v_back_porch;
+  os << " v_front_porch: " << display_attributes.v_front_porch;
+  os << " v_pulse_width: " << display_attributes.v_pulse_width;
+  os << "\n v_total: " << display_attributes.v_total;
+  os << " h_total: " << display_attributes.h_total;
+  os << " clk: " << display_attributes.clock_khz;
+  os << " Topology: " << display_attributes.topology;
   os << " Qsync mode: " << active_qsync_mode_;
   os << std::noboolalpha;
 
@@ -2115,8 +2118,8 @@ DisplayError DisplayBuiltIn::GetQSyncMode(QSyncMode *qsync_mode) {
 DisplayError DisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
   ClientLock lock(disp_mutex_);
 
-  if (!hw_panel_info_.qsync_support || first_cycle_) {
-    DLOGW("Failed: qsync_support: %d first_cycle %d", hw_panel_info_.qsync_support,
+  if (!client_ctx_.hw_panel_info.qsync_support || first_cycle_) {
+    DLOGW("Failed: qsync_support: %d first_cycle %d", client_ctx_.hw_panel_info.qsync_support,
           first_cycle_);
     return kErrorNotSupported;
   }
@@ -2141,7 +2144,7 @@ DisplayError DisplayBuiltIn::ControlIdlePowerCollapse(bool enable, bool synchron
           display_type_);
     return kErrorPermission;
   }
-  if (hw_panel_info_.mode == kModeVideo) {
+  if (client_ctx_.hw_panel_info.mode == kModeVideo) {
     DLOGW("Idle power collapse not supported for video mode panel.");
     return kErrorNotSupported;
   }
@@ -2151,11 +2154,11 @@ DisplayError DisplayBuiltIn::ControlIdlePowerCollapse(bool enable, bool synchron
 
 DisplayError DisplayBuiltIn::GetSupportedDSIClock(std::vector<uint64_t> *bitclk_rates) {
   ClientLock lock(disp_mutex_);
-  if (!hw_panel_info_.dyn_bitclk_support) {
+  if (!client_ctx_.hw_panel_info.dyn_bitclk_support) {
     return kErrorNotSupported;
   }
 
-  *bitclk_rates = hw_panel_info_.bitclk_rates;
+  *bitclk_rates = client_ctx_.hw_panel_info.bitclk_rates;
   return kErrorNone;
 }
 
@@ -2183,12 +2186,12 @@ DisplayError DisplayBuiltIn::SetDynamicDSIClock(uint64_t bit_clk_rate) {
     return kErrorNone;
   }
 
-  if (!hw_panel_info_.dyn_bitclk_support) {
+  if (!client_ctx_.hw_panel_info.dyn_bitclk_support) {
     return kErrorNotSupported;
   }
 
   uint64_t current_clk = 0;
-  std::vector<uint64_t> &clk_rates = hw_panel_info_.bitclk_rates;
+  std::vector<uint64_t> &clk_rates = client_ctx_.hw_panel_info.bitclk_rates;
   GetDynamicDSIClock(&current_clk);
   bool valid = std::find(clk_rates.begin(), clk_rates.end(), bit_clk_rate) != clk_rates.end();
   if (current_clk == bit_clk_rate || !valid) {
@@ -2204,7 +2207,7 @@ DisplayError DisplayBuiltIn::SetDynamicDSIClock(uint64_t bit_clk_rate) {
 
 DisplayError DisplayBuiltIn::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
   ClientLock lock(disp_mutex_);
-  if (!hw_panel_info_.dyn_bitclk_support) {
+  if (!client_ctx_.hw_panel_info.dyn_bitclk_support) {
     return kErrorNotSupported;
   }
 
@@ -2242,8 +2245,8 @@ bool DisplayBuiltIn::CanCompareFrameROI(LayerStack *layer_stack) {
   if (layer_stack->flags.demura_present)
     stack_fudge_factor++;
 
-  if (!hw_panel_info_.partial_update || (hw_panel_info_.left_roi_count != 1) ||
-      layer_stack->flags.geometry_changed || layer_stack->flags.skip_present ||
+  if (!client_ctx_.hw_panel_info.partial_update || (client_ctx_.hw_panel_info.left_roi_count != 1)
+      || layer_stack->flags.geometry_changed || layer_stack->flags.skip_present ||
       (layer_stack->layers.size() !=
        (disp_layer_stack_->stack_info.app_layer_count + stack_fudge_factor))) {
     return false;
@@ -2376,17 +2379,18 @@ DisplayError DisplayBuiltIn::UpdateTransferTime(uint32_t transfer_time) {
       return kErrorNotSupported;
     }
 
-    if (transfer_time == hw_panel_info_.transfer_time_us) {
+    if (transfer_time == client_ctx_.hw_panel_info.transfer_time_us) {
       DLOGW("Same transfer time requested. Current = %d, Requested = %d",
-            hw_panel_info_.transfer_time_us, transfer_time);
+            client_ctx_.hw_panel_info.transfer_time_us, transfer_time);
       return kErrorNone;
-    } else if (transfer_time > hw_panel_info_.transfer_time_us_max ||
-               transfer_time < hw_panel_info_.transfer_time_us_min) {
+    } else if (transfer_time > client_ctx_.hw_panel_info.transfer_time_us_max ||
+               transfer_time < client_ctx_.hw_panel_info.transfer_time_us_min) {
       DLOGW(
           "Invalid transfer time requested or panel info missing valid range. Min = %d, Max = %d, "
           "Requested = %d, Current = %d",
-          hw_panel_info_.transfer_time_us_min, hw_panel_info_.transfer_time_us_max, transfer_time,
-          hw_panel_info_.transfer_time_us);
+          client_ctx_.hw_panel_info.transfer_time_us_min,
+          client_ctx_.hw_panel_info.transfer_time_us_max, transfer_time,
+          client_ctx_.hw_panel_info.transfer_time_us);
       return kErrorParameters;
     }
 
@@ -2494,25 +2498,35 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
 
   DTRACE_SCOPED();
 
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  client_ctx = client_ctx_;
+  device_ctx = device_ctx_;
+
   error = dpu_core_mux_->GetActiveConfig(&active_index);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes);
+  error = dpu_core_mux_->GetDisplayAttributes(active_index, &device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes);
+  error = dpu_core_mux_->GetMixerAttributes(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = dpu_core_mux_->GetHWPanelInfo(&hw_panel_info);
+  error = dpu_core_mux_->GetHWPanelInfo(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
+
+  display_attributes = client_ctx.display_attributes;
+  mixer_attributes = client_ctx.mixer_attributes;
+  hw_panel_info = client_ctx.hw_panel_info;
 
   const bool dirty = deferred_config_.IsDirty();
   if (deferred_config_.IsDeferredState()) {
@@ -2524,9 +2538,9 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
     }
   }
 
-  const bool display_unchanged = (display_attributes == display_attributes_);
-  const bool mixer_unchanged = (mixer_attributes == mixer_attributes_);
-  const bool panel_unchanged = (hw_panel_info == hw_panel_info_);
+  const bool display_unchanged = (display_attributes == client_ctx_.display_attributes);
+  const bool mixer_unchanged = (mixer_attributes == client_ctx_.mixer_attributes);
+  const bool panel_unchanged = (hw_panel_info == client_ctx_.hw_panel_info);
   if (!dirty && display_unchanged && mixer_unchanged && panel_unchanged) {
     return kErrorNone;
   }
@@ -2539,8 +2553,7 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
     GetFpsConfig(&display_attributes, &hw_panel_info);
   }
 
-  error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes, hw_panel_info,
-                                            mixer_attributes, fb_config_,
+  error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx, client_ctx,
                                             &cached_qos_data_);
   if (error != kErrorNone) {
     return error;
@@ -2552,14 +2565,15 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
   // Disable Partial Update for one frame as PU not supported during modeset.
   DisablePartialUpdateOneFrameInternal();
 
-  display_attributes_ = display_attributes;
-  mixer_attributes_ = mixer_attributes;
-  hw_panel_info_ = hw_panel_info;
+  client_ctx_.display_attributes = display_attributes;
+  client_ctx_.mixer_attributes = mixer_attributes;
+  client_ctx_.hw_panel_info = hw_panel_info;
+  device_ctx_ = device_ctx;
 
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
   SetPUonDestScaler();
-  if (hw_panel_info_.partial_update && !disable_pu_on_dest_scaler_) {
+  if (client_ctx_.hw_panel_info.partial_update && !disable_pu_on_dest_scaler_) {
     // If current panel supports Partial Update and destination scalar isn't enabled, then add
     // a pending PU request to be served in the first PU enable frame after the modeset frame.
     // Because if first PU enable frame, after transition, has a partial Frame-ROI and
@@ -2568,7 +2582,7 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
   }
 
   if (enable_dpps_dyn_fps_) {
-    uint32_t dpps_fps = display_attributes_.fps;
+    uint32_t dpps_fps = client_ctx_.display_attributes.fps;
     DppsNotifyPayload dpps_payload = {};
     dpps_payload.is_primary = IsPrimaryDisplayLocked();
     dpps_payload.payload = &dpps_fps;
@@ -2587,21 +2601,26 @@ bool DisplayBuiltIn::CanDeferFpsConfig(uint32_t fps) {
 
   // In case of higher to lower Fps transition on a Builtin display, defer the Fps
   // (Transfer time) configuration, for the number of frames based on frame_count.
-  return ((deferred_config_.frame_count != 0) && (display_attributes_.fps > fps));
+  return ((deferred_config_.frame_count != 0) && (client_ctx_.display_attributes.fps > fps));
 }
 
 void DisplayBuiltIn::SetDeferredFpsConfig() {
   // Update with the deferred Fps Config.
-  display_attributes_.fps = deferred_config_.fps;
-  display_attributes_.vsync_period_ns = deferred_config_.vsync_period_ns;
-  hw_panel_info_.transfer_time_us = deferred_config_.transfer_time_us;
+  client_ctx_.display_attributes.fps = deferred_config_.fps;
+  client_ctx_.display_attributes.vsync_period_ns = deferred_config_.vsync_period_ns;
+  client_ctx_.hw_panel_info.transfer_time_us = deferred_config_.transfer_time_us;
+  for (uint32_t i = 0; i < device_ctx_.size(); i++) {
+    device_ctx_[i].display_attributes.fps = deferred_config_.fps;
+    device_ctx_[i].display_attributes.vsync_period_ns = deferred_config_.vsync_period_ns;
+    device_ctx_[i].hw_panel_info.transfer_time_us = deferred_config_.transfer_time_us;
+  }
   deferred_config_.Clear();
 }
 
 void DisplayBuiltIn::GetFpsConfig(HWDisplayAttributes *display_attr, HWPanelInfo *panel_info) {
-  display_attr->fps = display_attributes_.fps;
-  display_attr->vsync_period_ns = display_attributes_.vsync_period_ns;
-  panel_info->transfer_time_us = hw_panel_info_.transfer_time_us;
+  display_attr->fps = client_ctx_.display_attributes.fps;
+  display_attr->vsync_period_ns = client_ctx_.display_attributes.vsync_period_ns;
+  panel_info->transfer_time_us = client_ctx_.hw_panel_info.transfer_time_us;
 }
 
 PrimariesTransfer DisplayBuiltIn::GetBlendSpaceFromStcColorMode(
@@ -2626,7 +2645,7 @@ PrimariesTransfer DisplayBuiltIn::GetBlendSpaceFromStcColorMode(
 
 DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   ClientLock lock(disp_mutex_);
-  fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+  fixed_info->is_cmdmode = (client_ctx_.hw_panel_info.mode == kModeCommand);
   bool hdr_supported = true;
   bool has_concurrent_writeback = true;
 
@@ -2653,12 +2672,15 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_plus_supported = hdr_supported && hdr_plus_supported;
   fixed_info->dolby_vision_supported = hdr_supported && dolby_vision_supported;
   // Populate luminance values only if hdr will be supported on that display
-  fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
-  fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
-  fixed_info->min_luminance = fixed_info->hdr_supported ?  hw_panel_info_.blackness_level: 0;
-  fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
-  fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
-  fixed_info->partial_update = hw_panel_info_.partial_update;
+  fixed_info->max_luminance = fixed_info->hdr_supported ?
+                              client_ctx_.hw_panel_info.peak_luminance: 0;
+  fixed_info->average_luminance = fixed_info->hdr_supported ?
+                                  client_ctx_.hw_panel_info.average_luminance : 0;
+  fixed_info->min_luminance = fixed_info->hdr_supported ?
+                              client_ctx_.hw_panel_info.blackness_level: 0;
+  fixed_info->hdr_eotf = client_ctx_.hw_panel_info.hdr_eotf;
+  fixed_info->hdr_metadata_type_one = client_ctx_.hw_panel_info.hdr_metadata_type_one;
+  fixed_info->partial_update = client_ctx_.hw_panel_info.partial_update;
   fixed_info->readback_supported = has_concurrent_writeback;
   fixed_info->supports_unified_draw = unified_draw_supported_;
 
@@ -2688,10 +2710,10 @@ void DisplayBuiltIn::SendDisplayConfigs() {
     if (error != kErrorNone) {
       return;
     }
-    disp_configs->h_total = display_attributes_.h_total;
-    disp_configs->v_total = display_attributes_.v_total;
-    disp_configs->fps = display_attributes_.fps;
-    disp_configs->smart_panel = display_attributes_.smart_panel;
+    disp_configs->h_total = client_ctx_.display_attributes.h_total;
+    disp_configs->v_total = client_ctx_.display_attributes.v_total;
+    disp_configs->fps = client_ctx_.display_attributes.fps;
+    disp_configs->smart_panel = client_ctx_.display_attributes.smart_panel;
     disp_configs->is_primary = IsPrimaryDisplayLocked();
     if ((ret = ipc_intf_->SetParameter(kIpcParamDisplayConfigs, in))) {
       DLOGW("Failed to send display config, error = %d", ret);
@@ -2974,8 +2996,8 @@ void DisplayIPCVmCallbackImpl::OnServerExit() {
 // LCOV_EXCL_STOP
 
 void DisplayBuiltIn::InitCWBBuffer() {
-  if (hw_panel_info_.mode != kModeVideo || !HasConcurrentWriteback()
-      || !hw_panel_info_.is_primary_panel) {
+  if (client_ctx_.hw_panel_info.mode != kModeVideo || !HasConcurrentWriteback()
+      || !client_ctx_.hw_panel_info.is_primary_panel) {
     return;
   }
 
@@ -2986,8 +3008,8 @@ void DisplayBuiltIn::InitCWBBuffer() {
   BufferInfo output_buffer_info;
   // Initialize CWB buffer with display resolution to get full size buffer
   // as mixer or fb can init with custom values based on property
-  output_buffer_info.buffer_config.width = display_attributes_.x_pixels;
-  output_buffer_info.buffer_config.height = display_attributes_.y_pixels;
+  output_buffer_info.buffer_config.width = client_ctx_.display_attributes.x_pixels;
+  output_buffer_info.buffer_config.height = client_ctx_.display_attributes.y_pixels;
 
   output_buffer_info.buffer_config.format = kFormatRGBX8888Ubwc;
   output_buffer_info.buffer_config.buffer_count = 1;
@@ -3027,18 +3049,19 @@ void DisplayBuiltIn::AppendCWBLayer(LayerStack *layer_stack) {
     InitCWBBuffer();
   }
 
-  if (!hw_panel_info_.is_primary_panel || disable_cwb_idle_fallback_ ||
+  if (!client_ctx_.hw_panel_info.is_primary_panel || disable_cwb_idle_fallback_ ||
       !cwb_buffer_initialized_) {
     return;
   }
 
-  uint32_t new_mixer_width = fb_config_.x_pixels;
-  uint32_t new_mixer_height = fb_config_.y_pixels;
+  uint32_t new_mixer_width = client_ctx_.fb_config.x_pixels;
+  uint32_t new_mixer_height = client_ctx_.fb_config.y_pixels;
   NeedsMixerReconfiguration(layer_stack, &new_mixer_width, &new_mixer_height);
   // Set cwb src_rect same as mixer resolution since LM tappoint
   // and dest_rect equal to fb resolution as strategy scales HWLayer dest rect based on fb
   cwb_layer_.src_rect = {0, 0, FLOAT(new_mixer_width), FLOAT(new_mixer_height)};
-  cwb_layer_.dst_rect = {0, 0, FLOAT(fb_config_.x_pixels), FLOAT(fb_config_.y_pixels)};
+  cwb_layer_.dst_rect = {0, 0, FLOAT(client_ctx_.fb_config.x_pixels),
+                         FLOAT(client_ctx_.fb_config.y_pixels)};
   cwb_layer_.composition = kCompositionCWBTarget;
   layer_stack->layers.push_back(&cwb_layer_);
 }
@@ -3062,7 +3085,7 @@ uint32_t DisplayBuiltIn::GetUpdatingAppLayersCount(LayerStack *layer_stack) {
 DisplayError DisplayBuiltIn::ChangeFps() {
   ClientLock lock(disp_mutex_);
 
-  if (!active_ || !hw_panel_info_.dynamic_fps || qsync_mode_ != kQSyncModeNone ||
+  if (!active_ || !client_ctx_.hw_panel_info.dynamic_fps || qsync_mode_ != kQSyncModeNone ||
       disable_dyn_fps_) {
     return kErrorNotSupported;
   }
@@ -3071,7 +3094,8 @@ DisplayError DisplayBuiltIn::ChangeFps() {
   bool one_updating_layer = (num_updating_layers == 1);
   uint32_t refresh_rate = GetOptimalRefreshRate(one_updating_layer);
 
-  if (refresh_rate < hw_panel_info_.min_fps || refresh_rate > hw_panel_info_.max_fps) {
+  if (refresh_rate < client_ctx_.hw_panel_info.min_fps ||
+      refresh_rate > client_ctx_.hw_panel_info.max_fps) {
     DLOGE("Invalid Fps = %d request", refresh_rate);
     return kErrorParameters;
   }
@@ -3079,7 +3103,7 @@ DisplayError DisplayBuiltIn::ChangeFps() {
   bool idle_screen = GetUpdatingAppLayersCount(disp_layer_stack_->stack) == 0;
   if (!disp_layer_stack_->stack->force_refresh_rate && IdleFallbackLowerFps(idle_screen) &&
       !enable_qsync_idle_) {
-    refresh_rate = hw_panel_info_.min_fps;
+    refresh_rate = client_ctx_.hw_panel_info.min_fps;
   }
 
   if (current_refresh_rate_ != refresh_rate) {
@@ -3100,7 +3124,7 @@ DisplayError DisplayBuiltIn::ChangeFps() {
   }
 
   // Set safe mode upon success.
-  if (enhance_idle_time_ && (refresh_rate == hw_panel_info_.min_fps) &&
+  if (enhance_idle_time_ && (refresh_rate == client_ctx_.hw_panel_info.min_fps) &&
       (disp_layer_stack_->stack_info.lower_fps)) {
     comp_manager_->ProcessIdleTimeout(display_comp_ctx_);
   }

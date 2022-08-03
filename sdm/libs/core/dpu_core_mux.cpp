@@ -1,10 +1,13 @@
 /*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
 * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include "dpu_core_mux.h"
 
@@ -14,23 +17,24 @@
 namespace sdm {
 
 DPUCoreMux::DPUCoreMux(DisplayId display_id, DisplayType type,
-                               std::vector<HWInfoInterface*> hw_info_intf,
-                               BufferAllocator *buffer_allocator) : display_id_(display_id) {
+                       std::vector<HWInfoInterface*> hw_info_intf,
+                       BufferAllocator *buffer_allocator) : display_id_(display_id) {
   DisplayError error = kErrorNone;
-  for (auto hw_info : hw_info_intf) {
+  for (uint32_t i = 0; i < hw_info_intf.size(); i++) {
     HWInterface *hw = nullptr;
-    error = HWInterface::Create(display_id.GetConnId(), type, hw_info, buffer_allocator, &hw);
+    error = HWInterface::Create(display_id.GetConnId(), type, hw_info_intf[i],
+                                buffer_allocator, &hw);
     if (error != kErrorNone) {
       DLOGE("HW interface create failed");
     }
-
-    hw_intf_.push_back(hw);
+    uint32_t core_id = hw_info_intf[i]->GetCoreId();
+    hw_intf_.insert(std::make_pair(core_id, hw));
   }
 }
 
 DisplayError DPUCoreMux::Destroy() {
   for (auto hw_intf : hw_intf_) {
-    HWInterface::Destroy(hw_intf);
+    HWInterface::Destroy(hw_intf.second);
   }
   return kErrorNone;
 }
@@ -45,7 +49,7 @@ DisplayError DPUCoreMux::GetActiveConfig(uint32_t *active_config) {
   uint32_t active_config_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-    error = hw_intf->GetActiveConfig(&active_config_val);
+    error = hw_intf.second->GetActiveConfig(&active_config_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -67,7 +71,7 @@ DisplayError DPUCoreMux::GetDefaultConfig(uint32_t *default_config) {
   uint32_t default_config_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-    error = hw_intf->GetDefaultConfig(&default_config_val);
+    error = hw_intf.second->GetDefaultConfig(&default_config_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -88,7 +92,7 @@ DisplayError DPUCoreMux::GetNumDisplayAttributes(uint32_t *count) {
   uint32_t count_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->GetNumDisplayAttributes(&count_val);
+    DisplayError error = hw_intf.second->GetNumDisplayAttributes(&count_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -105,54 +109,84 @@ DisplayError DPUCoreMux::GetNumDisplayAttributes(uint32_t *count) {
 }
 
 DisplayError DPUCoreMux::GetDisplayAttributes(uint32_t index,
-                                                  HWDisplayAttributes *display_attributes) {
-  std::vector<HWDisplayAttributes> display_attributes_list;
-  HWDisplayAttributes display_attributes_val;
+                                              DisplayDeviceContext *device_ctx,
+                                              DisplayClientContext *client_ctx) {
+  DisplayError error = kErrorNone;
+  std::map<uint32_t, HWDisplayAttributes> display_attr_map;
 
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->GetDisplayAttributes(index, &display_attributes_val);
-     if (error != kErrorNone) {
-       return error;
-     }
-
-     display_attributes_list.push_back(display_attributes_val);
+    error = hw_intf.second->GetDisplayAttributes(index, &display_attr_map[hw_intf.first]);
+    if (error != kErrorNone) {
+      return error;
+    }
   }
 
-  display_attributes_val = display_attributes_list[zero_index];
-  for (int i = 1; i < display_attributes_list.size(); i++) {
-    display_attributes_val.x_pixels += display_attributes_list[i].x_pixels;
-    display_attributes_val.h_total += display_attributes_list[i].h_total;
+  client_ctx->display_attributes = display_attr_map[0];
+  DisplayInfoContext info_ctx = {};
+  info_ctx.display_attributes =  display_attr_map[0];
+  if (device_ctx->find(0) == device_ctx->end()) {
+    device_ctx->insert({0, info_ctx});
+  } else {
+    device_ctx->at(0).display_attributes = info_ctx.display_attributes;
   }
 
-  *display_attributes = display_attributes_val;
+  auto i = display_attr_map.begin();
+  i++;
+  for (; i != display_attr_map.end(); i++) {
+    auto itr = device_ctx->find(i->first);
+    if (itr == device_ctx->end()) {
+      DisplayInfoContext info_ctx = {};
+      info_ctx.display_attributes = i->second;
+      device_ctx->insert({i->first, info_ctx});
+    } else {
+      itr->second.display_attributes = i->second;
+    }
+    client_ctx->display_attributes.x_pixels += i->second.x_pixels;
+    client_ctx->display_attributes.h_total += i->second.h_total;
+  }
 
   return kErrorNone;
 }
 
-DisplayError DPUCoreMux::GetHWPanelInfo(HWPanelInfo *panel_info) {
-  std::vector<HWPanelInfo> panel_info_list;
-  HWPanelInfo panel_info_val;
-
+DisplayError DPUCoreMux::GetHWPanelInfo(DisplayDeviceContext *device_ctx,
+                                        DisplayClientContext *client_ctx) {
+  DisplayError error = kErrorNone;
+  std::map<uint32_t, HWPanelInfo> panel_info_map;
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->GetHWPanelInfo(&panel_info_val);
-     if (error != kErrorNone) {
-       return error;
-     }
-
-     panel_info_list.push_back(panel_info_val);
+    error = hw_intf.second->GetHWPanelInfo(&panel_info_map[hw_intf.first]);
+    if (error != kErrorNone) {
+      return error;
+    }
+  }
+  client_ctx->hw_panel_info = panel_info_map[0];
+  DisplayInfoContext info_ctx = {};
+  info_ctx.hw_panel_info = panel_info_map[0];
+  if (device_ctx->find(0) == device_ctx->end()) {
+    device_ctx->insert({0, info_ctx});
+  } else {
+    device_ctx->at(0).hw_panel_info = info_ctx.hw_panel_info;
   }
 
-  if (!AreAllEntriesSame<HWPanelInfo>(panel_info_list)) {
-    return kErrorUndefined;
+  auto i = panel_info_map.begin();
+  i++;
+  for (; i != panel_info_map.end(); i++) {
+    auto itr = device_ctx->find(i->first);
+    if (itr == device_ctx->end()) {
+      DisplayInfoContext info_ctx = {};
+      info_ctx.hw_panel_info = i->second;
+      device_ctx->insert({i->first, info_ctx});
+    } else {
+      itr->second.hw_panel_info = i->second;
+    }
+    client_ctx->hw_panel_info.min_roi_width += i->second.min_roi_width;
   }
-  *panel_info = panel_info_list[zero_index];
 
   return kErrorNone;
 }
 
 DisplayError DPUCoreMux::SetDisplayAttributes(uint32_t index) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetDisplayAttributes(index);
+    DisplayError error = hw_intf.second->SetDisplayAttributes(index);
     if (error != kErrorNone) {
       return error;
     }
@@ -163,7 +197,7 @@ DisplayError DPUCoreMux::SetDisplayAttributes(uint32_t index) {
 
 DisplayError DPUCoreMux::SetDisplayAttributes(const HWDisplayAttributes &display_attributes) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetDisplayAttributes(display_attributes);
+    DisplayError error = hw_intf.second->SetDisplayAttributes(display_attributes);
     if (error != kErrorNone) {
       return error;
     }
@@ -177,7 +211,7 @@ DisplayError DPUCoreMux::GetConfigIndex(char *mode, uint32_t *index) {
   uint32_t index_val;
 
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->GetConfigIndex(mode, &index_val);
+     DisplayError error = hw_intf.second->GetConfigIndex(mode, &index_val);
      if (error != kErrorNone) {
        return error;
      }
@@ -407,7 +441,7 @@ DisplayError DPUCoreMux::GetPPFeaturesVersion(PPFeatureVersion *vers) {
 
 DisplayError DPUCoreMux::SetVSyncState(bool enable) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->SetVSyncState(enable);
+     DisplayError error = hw_intf.second->SetVSyncState(enable);
      if (error != kErrorNone) {
        return error;
      }
@@ -417,13 +451,13 @@ DisplayError DPUCoreMux::SetVSyncState(bool enable) {
 
 void DPUCoreMux::SetIdleTimeoutMs(uint32_t timeout_ms) {
   for (auto hw_intf : hw_intf_) {
-     hw_intf->SetIdleTimeoutMs(timeout_ms);
+     hw_intf.second->SetIdleTimeoutMs(timeout_ms);
   }
 }
 
 DisplayError DPUCoreMux::SetDisplayMode(const HWDisplayMode hw_display_mode) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->SetDisplayMode(hw_display_mode);
+     DisplayError error = hw_intf.second->SetDisplayMode(hw_display_mode);
      if (error != kErrorNone) {
        return error;
      }
@@ -434,7 +468,7 @@ DisplayError DPUCoreMux::SetDisplayMode(const HWDisplayMode hw_display_mode) {
 
 DisplayError DPUCoreMux::SetRefreshRate(uint32_t refresh_rate) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->SetRefreshRate(refresh_rate);
+     DisplayError error = hw_intf.second->SetRefreshRate(refresh_rate);
      if (error != kErrorNone) {
        return error;
      }
@@ -445,7 +479,7 @@ DisplayError DPUCoreMux::SetRefreshRate(uint32_t refresh_rate) {
 
 DisplayError DPUCoreMux::SetPanelBrightness(int level) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->SetPanelBrightness(level);
+     DisplayError error = hw_intf.second->SetPanelBrightness(level);
      if (error != kErrorNone) {
        return error;
      }
@@ -459,7 +493,7 @@ DisplayError DPUCoreMux::GetHWScanInfo(HWScanInfo *scan_info) {
   HWScanInfo scan_info_val;
 
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->GetHWScanInfo(&scan_info_val);
+    DisplayError error = hw_intf.second->GetHWScanInfo(&scan_info_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -480,7 +514,7 @@ DisplayError DPUCoreMux::GetVideoFormat(uint32_t config_index, uint32_t *video_f
   uint32_t video_format_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->GetVideoFormat(config_index, &video_format_val);
+    DisplayError error = hw_intf.second->GetVideoFormat(config_index, &video_format_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -501,7 +535,7 @@ DisplayError DPUCoreMux::GetMaxCEAFormat(uint32_t *max_cea_format) {
   uint32_t max_cea_format_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->GetMaxCEAFormat(&max_cea_format_val);
+    DisplayError error = hw_intf.second->GetMaxCEAFormat(&max_cea_format_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -531,7 +565,7 @@ DisplayError DPUCoreMux::SetCursorPosition(std::vector<HWLayersInfo> &hw_layers_
 
 DisplayError DPUCoreMux::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->OnMinHdcpEncryptionLevelChange(min_enc_level);
+     DisplayError error = hw_intf.second->OnMinHdcpEncryptionLevelChange(min_enc_level);
      if (error != kErrorNone) {
        return error;
      }
@@ -545,7 +579,7 @@ DisplayError DPUCoreMux::GetPanelBrightness(int *level) {
   int level_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->GetPanelBrightness(&level_val);
+    DisplayError error = hw_intf.second->GetPanelBrightness(&level_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -563,7 +597,7 @@ DisplayError DPUCoreMux::GetPanelBrightness(int *level) {
 
 DisplayError DPUCoreMux::SetAutoRefresh(bool enable) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetAutoRefresh(enable);
+    DisplayError error = hw_intf.second->SetAutoRefresh(enable);
     if (error != kErrorNone) {
       return error;
     }
@@ -574,7 +608,7 @@ DisplayError DPUCoreMux::SetAutoRefresh(bool enable) {
 
 DisplayError DPUCoreMux::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetScaleLutConfig(lut_info);
+    DisplayError error = hw_intf.second->SetScaleLutConfig(lut_info);
     if (error != kErrorNone) {
       return error;
     }
@@ -584,7 +618,7 @@ DisplayError DPUCoreMux::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
 
 DisplayError DPUCoreMux::UnsetScaleLutConfig() {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->UnsetScaleLutConfig();
+    DisplayError error = hw_intf.second->UnsetScaleLutConfig();
     if (error != kErrorNone) {
       return error;
     }
@@ -595,7 +629,7 @@ DisplayError DPUCoreMux::UnsetScaleLutConfig() {
 
 DisplayError DPUCoreMux::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetMixerAttributes(mixer_attributes);
+    DisplayError error = hw_intf.second->SetMixerAttributes(mixer_attributes);
     if (error != kErrorNone) {
       return error;
     }
@@ -604,32 +638,47 @@ DisplayError DPUCoreMux::SetMixerAttributes(const HWMixerAttributes &mixer_attri
   return kErrorNone;
 }
 
-DisplayError DPUCoreMux::GetMixerAttributes(HWMixerAttributes *mixer_attributes) {
-  std::vector<HWMixerAttributes> mixer_attributes_list;
-  HWMixerAttributes mixer_attributes_val;
+DisplayError DPUCoreMux::GetMixerAttributes(DisplayDeviceContext *device_ctx,
+                                            DisplayClientContext *client_ctx) {
+  DisplayError error = kErrorNone;
+  std::map<uint32_t, HWMixerAttributes> mixer_attr_map;
 
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->GetMixerAttributes(&mixer_attributes_val);
-     if (error != kErrorNone) {
-       return error;
-     }
-
-     mixer_attributes_list.push_back(mixer_attributes_val);
+    error = hw_intf.second->GetMixerAttributes(&mixer_attr_map[hw_intf.first]);
+    if (error != kErrorNone) {
+      return error;
+    }
   }
 
-  mixer_attributes_val = mixer_attributes_list[0];
-  for (int i = 1; i <  mixer_attributes_list.size(); i++) {
-    mixer_attributes_val.width += mixer_attributes_list[i].width;
+  client_ctx->mixer_attributes = mixer_attr_map[0];
+  DisplayInfoContext info_ctx = {};
+  info_ctx.mixer_attributes = mixer_attr_map[0];
+  if (device_ctx->find(0) == device_ctx->end()) {
+    device_ctx->insert({0, info_ctx});
+  } else {
+    device_ctx->at(0).mixer_attributes = info_ctx.mixer_attributes;
   }
 
-  *mixer_attributes = mixer_attributes_val;
-
+  auto i = mixer_attr_map.begin();
+  i++;
+  for (; i != mixer_attr_map.end(); i++) {
+    auto itr = device_ctx->find(i->first);
+    if (itr == device_ctx->end()) {
+      DisplayInfoContext info_ctx = {};
+      info_ctx.mixer_attributes = i->second;
+      device_ctx->insert({i->first, info_ctx});
+    } else {
+      itr->second.mixer_attributes = i->second;
+    }
+    device_ctx->at(i->first).mixer_attributes = i->second;
+    client_ctx->mixer_attributes.width += i->second.width;
+  }
   return kErrorNone;
 }
 
 DisplayError DPUCoreMux::DumpDebugData() {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->DumpDebugData();
+    DisplayError error = hw_intf.second->DumpDebugData();
     if (error != kErrorNone) {
       return error;
     }
@@ -640,7 +689,7 @@ DisplayError DPUCoreMux::DumpDebugData() {
 
 DisplayError DPUCoreMux::SetDppsFeature(void *payload, size_t size) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetDppsFeature(payload, size);
+    DisplayError error = hw_intf.second->SetDppsFeature(payload, size);
     if (error != kErrorNone) {
       return error;
     }
@@ -651,7 +700,7 @@ DisplayError DPUCoreMux::SetDppsFeature(void *payload, size_t size) {
 
 DisplayError DPUCoreMux::SetPPConfig(void *payload, size_t size) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetPPConfig(payload, size);
+    DisplayError error = hw_intf.second->SetPPConfig(payload, size);
     if (error != kErrorNone) {
       return error;
     }
@@ -678,7 +727,7 @@ DisplayError DPUCoreMux::HandleSecureEvent(SecureEvent secure_event,
 
 DisplayError DPUCoreMux::ControlIdlePowerCollapse(bool enable, bool synchronous) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->ControlIdlePowerCollapse(enable, synchronous);
+    DisplayError error = hw_intf.second->ControlIdlePowerCollapse(enable, synchronous);
     if (error != kErrorNone) {
       return error;
     }
@@ -689,7 +738,7 @@ DisplayError DPUCoreMux::ControlIdlePowerCollapse(bool enable, bool synchronous)
 
 DisplayError DPUCoreMux::SetDisplayDppsAdROI(void *payload) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetDisplayDppsAdROI(payload);
+    DisplayError error = hw_intf.second->SetDisplayDppsAdROI(payload);
     if (error != kErrorNone) {
       return error;
     }
@@ -700,7 +749,7 @@ DisplayError DPUCoreMux::SetDisplayDppsAdROI(void *payload) {
 
 DisplayError DPUCoreMux::SetDynamicDSIClock(uint64_t bit_clk_rate) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetDynamicDSIClock(bit_clk_rate);
+    DisplayError error = hw_intf.second->SetDynamicDSIClock(bit_clk_rate);
     if (error != kErrorNone) {
       return error;
     }
@@ -714,7 +763,7 @@ DisplayError DPUCoreMux::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
   uint64_t bit_clk_rate_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->GetDynamicDSIClock(&bit_clk_rate_val);
+     DisplayError error = hw_intf.second->GetDynamicDSIClock(&bit_clk_rate_val);
      if (error != kErrorNone) {
        return error;
      }
@@ -731,13 +780,13 @@ DisplayError DPUCoreMux::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
 }
 
 DisplayError DPUCoreMux::GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
-                                                          uint8_t *out_data) {
+                                                      uint8_t *out_data) {
   return hw_intf_[zero_index]->GetDisplayIdentificationData(out_port, out_data_size, out_data);
 }
 
 DisplayError DPUCoreMux::SetFrameTrigger(FrameTriggerMode mode) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetFrameTrigger(mode);
+    DisplayError error = hw_intf.second->SetFrameTrigger(mode);
     if (error != kErrorNone) {
       return error;
     }
@@ -748,7 +797,7 @@ DisplayError DPUCoreMux::SetFrameTrigger(FrameTriggerMode mode) {
 
 DisplayError DPUCoreMux::SetBLScale(uint32_t level) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->SetBLScale(level);
+     DisplayError error = hw_intf.second->SetBLScale(level);
      if (error != kErrorNone) {
        return error;
      }
@@ -762,7 +811,7 @@ DisplayError DPUCoreMux::GetPanelBlMaxLvl(uint32_t *max_bl) {
   uint32_t max_bl_val = 0;
 
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->GetPanelBlMaxLvl(&max_bl_val);
+     DisplayError error = hw_intf.second->GetPanelBlMaxLvl(&max_bl_val);
      if (error != kErrorNone) {
        return error;
      }
@@ -779,12 +828,12 @@ DisplayError DPUCoreMux::GetPanelBlMaxLvl(uint32_t *max_bl) {
 }
 
 DisplayError DPUCoreMux::GetPanelBrightnessBasePath(std::string *base_path) const {
-  return hw_intf_[zero_index]->GetPanelBrightnessBasePath(base_path);
+  return hw_intf_.at(zero_index)->GetPanelBrightnessBasePath(base_path);
 }
 
 DisplayError DPUCoreMux::SetBlendSpace(const PrimariesTransfer &blend_space) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->SetBlendSpace(blend_space);
+     DisplayError error = hw_intf.second->SetBlendSpace(blend_space);
      if (error != kErrorNone) {
        return error;
      }
@@ -795,7 +844,7 @@ DisplayError DPUCoreMux::SetBlendSpace(const PrimariesTransfer &blend_space) {
 
 DisplayError DPUCoreMux::EnableSelfRefresh(SelfRefreshState self_refresh_state) {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->EnableSelfRefresh(self_refresh_state);
+     DisplayError error = hw_intf.second->EnableSelfRefresh(self_refresh_state);
      if (error != kErrorNone) {
        return error;
      }
@@ -809,7 +858,7 @@ DisplayError DPUCoreMux::GetFeatureSupportStatus(const HWFeature feature, uint32
   uint32_t status_val;
 
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->GetFeatureSupportStatus(feature, &status_val);
+    DisplayError error = hw_intf.second->GetFeatureSupportStatus(feature, &status_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -827,13 +876,13 @@ DisplayError DPUCoreMux::GetFeatureSupportStatus(const HWFeature feature, uint32
 
 void DPUCoreMux::FlushConcurrentWriteback() {
   for (auto hw_intf : hw_intf_) {
-     hw_intf->FlushConcurrentWriteback();
+     hw_intf.second->FlushConcurrentWriteback();
   }
 }
 
 DisplayError DPUCoreMux::SetAlternateDisplayConfig(uint32_t *alt_config) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->SetAlternateDisplayConfig(alt_config);
+    DisplayError error = hw_intf.second->SetAlternateDisplayConfig(alt_config);
     if (error != kErrorNone) {
       return error;
     }
@@ -847,7 +896,7 @@ DisplayError DPUCoreMux::GetQsyncFps(uint32_t *qsync_fps) {
   uint32_t qsync_fps_val;
 
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf->GetQsyncFps(&qsync_fps_val);
+    DisplayError error = hw_intf.second->GetQsyncFps(&qsync_fps_val);
     if (error != kErrorNone) {
       return error;
     }
@@ -865,7 +914,7 @@ DisplayError DPUCoreMux::GetQsyncFps(uint32_t *qsync_fps) {
 
 DisplayError DPUCoreMux::CancelDeferredPowerMode() {
   for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf->CancelDeferredPowerMode();
+     DisplayError error = hw_intf.second->CancelDeferredPowerMode();
      if (error != kErrorNone) {
        return error;
      }
@@ -899,16 +948,34 @@ bool DPUCoreMux::AreAllEntriesSame(std::vector<T>& entries) {
 }
 
 void DPUCoreMux::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const {
-  hw_intf_[zero_index]->GetDRMDisplayToken(token);
+  hw_intf_.at(zero_index)->GetDRMDisplayToken(token);
 }
 
 bool DPUCoreMux::IsPrimaryDisplay() const {
   bool is_primary_display = true;
   for (auto hw_intf : hw_intf_) {
-    is_primary_display &= hw_intf->IsPrimaryDisplay();
+    is_primary_display &= hw_intf.second->IsPrimaryDisplay();
   }
 
   return is_primary_display;
+}
+
+DisplayError DPUCoreMux::GetFbConfig(uint32_t width, uint32_t height,
+                                     DisplayDeviceContext *device_ctx,
+                                     DisplayClientContext *client_ctx) {
+  DisplayError error = kErrorNone;
+  client_ctx->fb_config.x_pixels = width;
+  client_ctx->fb_config.y_pixels = height;
+
+  for (uint32_t i = 0; i < device_ctx->size(); i++) {
+    device_ctx->at(i).fb_config = client_ctx->fb_config;
+
+    uint32_t dpu_fb_width = client_ctx->fb_config.x_pixels *
+                           (device_ctx->at(i).display_attributes.x_pixels /
+                            client_ctx->display_attributes.x_pixels);
+    device_ctx->at(i).fb_config.x_pixels = dpu_fb_width;
+  }
+  return error;
 }
 
 }  // namespace sdm

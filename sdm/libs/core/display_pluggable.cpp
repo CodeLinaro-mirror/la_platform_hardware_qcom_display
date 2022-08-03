@@ -130,7 +130,7 @@ DisplayError DisplayPluggable::Init() {
 
   InitializeColorModes();
 
-  current_refresh_rate_ = hw_panel_info_.max_fps;
+  current_refresh_rate_ = client_ctx_.hw_panel_info.max_fps;
 
   return error;
 }
@@ -141,8 +141,8 @@ DisplayError DisplayPluggable::Prepare(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
   uint32_t new_mixer_width = 0;
   uint32_t new_mixer_height = 0;
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
   error = PrePrepare(layer_stack);
   if (error == kErrorNone) {
@@ -168,9 +168,9 @@ DisplayError DisplayPluggable::GetRefreshRateRange(uint32_t *min_refresh_rate,
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
 
-  if (hw_panel_info_.min_fps && hw_panel_info_.max_fps) {
-    *min_refresh_rate = hw_panel_info_.min_fps;
-    *max_refresh_rate = hw_panel_info_.max_fps;
+  if (client_ctx_.hw_panel_info.min_fps && client_ctx_.hw_panel_info.max_fps) {
+    *min_refresh_rate = client_ctx_.hw_panel_info.min_fps;
+    *max_refresh_rate = client_ctx_.hw_panel_info.max_fps;
   } else {
     error = DisplayBase::GetRefreshRateRange(min_refresh_rate, max_refresh_rate);
   }
@@ -294,11 +294,12 @@ DisplayError DisplayPluggable::InitializeColorModes() {
     hdr_supported &= hw_resource_info_[i].has_hdr;
   }
 
-  if ((!hw_panel_info_.hdr_enabled && !hw_panel_info_.supported_colorspaces) ||
+  if ((!client_ctx_.hw_panel_info.hdr_enabled &&
+       !client_ctx_.hw_panel_info.supported_colorspaces) ||
       !hdr_supported) {
     return kErrorNone;
   } else {
-    if (hw_panel_info_.supported_colorspaces) {
+    if (client_ctx_.hw_panel_info.supported_colorspaces) {
       InitializeColorModesFromColorspace();
     }
     color_modes_cs_.push_back(pt);
@@ -323,13 +324,13 @@ DisplayError DisplayPluggable::InitializeColorModes() {
   var.push_back(std::make_pair(kColorGamutAttribute, kBt2020));
   var.push_back(std::make_pair(kPictureQualityAttribute, kStandard));
   var.push_back(std::make_pair(kRenderIntentAttribute, "0"));
-  if (hw_panel_info_.hdr_eotf & kHdrEOTFHDR10) {
+  if (client_ctx_.hw_panel_info.hdr_eotf & kHdrEOTFHDR10) {
     pt.transfer = Transfer_SMPTE_ST2084;
     var.push_back(std::make_pair(kGammaTransferAttribute, kSt2084));
     color_modes_cs_.push_back(pt);
     color_mode_attr_map_.insert(std::make_pair(kBt2020Pq, var));
   }
-  if (hw_panel_info_.hdr_eotf & kHdrEOTFHLG) {
+  if (client_ctx_.hw_panel_info.hdr_eotf & kHdrEOTFHLG) {
     pt.transfer = Transfer_HLG;
     var.pop_back();
     var.push_back(std::make_pair(kGammaTransferAttribute, kHlg));
@@ -345,7 +346,7 @@ DisplayError DisplayPluggable::InitializeColorModes() {
 void DisplayPluggable::InitializeColorModesFromColorspace() {
   PrimariesTransfer pt = {};
   AttrVal var = {};
-  if (hw_panel_info_.supported_colorspaces & kColorspaceDcip3) {
+  if (client_ctx_.hw_panel_info.supported_colorspaces & kColorspaceDcip3) {
     pt.primaries = ColorPrimaries_DCIP3;
     pt.transfer = Transfer_sRGB;
     var.clear();
@@ -356,7 +357,7 @@ void DisplayPluggable::InitializeColorModesFromColorspace() {
     color_modes_cs_.push_back(pt);
     color_mode_attr_map_.insert(std::make_pair(kDisplayP3, var));
   }
-  if (hw_panel_info_.supported_colorspaces & kColorspaceBt2020rgb) {
+  if (client_ctx_.hw_panel_info.supported_colorspaces & kColorspaceBt2020rgb) {
     pt.primaries = ColorPrimaries_BT2020;
     pt.transfer = Transfer_sRGB;
     var.clear();

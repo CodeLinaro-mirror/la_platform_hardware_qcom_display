@@ -1,6 +1,5 @@
 /*
 * Copyright (c) 2015 - 2018, 2020 - 2021, The Linux Foundation. All rights reserved.
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -21,6 +20,13 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __EXTENSION_INTERFACE_H__
@@ -59,20 +65,14 @@ class ExtensionInterface {
  public:
   virtual DisplayError CreatePartialUpdate(DisplayId display_id, DisplayType type,
                                            const std::vector<HWResourceInfo> &hw_resource_info,
-                                           const HWPanelInfo &hw_panel_info,
-                                           const HWMixerAttributes &mixer_attributes,
-                                           const HWDisplayAttributes &display_attributes,
-                                           const DisplayConfigVariableInfo &fb_config,
+                                           const DisplayInfoContext &info_ctx,
                                            PartialUpdateInterface **interface) = 0;
   virtual DisplayError DestroyPartialUpdate(PartialUpdateInterface *interface) = 0;
 
   virtual DisplayError CreateStrategyExtn(DisplayId display_id, DisplayType type,
                                           BufferAllocator *buffer_allocator,
                                           const std::vector<HWResourceInfo> &hw_resource_info,
-                                          const HWPanelInfo &hw_panel_info,
-                                          const HWMixerAttributes &mixer_attributes,
-                                          const HWDisplayAttributes &display_attributes,
-                                          const DisplayConfigVariableInfo &fb_config,
+                                          const DisplayInfoContext &info_ctx,
                                           StrategyInterface **interface) = 0;
   virtual DisplayError DestroyStrategyExtn(StrategyInterface *interface) = 0;
 

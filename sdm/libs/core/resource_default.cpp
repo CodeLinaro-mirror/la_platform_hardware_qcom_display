@@ -26,42 +26,6 @@
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
 * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -186,11 +150,12 @@ DisplayError ResourceDefault::Deinit() {
 }
 
 DisplayError ResourceDefault::RegisterDisplay(DisplayId disp_id, DisplayType type,
-                                              const HWDisplayAttributes &display_attributes,
-                                              const HWPanelInfo &hw_panel_info,
-                                              const HWMixerAttributes &mixer_attributes,
-                                              const Resolution &fb_resolution,
+                                              DisplayDeviceContext &device_ctx,
+                                              DisplayClientContext &client_ctx,
                                               Handle *display_ctx) {
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
+
   int core_id = disp_id.GetCoreIdMap();
   std::bitset<32> core_id_bitset = std::bitset<32>(core_id);
   DisplayResourceContext *display_resource_ctx = new DisplayResourceContext();
@@ -224,16 +189,13 @@ DisplayError ResourceDefault::RegisterDisplay(DisplayId disp_id, DisplayType typ
     }
 
     hw_block_ctx_[hw_block_type].is_in_use = true;
-    HWMixerAttributes mixer = mixer_attributes;
-    mixer.width /= 2;
-    mixer.height /= 2;
-    mixer_attributes_.push_back(mixer);
   }
 
-  display_resource_ctx->display_attributes = display_attributes;
+  display_resource_ctx->display_attributes = client_ctx.display_attributes;
   display_resource_ctx->hw_block_type = hw_block_type;
-  display_resource_ctx->mixer_attributes = mixer_attributes;
-  display_resource_ctx->fb_resolution = fb_resolution;
+  display_resource_ctx->mixer_attributes = client_ctx.mixer_attributes;
+  display_resource_ctx->fb_resolution.x_pixels = client_ctx.fb_config.x_pixels;
+  display_resource_ctx->fb_resolution.y_pixels = client_ctx.fb_config.y_pixels;
 
   *display_ctx = display_resource_ctx;
   return error;
@@ -252,16 +214,18 @@ DisplayError ResourceDefault::UnregisterDisplay(Handle display_ctx) {
 }
 
 DisplayError ResourceDefault::ReconfigureDisplay(Handle display_ctx,
-                                                 const HWDisplayAttributes &display_attributes,
-                                                 const HWPanelInfo &hw_panel_info,
-                                                 const HWMixerAttributes &mixer_attributes,
-                                                 const Resolution &fb_resolution) {
+                                                 DisplayDeviceContext &device_ctx,
+                                                 DisplayClientContext &client_ctx) {
   DisplayResourceContext *display_resource_ctx =
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
 
-  display_resource_ctx->display_attributes = display_attributes;
-  display_resource_ctx->mixer_attributes = mixer_attributes;
-  display_resource_ctx->fb_resolution = fb_resolution;
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
+
+  display_resource_ctx->display_attributes = client_ctx.display_attributes;
+  display_resource_ctx->mixer_attributes = client_ctx.mixer_attributes;
+  display_resource_ctx->fb_resolution.x_pixels = client_ctx.fb_config.x_pixels;
+  display_resource_ctx->fb_resolution.y_pixels = client_ctx.fb_config.y_pixels;
 
   return kErrorNone;
 }
@@ -314,7 +278,8 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, DispLayerStack *disp_l
   for (int j = 0; j < disp_layer_stack->info.size(); j++) {
     struct HWLayersInfo layer_info = disp_layer_stack->info[j];
     Layer *hw_layer = &disp_layer_stack->info[j].hw_layers.at(0);
-    CalculateDstRect(dpu_offset, mixer_attributes_[j].width, &dst_rect, &hw_layer->dst_rect);
+    CalculateDstRect(dpu_offset, device_ctx_[j].mixer_attributes.width,
+                     &dst_rect, &hw_layer->dst_rect);
     float split_ratio = ((hw_layer->dst_rect.right - hw_layer->dst_rect.left) / dst_width);
     CalculateSrcRect(split_ratio, src_width, &hw_layer->src_rect, &src_rect);
   }

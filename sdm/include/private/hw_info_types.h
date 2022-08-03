@@ -1140,6 +1140,16 @@ class DisplayId {
 };
 
 typedef std::map<uint32_t, std::map<uint32_t, uint8_t>> MultiDpuDemuraMap;
+
+struct DisplayInfoContext {
+  HWDisplayAttributes display_attributes = {};
+  HWMixerAttributes mixer_attributes = {};
+  HWPanelInfo hw_panel_info = {};
+  DisplayConfigVariableInfo fb_config = {};
+};
+
+typedef DisplayInfoContext DisplayClientContext;
+typedef std::map<uint32_t, DisplayInfoContext> DisplayDeviceContext;
 }  // namespace sdm
 
 #endif  // __HW_INFO_TYPES_H__
