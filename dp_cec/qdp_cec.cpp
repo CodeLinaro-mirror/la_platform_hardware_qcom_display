@@ -385,6 +385,11 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
     if(!ctx->system_control && connected == 0)
         return;
 
+    if (ctx->node.is_connected == connected) {
+        ALOGW("Same hotplug event, ignoring.");
+        return;
+    }
+
     // initialise the device on connect
     ctx->node.is_connected = connected;
     if (connected) {
