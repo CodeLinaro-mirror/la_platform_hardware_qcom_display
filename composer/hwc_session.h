@@ -146,6 +146,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
     kRebootStrategyDefault,
     kRebootStrategyOnceDSI = kRebootStrategyDefault,
     kRebootStrategyAlwaysDSI,
+    kRebootStrategyAnyOnce,
+    kRebootStrategyNoReboot,
   };
 
   enum ComposerSetupMode {
@@ -397,6 +399,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int HandlePluggableDisplays(bool delay_hotplug);
   int HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool delay_hotplug);
   int HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info);
+  int RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info);
   void DestroyDisplay(DisplayMapInfo *map_info);
   void DestroyPluggableDisplay(DisplayMapInfo *map_info);
   void DestroyNonPluggableDisplay(DisplayMapInfo *map_info);

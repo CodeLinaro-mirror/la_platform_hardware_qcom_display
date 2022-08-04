@@ -106,7 +106,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.high_fps_early_phase_offset_ns=6100000 \
     debug.sf.high_fps_early_gl_phase_offset_ns=6500000 \
     debug.sf.perf_fps_early_gl_phase_offset_ns=9000000 \
-    debug.sf.phase_offset_threshold_for_next_vsync_ns=6100000
+    debug.sf.phase_offset_threshold_for_next_vsync_ns=6100000 \
+    vendor.display.display_reboot_strategy=3
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),lito)
