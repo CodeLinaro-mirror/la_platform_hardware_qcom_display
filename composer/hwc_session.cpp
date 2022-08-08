@@ -1332,8 +1332,8 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
       return HWC2::Error::Unsupported;
     }
   }
-
-  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+  // CWB is not supported for pluggable primary displays.
+  if (hwc_display_[HWC_DISPLAY_PRIMARY] && !pluggable_is_primary_) {
     DisplayError error = hwc_display_[HWC_DISPLAY_PRIMARY]->TeardownConcurrentWriteback();
     if (error) {
       return HWC2::Error::NoResources;
