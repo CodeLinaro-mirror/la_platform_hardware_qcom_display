@@ -165,7 +165,7 @@ DisplayError DisplayBase::Init() {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
   hw_panel_info_ = HWPanelInfo();
-  hw_intf_->GetHWPanelInfo(&hw_panel_info_);
+  dpu_core_mux_->GetHWPanelInfo(&hw_panel_info_);
   for (auto info_intf : hw_info_intf_) {
     HWResourceInfo res_info;
     info_intf->GetHWResourceInfo(&res_info);
@@ -189,18 +189,18 @@ DisplayError DisplayBase::Init() {
   int drop_vsync = 0;
   int hw_recovery_threshold = 1;
   int32_t prop = 0;
-  hw_intf_->GetActiveConfig(&active_index);
-  hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes_);
   fb_config_ = display_attributes_;
   active_refresh_rate_ = display_attributes_.fps;
 
   if (!Debug::GetMixerResolution(&mixer_attributes_.width, &mixer_attributes_.height)) {
-    if (hw_intf_->SetMixerAttributes(mixer_attributes_) == kErrorNone) {
+    if (dpu_core_mux_->SetMixerAttributes(mixer_attributes_) == kErrorNone) {
       custom_mixer_resolution_ = true;
     }
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes_);
+  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes_);
   if (error != kErrorNone) {
     return error;
   }
@@ -213,7 +213,7 @@ DisplayError DisplayBase::Init() {
     HWScaleLutInfo lut_info = {};
     error = comp_manager_->GetScaleLutConfig(&lut_info);
     if (error == kErrorNone) {
-      error = hw_intf_->SetScaleLutConfig(&lut_info);
+      error = dpu_core_mux_->SetScaleLutConfig(&lut_info);
       if (error != kErrorNone) {
         goto CleanupOnError;
       }
@@ -382,11 +382,11 @@ DisplayError DisplayBase::Deinit() {
     ClientLock lock(disp_mutex_);
     ClearColorInfo();
     if (IsPrimaryDisplayLocked()) {
-      hw_intf_->UnsetScaleLutConfig();
+      dpu_core_mux_->UnsetScaleLutConfig();
     }
   }
   HWEventsInterface::Destroy(hw_events_intf_);
-  HWInterface::Destroy(hw_intf_);
+  dpu_core_mux_->Destroy();
 
   {  // Scope for lock
     ClientLock lock(disp_mutex_);
@@ -952,7 +952,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
     // Trigger validate only if needed.
     if (disp_layer_stack_.stack_info.do_hw_validate) {
-      error = hw_intf_->Validate(&disp_layer_stack_.info[0]);
+      error = dpu_core_mux_->Validate(disp_layer_stack_.info);
     }
 
     if (error == kErrorNone) {
@@ -982,7 +982,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   }
 
   if (disp_layer_stack_.stack_info.enable_self_refresh) {
-    hw_intf_->EnableSelfRefresh();
+    dpu_core_mux_->EnableSelfRefresh();
   }
 
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
@@ -991,7 +991,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 }
 
 void DisplayBase::FlushConcurrentWriteback() {
-  hw_intf_->FlushConcurrentWriteback();
+  dpu_core_mux_->FlushConcurrentWriteback();
 }
 
 DisplayError DisplayBase::HandleNoiseLayer(LayerStack *layer_stack) {
@@ -1404,7 +1404,7 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
 void DisplayBase::HandleAsyncCommit() {
   // Do not acquire mutexes here.
   // Perform hw commit here.
-  PerformHwCommit(&disp_layer_stack_.info[0]);
+  PerformHwCommit(disp_layer_stack_.info);
 }
 
 void DisplayBase::CommitThread() {
@@ -1523,9 +1523,9 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   return error;
 }
 
-DisplayError DisplayBase::PerformCommit(HWLayersInfo *hw_layers_info) {
+DisplayError DisplayBase::PerformCommit(std::vector<HWLayersInfo> &hw_layers_info) {
   DTRACE_SCOPED();
-  DisplayError error = hw_intf_->Commit(hw_layers_info);
+  DisplayError error = dpu_core_mux_->Commit(hw_layers_info);
   if (error != kErrorNone) {
     DLOGE("COMMIT failed: %d ", error);
   }
@@ -1565,7 +1565,7 @@ DisplayError DisplayBase::CommitLocked(LayerStack *layer_stack) {
     return error;
   }
 
-  error = PerformHwCommit(&disp_layer_stack_.info[0]);
+  error = PerformHwCommit(disp_layer_stack_.info);
   if (error != kErrorNone) {
     DLOGE("HwCommit failed %d", error);
   }
@@ -1573,7 +1573,7 @@ DisplayError DisplayBase::CommitLocked(LayerStack *layer_stack) {
   return error;
 }
 
-DisplayError DisplayBase::PerformHwCommit(HWLayersInfo *hw_layers_info) {
+DisplayError DisplayBase::PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_info) {
   DTRACE_SCOPED();
   DisplayError error = PerformCommit(hw_layers_info);
   if (error != kErrorNone) {
@@ -1589,18 +1589,22 @@ DisplayError DisplayBase::PerformHwCommit(HWLayersInfo *hw_layers_info) {
 
   // TODO(user): Workaround for messenger app flicker issue in CWB idle fallback,
   // to be removed when issue is fixed.
-  if (cwb_fence_wait_ && hw_layers_info->output_buffer &&
-      (hw_layers_info->output_buffer->release_fence != nullptr)) {
-    if (Fence::Wait(hw_layers_info->output_buffer->release_fence) != kErrorNone) {
+  // O/P buffer has merged release fences, so check on index 0 only
+  if (cwb_fence_wait_ && hw_layers_info[0].output_buffer &&
+      (hw_layers_info[0].output_buffer->release_fence != nullptr)) {
+    if (Fence::Wait(hw_layers_info[0].output_buffer->release_fence) != kErrorNone) {
       DLOGW("sync_wait error errno = %d, desc = %s", errno, strerror(errno));
     }
   }
+
   cwb_fence_wait_ = false;
 
-  error = PostCommit(hw_layers_info);
-  if (error != kErrorNone) {
-    DLOGE("Post Commit failed %d", error);
-    return error;
+  for (int i = 0; i < hw_layers_info.size(); i++) {
+    error = PostCommit(&hw_layers_info[i]);
+    if (error != kErrorNone) {
+      DLOGE("Post Commit failed %d", error);
+      return error;
+    }
   }
 
   DLOGI_IF(kTagDisplay, "Exiting commit for display: %d-%d", display_id_, display_type_);
@@ -1627,7 +1631,7 @@ DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
   }
 
   int level = 0;
-  if (hw_intf_->GetPanelBrightness(&level) == kErrorNone) {
+  if (dpu_core_mux_->GetPanelBrightness(&level) == kErrorNone) {
     comp_manager_->SetBacklightLevel(display_comp_ctx_, level);
   }
 
@@ -1728,7 +1732,7 @@ DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
     disp_layer_stack_.info[i].hw_layers.clear();
   }
   disp_layer_stack_.stack = layer_stack;
-  error = hw_intf_->Flush(&disp_layer_stack_.info[0]);
+  error = dpu_core_mux_->Flush(disp_layer_stack_.info);
   if (error == kErrorNone) {
     comp_manager_->Purge(display_comp_ctx_);
     validated_ = false;
@@ -1737,7 +1741,7 @@ DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
     DLOGW("Unable to flush display %d-%d", display_id_, display_type_);
   }
   if (layer_stack) {
-    layer_stack->retire_fence = disp_layer_stack_.info[0].retire_fence;
+    layer_stack->retire_fence = disp_layer_stack_.stack_info.common_info.retire_fence;
   }
 
   return error;
@@ -1755,13 +1759,13 @@ DisplayError DisplayBase::GetDisplayState(DisplayState *state) {
 
 DisplayError DisplayBase::GetNumVariableInfoConfigs(uint32_t *count) {
   ClientLock lock(disp_mutex_);
-  return hw_intf_->GetNumDisplayAttributes(count);
+  return dpu_core_mux_->GetNumDisplayAttributes(count);
 }
 
 DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
   HWDisplayAttributes attrib;
-  if (hw_intf_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
+  if (dpu_core_mux_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
     *variable_info = attrib;
     if (custom_mixer_resolution_) {
       variable_info->x_pixels = fb_config_.x_pixels;
@@ -1820,7 +1824,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
 DisplayError DisplayBase::GetRealConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
   HWDisplayAttributes attrib;
-  if (hw_intf_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
+  if (dpu_core_mux_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
     *variable_info = attrib;
     return kErrorNone;
   }
@@ -1830,7 +1834,7 @@ DisplayError DisplayBase::GetRealConfig(uint32_t index, DisplayConfigVariableInf
 
 DisplayError DisplayBase::GetActiveConfig(uint32_t *index) {
   ClientLock lock(disp_mutex_);
-  return hw_intf_->GetActiveConfig(index);
+  return dpu_core_mux_->GetActiveConfig(index);
 }
 
 DisplayError DisplayBase::GetVSyncState(bool *enabled) {
@@ -1880,7 +1884,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   if (state == state_) {
     if (pending_power_state_ != kPowerStateNone) {
-      hw_intf_->CancelDeferredPowerMode();
+      dpu_core_mux_->CancelDeferredPowerMode();
       pending_power_state_ = kPowerStateNone;
     }
     DLOGI("Same state transition is requested.");
@@ -1903,7 +1907,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
       disp_layer_stack_.info[i].hw_layers.clear();
     }
-    error = hw_intf_->PowerOff(teardown, &sync_points);
+    error = dpu_core_mux_->PowerOff(teardown, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateOff;
@@ -1926,7 +1930,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
     }
 
-    error = hw_intf_->PowerOn(cached_qos_data_[0], &sync_points);
+    error = dpu_core_mux_->PowerOn(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateOn;
@@ -1952,7 +1956,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateDoze:
-    error = hw_intf_->Doze(cached_qos_data_[0], &sync_points);
+    error = dpu_core_mux_->Doze(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDoze;
@@ -1967,7 +1971,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateDozeSuspend:
-    error = hw_intf_->DozeSuspend(cached_qos_data_[0], &sync_points);
+    error = dpu_core_mux_->DozeSuspend(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDozeSuspend;
@@ -1985,7 +1989,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateStandby:
-    error = hw_intf_->Standby(&sync_points);
+    error = dpu_core_mux_->Standby(&sync_points);
     break;
 
   default:
@@ -2038,7 +2042,7 @@ DisplayError DisplayBase::SetActiveConfig(uint32_t index) {
   uint32_t active_index = 0;
 
   validated_ = false;
-  hw_intf_->GetActiveConfig(&active_index);
+  dpu_core_mux_->GetActiveConfig(&active_index);
 
   if (active_index == index) {
     return kErrorNone;
@@ -2050,14 +2054,14 @@ DisplayError DisplayBase::SetActiveConfig(uint32_t index) {
     return kErrorNotSupported;
   }
 
-  error = hw_intf_->SetDisplayAttributes(index);
+  error = dpu_core_mux_->SetDisplayAttributes(index);
   if (error != kErrorNone) {
     return error;
   }
 
   // Cache last refresh rate set by SF
   HWDisplayAttributes display_attributes = {};
-  hw_intf_->GetDisplayAttributes(index, &display_attributes);
+  dpu_core_mux_->GetDisplayAttributes(index, &display_attributes);
   active_refresh_rate_ = display_attributes.fps;
 
   return ReconfigureDisplay();
@@ -2106,9 +2110,9 @@ std::string DisplayBase::Dump() {
   uint32_t num_modes = 0;
   std::ostringstream os;
 
-  hw_intf_->GetNumDisplayAttributes(&num_modes);
-  hw_intf_->GetActiveConfig(&active_index);
-  hw_intf_->GetDisplayAttributes(active_index, &attrib);
+  dpu_core_mux_->GetNumDisplayAttributes(&num_modes);
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  dpu_core_mux_->GetDisplayAttributes(active_index, &attrib);
 
   os << "device type:" << display_type_;
   os << " DrawMethod: " << draw_method_;
@@ -2431,7 +2435,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     DLOGE("SetBlendSpace failed, error = %d display_type_ = %d", error, display_type_);
   }
 
-  error = hw_intf_->SetBlendSpace(blend_space);
+  error = dpu_core_mux_->SetBlendSpace(blend_space);
   if (error != kErrorNone) {
     DLOGE("Failed to pass blend space, error = %d display_type_ = %d", error, display_type_);
   }
@@ -2702,7 +2706,7 @@ DisplayError DisplayBase::SetCursorPosition(int x, int y) {
   DisplayError error = comp_manager_->ValidateAndSetCursorPosition(display_comp_ctx_,
                                                                    &disp_layer_stack_, x, y);
   if (error == kErrorNone) {
-    return hw_intf_->SetCursorPosition(&disp_layer_stack_.info[0], x, y);
+    return dpu_core_mux_->SetCursorPosition(disp_layer_stack_.info, x, y);
   }
 
   return kErrorNone;
@@ -2715,8 +2719,8 @@ DisplayError DisplayBase::GetRefreshRateRange(uint32_t *min_refresh_rate,
   // Usually for secondary displays, command mode panels
   HWDisplayAttributes display_attributes;
   uint32_t active_index = 0;
-  hw_intf_->GetActiveConfig(&active_index);
-  DisplayError error = hw_intf_->GetDisplayAttributes(active_index, &display_attributes);
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  DisplayError error = dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes);
   if (error) {
     return error;
   }
@@ -2757,7 +2761,7 @@ DisplayError DisplayBase::SetVSyncStateLocked(bool enable) {
   }
   DisplayError error = kErrorNone;
   if (vsync_enable_ != enable) {
-    error = hw_intf_->SetVSyncState(enable);
+    error = dpu_core_mux_->SetVSyncState(enable);
     if (error == kErrorNotSupported) {
       if (drop_skewed_vsync_ && (hw_panel_info_.mode == kModeVideo) &&
         enable && (current_refresh_rate_ < hw_panel_info_.max_fps)) {
@@ -2854,22 +2858,22 @@ DisplayError DisplayBase::ReconfigureDisplay() {
 
   DTRACE_SCOPED();
 
-  error = hw_intf_->GetActiveConfig(&active_index);
+  error = dpu_core_mux_->GetActiveConfig(&active_index);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetDisplayAttributes(active_index, &display_attributes);
+  error = dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes);
+  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetHWPanelInfo(&hw_panel_info);
+  error = dpu_core_mux_->GetHWPanelInfo(&hw_panel_info);
   if (error != kErrorNone) {
     return error;
   }
@@ -2961,7 +2965,7 @@ DisplayError DisplayBase::ReconfigureMixer(uint32_t width, uint32_t height) {
   mixer_attributes.width = width;
   mixer_attributes.height = height;
 
-  error = hw_intf_->SetMixerAttributes(mixer_attributes);
+  error = dpu_core_mux_->SetMixerAttributes(mixer_attributes);
   if (error != kErrorNone) {
     return error;
   }
@@ -3402,7 +3406,7 @@ DisplayError DisplayBase::GetDisplayIdentificationData(uint8_t *out_port, uint32
     return kErrorParameters;
   }
 
-  return hw_intf_->GetDisplayIdentificationData(out_port, out_data_size, out_data);
+  return dpu_core_mux_->GetDisplayIdentificationData(out_port, out_data_size, out_data);
 }
 
 DisplayError DisplayBase::GetClientTargetSupport(uint32_t width, uint32_t height,
@@ -3584,7 +3588,7 @@ void DisplayBase::HwRecovery(const HWRecoveryEvent sdm_event_code) {
     case HWRecoveryEvent::kCapture:
 #ifndef TRUSTED_VM
       if (!disable_hw_recovery_dump_ && !hw_recovery_logs_captured_) {
-        hw_intf_->DumpDebugData();
+        dpu_core_mux_->DumpDebugData();
         hw_recovery_logs_captured_ = true;
         DLOGI("Captured debugfs data for display = %d", display_type_);
       } else if (!disable_hw_recovery_dump_) {
@@ -3819,7 +3823,7 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
   switch (feature) {
     case kSupportedModeSwitch: {
       ClientLock lock(disp_mutex_);
-      error = hw_intf_->GetFeatureSupportStatus(kAllowedModeSwitch, supported);
+      error = dpu_core_mux_->GetFeatureSupportStatus(kAllowedModeSwitch, supported);
       break;
     }
     case kDestinationScalar:
@@ -3842,10 +3846,10 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
       break;
     }
     case kCwbCrop:
-      error = hw_intf_->GetFeatureSupportStatus(kHasCwbCrop, supported);
+      error = dpu_core_mux_->GetFeatureSupportStatus(kHasCwbCrop, supported);
       break;
     case kDedicatedCwb:
-      error = hw_intf_->GetFeatureSupportStatus(kHasDedicatedCwb, supported);
+      error = dpu_core_mux_->GetFeatureSupportStatus(kHasDedicatedCwb, supported);
       break;
     default:
       DLOGW("Feature:%d is not present for display %d:%d", feature, display_id_, display_type_);
@@ -3919,7 +3923,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
     SetPendingPowerState(state);
   }
 
-  err = hw_intf_->HandleSecureEvent(secure_event, cached_qos_data_[0]);
+  err = dpu_core_mux_->HandleSecureEvent(secure_event, cached_qos_data_);
   if (err != kErrorNone) {
     return err;
   }
@@ -3979,7 +3983,7 @@ DisplayError DisplayBase::GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fen
 DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
   ClientLock lock(disp_mutex_);
   validated_ = false;
-  return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
+  return dpu_core_mux_->OnMinHdcpEncryptionLevelChange(min_enc_level);
 }
 
 void DisplayBase::CheckMMRMState() {
@@ -4085,7 +4089,7 @@ void DisplayBase::ProcessPowerEvent() {
 
 void DisplayBase::CacheRetireFence() {
   if (draw_method_ == kDrawDefault) {
-    retire_fence_ = disp_layer_stack_.info[0].retire_fence;
+    retire_fence_ = disp_layer_stack_.stack_info.common_info.retire_fence;
   } else {
     // For displays in unified draw, wait on cached retire fence in steady state.
     comp_manager_->GetRetireFence(display_comp_ctx_, &retire_fence_);
@@ -4190,7 +4194,7 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
 DisplayError DisplayBase::GetPanelBlMaxLvl(uint32_t *max_level) {
   ClientLock lock(disp_mutex_);
 
-  DisplayError err = hw_intf_->GetPanelBlMaxLvl(max_level);
+  DisplayError err = dpu_core_mux_->GetPanelBlMaxLvl(max_level);
   if (err) {
     DLOGE("Failed to get panel max backlight level %d", err);
   } else {
@@ -4202,7 +4206,7 @@ DisplayError DisplayBase::GetPanelBlMaxLvl(uint32_t *max_level) {
 DisplayError DisplayBase::SetDimmingConfig(void *payload, size_t size) {
   ClientLock lock(disp_mutex_);
 
-  DisplayError err = hw_intf_->SetDimmingConfig(payload, size);
+  DisplayError err = dpu_core_mux_->SetDimmingConfig(payload, size);
   if (err) {
     DLOGE("Failed to set dimming config %d", err);
   } else {

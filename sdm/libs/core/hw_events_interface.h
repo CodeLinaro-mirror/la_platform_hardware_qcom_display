@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_EVENTS_INTERFACE_H__
 #define __HW_EVENTS_INTERFACE_H__
 
@@ -29,6 +35,7 @@
 #include <inttypes.h>
 #include <utility>
 #include <vector>
+#include "dpu_core_mux.h"
 
 namespace sdm {
 
@@ -54,14 +61,15 @@ enum HWEvent {
 
 class HWEventsInterface {
  public:
-  virtual DisplayError Init(int display_id, DisplayType display_type, HWEventHandler *event_handler,
-                            const std::vector<HWEvent> &event_list, const HWInterface *hw_intf) = 0;
+  virtual DisplayError Init(DisplayId display_id, DisplayType display_type,
+                            HWEventHandler *event_handler, const std::vector<HWEvent> &event_list,
+                            const DPUCoreMux *hw_intf) = 0;
   virtual DisplayError Deinit() = 0;
   virtual DisplayError SetEventState(HWEvent event, bool enable, void *aux = nullptr) = 0;
 
-  static DisplayError Create(int display_id, DisplayType display_type,
+  static DisplayError Create(DisplayId display_id, DisplayType display_type,
                              HWEventHandler *event_handler, const std::vector<HWEvent> &event_list,
-                             const HWInterface *hw_intf, HWEventsInterface **intf);
+                             const DPUCoreMux *hw_intf, HWEventsInterface **intf);
   static DisplayError Destroy(HWEventsInterface *intf);
 
  protected:

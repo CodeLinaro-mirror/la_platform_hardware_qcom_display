@@ -511,7 +511,7 @@ struct HWPanelInfo {
             (dynamic_fps != panel_info.dynamic_fps) || (min_fps != panel_info.min_fps) ||
             (dfps_porch_mode != panel_info.dfps_porch_mode) ||
             (ping_pong_split != panel_info.ping_pong_split) ||
-            (max_fps != panel_info.max_fps) || (is_primary_panel != panel_info.is_primary_panel) ||
+            (max_fps != panel_info.max_fps) ||
             (split_info != panel_info.split_info) ||
             (left_roi_count != panel_info.left_roi_count) ||
             (right_roi_count != panel_info.right_roi_count) ||
@@ -816,6 +816,8 @@ struct CommonStackInfo {
   uint64_t elapse_timestamp = 0;
   HWAVRInfo hw_avr_info = {};
   PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
+  shared_ptr<Fence> retire_fence = nullptr;
+  shared_ptr<Fence> sync_handle = nullptr;
 };
 
 struct LayerStackInfo {
