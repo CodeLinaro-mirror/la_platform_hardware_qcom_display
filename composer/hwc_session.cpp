@@ -3165,6 +3165,8 @@ int HWCSession::RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info
   auto &hwc_display = hwc_display_[client_id];
   int temp_composer_setup_mode = composer_setup_mode_;
 
+  uint32_t dummy_config_index = 0;
+  DisplayConfigVariableInfo dummy_fb_config = {};
   HWC2::PowerMode previous_mode = HWC2::PowerMode::Off;
   HWCDisplay::HWCLayerStack stack = {};
 
@@ -3172,6 +3174,12 @@ int HWCSession::RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info
     SCOPE_LOCK(locker_[client_id]);
     // Destroy Dummy Display
     if (hwc_display) {
+      hwc_display->GetActiveDisplayConfig(&dummy_config_index);
+      if (hwc_display->GetDisplayAttributesForConfig(dummy_config_index, &dummy_fb_config)) {
+        DLOGE("Failed to check dummy display's attributes.");
+        dummy_fb_config.x_pixels = 0;
+        dummy_fb_config.y_pixels = 0;
+      }
       previous_mode = hwc_display->GetCurrentPowerMode();
       hwc_display->GetLayerStack(&stack);
       DLOGI("Destroy display %d-%d, client id = %d", map_info->sdm_id, map_info->disp_type,
@@ -3223,8 +3231,9 @@ int HWCSession::RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info
 
       if (info.display_type == kPluggable) {
         status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
-                                            qservice_, client_id, info.display_id, 0, 0, false,
-                                            hwc_display_new);
+                                            qservice_, client_id, info.display_id,
+                                            dummy_fb_config.x_pixels, dummy_fb_config.y_pixels,
+                                            true, hwc_display_new);
         pluggable_primary_connected_ = true;
       } else {
         DLOGE("Spurious primary display type = %d", info.display_type);
