@@ -666,6 +666,7 @@ Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
 
   NATIVE_HANDLE_DECLARE_STORAGE(fenceStorage, 1, 0);
   if (release_fence >= 0) {
+    tunneled_layer_rf_ = release_fence;
     handle = native_handle_init(fenceStorage, 1, 0);
     if (handle) {
      handle->data[0] = release_fence;
@@ -747,13 +748,14 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
     DLOGE("PresentDisplay failed! Exiting queueTunnelledBuffer.\n");
     return error;
   }
-
+  close(presentfence);
   auto hwc_layer = hwc_display->GetHWCLayer(tunnelled_layer_);
   if (hwc_layer == nullptr) {
     DLOGE("Unable to fetch corresponding hwc_layer for tunnelled layer");
     return EINVAL;
   }
   int release_fence = hwc_layer->PopBackReleaseFence();
+  close(tunneled_layer_rf_);
   tunnelling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id] = release_fence;
 
   DLOGV("queueTunnelledBuffer successful.\n");
