@@ -22,8 +22,45 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <utils/constants.h>
 #include <utils/debug.h>
+#include <utils/rect.h>
 #include <algorithm>
 #include "display_virtual.h"
 #include "hw_interface.h"
@@ -167,8 +204,14 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
 DisplayError DisplayVirtual::Prepare(LayerStack *layer_stack) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
+  DTRACE_SCOPED();
+
+  if (wb_cac_perf_enable_ && IsValid(layer_stack->frame_split)) {
+    return PrepareWbCacPerf(layer_stack);
+  }
+
   // Clean hw layers for reuse.
-  hw_layers_ = HWLayers();
+  *p_hw_layers_ = HWLayers();
 
   return DisplayBase::Prepare(layer_stack);
 }
@@ -194,6 +237,53 @@ DisplayError DisplayVirtual::colorSamplingOn() {
 
 DisplayError DisplayVirtual::colorSamplingOff() {
     return kErrorNone;
+}
+
+DisplayError DisplayVirtual::WbCacPerf(bool enable) {
+  string trace_name = enable ? "enable" : "disable";
+  DTRACE_BEGIN(trace_name.c_str());
+  wb_cac_perf_enable_ = enable;
+  p_hw_layers_ = &hw_layers_;
+  *p_hw_layers_ = HWLayers();
+  hw_layers_cac_first_ = HWLayers();
+  hw_layers_cac_second_ = HWLayers();
+  DTRACE_END();
+  return kErrorNone;
+};
+
+DisplayError DisplayVirtual::PrepareWbCacPerf(LayerStack *layer_stack) {
+  DTRACE_SCOPED();
+  DisplayError err = kErrorNone;
+  if (layer_stack->frame_split == hw_layers_cac_first_.frame_split) {
+    DTRACE_BEGIN("Using cached hw_layers_cac_first_");
+    p_hw_layers_ = &hw_layers_cac_first_;
+    DTRACE_END();
+    err = kErrorNone;
+  } else if (layer_stack->frame_split == hw_layers_cac_second_.frame_split) {
+    DTRACE_BEGIN("Using cached hw_layers_cac_second_");
+    p_hw_layers_ = &hw_layers_cac_second_;
+    DTRACE_END();
+    err = kErrorNone;
+  } else {
+    p_hw_layers_ = &hw_layers_;
+    *p_hw_layers_ = HWLayers();
+    err = DisplayBase::Prepare(layer_stack);
+    // Cache the first 2 HWLayers config for re-use in WB CAC use-case.
+    if (hw_layers_cac_first_.frame_split == LayerRect()) {
+      DTRACE_BEGIN("Caching hw_layers_cac_first_");
+      hw_layers_cac_first_.updates_mask.set(kUpdateResources);
+      hw_layers_cac_first_ = *p_hw_layers_;
+      hw_layers_cac_first_.frame_split = layer_stack->frame_split;
+      DTRACE_END();
+    } else {
+      DTRACE_BEGIN("Caching hw_layers_cac_second_");
+      hw_layers_cac_second_.updates_mask.set(kUpdateResources);
+      hw_layers_cac_second_ = *p_hw_layers_;
+      hw_layers_cac_second_.frame_split = layer_stack->frame_split;
+      DTRACE_END();
+    }
+  }
+  return err;
 }
 
 }  // namespace sdm

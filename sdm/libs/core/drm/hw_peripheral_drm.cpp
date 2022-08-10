@@ -29,7 +29,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -570,6 +570,8 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, int *release_fe
     needs_ds_update_ = true;
   }
 
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_SKEW_VSYNC, token_.conn_id, skew_vsync_val_);
+
   DisplayError err = HWDeviceDRM::PowerOn(qos_data, release_fence);
   if (err != kErrorNone) {
     return err;
@@ -586,6 +588,8 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, int *release_fe
 
 DisplayError HWPeripheralDRM::PowerOff(bool teardown) {
   DTRACE_SCOPED();
+
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_SKEW_VSYNC, token_.conn_id, 0);
 
   DisplayError err = HWDeviceDRM::PowerOff(teardown);
   if (err != kErrorNone) {
@@ -798,6 +802,11 @@ DisplayError HWPeripheralDRM::GetPanelBrightnessBasePath(std::string *base_path)
   }
 
   *base_path = brightness_base_path_;
+  return kErrorNone;
+}
+
+DisplayError HWPeripheralDRM::SetSkewVsync(uint32_t skew_vsync) {
+  skew_vsync_val_ = skew_vsync;
   return kErrorNone;
 }
 

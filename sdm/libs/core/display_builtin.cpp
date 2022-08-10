@@ -185,17 +185,17 @@ DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
     }
   } else {
     if (CanSkipDisplayPrepare(layer_stack)) {
-      hw_layers_.hw_avr_info.update = needs_avr_update_;
-      hw_layers_.hw_avr_info.mode = GetAvrMode(qsync_mode_);
+      p_hw_layers_->hw_avr_info.update = needs_avr_update_;
+      p_hw_layers_->hw_avr_info.mode = GetAvrMode(qsync_mode_);
       return kErrorNone;
     }
   }
 
   // Clean hw layers for reuse.
-  hw_layers_ = HWLayers();
+  *p_hw_layers_ = HWLayers();
 
-  hw_layers_.hw_avr_info.update = needs_avr_update_;
-  hw_layers_.hw_avr_info.mode = GetAvrMode(qsync_mode_);
+  p_hw_layers_->hw_avr_info.update = needs_avr_update_;
+  p_hw_layers_->hw_avr_info.mode = GetAvrMode(qsync_mode_);
 
   left_frame_roi_ = {};
   right_frame_roi_ = {};
@@ -204,9 +204,9 @@ DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
 
   // Cache the Frame ROI.
   if (error == kErrorNone) {
-    if (hw_layers_.info.left_frame_roi.size() && hw_layers_.info.right_frame_roi.size()) {
-      left_frame_roi_ = hw_layers_.info.left_frame_roi.at(0);
-      right_frame_roi_ = hw_layers_.info.right_frame_roi.at(0);
+    if (p_hw_layers_->info.left_frame_roi.size() && p_hw_layers_->info.right_frame_roi.size()) {
+      left_frame_roi_ = p_hw_layers_->info.left_frame_roi.at(0);
+      right_frame_roi_ = p_hw_layers_->info.right_frame_roi.at(0);
     }
   }
 
@@ -270,7 +270,7 @@ DisplayError DisplayBuiltIn::colorSamplingOff() {
 DisplayError DisplayBuiltIn::Commit(LayerStack *layer_stack) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
-  uint32_t app_layer_count = hw_layers_.info.app_layer_count;
+  uint32_t app_layer_count = p_hw_layers_->info.app_layer_count;
   HWDisplayMode panel_mode = hw_panel_info_.mode;
 
   DTRACE_SCOPED();
@@ -333,7 +333,7 @@ DisplayError DisplayBuiltIn::Commit(LayerStack *layer_stack) {
     deferred_config_.Clear();
   }
 
-  int idle_time_ms = hw_layers_.info.set_idle_time_ms;
+  int idle_time_ms = p_hw_layers_->info.set_idle_time_ms;
   if (idle_time_ms >= 0) {
     hw_intf_->SetIdleTimeoutMs(UINT32(idle_time_ms));
   }
@@ -905,8 +905,8 @@ void DppsInfo::DppsNotifyOps(enum DppsNotifyOps op, void *payload, size_t size) 
 }
 
 DisplayError DisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event, LayerStack *layer_stack) {
-  hw_layers_.info.stack = layer_stack;
-  DisplayError err = hw_intf_->HandleSecureEvent(secure_event, &hw_layers_);
+  p_hw_layers_->info.stack = layer_stack;
+  DisplayError err = hw_intf_->HandleSecureEvent(secure_event, p_hw_layers_);
   if (err != kErrorNone) {
     return err;
   }
@@ -1052,7 +1052,7 @@ bool DisplayBuiltIn::CanCompareFrameROI(LayerStack *layer_stack) {
   // Check Panel and Layer Stack attributes.
   if (!hw_panel_info_.partial_update || (hw_panel_info_.left_roi_count != 1) ||
       layer_stack->flags.geometry_changed || layer_stack->flags.config_changed ||
-      (layer_stack->layers.size() != (hw_layers_.info.app_layer_count + 1))) {
+      (layer_stack->layers.size() != (p_hw_layers_->info.app_layer_count + 1))) {
     return false;
   }
 
@@ -1093,25 +1093,25 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
     return false;
   }
 
-  hw_layers_.info.left_frame_roi.clear();
-  hw_layers_.info.right_frame_roi.clear();
-  hw_layers_.info.dest_scale_info_map.clear();
-  comp_manager_->GenerateROI(display_comp_ctx_, &hw_layers_);
+  p_hw_layers_->info.left_frame_roi.clear();
+  p_hw_layers_->info.right_frame_roi.clear();
+  p_hw_layers_->info.dest_scale_info_map.clear();
+  comp_manager_->GenerateROI(display_comp_ctx_, p_hw_layers_);
 
-  if (!hw_layers_.info.left_frame_roi.size() || !hw_layers_.info.right_frame_roi.size()) {
+  if (!p_hw_layers_->info.left_frame_roi.size() || !p_hw_layers_->info.right_frame_roi.size()) {
     return false;
   }
 
   // Compare the cached and calculated Frame ROIs.
-  bool same_roi = IsCongruent(left_frame_roi_, hw_layers_.info.left_frame_roi.at(0)) &&
-                  IsCongruent(right_frame_roi_, hw_layers_.info.right_frame_roi.at(0));
+  bool same_roi = IsCongruent(left_frame_roi_, p_hw_layers_->info.left_frame_roi.at(0)) &&
+                  IsCongruent(right_frame_roi_, p_hw_layers_->info.right_frame_roi.at(0));
 
   if (same_roi) {
     // Update Surface Damage rectangle(s) in HW layers.
-    uint32_t hw_layer_count = UINT32(hw_layers_.info.hw_layers.size());
+    uint32_t hw_layer_count = UINT32(p_hw_layers_->info.hw_layers.size());
     for (uint32_t j = 0; j < hw_layer_count; j++) {
-      Layer &hw_layer = hw_layers_.info.hw_layers.at(j);
-      Layer *sdm_layer = layer_stack->layers.at(hw_layers_.info.index.at(j));
+      Layer &hw_layer = p_hw_layers_->info.hw_layers.at(j);
+      Layer *sdm_layer = layer_stack->layers.at(p_hw_layers_->info.index.at(j));
       if (hw_layer.dirty_regions.size() != sdm_layer->dirty_regions.size()) {
         return false;
       }
@@ -1243,6 +1243,19 @@ void DisplayBuiltIn::GetFpsConfig(HWDisplayAttributes *display_attr, HWPanelInfo
   display_attr->fps = display_attributes_.fps;
   display_attr->vsync_period_ns = display_attributes_.vsync_period_ns;
   panel_info->transfer_time_us = hw_panel_info_.transfer_time_us;
+}
+
+DisplayError DisplayBuiltIn::SetSkewVsync(uint32_t skew_vsync_val) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  DisplayError err = hw_intf_->SetSkewVsync(skew_vsync_val);
+  if (err) {
+    DLOGE("Display %d-%d: Failed to set skew vsync value: %d", display_id_, display_type_,
+          skew_vsync_val);
+  } else {
+    DLOGI_IF(kTagDisplay, "Setting skew vsync value: %d", skew_vsync_val);
+  }
+  return err;
 }
 
 }  // namespace sdm

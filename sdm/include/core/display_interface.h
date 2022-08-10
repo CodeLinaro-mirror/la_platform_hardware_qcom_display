@@ -1034,6 +1034,23 @@ class DisplayInterface {
   virtual DisplayError SetCACEyeConfig(const CACEyeConfig &left,
                                        const CACEyeConfig &right) = 0;
 
+  /*! @brief Method to turn on/off optimizations in SDM writeback CAC.
+
+    @param[in] enable/disable optimization
+
+    @return \link DisplayError \endlink
+  */
+
+  virtual DisplayError WbCacPerf(bool enable) = 0;
+
+  /*! @brief Method to set skew vsync
+
+    @param[in] skew vsync value
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetSkewVsync(uint32_t skew_vysnc_val) = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };

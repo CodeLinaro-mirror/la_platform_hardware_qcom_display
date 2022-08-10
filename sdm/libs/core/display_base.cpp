@@ -80,6 +80,7 @@ namespace sdm {
 
 bool DisplayBase::display_power_reset_pending_ = false;
 Locker DisplayBase::display_power_reset_lock_;
+DisplayType DisplayBase::first_display_type_ = kBuiltIn;
 
 static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
   if (gamut.find(kDisplayP3) != std::string::npos || gamut.find(kDcip3) != std::string::npos) {
@@ -129,12 +130,16 @@ DisplayError DisplayBase::Init() {
   if (hw_info_intf_) {
     hw_info_intf_->GetHWResourceInfo(&hw_resource_info_);
   }
+
+  HWDisplayInterfaceInfo hw_disp_info = {};
+  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
+  first_display_type_ = hw_disp_info.type;
+
   auto max_mixer_stages = hw_resource_info_.num_blending_stages;
   int property_value = Debug::GetMaxPipesPerMixer(display_type_);
   Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_on_external_);
   uint32_t active_index = 0;
   int drop_vsync = 0;
-  int32_t enable_wb_cac = 0;
   hw_intf_->GetActiveConfig(&active_index);
   hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
   fb_config_ = display_attributes_;
@@ -169,10 +174,8 @@ DisplayError DisplayBase::Init() {
   // ColorManager supported for built-in display.
   // ColorManager also supported for pluggable dispaly if ENABLE_QDCM_COLORMODES_ON_EXTERNAL
   // vendor property is set.
-  DebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac);
-  // if CAC using WB is enabled disable DSPP and SSPP gamut conversion blocks
-  if (!enable_wb_cac && ((kBuiltIn == display_type_) ||
-     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1)))) {
+  if ((kBuiltIn == display_type_) ||
+     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1))) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_,
@@ -247,7 +250,7 @@ DisplayError DisplayBase::Deinit() {
 
 DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
   std::vector<Layer *> &layers = layer_stack->layers;
-  HWLayersInfo &hw_layers_info = hw_layers_.info;
+  HWLayersInfo &hw_layers_info = p_hw_layers_->info;
   hw_layers_info.app_layer_count = 0;
 
   hw_layers_info.stack = layer_stack;
@@ -293,7 +296,7 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
 }
 
 DisplayError DisplayBase::ValidateGPUTargetParams() {
-  HWLayersInfo &hw_layers_info = hw_layers_.info;
+  HWLayersInfo &hw_layers_info = p_hw_layers_->info;
   Layer *gpu_target_layer = hw_layers_info.stack->layers.at(hw_layers_info.gpu_target_index);
 
   if (!IsValid(gpu_target_layer->src_rect)) {
@@ -363,39 +366,39 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     disable_pu_one_frame_ = false;
   }
 
-  hw_layers_.updates_mask.set(kUpdateResources);
-  comp_manager_->GenerateROI(display_comp_ctx_, &hw_layers_);
-  comp_manager_->PrePrepare(display_comp_ctx_, &hw_layers_);
+  p_hw_layers_->updates_mask.set(kUpdateResources);
+  comp_manager_->GenerateROI(display_comp_ctx_, p_hw_layers_);
+  comp_manager_->PrePrepare(display_comp_ctx_, p_hw_layers_);
 
   while (true) {
-    error = comp_manager_->Prepare(display_comp_ctx_, &hw_layers_);
+    error = comp_manager_->Prepare(display_comp_ctx_, p_hw_layers_);
     if (error != kErrorNone) {
       break;
     }
 
-    if (layer_stack->flags.fast_path && hw_layers_.info.fast_path_composition) {
+    if (layer_stack->flags.fast_path && p_hw_layers_->info.fast_path_composition) {
       // In Fast Path, driver validation happens in COMMIT Phase.
       DLOGI_IF(kTagDisplay, "Draw cycle qualifies for Fast Path!");
       needs_validate_ = false;
       break;
     }
 
-    error = hw_intf_->Validate(&hw_layers_);
+    error = hw_intf_->Validate(p_hw_layers_);
     if (error == kErrorNone) {
       // Strategy is successful now, wait for Commit().
       needs_validate_ = false;
       break;
     }
     if (error == kErrorShutDown) {
-      comp_manager_->PostPrepare(display_comp_ctx_, &hw_layers_);
+      comp_manager_->PostPrepare(display_comp_ctx_, p_hw_layers_);
       return error;
     }
   }
 
   if (color_mgr_)
-    color_mgr_->Validate(&hw_layers_);
+    color_mgr_->Validate(p_hw_layers_);
 
-  comp_manager_->PostPrepare(display_comp_ctx_, &hw_layers_);
+  comp_manager_->PostPrepare(display_comp_ctx_, p_hw_layers_);
 
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
   return error;
@@ -424,7 +427,7 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
   DLOGI_IF(kTagDisplay, "Entering commit for display: %d-%d", display_id_, display_type_);
   CommitLayerParams(layer_stack);
 
-  error = comp_manager_->Commit(display_comp_ctx_, &hw_layers_);
+  error = comp_manager_->Commit(display_comp_ctx_, p_hw_layers_);
   if (error != kErrorNone) {
     return error;
   }
@@ -437,9 +440,9 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
     DLOGW("ColorManager::Commit(...) isn't working");
   }
 
-  error = hw_intf_->Commit(&hw_layers_);
+  error = hw_intf_->Commit(p_hw_layers_);
   if (error != kErrorNone) {
-    if (layer_stack->flags.fast_path && hw_layers_.info.fast_path_composition) {
+    if (layer_stack->flags.fast_path && p_hw_layers_->info.fast_path_composition) {
       // If COMMIT fails on the Fast Path, set Safe Mode.
       DLOGE("COMMIT failed in Fast Path, set Safe Mode!");
       comp_manager_->SetSafeMode(true);
@@ -454,7 +457,7 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
     comp_manager_->ControlPartialUpdate(display_comp_ctx_, true /* enable */);
   }
 
-  error = comp_manager_->PostCommit(display_comp_ctx_, &hw_layers_);
+  error = comp_manager_->PostCommit(display_comp_ctx_, p_hw_layers_);
   if (error != kErrorNone) {
     return error;
   }
@@ -488,9 +491,9 @@ DisplayError DisplayBase::Flush(LayerStack *layer_stack) {
   if (!active_) {
     return kErrorPermission;
   }
-  hw_layers_.info.hw_layers.clear();
-  hw_layers_.info.stack = layer_stack;
-  error = hw_intf_->Flush(&hw_layers_);
+  p_hw_layers_->info.hw_layers.clear();
+  p_hw_layers_->info.stack = layer_stack;
+  error = hw_intf_->Flush(p_hw_layers_);
   if (error == kErrorNone) {
     comp_manager_->Purge(display_comp_ctx_);
     needs_validate_ = true;
@@ -535,13 +538,10 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
 
-  HWResourceInfo hw_resource_info = HWResourceInfo();
-  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-  bool hdr_supported = hw_resource_info.has_hdr;
+  bool hdr_supported = hw_resource_info_.has_hdr;  // Always report HDR supported
   bool hdr_plus_supported = false;
-  HWDisplayInterfaceInfo hw_disp_info = {};
-  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
-  if (hw_disp_info.type == kHDMI) {
+  if (first_display_type_ == kHDMI) {
+    // For DP/HDMI as primary report supported only when panel supports.
     hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
   }
 
@@ -562,7 +562,7 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
   fixed_info->partial_update = hw_panel_info_.partial_update;
-  fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+  fixed_info->readback_supported = hw_resource_info_.has_concurrent_writeback;
   fixed_info->fsc_rgb_order = hw_panel_info_.fsc_rgb_order;
   fixed_info->panel_orientation = hw_panel_info_.panel_orientation;
 
@@ -609,8 +609,8 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   switch (state) {
   case kStateOff:
-    hw_layers_.info.hw_layers.clear();
-    error = hw_intf_->Flush(&hw_layers_);
+    p_hw_layers_->info.hw_layers.clear();
+    error = hw_intf_->Flush(p_hw_layers_);
     if (error == kErrorNone) {
       error = hw_intf_->PowerOff(teardown);
     }
@@ -807,8 +807,8 @@ std::string DisplayBase::Dump() {
   }
 
   uint32_t num_hw_layers = 0;
-  if (hw_layers_.info.stack) {
-    num_hw_layers = UINT32(hw_layers_.info.hw_layers.size());
+  if (p_hw_layers_->info.stack) {
+    num_hw_layers = UINT32(p_hw_layers_->info.hw_layers.size());
   }
 
   if (num_hw_layers == 0) {
@@ -816,13 +816,13 @@ std::string DisplayBase::Dump() {
     return os.str();
   }
 
-  LayerBuffer *out_buffer = hw_layers_.info.stack->output_buffer;
+  LayerBuffer *out_buffer = p_hw_layers_->info.stack->output_buffer;
   if (out_buffer) {
     os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
        << " format: " << GetFormatString(out_buffer->format) << " buffer_id:" << std::hex << "0x" <<
        out_buffer->buffer_id;
   }
-  HWLayersInfo &layer_info = hw_layers_.info;
+  HWLayersInfo &layer_info = p_hw_layers_->info;
   for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
     LayerRect &l_roi = layer_info.left_frame_roi.at(i);
     LayerRect &r_roi = layer_info.right_frame_roi.at(i);
@@ -851,13 +851,13 @@ std::string DisplayBase::Dump() {
   os << newline;
 
   for (uint32_t i = 0; i < num_hw_layers; i++) {
-    uint32_t layer_index = hw_layers_.info.index.at(i);
+    uint32_t layer_index = p_hw_layers_->info.index.at(i);
     // sdm-layer from client layer stack
-    Layer *sdm_layer = hw_layers_.info.stack->layers.at(layer_index);
+    Layer *sdm_layer = p_hw_layers_->info.stack->layers.at(layer_index);
     // hw-layer from hw layers info
-    Layer &hw_layer = hw_layers_.info.hw_layers.at(i);
+    Layer &hw_layer = p_hw_layers_->info.hw_layers.at(i);
     LayerBuffer *input_buffer = &hw_layer.input_buffer;
-    HWLayerConfig &layer_config = hw_layers_.config[i];
+    HWLayerConfig &layer_config = p_hw_layers_->config[i];
     HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
 
     const char *comp_type = GetName(sdm_layer->composition);
@@ -1251,10 +1251,10 @@ DisplayError DisplayBase::SetCursorPosition(int x, int y) {
     return kErrorNotSupported;
   }
 
-  DisplayError error = comp_manager_->ValidateAndSetCursorPosition(display_comp_ctx_, &hw_layers_,
+  DisplayError error = comp_manager_->ValidateAndSetCursorPosition(display_comp_ctx_, p_hw_layers_,
                                                                    x, y);
   if (error == kErrorNone) {
-    return hw_intf_->SetCursorPosition(&hw_layers_, x, y);
+    return hw_intf_->SetCursorPosition(p_hw_layers_, x, y);
   }
 
   return kErrorNone;
@@ -1674,12 +1674,12 @@ DisplayError DisplayBase::SetCompositionState(LayerComposition composition_type,
 
 void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   // Copy the acquire fence from clients layers  to HWLayers
-  uint32_t hw_layers_count = UINT32(hw_layers_.info.hw_layers.size());
+  uint32_t hw_layers_count = UINT32(p_hw_layers_->info.hw_layers.size());
 
   for (uint32_t i = 0; i < hw_layers_count; i++) {
-    uint32_t sdm_layer_index = hw_layers_.info.index.at(i);
+    uint32_t sdm_layer_index = p_hw_layers_->info.index.at(i);
     Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
-    Layer &hw_layer = hw_layers_.info.hw_layers.at(i);
+    Layer &hw_layer = p_hw_layers_->info.hw_layers.at(i);
 
     hw_layer.input_buffer.planes[0].fd = sdm_layer->input_buffer.planes[0].fd;
     hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
@@ -1690,7 +1690,7 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
     // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
     // secure display flags are also updated during SetClientTarget() called between validate and
     // commit. Need to revist this and update it accordingly for FBT layer.
-    if (hw_layers_.info.gpu_target_index == sdm_layer_index) {
+    if (p_hw_layers_->info.gpu_target_index == sdm_layer_index) {
       hw_layer.input_buffer.flags.secure = sdm_layer->input_buffer.flags.secure;
       hw_layer.input_buffer.format = sdm_layer->input_buffer.format;
       hw_layer.input_buffer.width = sdm_layer->input_buffer.width;
@@ -1701,7 +1701,7 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   }
 
   if (layer_stack->elapse_timestamp) {
-    hw_layers_.elapse_timestamp = layer_stack->elapse_timestamp;
+    p_hw_layers_->elapse_timestamp = layer_stack->elapse_timestamp;
   }
 
   return;
@@ -1709,14 +1709,14 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
 
 void DisplayBase::PostCommitLayerParams(LayerStack *layer_stack) {
   // Copy the release fence from HWLayers to clients layers
-    uint32_t hw_layers_count = UINT32(hw_layers_.info.hw_layers.size());
+    uint32_t hw_layers_count = UINT32(p_hw_layers_->info.hw_layers.size());
 
   std::vector<uint32_t> fence_dup_flag;
 
   for (uint32_t i = 0; i < hw_layers_count; i++) {
-    uint32_t sdm_layer_index = hw_layers_.info.index.at(i);
+    uint32_t sdm_layer_index = p_hw_layers_->info.index.at(i);
     Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
-    Layer &hw_layer = hw_layers_.info.hw_layers.at(i);
+    Layer &hw_layer = p_hw_layers_->info.hw_layers.at(i);
 
     // Copy the release fence only once for a SDM Layer.
     // In S3D use case, two hw layers can share the same input buffer, So make sure to merge the
@@ -1743,7 +1743,7 @@ void DisplayBase::PostCommitLayerParams(LayerStack *layer_stack) {
       sdm_layer->input_buffer.release_fence_fd = temp;
     }
   }
-  cached_qos_data_ = hw_layers_.qos_data;
+  cached_qos_data_ = p_hw_layers_->qos_data;
 
   return;
 }
@@ -2125,7 +2125,7 @@ bool DisplayBase::CanSkipValidate() {
   bool skip_validate = comp_manager_->CanSkipValidate(display_comp_ctx_, &needs_buffer_swap);
 
   if (needs_buffer_swap) {
-    hw_layers_.updates_mask.set(kSwapBuffers);
+    p_hw_layers_->updates_mask.set(kSwapBuffers);
     DisplayError error = comp_manager_->SwapBuffers(display_comp_ctx_);
     if (error != kErrorNone) {
       // Buffers couldn't be swapped.

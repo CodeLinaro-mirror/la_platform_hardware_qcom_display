@@ -89,6 +89,9 @@ class HWCDisplayVirtual : public HWCDisplay {
   HWCDisplayVirtual(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, hwc2_display_t id, int32_t sdm_id,
                     uint32_t width, uint32_t height);
+  virtual void CacCommitDone(bool cac_commit_done) {
+    display_intf_->WbCacPerf(cac_commit_done);
+  }
 
  protected:
   uint32_t width_ = 0;

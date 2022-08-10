@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -199,6 +199,7 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "supported_colorspaces") { return DRMProperty::SUPPORTED_COLORSPACES; }
   if (name == "sspp_layout") { return DRMProperty::SDE_SSPP_LAYOUT; }
   if (name == "layer_color_component") { return DRMProperty::LAYER_COLOR_COMPONENT; }
+  if (name == "skew_vsync") { return DRMProperty::SKEW_VSYNC; }
 
   return DRMProperty::INVALID;
 }
