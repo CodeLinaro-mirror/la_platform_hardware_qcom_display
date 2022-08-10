@@ -1247,7 +1247,11 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
       } else {
         *alignedw = ALIGN((width * bpp), alignment) / bpp;
       }
-      *alignedh = height;
+      if (ubwc_enabled) {
+        *alignedh = ALIGN(height, 16);
+      } else {
+        *alignedh = height;
+      }
     }
 
     if (((usage & BufferUsage::VIDEO_ENCODER) || (usage & BufferUsage::VIDEO_DECODER) ||
