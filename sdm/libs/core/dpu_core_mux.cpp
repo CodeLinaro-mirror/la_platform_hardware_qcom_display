@@ -146,10 +146,22 @@ DisplayError DPUCoreMux::GetDisplayAttributes(uint32_t index,
   return kErrorNone;
 }
 
+void DPUCoreMux::SetOpSyncHint(bool dpu_ctl_op_sync) {
+  dpu_ctl_op_sync_ = dpu_ctl_op_sync;
+
+  op_sync_sequence_.resize(hw_intf_.size());
+  if (dpu_ctl_op_sync_) {
+    std::iota(std::rbegin(op_sync_sequence_), std::rend(op_sync_sequence_), 0);
+  } else {
+    std::iota(std::begin(op_sync_sequence_), std::end(op_sync_sequence_), 0);
+  }
+}
+
 DisplayError DPUCoreMux::GetHWPanelInfo(DisplayDeviceContext *device_ctx,
                                         DisplayClientContext *client_ctx) {
   DisplayError error = kErrorNone;
   std::map<uint32_t, HWPanelInfo> panel_info_map;
+
   for (auto hw_intf : hw_intf_) {
     error = hw_intf.second->GetHWPanelInfo(&panel_info_map[hw_intf.first]);
     if (error != kErrorNone) {
@@ -178,6 +190,8 @@ DisplayError DPUCoreMux::GetHWPanelInfo(DisplayDeviceContext *device_ctx,
     }
     client_ctx->hw_panel_info.min_roi_width += i->second.min_roi_width;
   }
+
+  SetOpSyncHint(panel_info_map[zero_index].dpu_ctl_op_sync);
 
   return kErrorNone;
 }
@@ -230,7 +244,7 @@ DisplayError DPUCoreMux::PowerOn(std::vector<HWQosData> &qos_data, SyncPoints *s
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
-  for (int i = 0; i < hw_intf_.size(); i++) {
+  for (uint32_t i : op_sync_sequence_) {
     error = hw_intf_[i]->PowerOn(qos_data[i], &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
@@ -289,7 +303,7 @@ DisplayError DPUCoreMux::Doze(std::vector<HWQosData> &qos_data, SyncPoints *sync
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
-  for (int i = 0; i < hw_intf_.size(); i++) {
+  for (uint32_t i : op_sync_sequence_) {
     error = hw_intf_[i]->Doze(qos_data[i], &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
@@ -314,7 +328,7 @@ DisplayError DPUCoreMux::DozeSuspend(std::vector<HWQosData> &qos_data, SyncPoint
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
-  for (int i = 0; i < hw_intf_.size(); i++) {
+  for (uint32_t i : op_sync_sequence_) {
     error = hw_intf_[i]->DozeSuspend(qos_data[i], &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
@@ -371,7 +385,7 @@ DisplayError DPUCoreMux::Validate(std::vector<HWLayersInfo> &hw_layers_info) {
 }
 
 DisplayError DPUCoreMux::Commit(std::vector<HWLayersInfo> &hw_layers_info) {
-  for (int i = 0; i < hw_intf_.size(); i++) {
+  for (uint32_t i : op_sync_sequence_) {
     DisplayError error = hw_intf_[i]->Commit(&hw_layers_info[i]);
     if (error != kErrorNone) {
       return error;

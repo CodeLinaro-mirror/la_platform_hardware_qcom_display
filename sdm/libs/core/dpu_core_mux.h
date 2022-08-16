@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 
 #include "hw_interface.h"
 #include "hw_info_interface.h"
@@ -110,6 +111,10 @@ class DPUCoreMux {
  private:
   std::map<uint32_t, HWInterface*> hw_intf_;
   DisplayId display_id_ = {};
+  bool dpu_ctl_op_sync_ = false;
+  std::vector<uint32_t> op_sync_sequence_;
+
+  void SetOpSyncHint(bool dpu_ctl_op_sync);
 };
 
 }  // namespace sdm
