@@ -488,6 +488,9 @@ DisplayError HWDeviceDRM::Init() {
   drm_master->GetHandle(&dev_fd_);
   DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
 
+  Debug::GetProperty(DISABLE_CONT_SPLASH_HANDOFF, &disable_cont_splash_handoff_);
+  DLOGI("Disable continuous splash handoff = %d", disable_cont_splash_handoff_);
+
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {
       DLOGE("RegisterDisplay (by type) failed for %s", device_name_);
@@ -1130,6 +1133,7 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
   uint32_t index = current_mode_index_;
   drmModeModeInfo current_mode = connector_info_.modes[index].mode;
   uint64_t current_bit_clk = connector_info_.modes[index].bit_clk_rate;
+  DRMTopology topology = connector_info_.modes[index].topology;
 
   solid_fills_.clear();
   bool resource_update = hw_layers->updates_mask.test(kUpdateResources);
@@ -1191,7 +1195,18 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
       if (pipe_info->valid && fb_id) {
         uint32_t pipe_id = pipe_info->pipe_id;
-
+        if (topology == DRMTopology::SINGLE_LM || topology == DRMTopology::DUAL_LM_MERGE ||
+            update_config) {
+          if (hw_scale_) {
+            SDEScaler scaler_output = {};
+            hw_scale_->SetScaler(pipe_info->scale_data, &scaler_output);
+            // TODO(user): Remove qseed3 and add version check, then send appropriate scaler object
+            if (hw_resource_.has_qseed3) {
+              drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
+                                        reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
+            }
+          }
+        }
         if (update_config) {
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ALPHA, pipe_id, layer.plane_alpha);
 
@@ -1259,16 +1274,6 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           uint32_t config = 0;
           SetSrcConfig(layer.input_buffer, hw_rotator_session->mode, &config);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SRC_CONFIG, pipe_id, config);;
-
-          if (hw_scale_) {
-            SDEScaler scaler_output = {};
-            hw_scale_->SetScaler(pipe_info->scale_data, &scaler_output);
-            // TODO(user): Remove qseed3 and add version check, then send appropriate scaler object
-            if (hw_resource_.has_qseed3) {
-              drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
-                                        reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
-            }
-          }
 
           DRMCscType csc_type = DRMCscType::kCscTypeMax;
           SelectCscType(layer.input_buffer, &csc_type);
@@ -1520,7 +1525,7 @@ DisplayError HWDeviceDRM::DefaultCommit(HWLayers *hw_layers) {
 
 DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
-  if (first_cycle_ && IsPrimaryDisplay()) {
+  if (first_cycle_ && IsPrimaryDisplay() && !disable_cont_splash_handoff_) {
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
     int ret = NullCommit(true /* synchronous */, false /* retain_planes */);
     if (ret) {

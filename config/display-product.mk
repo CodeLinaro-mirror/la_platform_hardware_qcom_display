@@ -31,6 +31,7 @@ PRODUCT_PACKAGES += \
     vendor.display.config@1.13.vendor \
     vendor.display.config@1.14.vendor \
     vendor.display.config@1.15.vendor \
+    vendor.display.config@1.21.vendor \
     vendor.qti.hardware.display.mapper@2.0.vendor \
     vendor.qti.hardware.display.mapper@3.0.vendor \
     modetest
@@ -106,7 +107,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.high_fps_early_phase_offset_ns=6100000 \
     debug.sf.high_fps_early_gl_phase_offset_ns=6500000 \
     debug.sf.perf_fps_early_gl_phase_offset_ns=9000000 \
-    debug.sf.phase_offset_threshold_for_next_vsync_ns=6100000
+    debug.sf.phase_offset_threshold_for_next_vsync_ns=6100000 \
+    vendor.display.display_reboot_strategy=3
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),lito)
