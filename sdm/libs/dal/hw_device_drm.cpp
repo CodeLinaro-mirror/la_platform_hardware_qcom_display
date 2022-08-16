@@ -979,6 +979,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.primaries.blue[0] = connector_info_.panel_hdr_prop.display_primaries[6];
   hw_panel_info_.primaries.blue[1] = connector_info_.panel_hdr_prop.display_primaries[7];
   hw_panel_info_.dyn_bitclk_support = connector_info_.dyn_bitclk_support;
+  hw_panel_info_.dpu_ctl_op_sync = connector_info_.dpu_ctl_op_sync;
 
   // no supprt for 90 rotation only flips or 180 supported
   hw_panel_info_.panel_orientation.rotation = 0;
@@ -1254,7 +1255,15 @@ DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, SyncPoints *sync_po
   // On the first boot up of the display, make the power call synchronous. This is only applicable
   // to pluggable displays. Check HWPeripheralDRM::PowerOn. For builtin first power call defered
   // and handled in commit(synchronous for first cycle).
-  int ret = NullCommit(first_cycle_ /* synchronous */, true /* retain_planes */);
+  bool is_synchronous = first_cycle_;
+  if (hw_panel_info_.dpu_ctl_op_sync) {
+    if (core_id_ != 0) {
+      is_synchronous = true;
+    } else {
+      is_synchronous = false;
+    }
+  }
+  int ret = NullCommit(is_synchronous, true /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
@@ -1304,7 +1313,11 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
     DLOGI("Tearing down the CWB topology");
   }
 
-  int ret = NullCommit(false /* synchronous */, false /* retain_planes */);
+  bool is_synchronous = false;
+  if (hw_panel_info_.dpu_ctl_op_sync) {
+    is_synchronous = true;
+  }
+  int ret = NullCommit(is_synchronous, false /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d, dynamic_fps=%d, seamless_mode_switch_=%d, vrefresh_=%d,"
      "panel_mode_changed_=%d bit_clk_rate_=%d", ret, hw_panel_info_.dynamic_fps,
@@ -1346,7 +1359,11 @@ DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, SyncPoints *sync_point
   drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
 
-  int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
+  bool is_synchronous = false;
+  if (hw_panel_info_.dpu_ctl_op_sync && core_id_ != 0) {
+    is_synchronous = true;
+  }
+  int ret = NullCommit(is_synchronous, true /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
@@ -1385,7 +1402,11 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, SyncPoints *syn
   drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
 
-  int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
+  bool is_synchronous = false;
+  if (hw_panel_info_.dpu_ctl_op_sync && core_id_ != 0) {
+    is_synchronous = true;
+  }
+  int ret = NullCommit(is_synchronous, true /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;

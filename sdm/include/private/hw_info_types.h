@@ -510,6 +510,7 @@ struct HWPanelInfo {
   uint32_t supported_colorspaces = 0;  // supported_colorspaces for DP displays.
   uint32_t qsync_fps = 0;              // Min qsync fps
   bool has_cwb_crop = false;           // CWB Crop support
+  bool dpu_ctl_op_sync = false;        // Supports multi-core DPU Interface Sync
 
 
   bool operator !=(const HWPanelInfo &panel_info) {

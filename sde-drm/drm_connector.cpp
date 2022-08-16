@@ -673,6 +673,7 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   const string max_panel_backlight = "max panel backlight=";
   const string backlight_type = "backlight type=";
   const string has_disp_in_other_core = "has_disp_in_other_core=";
+  const string dpu_ctl_op_sync = "dpu_ctl_op_sync=";
 
   while (std::getline(stream, line)) {
     if (line.find(pixel_formats) != string::npos) {
@@ -718,6 +719,8 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
       }
     } else if (line.find(has_disp_in_other_core) != string::npos) {
       info->has_disp_in_other_core = (string(line, has_disp_in_other_core.length()) == "true");
+    } else if (line.find(dpu_ctl_op_sync) != string::npos) {
+      info->dpu_ctl_op_sync = (string(line, dpu_ctl_op_sync.length()) == "true");
     }
 
   }

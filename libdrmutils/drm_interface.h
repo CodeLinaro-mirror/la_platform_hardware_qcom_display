@@ -965,6 +965,7 @@ struct DRMConnectorInfo {
   bool is_reserved;
   std::string backlight_type;
   bool has_disp_in_other_core = false;
+  bool dpu_ctl_op_sync = false;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>
