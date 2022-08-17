@@ -148,6 +148,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   void ResetPanel();
   virtual DisplayError SetActiveConfig(uint32_t index);
   virtual DisplayError ReconfigureDisplay();
+  void ShutdownUnuseConnector(int32_t conn_id);
 
  private:
   bool CanCompareFrameROI(LayerStack *layer_stack);

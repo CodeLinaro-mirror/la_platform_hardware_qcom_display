@@ -69,6 +69,7 @@ class HWPeripheralDRM : public HWDeviceDRM {
   virtual void GetHWPanelMaxBrightness();
   virtual DisplayError SetBLScale(uint32_t level);
   virtual DisplayError GetPanelBrightnessBasePath(std::string *base_path);
+  virtual void ShutdownUnuseConnector(int32_t conn_id);
 
  private:
   void InitDestScaler();

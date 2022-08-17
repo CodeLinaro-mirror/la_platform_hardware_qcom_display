@@ -459,4 +459,8 @@ DisplayError DisplayPluggable::colorSamplingOff() {
     return kErrorNone;
 }
 
+void DisplayPluggable::ShutdownUnuseConnector(int32_t conn_id) {
+  DisplayBase::ShutdownUnuseConnector(conn_id);
+}
+
 }  // namespace sdm

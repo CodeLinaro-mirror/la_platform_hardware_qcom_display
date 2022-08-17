@@ -686,4 +686,8 @@ DisplayError HWPeripheralDRM::GetPanelBrightnessBasePath(std::string *base_path)
   return kErrorNone;
 }
 
+void HWPeripheralDRM::ShutdownUnuseConnector(int32_t conn_id) {
+  HWDeviceDRM::ShutdownUnuseConnector(conn_id);
+}
+
 }  // namespace sdm

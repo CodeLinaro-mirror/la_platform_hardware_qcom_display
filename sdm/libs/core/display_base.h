@@ -163,6 +163,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError colorSamplingOn();
   virtual DisplayError colorSamplingOff();
   virtual DisplayError ReconfigureDisplay();
+  virtual void ShutdownUnuseConnector(int32_t conn_id);
 
  protected:
   const char *kBt2020Pq = "bt2020_pq";

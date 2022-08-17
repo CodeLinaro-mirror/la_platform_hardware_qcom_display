@@ -2347,4 +2347,8 @@ DisplayError HWDeviceDRM::SetBlendSpace(const PrimariesTransfer &blend_space) {
   return kErrorNone;
 }
 
+void HWDeviceDRM::ShutdownUnuseConnector(int32_t conn_id) {
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, conn_id, DRMPowerMode::OFF);
+}
+
 }  // namespace sdm

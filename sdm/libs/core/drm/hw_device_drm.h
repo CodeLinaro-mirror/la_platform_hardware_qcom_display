@@ -133,6 +133,7 @@ class HWDeviceDRM : public HWInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError SetBlendSpace(const PrimariesTransfer &blend_space);
+  virtual void ShutdownUnuseConnector(int32_t conn_id);
 
   enum {
     kHWEventVSync,

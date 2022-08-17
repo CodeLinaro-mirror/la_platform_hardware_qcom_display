@@ -1179,4 +1179,8 @@ void DisplayBuiltIn::GetFpsConfig(HWDisplayAttributes *display_attr, HWPanelInfo
   panel_info->transfer_time_us = hw_panel_info_.transfer_time_us;
 }
 
+void DisplayBuiltIn::ShutdownUnuseConnector(int32_t conn_id) {
+  DisplayBase::ShutdownUnuseConnector(conn_id);
+}
+
 }  // namespace sdm

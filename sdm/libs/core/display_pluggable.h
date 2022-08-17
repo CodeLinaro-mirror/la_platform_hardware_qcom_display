@@ -73,6 +73,7 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
 
   void UpdateColorModes();
   void InitializeColorModesFromColorspace();
+  void ShutdownUnuseConnector(int32_t conn_id);
 
  private:
   DisplayError GetOverrideConfig(uint32_t *mode_index);

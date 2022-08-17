@@ -2116,4 +2116,8 @@ DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level)
   return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
 }
 
+void DisplayBase::ShutdownUnuseConnector(int32_t conn_id) {
+  hw_intf_->ShutdownUnuseConnector(conn_id);
+}
+
 }  // namespace sdm

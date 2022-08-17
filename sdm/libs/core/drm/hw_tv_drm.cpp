@@ -439,5 +439,9 @@ DisplayError HWTVDRM::PowerOn(const HWQosData &qos_data, int *release_fence) {
   return HWDeviceDRM::PowerOn(qos_data, release_fence);
 }
 
+void HWTVDRM::ShutdownUnuseConnector(int32_t conn_id) {
+  HWDeviceDRM::ShutdownUnuseConnector(conn_id);
+}
+
 }  // namespace sdm
 

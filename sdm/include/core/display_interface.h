@@ -931,6 +931,8 @@ class DisplayInterface {
   */
   virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode) = 0;
 
+  virtual void ShutdownUnuseConnector(int32_t conn_id) = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };
