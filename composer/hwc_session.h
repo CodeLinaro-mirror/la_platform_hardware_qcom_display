@@ -297,7 +297,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t SetLayerTransform(hwc2_display_t display, hwc2_layer_t layer, int32_t int_transform);
   int32_t SetLayerZOrder(hwc2_display_t display, hwc2_layer_t layer, uint32_t z);
   int32_t SetLayerIsTunneled(hwc2_display_t display, hwc2_layer_t layer, bool tunneled);
-  int32_t IsTunnelledLayerPresent(hwc2_display_t display, bool *tunnelled_layer_present);
+  int32_t IsTunnelledLayerPresent(hwc2_display_t display, bool *tunneled_layer_present);
   int32_t SetLayerType(hwc2_display_t display, hwc2_layer_t layer,
                        IQtiComposerClient::LayerType type);
   int32_t SetLayerSurfaceDamage(hwc2_display_t display, hwc2_layer_t layer, hwc_region_t damage);
@@ -419,6 +419,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t getDisplayMaxBrightness(uint32_t display, uint32_t *max_brightness_level);
   bool HasHDRSupport(HWCDisplay *hwc_display);
   void PostInit();
+  int32_t CreateTunneledLayerInternal();
 
   int SetBestNullDisplayResolution();
   bool IsFrameworkRebootRequired(bool is_primary);
@@ -576,10 +577,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   bool update_vsync_on_doze_ = false;
   std::vector<bool> is_hdr_display_;    // info on HDR supported
   std::map <hwc2_display_t, hwc2_display_t> map_hwc_display_;  // Real and dummy display pairs.
-  std::map <uint64_t, int32_t> tunnelling_map_buffer_release_fence_; // stores mapping between
+  std::map <uint64_t, int32_t> tunneling_map_buffer_release_fence_; // stores mapping between
                                                                      // buffer id and release fence
   // stores mapping between buffer id and native handle
-  std::map <uint64_t, const native_handle_t *> tunnelling_map_buffer_native_handle_;
+  std::map <uint64_t, const native_handle_t *> tunneling_map_buffer_native_handle_;
   bool reset_panel_ = false;
   bool client_connected_ = false;
   bool new_bw_mode_ = false;
@@ -601,7 +602,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t disable_mask_layer_hint_ = 0;
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
-  bool tunnelling_enabled_ = false;
+  bool tunneling_enabled_ = false;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
   CWB cwb_;
@@ -619,8 +620,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int display_reboot_strategy_ = kRebootStrategyDefault;
   bool null_display_active_ = false;
   static int null_display_mode_;
-  hwc2_layer_t tunnelled_layer_ = -1;
+  hwc2_layer_t tunneled_layer_ = -1;
   int tunneled_layer_rf_ = -1; // tunneled layer's release fence
+  IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
 };
 }  // namespace sdm
 
