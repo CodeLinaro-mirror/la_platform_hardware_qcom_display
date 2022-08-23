@@ -2035,6 +2035,8 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
   stack_info.common_info.flags = layer_stack->flags;
   stack_info.common_info.blend_cs = layer_stack->blend_cs;
   stack_info.wide_color_primaries.clear();
+  stack_info.enable_cac = enable_cac_;
+  stack_info.cac_config = cac_config_;
 
   int index = 0;
   for (auto &layer : layers) {
@@ -2783,5 +2785,26 @@ uint32_t DisplayBuiltIn::SanitizeRefreshRate(uint32_t req_refresh_rate, uint32_t
   return refresh_rate;
 }
 
+DisplayError DisplayBuiltIn::PerformCacConfig(CacConfig config, bool enable) {
+  ClientLock lock(disp_mutex_);
+
+  for (auto res_info : hw_resource_info_) {
+    if (res_info.cac_version != kCacVersion2) {
+      return kErrorNotSupported;
+    }
+  }
+
+  DLOGV_IF(kTagDisplay, "CAC enable: %d Config:: k0r: %f k1r: %f k0b: %f k1b: %f pixel_pitch: %f"
+           "normalization: %f mid_le_y_offset: %d mid_le_x_offset: %d mid_re_y_offset: %d"
+           " mid_re_x_offset: %d skip_inc: %d", enable, config.k0r, config.k1r, config.k0b,
+           config.k1b, config.pixel_pitch, config.normalization, config.mid_le_y_offset,
+           config.mid_le_x_offset, config.mid_re_y_offset, config.mid_re_x_offset, config.skip_inc);
+
+  enable_cac_ = enable;
+  cac_config_ = config;
+  validated_ = false;
+  event_handler_->Refresh();
+  return kErrorNone;
+}
 
 }  // namespace sdm

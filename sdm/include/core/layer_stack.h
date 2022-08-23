@@ -418,7 +418,7 @@ struct LayerSolidFill {
 
 struct LayerBufferMap {
   std::unordered_map<uint64_t, std::unordered_map<uint32_t,
-                                                  std::shared_ptr<LayerBufferObject>>> buffer_map;
+                               std::vector<std::shared_ptr<LayerBufferObject>>>> buffer_map;
 };
 
 /*! @brief This structure defines display layer object which contains layer properties and a drawing
@@ -536,6 +536,20 @@ struct CwbConfig {
   LayerRect cwb_full_rect = {};                      //!< Same as Output buffer Rect (unaligned).
   CwbTapPoint tap_point = CwbTapPoint::kLmTapPoint;  //!< Client specified tap point for CWB.
   void *dither_info = nullptr;                       //!< Pointer to the cwb dither setting.
+};
+
+struct CacConfig {
+  double k0r = 0;
+  double k1r = 0;
+  double k0b = 0;
+  double k1b = 0;
+  double pixel_pitch = 0;
+  double normalization = 0;
+  uint32_t mid_le_y_offset = 0;
+  uint32_t mid_le_x_offset = 0;
+  uint32_t mid_re_y_offset = 0;
+  uint32_t mid_re_x_offset = 0;
+  uint32_t skip_inc = 0;
 };
 
 /*! @brief This structure defines a layer stack that contains layers which need to be composed and

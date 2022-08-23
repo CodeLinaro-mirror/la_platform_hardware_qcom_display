@@ -158,6 +158,17 @@ static InlineRotationVersion GetInRotVersion(sde_drm::InlineRotationVersion drm_
   }
 }
 
+static HWPipeCacMode GetCacMode(sde_drm::DRMCacMode cac_mode) {
+  switch (cac_mode) {
+    case sde_drm::DRMCacMode::CAC_MODE_UNPACK:
+      return kModeUnpack;
+    case sde_drm::DRMCacMode::CAC_MODE_FETCH:
+      return kModeFetch;
+    default:
+      return kModeDisabled;
+  }
+}
+
 DisplayError HWInfoDRM::Init() {
   default_mode_ = (DRMLibLoader::GetInstance(core_id_)->IsLoaded() == false);
   if (!default_mode_) {
@@ -373,6 +384,12 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
     hw_resource->ddr_version = kDDRVersion5;
   }
 
+  if (info.cac_version == sde_drm::CacVersion::V1) {
+    hw_resource->cac_version = kCacVersion1;
+  } else if (info.cac_version == sde_drm::CacVersion::V2) {
+    hw_resource->cac_version = kCacVersion2;
+  }
+
   for (int index = 0; index < kBwModeMax; index++) {
     if (index == kBwVFEOn) {
       hw_resource->dyn_bw_info.total_bw_limit[index] = info.max_bandwidth_low / kKiloUnit;
@@ -526,6 +543,8 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
     pipe_caps.dgm_csc_version = pipe_obj.second.dgm_csc_version;
     pipe_caps.pipe_idx = pipe_obj.second.pipe_idx;
     pipe_caps.demura_block_capability = pipe_obj.second.demura_block_capability;
+    pipe_caps.cac_mode = GetCacMode(pipe_obj.second.cac_mode);
+    pipe_caps.cac_parent_id = pipe_obj.second.cac_parent_rect;
     // disable src tonemap feature if its disabled using property.
     if (!disable_src_tonemap) {
       for (auto &it : pipe_obj.second.tonemap_lut_version_map) {

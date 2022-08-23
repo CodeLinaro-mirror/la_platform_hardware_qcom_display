@@ -180,6 +180,11 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "dimming_bl_lut") { return DRMProperty::DIMMING_BL_LUT; }
   if (name == "dimming_dyn_ctrl") { return DRMProperty::DIMMING_DYN_CTRL; }
   if (name == "dimming_min_bl") { return DRMProperty::DIMMING_MIN_BL; }
+  if (name == "cac_type") { return DRMProperty::CAC_TYPE; }
+  if (name == "src_rect_extn") { return DRMProperty::SRC_RECT_EXT; }
+  if (name == "dst_rect_extn") { return DRMProperty::DST_RECT_EXT; }
+  if (name == "bg_alpha") { return DRMProperty::BG_ALPHA; }
+  if (name == "src_img_size") { return DRMProperty::IMG_SIZE_RECT; }
 
   return DRMProperty::INVALID;
 }
