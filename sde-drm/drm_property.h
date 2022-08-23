@@ -241,6 +241,11 @@ enum struct DRMProperty {
   SPR_INIT_CFG_V2,
   SPR_UDC_CFG_V2,
   EPT,
+  CAC_TYPE,
+  SRC_RECT_EXT,
+  DST_RECT_EXT,
+  BG_ALPHA,
+  IMG_SIZE_RECT,
 
   // Insert above
   MAX

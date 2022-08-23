@@ -155,6 +155,7 @@ using sde_drm::DRMCrtcInfo;
 using sde_drm::DRMCWbCaptureMode;
 using sde_drm::DRMUcscIgcMode;
 using sde_drm::DRMUcscGcMode;
+using sde_drm::DRMCacMode;
 
 namespace sdm {
 
@@ -180,18 +181,33 @@ static PPBlock GetPPBlock(const HWToneMapLut &lut_type) {
   return pp_block;
 }
 
+static uint64_t GetDRMModifier(uint64_t default_modifier, HWCacColorComponent cac_color) {
+  switch (cac_color) {
+    case kCacRed:
+      return DRM_FORMAT_MOD_QCOM_CAC_R;
+    case kCacGreen:
+      return DRM_FORMAT_MOD_QCOM_CAC_G;
+    case kCacBlue:
+      return DRM_FORMAT_MOD_QCOM_CAC_B;
+    default:
+      return default_modifier;
+  }
+}
+
 static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
-                         uint64_t *drm_format_modifier) {
+                         uint64_t *drm_format_modifier, HWCacColorComponent cac_color) {
   switch (format) {
     case kFormatARGB8888:
       *drm_format = DRM_FORMAT_BGRA8888;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGBA8888:
       *drm_format = DRM_FORMAT_ABGR8888;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGBA8888Ubwc:
       *drm_format = DRM_FORMAT_ABGR8888;
-      *drm_format_modifier = DRM_FORMAT_MOD_QCOM_COMPRESSED;
+      *drm_format_modifier = GetDRMModifier(DRM_FORMAT_MOD_QCOM_COMPRESSED, cac_color);
       break;
     case kFormatRGBA5551:
       *drm_format = DRM_FORMAT_ABGR1555;
@@ -201,22 +217,27 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
       break;
     case kFormatBGRA8888:
       *drm_format = DRM_FORMAT_ARGB8888;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGBX8888:
       *drm_format = DRM_FORMAT_XBGR8888;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGBX8888Ubwc:
       *drm_format = DRM_FORMAT_XBGR8888;
-      *drm_format_modifier = DRM_FORMAT_MOD_QCOM_COMPRESSED;
+      *drm_format_modifier = GetDRMModifier(DRM_FORMAT_MOD_QCOM_COMPRESSED, cac_color);
       break;
     case kFormatBGRX8888:
       *drm_format = DRM_FORMAT_XRGB8888;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGB888:
       *drm_format = DRM_FORMAT_BGR888;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatBGR888:
       *drm_format = DRM_FORMAT_RGB888;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGB565:
       *drm_format = DRM_FORMAT_BGR565;
@@ -230,35 +251,43 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
       break;
     case kFormatRGBA1010102:
       *drm_format = DRM_FORMAT_ABGR2101010;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGBA1010102Ubwc:
       *drm_format = DRM_FORMAT_ABGR2101010;
-      *drm_format_modifier = DRM_FORMAT_MOD_QCOM_COMPRESSED;
+      *drm_format_modifier = GetDRMModifier(DRM_FORMAT_MOD_QCOM_COMPRESSED, cac_color);
       break;
     case kFormatARGB2101010:
       *drm_format = DRM_FORMAT_BGRA1010102;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGBX1010102:
       *drm_format = DRM_FORMAT_XBGR2101010;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatRGBX1010102Ubwc:
       *drm_format = DRM_FORMAT_XBGR2101010;
-      *drm_format_modifier = DRM_FORMAT_MOD_QCOM_COMPRESSED;
+      *drm_format_modifier = GetDRMModifier(DRM_FORMAT_MOD_QCOM_COMPRESSED, cac_color);
       break;
     case kFormatXRGB2101010:
       *drm_format = DRM_FORMAT_BGRX1010102;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatBGRA1010102:
       *drm_format = DRM_FORMAT_ARGB2101010;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatABGR2101010:
       *drm_format = DRM_FORMAT_RGBA1010102;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatBGRX1010102:
       *drm_format = DRM_FORMAT_XRGB2101010;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatXBGR2101010:
       *drm_format = DRM_FORMAT_RGBX1010102;
+      *drm_format_modifier = GetDRMModifier(*drm_format_modifier, cac_color);
       break;
     case kFormatYCbCr420SemiPlanar:
       *drm_format = DRM_FORMAT_NV12;
@@ -374,6 +403,7 @@ int HWDeviceDRM::Registry::Register(HWLayersInfo *hw_layers_info) {
   int err = 0;
   for (uint32_t i = 0; i < hw_layer_count; i++) {
     Layer &layer = hw_layers_info->hw_layers.at(i);
+    HWLayerConfig &layer_config = hw_layers_info->config[i];
     LayerBuffer input_buffer = layer.input_buffer;
     HWRotatorSession *hw_rotator_session = &hw_layers_info->config[i].hw_rotator_session;
     HWRotateInfo *hw_rotate_info = &hw_rotator_session->hw_rotate_info[0];
@@ -388,7 +418,8 @@ int HWDeviceDRM::Registry::Register(HWLayersInfo *hw_layers_info) {
       input_buffer.width *= 2;
       input_buffer.height /= 2;
     }
-    int ret = MapBufferToFbId(&layer, input_buffer);
+    int ret = MapBufferToFbId(&layer, input_buffer,
+                              layer_config.tunnel_pipes.size() > 0 ? true : false);
     if (!err) {
       err = ret;
     }
@@ -396,7 +427,7 @@ int HWDeviceDRM::Registry::Register(HWLayersInfo *hw_layers_info) {
   return err;
 }
 
-int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id) {
+int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, std::vector<uint32_t> *fb_id) {
   DRMMaster *master = reinterpret_cast<DRMMaster*>(master_);
   int ret = -1;
 
@@ -405,6 +436,7 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id
     return ret;
   }
 
+  uint32_t *fb_id_data = fb_id->data();
   DRMBuffer layout{};
   AllocatedBufferInfo buf_info{};
   buf_info.fd = layout.fd = buffer.planes[0].fd;
@@ -412,20 +444,24 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id
   buf_info.aligned_height = layout.height = buffer.height;
   buf_info.format = buffer.format;
   buf_info.usage = buffer.usage;
-  GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier);
   buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset, &layout.num_planes);
-  ret = master->CreateFbId(layout, fb_id);
-  if (ret < 0) {
-    DLOGE("CreateFbId failed. width %d, height %d, format: %s, usage %d, stride %u, "
-          "unaligned_width %d, unaligned_height %d, error %d", layout.width, layout.height,
-          GetFormatString(buf_info.format), buf_info.usage, layout.stride[0],
-          buffer.unaligned_width, buffer.unaligned_height, errno);
+  for (int color = 0; color < fb_id->size(); color++) {
+    GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier,
+                 static_cast<HWCacColorComponent>(color));
+    ret = master->CreateFbId(layout, fb_id_data);
+    if (ret < 0) {
+      DLOGE("CreateFbId failed. width %d, height %d, format: %s, stride %u, cac_color %d error %d",
+          layout.width, layout.height, GetFormatString(buf_info.format), layout.stride[0], color,
+          errno);
+    }
+    fb_id_data++;
   }
 
   return ret;
 }
 
-int HWDeviceDRM::Registry::MapBufferToFbId(Layer *layer, const LayerBuffer &buffer) {
+int HWDeviceDRM::Registry::MapBufferToFbId(Layer *layer, const LayerBuffer &buffer,
+                                           bool is_cac_buffer) {
   if (buffer.planes[0].fd < 0) {
     return 0;
   }
@@ -448,20 +484,32 @@ int HWDeviceDRM::Registry::MapBufferToFbId(Layer *layer, const LayerBuffer &buff
         if (itr != dpu_buffer_map.end()) {
           FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second.get());
           if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height, secure_present)) {
-            layer->buffer_map->buffer_map[handle_id] = output_buffer_map_[handle_id];
+            // make local copy of output_buffer_map_
+            std::unordered_map<uint32_t,
+                std::vector<std::shared_ptr<LayerBufferObject>>> temp_output_buffer;
+            for (auto& itr2: output_buffer_map_[handle_id]) {
+              std::vector<std::shared_ptr<LayerBufferObject>> temp_layer_buffer;
+              temp_layer_buffer.push_back(itr2.second);
+              temp_output_buffer[itr2.first] = temp_layer_buffer;
+            }
+            // update buffer_map with local output_buffer_map
+            layer->buffer_map->buffer_map[handle_id] = temp_output_buffer;
             // Found fb_id for given handle_id key
             return 0;
           }
         }
       }
     }
+    uint32_t fb_id_size = is_cac_buffer ? 4 : 1;
     auto it = layer->buffer_map->buffer_map.find(handle_id);
     if (it != layer->buffer_map->buffer_map.end()) {
-      std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map = it->second;
+      std::unordered_map<uint32_t,
+           std::vector<std::shared_ptr<LayerBufferObject>>> dpu_buffer_map = it->second;
       auto itr = dpu_buffer_map.find(core_id_);
       if (itr != dpu_buffer_map.end()) {
-        FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second.get());
-        if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height, secure_present)) {
+        FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second[kCacNone].get());
+        if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height, secure_present) &&
+            (it->second.size() >= fb_id_size)) {
           // Found fb_id for given handle_id key
           return 0;
         } else {
@@ -477,18 +525,26 @@ int HWDeviceDRM::Registry::MapBufferToFbId(Layer *layer, const LayerBuffer &buff
     }
   }
 
-  uint32_t fb_id = 0;
+  std::vector<uint32_t> fb_id(1);
+  if (is_cac_buffer) {
+    fb_id.resize(4);
+  }
   if (CreateFbId(buffer, &fb_id) >= 0) {
+    // Create and cache the fb_id in map
+    std::vector<std::shared_ptr<LayerBufferObject>> fb_id_vec;
+    for (int i = 0; i < fb_id.size(); i++) {
+      std::shared_ptr<LayerBufferObject> bo = std::make_shared<FrameBufferObject>(fb_id[i],
+                                              core_id_, buffer.format, buffer.width, buffer.height,
+                                              secure_present);
+      fb_id_vec.push_back(bo);
+    }
+
     auto it = layer->buffer_map->buffer_map.find(handle_id);
     if (it != layer->buffer_map->buffer_map.end()) {
-      it->second.insert({core_id_, std::make_shared<FrameBufferObject>(fb_id,
-                                                     core_id_, buffer.format, buffer.width,
-                                                     buffer.height, secure_present)});
+      it->second.insert({core_id_, fb_id_vec});
     } else {
-      // Create and cache the fb_id in map
-      std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map;
-      dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id, core_id_,
-          buffer.format, buffer.width, buffer.height, false /* shallow */, secure_present);
+      std::unordered_map<uint32_t, std::vector<std::shared_ptr<LayerBufferObject>>> dpu_buffer_map;
+      dpu_buffer_map[core_id_] = fb_id_vec;
       layer->buffer_map->buffer_map[handle_id] = dpu_buffer_map;
     }
   }
@@ -529,11 +585,11 @@ void HWDeviceDRM::Registry::MapOutputBufferToFbId(LayerBuffer *output_buffer) {
     }
   }
 
-  uint32_t fb_id = 0;
+  std::vector<uint32_t> fb_id(1);
   if (CreateFbId(*output_buffer, &fb_id) >= 0) {
     std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map;
-    dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id, core_id_,
-        output_buffer->format, output_buffer->width, output_buffer->height,
+    dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id[kCacNone],
+        core_id_, output_buffer->format, output_buffer->width, output_buffer->height,
         false /* shallow */, secure_present);
     output_buffer_map_[handle_id] = dpu_buffer_map;
   }
@@ -543,18 +599,27 @@ void HWDeviceDRM::Registry::Clear() {
   output_buffer_map_.clear();
 }
 
-uint32_t HWDeviceDRM::Registry::GetFbId(Layer *layer, uint64_t handle_id) {
+std::vector<uint32_t> HWDeviceDRM::Registry::GetFbId(Layer *layer, uint64_t handle_id) {
   auto it = layer->buffer_map->buffer_map.find(handle_id);
+  std::vector<uint32_t> fb_id_vec;
   if (it != layer->buffer_map->buffer_map.end()) {
-    std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map = it->second;
+    std::unordered_map<uint32_t,
+                       std::vector<std::shared_ptr<LayerBufferObject>>> dpu_buffer_map = it->second;
     auto itr = dpu_buffer_map.find(core_id_);
     if (itr != dpu_buffer_map.end()) {
-      FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second.get());
-      return fb_obj->GetFbId();
+      std::vector<std::shared_ptr<LayerBufferObject>> fb_obj_vec = itr->second;
+      for (int i = 0; i < fb_obj_vec.size(); i++) {
+        FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(fb_obj_vec[i].get());
+         fb_id_vec.push_back(fb_obj->GetFbId());
+      }
     }
   }
 
-  return 0;
+  if (fb_id_vec.size() == 0) {
+    fb_id_vec.push_back(0);  // failure case
+  }
+
+  return fb_id_vec;
 }
 
 uint32_t HWDeviceDRM::Registry::GetOutputFbId(uint64_t handle_id) {
@@ -1517,6 +1582,17 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     HWLayerConfig &layer_config = hw_layers_info->config[i];
     HWRotatorSession *hw_rotator_session = &layer_config.hw_rotator_session;
 
+    std::vector<HWPipeInfo *> pipe_info_vec;
+    if (left_pipe->valid) {
+      pipe_info_vec.push_back(left_pipe);
+    }
+    if (right_pipe->valid) {
+      pipe_info_vec.push_back(right_pipe);
+    }
+    for (int j = 0; j < hw_layers_info->config[i].tunnel_pipes.size(); j++) {
+      pipe_info_vec.push_back(&hw_layers_info->config[i].tunnel_pipes[j]);
+    }
+
     if (hw_layers_info->config[i].use_solidfill_stage) {
       hw_layers_info->config[i].hw_solidfill_stage.solid_fill_info = layer.solid_fill_info;
       AddSolidfillStage(hw_layers_info->config[i].hw_solidfill_stage, layer.plane_alpha);
@@ -1528,21 +1604,37 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       continue;
     }
 
-    for (uint32_t count = 0; count < 2; count++) {
-      HWPipeInfo *pipe_info = (count == 0) ? left_pipe : right_pipe;
-      HWRotateInfo *hw_rotate_info = &hw_rotator_session->hw_rotate_info[count];
+    for (uint32_t count = 0; count < pipe_info_vec.size(); count++) {
+      HWPipeInfo *pipe_info = pipe_info_vec[count];
+      HWRotateInfo *hw_rotate_info = (count <= 1) ?
+                                     &hw_rotator_session->hw_rotate_info[count] : NULL;
 
-      if (hw_rotator_session->mode == kRotatorOffline && hw_rotate_info->valid) {
+      if (hw_rotator_session->mode == kRotatorOffline && hw_rotate_info && hw_rotate_info->valid) {
         input_buffer = &hw_rotator_session->output_buffer;
       }
 
-      uint32_t fb_id = registry_.GetFbId(&layer, input_buffer->handle_id);
+      std::vector<uint32_t> fb_id = registry_.GetFbId(&layer, input_buffer->handle_id);
 
-      if (pipe_info->valid && fb_id) {
+      if (pipe_info->valid && fb_id[pipe_info->cac_color]) {
         uint32_t pipe_id = pipe_info->pipe_id;
 
         if (update_config) {
-          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ALPHA, pipe_id, layer.plane_alpha);
+          uint32_t fg_alpha = layer.plane_alpha;
+          uint32_t bg_alpha = 0xff - layer.plane_alpha;
+
+          if (pipe_info->cac_mode) {
+            fg_alpha = bg_alpha = 0xff;
+          }
+
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ALPHA, pipe_id, fg_alpha);
+
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_BG_ALPHA, pipe_id, bg_alpha);
+
+          if (hw_resource_.cac_version == kCacVersion2) {
+            DRMCacMode target_mode = DRMCacMode::CAC_MODE_DISABLED;
+            SetCacType(pipe_info->cac_mode, &target_mode);
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CAC_TYPE, pipe_id, target_mode);
+          }
 
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ZORDER, pipe_id, pipe_info->z_order);
 
@@ -1593,6 +1685,9 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
               DLOGI_IF(kTagDriverConfig, "PMA handled by Inverse PMA block - Pipe id: %u", pipe_id);
             }
           }
+          if (pipe_info->cac_mode) {
+            layer_blend = pipe_info->cac_blend_type;
+          }
           SetBlending(layer_blend, &blending);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_BLEND_TYPE, pipe_id, blending);
 
@@ -1600,9 +1695,27 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
           SetRect(pipe_info->src_roi, &src);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SRC_RECT, pipe_id, src);
 
+          if (IsValid(pipe_info->ext_src_roi)) {
+            DRMRect src_ext = {};
+            SetRect(pipe_info->ext_src_roi, &src_ext);
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SRC_RECT_EXT, pipe_id, src_ext);
+          }
+
           DRMRect dst = {};
           SetRect(pipe_info->dst_roi, &dst);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_DST_RECT, pipe_id, dst);
+
+          if (IsValid(pipe_info->ext_dst_roi)) {
+            DRMRect dst_ext = {};
+            SetRect(pipe_info->ext_dst_roi, &dst_ext);
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_DST_RECT_EXT, pipe_id, dst_ext);
+          }
+
+          if (IsValid(pipe_info->img_roi)) {
+            DRMRect img_roi = {};
+            SetRect(pipe_info->img_roi, &img_roi);
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_IMG_SIZE_RECT, pipe_id, img_roi);
+          }
 
           DRMRect excl = {};
           SetRect(pipe_info->excl_rect, &excl);
@@ -1652,7 +1765,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
           SetSsppTonemapFeatures(pipe_info);
         }
 
-        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_ID, pipe_id, fb_id);
+        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_ID, pipe_id, fb_id[pipe_info->cac_color]);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CRTC, pipe_id, token_.crtc_id);
 
         if (!validate && input_buffer->acquire_fence) {
@@ -1946,12 +2059,12 @@ DisplayError HWDeviceDRM::DefaultCommit(HWLayersInfo *hw_layers_info) {
   res_mgr->GetMode(&mode);
 
   uint64_t handle_id = hw_layers_info->hw_layers.at(0).input_buffer.handle_id;
-  uint32_t fb_id = registry_.GetFbId(&hw_layers_info->hw_layers.at(0), handle_id);
-  ret = drmModeSetCrtc(dev_fd, crtc_id, fb_id, 0 /* x */, 0 /* y */, &connector_id,
+  std::vector<uint32_t> fb_id = registry_.GetFbId(&hw_layers_info->hw_layers.at(0), handle_id);
+  ret = drmModeSetCrtc(dev_fd, crtc_id, fb_id[kCacNone], 0 /* x */, 0 /* y */, &connector_id,
                        1 /* num_connectors */, &mode);
   if (ret < 0) {
     DLOGE("drmModeSetCrtc failed dev fd %d, fb_id %d, crtc id %d, connector id %d, %s", dev_fd,
-          fb_id, crtc_id, connector_id, strerror(errno));
+          fb_id[kCacNone], crtc_id, connector_id, strerror(errno));
     return kErrorHardware;
   }
 
@@ -2119,6 +2232,22 @@ void HWDeviceDRM::SetBlending(const LayerBlending &source, DRMBlendType *target)
       break;
     default:
       *target = DRMBlendType::UNDEFINED;
+  }
+}
+
+void HWDeviceDRM::SetCacType(const HWPipeCacMode &cac_mode, DRMCacMode *target) {
+  switch (cac_mode) {
+    case kModeDisabled:
+      *target = DRMCacMode::CAC_MODE_DISABLED;
+      break;
+    case kModeUnpack:
+      *target = DRMCacMode::CAC_MODE_UNPACK;
+      break;
+    case kModeFetch:
+      *target = DRMCacMode::CAC_MODE_FETCH;
+      break;
+    default:
+      *target = DRMCacMode::CAC_MODE_DISABLED;
   }
 }
 

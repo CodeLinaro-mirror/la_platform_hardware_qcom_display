@@ -120,6 +120,13 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::PLANE_SET_INVERSE_PMA:
     case DRMOps::PLANE_SET_DGM_CSC_CONFIG:
     case DRMOps::PLANE_SET_POST_PROC:
+    case DRMOps::PLANE_SET_CAC_TYPE:
+    case DRMOps::PLANE_SET_SRC_RECT_EXT:
+    case DRMOps::PLANE_SET_DST_RECT_EXT:
+    case DRMOps::PLANE_SET_BG_ALPHA:
+    case DRMOps::PLANE_SET_IMG_SIZE_RECT: {
+      drm_mgr_->GetPlaneMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
+    } break;
     case DRMOps::PLANE_SET_FP16_CSC_CONFIG:
     case DRMOps::PLANE_SET_FP16_IGC_CONFIG:
     case DRMOps::PLANE_SET_FP16_UNMULT_CONFIG:

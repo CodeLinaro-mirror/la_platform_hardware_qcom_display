@@ -256,6 +256,10 @@ static uint8_t UCSC_GC_PQ = 2;
 static uint8_t UCSC_GC_GAMMA2_2 = 3;
 static uint8_t UCSC_GC_HLG = 4;
 
+static uint8_t CAC_NONE = 0;
+static uint8_t CAC_UNPACK = 1;
+static uint8_t CAC_FETCH = 2;
+
 static void SetRect(DRMRect &source, drm_clip_rect *target) {
   target->x1 = uint16_t(source.left);
   target->y1 = uint16_t(source.top);
@@ -327,6 +331,16 @@ static QSEEDStepVersion PopulateQseedStepVersion(uint32_t hw_ver) {
     case 0x3003: return QSEEDStepVersion::V3LITE_V9;
     // default value. also corresponds to (hw_ver == 0x1002)
     default: return QSEEDStepVersion::V2;
+  }
+}
+
+static DRMCacMode PopulateCacMode(uint32_t mode) {
+  switch (mode) {
+    case 0x0: return DRMCacMode::CAC_MODE_DISABLED;
+    case 0x1: return DRMCacMode::CAC_MODE_UNPACK;
+    case 0x2: return DRMCacMode::CAC_MODE_FETCH;
+    // default corresponds to CAC_MODE_DISABLED
+    default: return DRMCacMode::CAC_MODE_DISABLED;
   }
 }
 
@@ -740,6 +754,8 @@ void DRMPlane::GetTypeInfo(const PropertyMap &prop_map) {
   string true_inline_max_height = "true_inline_max_height=";
   string pipe_idx = "pipe_idx=";
   string demura_block = "demura_block=";
+  string cac_mode = "cac_mode=";
+  string cac_parent_rect = "cac_parent_rec=";
 
   while (std::getline(stream, line)) {
     if (line.find(inline_rot_pixel_formats) != string::npos) {
@@ -787,6 +803,10 @@ void DRMPlane::GetTypeInfo(const PropertyMap &prop_map) {
       info->pipe_idx = std::stoi(line.erase(0, pipe_idx.length()));
     }  else if (line.find(demura_block) != string::npos) {
       info->demura_block_capability = std::stoi(line.erase(0, demura_block.length()));
+    }  else if (line.find(cac_mode) != string::npos) {
+      info->cac_mode = PopulateCacMode(std::stoi(line.erase(0, cac_mode.length())));
+    }  else if (line.find(cac_parent_rect) != string::npos) {
+      info->cac_parent_rect = std::stoi(line.erase(0, cac_parent_rect.length()));
     }
 
   }
@@ -975,6 +995,51 @@ void DRMPlane::SetExclRect(drmModeAtomicReq *req, DRMRect rect) {
   AddProperty(req, drm_plane_->plane_id, prop_id, reinterpret_cast<uint64_t>
               (&excl_rect_copy_), false /* cache */, tmp_prop_val_map_);
   DRM_LOGD("Plane %d: Setting exclusion rect [x,y,w,h][%d,%d,%d,%d]", drm_plane_->plane_id,
+           clip_rect.x1, clip_rect.y1, (clip_rect.x2 - clip_rect.x1),
+           (clip_rect.y2 - clip_rect.y1));
+}
+
+void DRMPlane::SetSrcExtnRect(drmModeAtomicReq *req, DRMRect rect) {
+  if (!prop_mgr_.IsPropertyAvailable(DRMProperty::SRC_RECT_EXT)) {
+    return;
+  }
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::SRC_RECT_EXT);
+  drm_clip_rect clip_rect;
+  SetRect(rect, &clip_rect);
+  src_rect_extn_copy_ = clip_rect;
+  AddProperty(req, drm_plane_->plane_id, prop_id, reinterpret_cast<uint64_t>
+              (&src_rect_extn_copy_), false /* cache */, tmp_prop_val_map_);
+  DRM_LOGD("Plane %d: Setting src extn rect [x,y,w,h][%d,%d,%d,%d]", drm_plane_->plane_id,
+           clip_rect.x1, clip_rect.y1, (clip_rect.x2 - clip_rect.x1),
+           (clip_rect.y2 - clip_rect.y1));
+}
+
+void DRMPlane::SetDstExtnRect(drmModeAtomicReq *req, DRMRect rect) {
+  if (!prop_mgr_.IsPropertyAvailable(DRMProperty::DST_RECT_EXT)) {
+    return;
+  }
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::DST_RECT_EXT);
+  drm_clip_rect clip_rect;
+  SetRect(rect, &clip_rect);
+  dst_rect_extn_copy_ = clip_rect;
+  AddProperty(req, drm_plane_->plane_id, prop_id, reinterpret_cast<uint64_t>
+              (&dst_rect_extn_copy_), false /* cache */, tmp_prop_val_map_);
+  DRM_LOGD("Plane %d: Setting dst extn rect [x,y,w,h][%d,%d,%d,%d]", drm_plane_->plane_id,
+           clip_rect.x1, clip_rect.y1, (clip_rect.x2 - clip_rect.x1),
+           (clip_rect.y2 - clip_rect.y1));
+}
+
+void DRMPlane::SetImgSizeRect(drmModeAtomicReq *req, DRMRect rect) {
+  if (!prop_mgr_.IsPropertyAvailable(DRMProperty::IMG_SIZE_RECT)) {
+    return;
+  }
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::IMG_SIZE_RECT);
+  drm_clip_rect clip_rect;
+  SetRect(rect, &clip_rect);
+  img_size_rect_copy_ = clip_rect;
+  AddProperty(req, drm_plane_->plane_id, prop_id, reinterpret_cast<uint64_t>
+              (&img_size_rect_copy_), false /* cache */, tmp_prop_val_map_);
+  DRM_LOGD("Plane %d: Setting img size rect [x,y,w,h][%d,%d,%d,%d]", drm_plane_->plane_id,
            clip_rect.x1, clip_rect.y1, (clip_rect.x2 - clip_rect.x1),
            (clip_rect.y2 - clip_rect.y1));
 }
@@ -1265,9 +1330,25 @@ void DRMPlane::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       DRM_LOGV("Plane %d: Setting dst [x,y,w,h][%d,%d,%d,%d]", obj_id, rect.left,
                rect.top, (rect.right - rect.left), (rect.bottom - rect.top));
     } break;
+
     case DRMOps::PLANE_SET_EXCL_RECT: {
       DRMRect excl_rect = va_arg(args, DRMRect);
       SetExclRect(req, excl_rect);
+    } break;
+
+    case DRMOps::PLANE_SET_SRC_RECT_EXT: {
+      DRMRect src_rect_extn = va_arg(args, DRMRect);
+      SetSrcExtnRect(req, src_rect_extn);
+    } break;
+
+    case DRMOps::PLANE_SET_DST_RECT_EXT: {
+      DRMRect dst_rect_extn = va_arg(args, DRMRect);
+      SetDstExtnRect(req, dst_rect_extn);
+    } break;
+
+    case DRMOps::PLANE_SET_IMG_SIZE_RECT: {
+      DRMRect img_size_rect = va_arg(args, DRMRect);
+      SetImgSizeRect(req, img_size_rect);
     } break;
 
     case DRMOps::PLANE_SET_ZORDER: {
@@ -1296,11 +1377,17 @@ void DRMPlane::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       DRM_LOGV("Plane %d: Setting rotation mask %x", obj_id, drm_rot_bit_mask);
     } break;
 
-    case DRMOps::PLANE_SET_ALPHA: {
+    case DRMOps::PLANE_SET_ALPHA:
+    case DRMOps::PLANE_SET_BG_ALPHA: {
       uint32_t alpha = va_arg(args, uint32_t);
       prop_id = prop_mgr_.GetPropertyId(DRMProperty::ALPHA);
+      std::string prop_name = "alpha";
+      if (code == DRMOps::PLANE_SET_BG_ALPHA) {
+        prop_id = prop_mgr_.GetPropertyId(DRMProperty::BG_ALPHA);
+        prop_name = "bg alpha";
+      }
       AddProperty(req, obj_id, prop_id, alpha, true /* cache */, tmp_prop_val_map_);
-      DRM_LOGV("Plane %d: Setting alpha %d", obj_id, alpha);
+      DRM_LOGV("Plane %d: Setting %s %d", obj_id, prop_name.c_str(), alpha);
     } break;
 
     case DRMOps::PLANE_SET_BLEND_TYPE: {
@@ -1468,6 +1555,13 @@ void DRMPlane::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
     case DRMOps::PLANE_SET_FP16_UNMULT_CONFIG: {
       uint32_t config = va_arg(args, uint32_t);
       SetFp16UnmultConfig(req, config);
+    } break;
+    case DRMOps::PLANE_SET_CAC_TYPE: {
+      if (!prop_mgr_.IsPropertyAvailable(DRMProperty::CAC_TYPE)) {
+        return;
+      }
+      DRMCacMode cac_mode = (DRMCacMode)va_arg(args, uint32_t);
+      SetCacType(req, cac_mode);
     } break;
 
 #ifdef UCSC_SUPPORTED
@@ -1649,6 +1743,27 @@ void DRMPlane::SetMultiRectMode(drmModeAtomicReq *req, DRMMultiRectMode drm_mult
     DRM_LOGD("Plane %d: Setting multirect_mode %d", obj_id, multirect_mode);
 }
 
+void DRMPlane::SetCacType(drmModeAtomicReq *req, DRMCacMode drm_cac_mode) {
+  uint32_t obj_id = drm_plane_->plane_id;
+  uint32_t cac_mode = CAC_NONE;
+  switch (drm_cac_mode) {
+    case DRMCacMode::CAC_MODE_DISABLED:
+      cac_mode = CAC_NONE;
+      break;
+    case DRMCacMode::CAC_MODE_UNPACK:
+      cac_mode = CAC_UNPACK;
+      break;
+    case DRMCacMode::CAC_MODE_FETCH:
+      cac_mode = CAC_FETCH;
+      break;
+    default:
+      DRM_LOGE("Invalid cac mode %s to set on plane %d", drm_cac_mode, obj_id);
+  }
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::CAC_TYPE);
+  AddProperty(req, obj_id, prop_id, cac_mode, true /* cache */, tmp_prop_val_map_);
+  DRM_LOGD("Plane %d: Setting cac mode %d", obj_id, cac_mode);
+}
+
 void DRMPlane::Unset(bool is_commit, drmModeAtomicReq *req) {
   DRM_LOGD("Plane %d: Unsetting from crtc %d", drm_plane_->plane_id, assigned_crtc_id_);
   PerformWrapper(DRMOps::PLANE_SET_FB_ID, req, 0);
@@ -1657,6 +1772,9 @@ void DRMPlane::Unset(bool is_commit, drmModeAtomicReq *req) {
   PerformWrapper(DRMOps::PLANE_SET_SRC_RECT, req, rect);
   PerformWrapper(DRMOps::PLANE_SET_DST_RECT, req, rect);
   PerformWrapper(DRMOps::PLANE_SET_EXCL_RECT, req, rect);
+  PerformWrapper(DRMOps::PLANE_SET_SRC_RECT_EXT, req, rect);
+  PerformWrapper(DRMOps::PLANE_SET_DST_RECT_EXT, req, rect);
+  PerformWrapper(DRMOps::PLANE_SET_IMG_SIZE_RECT, req, rect);
   if (plane_type_info_.inverse_pma) {
     PerformWrapper(DRMOps::PLANE_SET_INVERSE_PMA, req, 0);
   }

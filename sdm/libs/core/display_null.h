@@ -84,6 +84,9 @@ class DisplayNull : public DisplayInterface {
   virtual uint32_t GetAvailableMixerCount() { return 0; }
   virtual DisplayError GetDisplayId(int32_t *display_id);
   virtual DisplayError GetDisplayType(DisplayType *display_type);
+  virtual DisplayError PerformCacConfig(CacConfig config, bool enable) {
+    return kErrorNotSupported;
+  }
 
   MAKE_NO_OP(CommitOrPrepare(LayerStack *))
   MAKE_NO_OP(PrePrepare(LayerStack *))

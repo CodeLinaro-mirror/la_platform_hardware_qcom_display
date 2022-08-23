@@ -243,6 +243,11 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "SDE_SSPP_UCSC_GC_V1") { return DRMProperty::SDE_SSPP_UCSC_GC_V1; }
   if (name == "SDE_SSPP_UCSC_ALPHA_DITHER_V1") { return DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1; }
   if (name == "EPT") { return DRMProperty::EPT; }
+  if (name == "cac_type") { return DRMProperty::CAC_TYPE; }
+  if (name == "src_rect_extn") { return DRMProperty::SRC_RECT_EXT; }
+  if (name == "dst_rect_extn") { return DRMProperty::DST_RECT_EXT; }
+  if (name == "bg_alpha") { return DRMProperty::BG_ALPHA; }
+  if (name == "src_img_size") { return DRMProperty::IMG_SIZE_RECT; }
 
   return DRMProperty::INVALID;
 }

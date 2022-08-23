@@ -1358,6 +1358,14 @@ class DisplayInterface {
   */
   virtual DisplayError SetDemuraConfig(int demura_idx) = 0;
 
+  /*! @brief Method to handle CAC configuration.
+
+    @param[in] config \link CacConfig \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError PerformCacConfig(CacConfig config, bool enable) = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };

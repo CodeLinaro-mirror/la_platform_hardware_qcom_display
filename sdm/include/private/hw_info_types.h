@@ -288,6 +288,27 @@ enum SplashType {
   kSplashDemura,
 };
 
+enum HWPipeCacMode {
+  kModeDisabled,
+  kModeUnpack,
+  kModeFetch,
+};
+
+enum HWCacColorComponent {
+  kCacNone,
+  kCacRed,
+  kCacGreen,
+  kCacBlue,
+  kCacMax,
+};
+
+enum HWCacMode {
+  kCacModeNone,
+  kCacOneEye,
+  kCacTwoEyePortrait,
+  kCacTwoEyeLandscape,  // not supported
+};
+
 struct HWPipeCaps {
   PipeType type = kPipeTypeUnused;
   uint32_t id = 0;
@@ -302,6 +323,8 @@ struct HWPipeCaps {
   SplashType splash_type = kSplashNone;
   int32_t pipe_idx = -1;
   int32_t demura_block_capability = -1;
+  HWPipeCacMode cac_mode = kModeDisabled;
+  int32_t cac_parent_id = -1;
 };
 
 struct HWRotatorInfo {
@@ -347,6 +370,12 @@ enum InlineRotationVersion {
   kInlineRotationNone,
   kInlineRotationV1,
   kInlineRotationV2,
+};
+
+enum CacVersion {
+  kCacVersionNone,
+  kCacVersion1,
+  kCacVersion2,
 };
 
 struct InlineRotationInfo {
@@ -436,6 +465,7 @@ struct HWResourceInfo {
   bool has_noise_layer = false;
   uint32_t dsc_block_count = 0;
   uint32_t core_id = 0;
+  CacVersion cac_version = kCacVersionNone;
 };
 
 struct HWSplitInfo {
@@ -635,6 +665,21 @@ struct HWPlane {
   int32_t preload_y = 0;
   uint32_t src_width = 0;
   uint32_t src_height = 0;
+  // cac data
+  uint32_t cac_le_phase_init2_x = 0;
+  uint32_t cac_le_phase_init2_y = 0;
+  uint32_t cac_re_phase_init2_y = 0;
+  uint32_t cac_re_phase_init_y = 0;
+  uint32_t cac_le_thr_x = 0;
+  uint32_t cac_le_thr_y = 0;
+  uint32_t cac_re_thr_y = 0;
+  uint16_t cac_phase_inc_first_x = 0;
+  uint16_t cac_phase_inc_first_y = 0;
+  uint32_t cac_re_preload_y = 0;
+  uint16_t cac_le_inc_skip_x = 0;
+  uint16_t cac_le_inc_skip_y = 0;
+  uint16_t cac_re_inc_skip_x = 0;
+  uint16_t cac_re_inc_skip_y = 0;
 };
 
 struct HWCsc {
@@ -693,6 +738,14 @@ struct HWScaleData {
   uint32_t src_x_pre_down_scale_1 = 0;
   uint32_t src_y_pre_down_scale_0 = 0;
   uint32_t src_y_pre_down_scale_1 = 0;
+
+  // cac params
+  uint32_t cac_mode = 0;
+  uint32_t cac_dst_uv_w = 0;
+  uint32_t cac_dst_uv_h = 0;
+  uint32_t cac_le_dst_h_offset = 0;
+  uint32_t cac_le_dst_v_offset = 0;
+  uint32_t cac_re_dst_v_offset = 0;
 };
 
 struct HWDestScaleInfo {
@@ -742,9 +795,15 @@ struct HWPipeInfo {
   HWPipeInfo *pair = NULL;
   uint8_t rect = 255;
   uint32_t pipe_id = 0;
+  int32_t pipe_idx = -1;  // Pipe number in DPU, ex. 0 for DMA0/VIG0, 1 for DMA1/VIG1 etc.
   HWSubBlockType sub_block_type = kHWSubBlockMax;
+  LayerBlending cac_blend_type = kBlendingPremultiplied;
   LayerRect src_roi {};
   LayerRect dst_roi {};
+  LayerRect ext_src_roi {};
+  LayerRect ext_dst_roi {};
+  LayerRect img_roi {};
+  HWPipeCacMode cac_mode = kModeDisabled;
   LayerRect excl_rect {};  // exclusion rectangle per pipe rectangle
   uint8_t horizontal_decimation = 0;
   uint8_t vertical_decimation = 0;
@@ -762,6 +821,7 @@ struct HWPipeInfo {
   HWSrcTonemap tonemap = kSrcTonemapNone;
   LayerBufferFormat format = kFormatARGB8888;  // src format of the buffer
   bool is_solid_fill = false;
+  HWCacColorComponent cac_color = kCacNone;
 };
 
 struct HWSolidfillStage {
@@ -786,6 +846,7 @@ struct NoiseLayerConfig {
 struct HWLayerConfig {
   HWPipeInfo left_pipe {};           // pipe for left side of output
   HWPipeInfo right_pipe {};          // pipe for right side of output
+  std::vector<HWPipeInfo> tunnel_pipes = {};  // pipe info for tunnel pipes
   HWRotatorSession hw_rotator_session {};
   bool use_inline_rot = false;             // keep track of which layers inline rotation
   HWSolidfillStage hw_solidfill_stage {};
@@ -949,6 +1010,8 @@ struct LayerStackInfo {
   bool spr_enable = false;
   RCLayersInfo rc_layers_info = {};
   CommonStackInfo common_info = {};
+  bool enable_cac = false;  // This field hints to enable CAC
+  CacConfig cac_config = {};
   Handle comp_stack = nullptr;
   SelfRefreshState self_refresh_state = kSelfRefreshNone;
 };

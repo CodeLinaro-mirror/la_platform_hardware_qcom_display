@@ -199,6 +199,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError RetrieveDemuraTnFiles() override;
   DisplayError SetDemuraState(int state) override;
   DisplayError SetDemuraConfig(int demura_idx) override;
+  DisplayError PerformCacConfig(CacConfig config, bool enable) override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;
@@ -322,6 +323,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   Layer cwb_layer_ = {};
   bool lower_fps_ = false;
   bool cwb_buffer_initialized_ = false;
+  bool enable_cac_ = false;
+  CacConfig cac_config_ = {};
 };
 
 }  // namespace sdm
