@@ -118,6 +118,22 @@ void HWScaleDRM::SetScalerV2(const HWScaleData &scale_data, sde_drm_scaler_v2 *s
 
     scaler->src_width[i] = plane.src_width;
     scaler->src_height[i] = plane.src_height;
+
+    // cac params
+    scaler->cac_cfg.cac_le_phase_init2_x[i] = plane.cac_le_phase_init2_x;
+    scaler->cac_cfg.cac_le_phase_init2_y[i] = plane.cac_le_phase_init2_y;
+    scaler->cac_cfg.cac_re_phase_init2_y[i] = plane.cac_re_phase_init2_y;
+    scaler->cac_cfg.cac_re_phase_init_y[i] = plane.cac_re_phase_init_y;
+    scaler->cac_cfg.cac_le_thr_x[i] = plane.cac_le_thr_x;
+    scaler->cac_cfg.cac_le_thr_y[i] = plane.cac_le_thr_y;
+    scaler->cac_cfg.cac_re_thr_y[i] = plane.cac_re_thr_y;
+    scaler->cac_cfg.cac_re_preload_y[i] = plane.cac_re_preload_y;
+    scaler->cac_cfg.cac_phase_inc_first_x[i] = plane.cac_phase_inc_first_x;
+    scaler->cac_cfg.cac_phase_inc_first_y[i] = plane.cac_phase_inc_first_y;
+    scaler->cac_cfg.cac_le_inc_skip_x[i] = plane.cac_le_inc_skip_x;
+    scaler->cac_cfg.cac_le_inc_skip_y[i] = plane.cac_le_inc_skip_y;
+    scaler->cac_cfg.cac_re_inc_skip_x[i] = plane.cac_re_inc_skip_y;
+    scaler->cac_cfg.cac_re_inc_skip_y[i] = plane.cac_re_inc_skip_y;
   }
 
   scaler->dst_width = scale_data.dst_width;
@@ -167,6 +183,14 @@ void HWScaleDRM::SetScalerV2(const HWScaleData &scale_data, sde_drm_scaler_v2 *s
   scaler->pre_downscale_y_0 = scale_data.src_y_pre_down_scale_0;
   scaler->pre_downscale_y_1 = scale_data.src_y_pre_down_scale_1;
 #endif
+
+  // cac params
+  scaler->cac_cfg.cac_mode = scale_data.cac_mode;
+  scaler->cac_cfg.cac_dst_uv_w = scale_data.cac_dst_uv_w;
+  scaler->cac_cfg.cac_dst_uv_h = scale_data.cac_dst_uv_h;
+  scaler->cac_cfg.cac_le_dst_h_offset = scale_data.cac_le_dst_h_offset;
+  scaler->cac_cfg.cac_le_dst_v_offset = scale_data.cac_le_dst_v_offset;
+  scaler->cac_cfg.cac_re_dst_v_offset = scale_data.cac_re_dst_v_offset;
 
   return;
 }
