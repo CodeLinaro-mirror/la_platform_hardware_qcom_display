@@ -92,6 +92,7 @@ struct eventData;
 
 struct cec_node_t {
     int fd = -1;
+    int node_num = 0;
     const char *device = NULL;
     bool is_connected = false;
     unsigned caps = -1;
