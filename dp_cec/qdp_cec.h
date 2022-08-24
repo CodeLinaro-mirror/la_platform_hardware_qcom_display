@@ -92,33 +92,33 @@ struct eventData;
 
 struct cec_node_t {
     int fd = -1;
-    const char *device;
-    bool is_connected;
-    unsigned caps;
-    unsigned available_log_addrs;
-    unsigned num_log_addrs;
-    __u16 log_addr_mask;
-    __u16 phys_addr;
-    __u8 log_addr[CEC_MAX_LOG_ADDRS];
+    const char *device = NULL;
+    bool is_connected = false;
+    unsigned caps = -1;
+    unsigned available_log_addrs = -1;
+    unsigned num_log_addrs = -1;
+    __u16 log_addr_mask = -1;
+    __u16 phys_addr = -1;
+    __u8 log_addr[CEC_MAX_LOG_ADDRS] = {};
 };
 
 struct cec_context_t {
     hdmi_cec_device_t device;    // Device for HW module
     cec_node_t node;
     cec_callback_t callback;     // Struct storing callback object
-    bool enabled;
-    bool arc_enabled;
-    bool system_control;         // If true, HAL/driver handle CEC messages
+    bool enabled = false;
+    bool arc_enabled = false;
+    bool system_control = false;         // If true, HAL/driver handle CEC messages
     hdmi_port_info *port_info;   // HDMI port info
 
     // Logical address is stored in an array, the index of the array is the
     // logical address and the value in the index shows whether it is set or not
-    int logical_address[CEC_ADDR_BROADCAST];
+    int logical_address[CEC_ADDR_BROADCAST] = {};
     int prim_log_addr = CEC_ADDR_UNREGISTERED;
-    int version;
-    uint32_t vendor_id;
+    int version = -1;
+    uint32_t vendor_id = -1;
 
-    std::vector<pollfd> poll_fds;               // poll fds for cec message monitor and exit signal
+    std::vector<pollfd> poll_fds = {};               // poll fds for cec message monitor and exit signal
                                                 // on cec message monitor thread
     int exit_fd = -1;
     bool cec_exit_thread = false;
