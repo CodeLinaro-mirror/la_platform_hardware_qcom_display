@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -490,6 +491,14 @@ void HWDeviceDRM::InitializeConfigs() {
 
   uint32_t width = connector_info_.modes[current_mode_index_].mode.hdisplay;
   uint32_t height = connector_info_.modes[current_mode_index_].mode.vdisplay;
+
+  // For edp panel use case which only has one mode
+  if (connector_info_.modes.size() == 1) {
+    resolution_switch_enabled_ = true;
+    PopulateDisplayAttributes(0);
+    return;
+  }
+
   for (uint32_t i = 0; i < connector_info_.modes.size(); i++) {
     auto &mode = connector_info_.modes[i].mode;
     if (mode.hdisplay != width || mode.vdisplay != height) {
