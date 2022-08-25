@@ -834,7 +834,9 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
 
   // TODO(user): This clock should no longer be used as mode's pixel clock for RFI connectors.
   // Driver can expose list of dynamic pixel clocks, userspace needs to support dynamic change.
-  display_attributes_[index].clock_khz = mode.clock;
+  uint32_t submode_idx = connector_info_.modes[index].curr_submode_index;
+  display_attributes_[index].clock_khz =
+                          connector_info_.modes[index].sub_modes[submode_idx].pixel_clk_khz;
 
   // If driver doesn't return panel width/height information, default to 320 dpi
   if (INT(mm_width) <= 0 || INT(mm_height) <= 0) {
