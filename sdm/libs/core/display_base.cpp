@@ -1600,12 +1600,10 @@ DisplayError DisplayBase::PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_i
 
   cwb_fence_wait_ = false;
 
-  for (int i = 0; i < hw_layers_info.size(); i++) {
-    error = PostCommit(&hw_layers_info[i]);
-    if (error != kErrorNone) {
-      DLOGE("Post Commit failed %d", error);
-      return error;
-    }
+  error = PostCommit();
+  if (error != kErrorNone) {
+    DLOGE("Post Commit failed %d", error);
+    return error;
   }
 
   DLOGI_IF(kTagDisplay, "Exiting commit for display: %d-%d", display_id_, display_type_);
@@ -1622,7 +1620,7 @@ void DisplayBase::CleanupOnError() {
   }
 }
 
-DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
+DisplayError DisplayBase::PostCommit() {
   DTRACE_SCOPED();
   // Store retire fence to track commit start.
   CacheRetireFence();

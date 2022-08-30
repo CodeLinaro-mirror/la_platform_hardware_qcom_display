@@ -344,7 +344,7 @@ class DisplayBase : public DisplayInterface {
   DisplayError SetVSyncStateLocked(bool enable);
   virtual DisplayError SetUpCommit(LayerStack *layer_stack);
   DisplayError PerformCommit(std::vector<HWLayersInfo> &hw_layers_info);
-  virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
+  virtual DisplayError PostCommit();
   bool IsPrimaryDisplayLocked();
   virtual DisplayError CommitLocked(LayerStack *layer_stack);
   DisplayError ConfigureCwb(LayerStack *layer_stack);

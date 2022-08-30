@@ -753,8 +753,8 @@ DisplayError DisplayBuiltIn::CommitLocked(LayerStack *layer_stack) {
   return DisplayBase::CommitLocked(layer_stack);
 }
 
-DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
-  DisplayBase::PostCommit(hw_layers_info);
+DisplayError DisplayBuiltIn::PostCommit() {
+  DisplayBase::PostCommit();
 
   if (pending_brightness_) {
     Fence::Wait(retire_fence_);
