@@ -226,7 +226,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError CreatePanelfeatures();
   DisplayError CommitLocked(LayerStack *layer_stack) override;
   DisplayError SetUpCommit(LayerStack *layer_stack) override;
-  DisplayError PostCommit(HWLayersInfo *hw_layers_info) override;
+  DisplayError PostCommit() override;
   DisplayError GetQsyncFps(uint32_t *qsync_fps) override;
 
  private:

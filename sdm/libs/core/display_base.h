@@ -343,7 +343,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   DisplayError SetVSyncStateLocked(bool enable);
   virtual DisplayError SetUpCommit(LayerStack *layer_stack);
   DisplayError PerformCommit(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
-  virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
+  virtual DisplayError PostCommit();
   bool IsPrimaryDisplayLocked();
   virtual DisplayError CommitLocked(LayerStack *layer_stack);
   void ConfigureCwbParams(LayerStack *layer_stack);
