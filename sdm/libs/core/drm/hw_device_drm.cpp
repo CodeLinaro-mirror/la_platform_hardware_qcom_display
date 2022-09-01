@@ -1246,7 +1246,7 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
   if (hw_panel_info_.dpu_ctl_op_sync) {
     is_synchronous = true;
   }
-  int ret = NullCommit(is_synchronous, true /* retain_planes */);
+  int ret = NullCommit(is_synchronous, false /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d, dynamic_fps=%d, seamless_mode_switch_=%d, vrefresh_=%d,"
      "panel_mode_changed_=%d bit_clk_rate_=%d", ret, hw_panel_info_.dynamic_fps,
