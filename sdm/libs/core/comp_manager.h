@@ -64,6 +64,7 @@
 #include <core/display_interface.h>
 #include <private/extension_interface.h>
 #include <utils/locker.h>
+#include<limits.h>
 #include <bitset>
 #include <set>
 #include <vector>
@@ -79,21 +80,18 @@ namespace sdm {
 
 class CompManager {
  public:
-  DisplayError Init(const HWResourceInfo &hw_res_info_, ExtensionInterface *extension_intf,
+  DisplayError Init(const std::vector<HWResourceInfo> &hw_res_info_,
+                    ExtensionInterface *extension_intf,
                     BufferAllocator *buffer_allocator, SocketHandler *socket_handler);
   DisplayError Deinit();
-  DisplayError RegisterDisplay(int32_t display_id, DisplayType type,
-                               const HWDisplayAttributes &display_attributes,
-                               const HWPanelInfo &hw_panel_info,
-                               const HWMixerAttributes &mixer_attributes,
-                               const DisplayConfigVariableInfo &fb_config, Handle *display_ctx,
-                               HWQosData *qos_data);
+  DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
+                               DisplayDeviceContext &device_ctx,
+                               DisplayClientContext &client_ctx, Handle *display_ctx,
+                               std::vector<HWQosData> *default_qos_data);
   DisplayError UnregisterDisplay(Handle display_ctx);
-  DisplayError ReconfigureDisplay(Handle display_ctx, const HWDisplayAttributes &display_attributes,
-                                  const HWPanelInfo &hw_panel_info,
-                                  const HWMixerAttributes &mixer_attributes,
-                                  const DisplayConfigVariableInfo &fb_config,
-                                  HWQosData *qos_data);
+  DisplayError ReconfigureDisplay(Handle display_ctx, DisplayDeviceContext &device_ctx,
+                                  DisplayClientContext &client_ctx,
+                                  std::vector<HWQosData> *default_qos_data);
   DisplayError PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Commit(Handle display_ctx, DispLayerStack *disp_layer_stack);
@@ -126,14 +124,14 @@ class CompManager {
   DisplayError CheckEnforceSplit(Handle comp_handle, uint32_t new_refresh_rate);
   DppsControlInterface* GetDppsControlIntf();
   bool CheckResourceState(Handle display_ctx, bool *res_exhausted, HWDisplayAttributes attr);
-  DisplayError GetConcurrencyFps(DisplayConcurrencyType type, float *fps);
+  DisplayError GetConcurrencyFps(Handle display_ctx, DisplayConcurrencyType type, float *fps);
   bool IsRotatorSupportedFormat(LayerBufferFormat format);
   DisplayError SetDrawMethod(Handle display_ctx, const DisplayDrawMethod &draw_method);
   DisplayError FreeDemuraFetchResources(const uint32_t &display_id);
-  DisplayError GetDemuraFetchResourceCount(std::map<uint32_t, uint8_t> *fetch_resource_cnt);
+  DisplayError GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt);
   DisplayError ReserveDemuraFetchResources(const uint32_t &display_id,
                                            const int8_t &preferred_rect);
-  DisplayError GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl);
+  DisplayError GetDemuraFetchResources(Handle display_ctx, std::vector<FetchResourceList> *frl);
   void SetDemuraStatus(bool status);
   bool GetDemuraStatus();
   void SetDemuraStatusForDisplay(const int32_t &display_id, bool status);
@@ -144,7 +142,7 @@ class CompManager {
   DisplayError SetBacklightLevel(Handle display_ctx, const uint32_t &backlight_level);
   DisplayError GetHDR10PlusCapability(bool *hdr_plus_support);
   DisplayError ForceToneMapConfigure(Handle display_ctx, DispLayerStack *disp_layer_stack);
-  DisplayError GetDefaultQosData(Handle display_ctx, HWQosData *qos_data);
+  DisplayError GetDefaultQosData(Handle display_ctx, std::vector<HWQosData> *default_qos_data);
   DisplayError HandleCwbFrequencyBoost(bool isRequest);
 
  private:
@@ -159,7 +157,7 @@ class CompManager {
     Strategy *strategy = NULL;
     StrategyConstraints constraints;
     Handle display_resource_ctx = NULL;
-    int32_t display_id = -1;
+    DisplayId display_id = {};
     DisplayType display_type = kBuiltIn;
     uint32_t max_strategies = 0;
     uint32_t remaining_strategies = 0;
@@ -181,7 +179,7 @@ class CompManager {
   bool safe_mode_ = false;              // Flag to notify all displays to be in resource crunch
                                         // mode, where strategy manager chooses the best strategy
                                         // that uses optimal number of pipes for each display
-  HWResourceInfo hw_res_info_;
+  std::vector<HWResourceInfo> hw_res_info_;
   BufferAllocator *buffer_allocator_ = NULL;
   ExtensionInterface *extension_intf_ = NULL;
   CapabilitiesInterface *cap_intf_ = nullptr;

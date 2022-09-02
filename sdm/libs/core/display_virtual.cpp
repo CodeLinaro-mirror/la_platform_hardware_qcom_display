@@ -22,9 +22,16 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <algorithm>
+#include <vector>
 #include "display_virtual.h"
 #include "hw_interface.h"
 #include "hw_info_interface.h"
@@ -33,14 +40,15 @@
 
 namespace sdm {
 
-DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(kVirtual, event_handler, kDeviceVirtual, buffer_allocator,
                 comp_manager, hw_info_intf) {
 }
 
-DisplayVirtual::DisplayVirtual(int32_t display_id, DisplayEventHandler *event_handler,
-                               HWInfoInterface *hw_info_intf,
+DisplayVirtual::DisplayVirtual(DisplayId display_id, DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(display_id, kVirtual, event_handler, kDeviceVirtual,
                 buffer_allocator, comp_manager, hw_info_intf) {
@@ -49,27 +57,42 @@ DisplayVirtual::DisplayVirtual(int32_t display_id, DisplayEventHandler *event_ha
 DisplayError DisplayVirtual::Init() {
   ClientLock lock(disp_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kVirtual, hw_info_intf_,
-                                           buffer_allocator_, &hw_intf_);
+  DisplayError error = kErrorNone;
+  dpu_core_mux_ = new DPUCoreMux(display_id_info_, kVirtual, hw_info_intf_, buffer_allocator_);
 
   if (error != kErrorNone) {
     return error;
   }
 
-  if (-1 == display_id_) {
-    hw_intf_->GetDisplayId(&display_id_);
+  dpu_core_mux_->GetHWInterface(&hw_intf_);
+
+  if (-1 == display_id_info_.GetDisplayId()) {
+    dpu_core_mux_->GetDisplayId(&display_id_);
+    display_id_info_ = DisplayId(primary_core_id_, display_id_);
+    display_id_ = display_id_info_.GetDisplayId();
   }
 
-  if (hw_info_intf_) {
+  for (auto info_intf : hw_info_intf_) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-    auto max_mixer_stages = hw_resource_info.num_blending_stages;
-    int property_value = Debug::GetMaxPipesPerMixer(display_type_);
-    if (property_value >= 0) {
-      max_mixer_stages = std::min(UINT32(property_value), hw_resource_info.num_blending_stages);
-    }
-    DisplayBase::SetMaxMixerStages(max_mixer_stages);
+    info_intf->GetHWResourceInfo(&hw_resource_info);
+    hw_resource_info_.push_back(hw_resource_info);
   }
+
+  uint32_t max_mixer_stages = INT_MAX;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    max_mixer_stages = std::min(max_mixer_stages, hw_resource_info_[i].num_blending_stages);
+  }
+
+  int property_value = Debug::GetMaxPipesPerMixer(display_type_);
+  if (property_value >= 0) {
+    max_mixer_stages = std::min(UINT32(property_value), max_mixer_stages);
+  }
+  DisplayBase::SetMaxMixerStages(max_mixer_stages);
 
   int value = 0;
   Debug::Get()->GetProperty(DISABLE_MITIGATED_FPS, &value);
@@ -88,7 +111,8 @@ DisplayError DisplayVirtual::Deinit() {
   DisplayError error = DisplayBase::Deinit();
   float fps = 0;
   if (async_vds_creation_ && !disable_mitigated_fps_) {
-    comp_manager_->GetConcurrencyFps(DisplayConcurrencyType::kConcurrencyWfd, &fps);
+    comp_manager_->GetConcurrencyFps(display_comp_ctx_,
+                                     DisplayConcurrencyType::kConcurrencyWfd, &fps);
     if (fps != 0.0) {
       event_handler_->NotifyFpsMitigation(fps, DisplayConcurrencyType::kConcurrencyWfd, false);
     }
@@ -104,7 +128,7 @@ DisplayError DisplayVirtual::GetNumVariableInfoConfigs(uint32_t *count) {
 
 DisplayError DisplayVirtual::GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
-  *variable_info = display_attributes_;
+  *variable_info = client_ctx_.display_attributes;
   return kErrorNone;
 }
 
@@ -122,51 +146,65 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
   }
 
   DisplayError error = kErrorNone;
-  HWDisplayAttributes display_attributes;
-  HWMixerAttributes mixer_attributes;
-  HWPanelInfo hw_panel_info = {};
-  DisplayConfigVariableInfo fb_config = fb_config_;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+  client_ctx = client_ctx_;
+  device_ctx = device_ctx_;
 
-  display_attributes.x_pixels = variable_info->x_pixels;
-  display_attributes.y_pixels = variable_info->y_pixels;
-  display_attributes.fps = variable_info->fps;
+  client_ctx.display_attributes.x_pixels = variable_info->x_pixels;
+  client_ctx.display_attributes.y_pixels = variable_info->y_pixels;
+  client_ctx.display_attributes.fps = variable_info->fps;
 
-  if (display_attributes == display_attributes_) {
+  if (client_ctx.display_attributes == client_ctx_.display_attributes) {
     return kErrorNone;
   }
 
-  error = hw_intf_->SetDisplayAttributes(display_attributes);
+  error = dpu_core_mux_->SetDisplayAttributes(client_ctx.display_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
-  hw_intf_->GetHWPanelInfo(&hw_panel_info);
-
-  if (set_max_lum_ != -1.0 || set_min_lum_ != -1.0) {
-    hw_panel_info.peak_luminance = set_max_lum_;
-    hw_panel_info.blackness_level = set_min_lum_;
-    DLOGI("set peak_luminance %f blackness_level %f", hw_panel_info.peak_luminance,
-          hw_panel_info.blackness_level);
+  for (int i = 0; i < core_count_; i++) {
+    device_ctx[i].display_attributes = client_ctx.display_attributes;
+    device_ctx[i].display_attributes.x_pixels = client_ctx.display_attributes.x_pixels /
+                                                core_count_;
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes);
+  dpu_core_mux_->GetHWPanelInfo(&device_ctx, &client_ctx);
+
+  if (set_max_lum_ != -1.0 || set_min_lum_ != -1.0) {
+    client_ctx.hw_panel_info.peak_luminance = set_max_lum_;
+    client_ctx.hw_panel_info.blackness_level = set_min_lum_;
+    DLOGI("set peak_luminance %f blackness_level %f", client_ctx.hw_panel_info.peak_luminance,
+          client_ctx.hw_panel_info.blackness_level);
+  }
+
+  for (int i = 0; i < core_count_; i++) {
+    device_ctx[i].hw_panel_info.peak_luminance = set_max_lum_;
+    device_ctx[i].hw_panel_info.blackness_level = set_min_lum_;
+  }
+
+  error = dpu_core_mux_->GetMixerAttributes(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
   // fb_config will be updated only once after creation of virtual display
-  if (fb_config.x_pixels == 0 || fb_config.y_pixels == 0) {
-    fb_config = display_attributes;
+  if (client_ctx.fb_config.x_pixels == 0 || client_ctx.fb_config.y_pixels == 0) {
+    error = dpu_core_mux_->GetFbConfig(client_ctx.display_attributes.x_pixels,
+                                       client_ctx.display_attributes.y_pixels,
+                                       &device_ctx, &client_ctx);
+      if (error != kErrorNone) {
+        return error;
+      }
   }
 
   // if display is already connected, reconfigure the display with new configuration.
   if (!display_comp_ctx_) {
-    error = comp_manager_->RegisterDisplay(display_id_, display_type_, display_attributes,
-                                           hw_panel_info, mixer_attributes, fb_config,
+    error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, device_ctx, client_ctx,
                                            &display_comp_ctx_, &cached_qos_data_);
   } else {
-    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes, hw_panel_info,
-                                              mixer_attributes, fb_config,
+    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx, client_ctx,
                                               &cached_qos_data_);
   }
   if (error != kErrorNone) {
@@ -175,21 +213,22 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
 
   if (async_vds_creation_ && !disable_mitigated_fps_) {
     float fps = 0;
-    comp_manager_->GetConcurrencyFps(DisplayConcurrencyType::kConcurrencyWfd, &fps);
+    comp_manager_->GetConcurrencyFps(display_comp_ctx_,
+                                     DisplayConcurrencyType::kConcurrencyWfd, &fps);
     if (fps != 0.0) {
       event_handler_->NotifyFpsMitigation(fps, DisplayConcurrencyType::kConcurrencyWfd, true);
     }
   }
 
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
-  display_attributes_ = display_attributes;
-  mixer_attributes_ = mixer_attributes;
-  hw_panel_info_ = hw_panel_info;
-  fb_config_ = fb_config;
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
 
-  DLOGI("Virtual display resolution changed to[%dx%d]", display_attributes_.x_pixels,
-        display_attributes_.y_pixels);
+  DLOGI("Virtual display resolution changed to[%dx%d]", client_ctx_.display_attributes.x_pixels,
+        client_ctx_.display_attributes.y_pixels);
 
   return kErrorNone;
 }
@@ -208,7 +247,7 @@ DisplayError DisplayVirtual::Prepare(LayerStack *layer_stack) {
 
   // Clean display layer stack for reuse.
   disp_layer_stack_ = DispLayerStack();
-
+  disp_layer_stack_.info.resize(core_count_, {});
   return DisplayBase::Prepare(layer_stack);
 }
 

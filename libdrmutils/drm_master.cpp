@@ -56,42 +56,68 @@ using std::fill;
 
 namespace drm_utils {
 
-DRMMaster *DRMMaster::s_instance = nullptr;
+sdm::MultiCoreInstance<uint32_t, DRMMaster*> DRMMaster::s_instance;
 mutex DRMMaster::s_lock;
 
-int DRMMaster::GetInstance(DRMMaster **master) {
+int DRMMaster::GetInstance(DRMMaster **master, uint32_t core_id) {
   lock_guard<mutex> obj(s_lock);
 
-  if (!s_instance) {
-    s_instance = new DRMMaster();
-    if (s_instance->Init() < 0) {
-      delete s_instance;
-      s_instance = nullptr;
+  auto iter = s_instance.Find(core_id);
+  if (iter == s_instance.End()) {
+    DRMMaster *new_master = new DRMMaster();
+    if (new_master->Init(core_id) < 0) {
+      delete new_master;
       return -ENODEV;
     }
+    s_instance[core_id] = new_master;
+    *master = new_master;
+  } else {
+    *master = iter->second;
   }
 
-  *master = s_instance;
   return 0;
 }
 
-void DRMMaster::DestroyInstance() {
+void DRMMaster::DestroyInstance(uint32_t core_id) {
   lock_guard<mutex> obj(s_lock);
-  delete s_instance;
-  s_instance = nullptr;
+
+  auto iter = s_instance.Find(core_id);
+  if (iter != s_instance.End()) {
+    delete iter->second;
+    s_instance.Erase(iter);
+  }
 }
 
-int DRMMaster::Init() {
+int DRMMaster::Init(uint32_t core_id) {
+  lock_guard<mutex> obj(lock_);
   uint8_t retry = 0;
   do {
-    dev_fd_ = drmOpen("msm_drm", nullptr);
-    if(dev_fd_ < 0) {
-      DRM_LOGW("drmOpen failed with error %d, retry %d", dev_fd_, retry);
+    if (core_id == 0) {
+      dev_fd_ = drmOpen("msm_drm", nullptr);
+      if(dev_fd_ < 0) {
+        DRM_LOGW("drmOpen failed with error %d, retry %d", dev_fd_, retry);
+        if (retry >= MAX_RETRY) {
+          return -ENODEV;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      continue;
+    }
+
+    int fd;
+
+    snprintf(path_, sizeof(path_), "/dev/dri/card%d", core_id);
+    fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+    if (fd < 0) {
+      DRM_LOGI("drmOpen failed with error %d for card %d, retry %d", fd, core_id, retry);
       if (retry >= MAX_RETRY) {
         return -ENODEV;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    } else {
+      dev_fd_ = fd;
+      core_id_ = core_id;
     }
+
   } while(dev_fd_ < 0 && retry++ < MAX_RETRY);
 
   return 0;
@@ -158,6 +184,14 @@ bool DRMMaster::IsRmFbRefCounted() {
   return true;
 #endif
   return false;
+}
+
+void DRMMaster::CreateEventHandle(int *fd) {
+  if (core_id_ == 0) {
+    *fd = drmOpen("msm_drm", nullptr);
+  } else {
+    *fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+  }
 }
 
 }  // namespace drm_utils

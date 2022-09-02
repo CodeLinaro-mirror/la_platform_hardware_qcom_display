@@ -73,7 +73,7 @@ namespace sdm {
 
 class HWInfoInterface {
  public:
-  static DisplayError Create(HWInfoInterface **intf);
+  static DisplayError Create(std::vector<HWInfoInterface*> *intfs);
   static DisplayError Destroy(HWInfoInterface *intf);
   virtual DisplayError Init() = 0;
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;
@@ -84,8 +84,10 @@ class HWInfoInterface {
                        std::map<uint32_t, uint8_t> *required_demura_fetch_cnt) = 0;
   virtual DisplayError GetDemuraPanelIds(std::vector<uint64_t> *panel_ids) = 0;
   virtual DisplayError GetPanelBootParamString(std::string *panel_boot_param_string) = 0;
+  virtual uint32_t GetCoreId() = 0;
  protected:
   virtual ~HWInfoInterface() { }
+  static const int kMaxCore = 12;
 };
 
 }  // namespace sdm

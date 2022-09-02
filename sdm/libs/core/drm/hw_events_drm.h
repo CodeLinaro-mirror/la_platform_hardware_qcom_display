@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_EVENTS_DRM_H__
 #define __HW_EVENTS_DRM_H__
 
@@ -43,6 +49,7 @@
 #include "hw_events_interface.h"
 #include "hw_interface.h"
 #include "hw_device_drm.h"
+#include "dpu_core_mux.h"
 
 namespace sdm {
 
@@ -50,8 +57,9 @@ using std::vector;
 
 class HWEventsDRM : public HWEventsInterface {
  public:
-  virtual DisplayError Init(int display_id, DisplayType display_type, HWEventHandler *event_handler,
-                            const vector<HWEvent> &event_list, const HWInterface *hw_intf);
+  virtual DisplayError Init(DisplayId display_id, DisplayType display_type,
+                            HWEventHandler *event_handler, const vector<HWEvent> &event_list,
+                            const DPUCoreMux *hw_intf);
   virtual DisplayError Deinit();
   virtual DisplayError SetEventState(HWEvent event, bool enable, void *aux = nullptr);
 
@@ -98,6 +106,7 @@ class HWEventsDRM : public HWEventsInterface {
   DisplayError RegisterMMRM(bool enable);
   DisplayError RegisterPowerEvents(bool enable);
   DisplayError RegisterVmReleaseEvents(bool enable);
+  void HandleDRMOpen(int& fd);
 
   HWEventHandler *event_handler_{};
   vector<HWEventData> event_data_list_{};
@@ -126,6 +135,8 @@ class HWEventsDRM : public HWEventsInterface {
   uint32_t mmrm_index_ = UINT32_MAX;
   uint32_t power_event_index_ = UINT32_MAX;
   uint32_t vm_release_event_index_ = UINT32_MAX;
+  std::bitset<8> core_id_map_ = 0;
+  char path_[64];
 };
 
 }  // namespace sdm

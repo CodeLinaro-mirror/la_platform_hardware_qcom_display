@@ -82,6 +82,7 @@
 #include "comp_manager.h"
 #include "color_manager.h"
 #include "hw_events_interface.h"
+#include "dpu_core_mux.h"
 
 #define GET_PANEL_FEATURE_FACTORY "GetPanelFeatureFactoryIntf"
 
@@ -99,10 +100,10 @@ class DisplayBase : public DisplayInterface {
  public:
   DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, HWInfoInterface *hw_info_intf);
-  DisplayBase(int32_t display_id, DisplayType display_type, DisplayEventHandler *event_handler,
+              CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf);
+  DisplayBase(DisplayId display_id, DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, HWInfoInterface *hw_info_intf);
+              CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf);
   virtual ~DisplayBase();
   virtual DisplayError Init();
   virtual DisplayError Deinit();
@@ -188,6 +189,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError SetDetailEnhancerData(const DisplayDetailEnhancerData &de_data);
   virtual DisplayError GetDisplayPort(DisplayPort *port);
   virtual DisplayError GetDisplayId(int32_t *display_id);
+  virtual DisplayError GetConnectorId(int32_t *conn_id);
   virtual DisplayError GetDisplayType(DisplayType *display_type);
   virtual bool IsPrimaryDisplay();
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
@@ -259,6 +261,9 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError ForceToneMapUpdate(LayerStack *layer_stack);
+  virtual bool HasNoiseLayer();
+  virtual bool HasConcurrentWriteback();
+  virtual bool HasSrcTonemap();
 
  protected:
   struct DisplayMutex {
@@ -338,7 +343,7 @@ class DisplayBase : public DisplayInterface {
   void CheckMMRMState();
   DisplayError SetVSyncStateLocked(bool enable);
   virtual DisplayError SetUpCommit(LayerStack *layer_stack);
-  DisplayError PerformCommit(HWLayersInfo *hw_layers_info);
+  DisplayError PerformCommit(std::vector<HWLayersInfo> &hw_layers_info);
   virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
   bool IsPrimaryDisplayLocked();
   virtual DisplayError CommitLocked(LayerStack *layer_stack);
@@ -353,13 +358,14 @@ class DisplayBase : public DisplayInterface {
 
   DisplayMutex disp_mutex_;
   std::thread commit_thread_;
+  DisplayId display_id_info_ = {};
   int32_t display_id_ = -1;
   DisplayType display_type_;
   DisplayEventHandler *event_handler_ = NULL;
   HWDeviceType hw_device_type_;
+  DPUCoreMux *dpu_core_mux_ = NULL;
   HWInterface *hw_intf_ = NULL;
-  HWPanelInfo hw_panel_info_;
-  HWResourceInfo hw_resource_info_ = {};
+  std::vector<HWResourceInfo> hw_resource_info_;
   BufferAllocator *buffer_allocator_ {};
   CompManager *comp_manager_ = NULL;
   DisplayState state_ = kStateOff;
@@ -370,7 +376,10 @@ class DisplayBase : public DisplayInterface {
   bool needs_validate_ = true;  // maintains validation state between Prepare/Commit Cycle
   bool vsync_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
-  HWInfoInterface *hw_info_intf_ = NULL;
+  std::vector<HWInfoInterface*> hw_info_intf_;
+  std::bitset<32> core_id_;
+  uint32_t primary_core_id_ = 0;
+  int core_count_ = 0;
   ColorManagerProxy *color_mgr_ = NULL;  // each display object owns its ColorManagerProxy
   bool partial_update_control_ = true;
   HWEventsInterface *hw_events_intf_ = NULL;
@@ -387,9 +396,6 @@ class DisplayBase : public DisplayInterface {
   typedef std::map<std::string, AttrVal> ColorModeAttrMap;
   ColorModeAttrMap color_mode_attr_map_ = {};
   std::vector<PrimariesTransfer> color_modes_cs_ = {};  // Gamut+Gamma(color space) of color mode
-  HWDisplayAttributes display_attributes_ = {};
-  HWMixerAttributes mixer_attributes_ = {};
-  DisplayConfigVariableInfo fb_config_ = {};
   uint32_t req_mixer_width_ = 0;
   uint32_t req_mixer_height_ = 0;
   std::string current_color_mode_ = "hal_native";
@@ -397,8 +403,8 @@ class DisplayBase : public DisplayInterface {
   int disable_hw_recovery_dump_ = 0;
   uint32_t hw_recovery_count_ = 0;
   uint32_t hw_recovery_threshold_ = 1;
-  HWQosData cached_qos_data_;
-  uint32_t default_clock_hz_ = 0;
+  std::vector<HWQosData> cached_qos_data_;
+  std::vector<uint32_t> default_clock_hz_;
   bool drop_hw_vsync_ = false;
   uint32_t current_refresh_rate_ = 0;
   bool drop_skewed_vsync_ = false;
@@ -434,6 +440,8 @@ class DisplayBase : public DisplayInterface {
   bool pending_commit_ = false;
   uint32_t active_refresh_rate_ = 0;
   bool disable_cwb_idle_fallback_ = false;
+  DisplayClientContext client_ctx_ = {};
+  DisplayDeviceContext device_ctx_;
 
  private:
   // Max tolerable power-state-change wait-times in milliseconds.
@@ -447,7 +455,7 @@ class DisplayBase : public DisplayInterface {
   DisplayError GetNoisePluginParams(LayerStack *layer_stack);
   DisplayError InsertNoiseLayer(LayerStack *layer_stack);
   void WaitForCompletion(SyncPoints *sync_points);
-  DisplayError PerformHwCommit(HWLayersInfo *hw_layers_info);
+  DisplayError PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_info);
   void CacheRetireFence();
   void CacheFrameBuffer();
   void CacheDisplayComposition();
@@ -475,7 +483,7 @@ class DisplayBase : public DisplayInterface {
   uint32_t retire_fence_offset_ = 0;
   std::mutex power_mutex_;
   std::condition_variable cv_;
-  LayerBuffer cached_framebuffer_ = {};
+  std::vector<LayerBuffer> cached_framebuffer_ = {};
   Layer noise_layer_ = {};
   DisplayError ConfigureCwbForIdleFallback(LayerStack *layer_stack);
   bool cwb_fence_wait_ = false;

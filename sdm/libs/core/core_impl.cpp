@@ -69,6 +69,7 @@
 #include <map>
 #include <vector>
 #include <thread>
+#include <utility>
 
 #include "color_manager.h"
 #include "core_impl.h"
@@ -120,9 +121,12 @@ DisplayError CoreImpl::Init() {
     goto CleanupOnError;
   }
 
-  error = hw_info_intf_->GetHWResourceInfo(&hw_resource_);
-  if (error != kErrorNone) {
-    goto CleanupOnError;
+  for (auto hw_info : hw_info_intf_) {
+    HWResourceInfo hw_resource;
+    error = hw_info->GetHWResourceInfo(&hw_resource);
+    if (error != kErrorNone)
+      goto CleanupOnError;
+    hw_resource_.push_back(hw_resource);
   }
 
   InitializeSDMUtils();
@@ -140,17 +144,16 @@ DisplayError CoreImpl::Init() {
   }
 
   // Populate hw_displays_info_ once.
-  error = hw_info_intf_->GetDisplaysStatus(&hw_displays_info_);
-  if (error != kErrorNone) {
-    DLOGW("Failed getting displays status. Error = %d", error);
-  }
+  GetDisplaysStatus(&hw_displays_info_);
+
+  // To-Do: Find primary card id, needed by GetFirstDisplayOnterfaceType
 
   // Must only call after GetDisplaysStatus
 #ifndef TRUSTED_VM
   if (ReserveDemuraResources() != kErrorNone) {
     comp_mgr_.SetDemuraStatus(false);
   }
-  vm_cb_intf_ = new CoreIPCVmCallbackImpl(ipc_intf_, pm_intf_, hw_info_intf_);
+  vm_cb_intf_ = new CoreIPCVmCallbackImpl(ipc_intf_, pm_intf_, hw_info_intf_[0]);
   if (vm_cb_intf_) {
     vm_cb_intf_->Init();
   }
@@ -159,9 +162,11 @@ DisplayError CoreImpl::Init() {
   return kErrorNone;
 
 CleanupOnError:
-  if (hw_info_intf_) {
-    HWInfoInterface::Destroy(hw_info_intf_);
+  for (auto hw_info : hw_info_intf_) {
+    HWInfoInterface::Destroy(hw_info);
   }
+  hw_info_intf_.clear();
+  hw_resource_.clear();
 
   return error;
 }
@@ -190,7 +195,10 @@ DisplayError CoreImpl::Deinit() {
   ColorManagerProxy::Deinit();
 
   comp_mgr_.Deinit();
-  HWInfoInterface::Destroy(hw_info_intf_);
+  for (auto hw_info : hw_info_intf_) {
+    HWInfoInterface::Destroy(hw_info);
+  }
+  hw_info_intf_.clear();
 #ifdef TRUSTED_VM
   // release free memory from the heap, needed for Trusted_VM due to the limited
   // carveout size
@@ -249,7 +257,16 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
     return kErrorParameters;
   }
 
-  auto iter = hw_displays_info_.find(display_id);
+  DisplayId disp_id = DisplayId(display_id);
+  uint32_t core_count = (std::bitset<32> (disp_id.GetCoreIdMap())).count();
+
+  // ToDo(devanshi): Fix when enabling virtual driver for dual core
+  if (disp_id.GetDisplayId() != 0 && core_count == 0) {
+    disp_id = DisplayId(0, display_id);
+    core_count = 1;
+  }
+
+  auto iter = hw_displays_info_.find(disp_id.GetDisplayId());
 
   if (iter == hw_displays_info_.end()) {
     DLOGE("Spurious display id %d", display_id);
@@ -259,17 +276,21 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
   DisplayBase *display_base = NULL;
   DisplayType display_type = iter->second.display_type;
 
+  if (core_count > hw_info_intf_.size()) {
+    return kErrorCriticalResource;
+  }
+
   switch (display_type) {
     case kBuiltIn:
-      display_base = new DisplayBuiltIn(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayBuiltIn(disp_id, event_handler, hw_info_intf_,
                                         buffer_allocator_, &comp_mgr_, ipc_intf_);
       break;
     case kPluggable:
-      display_base = new DisplayPluggable(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayPluggable(disp_id, event_handler, hw_info_intf_,
                                           buffer_allocator_, &comp_mgr_);
       break;
     case kVirtual:
-      display_base = new DisplayVirtual(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayVirtual(disp_id, event_handler, hw_info_intf_,
                                         buffer_allocator_, &comp_mgr_);
       break;
     default:
@@ -314,22 +335,63 @@ DisplayError CoreImpl::SetMaxBandwidthMode(HWBwModes mode) {
 
 DisplayError CoreImpl::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
   SCOPE_LOCK(locker_);
-  return hw_info_intf_->GetFirstDisplayInterfaceType(hw_disp_info);
+  return hw_info_intf_[0]->GetFirstDisplayInterfaceType(hw_disp_info);
 }
 
 DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
-  SCOPE_LOCK(locker_);
-  DisplayError error = hw_info_intf_->GetDisplaysStatus(hw_displays_info);
-  if (kErrorNone == error) {
-    // Needed for error-checking in CreateDisplay(int32_t display_id, ...) and getting display-type.
-    hw_displays_info_ = *hw_displays_info;
+  hw_displays_info->clear();
+  // Needed for error-checking in CreateDisplay(int32_t display_id, ...) and getting display-type.
+  for (auto hw_info : hw_info_intf_) {
+    HWDisplaysInfo display_infos;
+    DisplayError error = hw_info->GetDisplaysStatus(&display_infos);
+    if (error)
+      return error;
+    hw_displays_info->insert(display_infos.begin(), display_infos.end());
   }
-  return error;
+
+  // To-Do: Merge two display ids if the one display has two DPU
+  std::map<uint32_t , std::pair<int32_t, HWDisplayInfo>> conn_to_dispinfo;
+  for (auto disp_id_to_disp_info_pair : *hw_displays_info) {
+    uint32_t disp_id = disp_id_to_disp_info_pair.first;
+    uint32_t conn_id = DisplayId(disp_id).GetConnId();
+
+    if (conn_to_dispinfo.find(conn_id) == conn_to_dispinfo.end()) {
+    conn_to_dispinfo[conn_id] = disp_id_to_disp_info_pair;
+    continue;
+    }
+
+    uint32_t cached_disp_id = conn_to_dispinfo[conn_id].first;
+    HWDisplayInfo cached_disp_info = conn_to_dispinfo[conn_id].second;
+    cached_disp_info.display_id = disp_id | cached_disp_id;
+
+    conn_to_dispinfo[conn_id] = std::make_pair(disp_id | cached_disp_id, cached_disp_info);
+  }
+
+  hw_displays_info->clear();
+  for (auto val : conn_to_dispinfo) {
+    hw_displays_info->insert(val.second);
+  }
+
+  hw_displays_info_ = *hw_displays_info;
+
+  return kErrorNone;
 }
 
 DisplayError CoreImpl::GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) {
   SCOPE_LOCK(locker_);
-  return hw_info_intf_->GetMaxDisplaysSupported(type, max_displays);
+
+  // ToDo: Revisit this avoid creating duplicate slot in dual core case
+  *max_displays = 0;
+  for (auto hw_info : hw_info_intf_) {
+    int32_t tmp;
+    DisplayError error = hw_info->GetMaxDisplaysSupported(type, &tmp);
+    if (error)
+      return error;
+
+    *max_displays += tmp;
+  }
+
+  return kErrorNone;
 }
 
 bool CoreImpl::IsRotatorSupportedFormat(LayerBufferFormat format) {
@@ -346,7 +408,9 @@ void CoreImpl::InitializeSDMUtils() {
   }
 
   sdm_utils_factory_intf_ = get_sdm_utils_f_ptr();
-  sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_);
+  for (int i = 0; i < hw_resource_.size(); i++) {
+    sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[i], i);
+  }
 }
 
 void CoreImpl::OverRideDemuraPanelIds(std::vector<uint64_t> *panel_ids) {
@@ -411,11 +475,28 @@ DisplayError CoreImpl::ReserveDemuraResources() {
     DLOGI("Demura is enabled");
     comp_mgr_.SetDemuraStatus(true);
   }
-  std::map<uint32_t, uint8_t> required_demura_fetch_cnt;  // display_id, count
-  if ((err = hw_info_intf_->GetRequiredDemuraFetchResourceCount(&required_demura_fetch_cnt)) !=
-      kErrorNone) {
+
+  // TODO(user): get demura fetch resouce count for multi-dpu
+  std::map<uint32_t, uint8_t> dpu_required_demura_fetch_cnt;  // display_id, count
+  if ((err = hw_info_intf_[0]->
+        GetRequiredDemuraFetchResourceCount(&dpu_required_demura_fetch_cnt)) != kErrorNone) {
     DLOGE("Unable to get required demura pipes count");
     return err;
+  }
+
+  // TODO(user): Workaround to append core_id to get display_id
+  // to be removed after making changes for Demura on multi-dpu
+  std::map<uint32_t, uint8_t> required_demura_fetch_cnt;
+  for (auto r = dpu_required_demura_fetch_cnt.begin();
+       r != dpu_required_demura_fetch_cnt.end(); r++) {
+    uint32_t disp_id = r->first;
+    for (auto display_info : hw_displays_info_) {
+      if (DisplayId::GetConnId(display_info.first) == r->first) {
+        disp_id = display_info.first;
+      }
+    }
+
+    required_demura_fetch_cnt.insert({disp_id, r->second});
   }
 
   if (!required_demura_fetch_cnt.size()) {
@@ -429,7 +510,7 @@ DisplayError CoreImpl::ReserveDemuraResources() {
   Debug::Get()->GetProperty(DISABLE_DEMURA_PRIMARY, &primary_off);
   Debug::Get()->GetProperty(DISABLE_DEMURA_SECONDARY, &secondary_off);
 
-  int available_blocks = hw_resource_.demura_count;
+  int available_blocks = hw_resource_[0].demura_count;
   for (auto r = required_demura_fetch_cnt.begin(); r != required_demura_fetch_cnt.end();) {
     HWDisplayInfo &info = hw_displays_info_[r->first];
     DLOGI("[%d] is_primary = %d, p_off = %d, s_off = %d", r->first, info.is_primary, primary_off,
@@ -444,19 +525,22 @@ DisplayError CoreImpl::ReserveDemuraResources() {
 
     available_blocks -= r->second;
     if (available_blocks < 0) {
-      DLOGE("Not enough Demura blocks (%u)", hw_resource_.demura_count);
+      DLOGE("Not enough Demura blocks (%u)", hw_resource_[0].demura_count);
       return kErrorResources;
     }
     ++r;
   }
 
-  std::map<uint32_t, uint8_t> fetch_resource_cnt;  // display id, count
+  // map(display id, map(core_id, count))
+  MultiDpuDemuraMap fetch_resource_cnt;
   comp_mgr_.GetDemuraFetchResourceCount(&fetch_resource_cnt);
+
   for (auto &req : required_demura_fetch_cnt) {
     uint8_t cnt = 0;
     auto it = fetch_resource_cnt.find(req.first);
     if (it != fetch_resource_cnt.end()) {
-      cnt = it->second;
+      // ToDo(devanshi): modify required_demura_fetch_cnt to include count for every DPU
+      cnt = it->second[0];
     }
     uint8_t req_cnt = req.second;
     if (req_cnt != cnt && cnt != 0) {
@@ -510,7 +594,7 @@ DisplayError CoreImpl::ReserveDemuraResources() {
     return kErrorResources;
   }
 
-  if ((err = hw_info_intf_->GetDemuraPanelIds(panel_ids)) != kErrorNone) {
+  if ((err = hw_info_intf_[0]->GetDemuraPanelIds(panel_ids)) != kErrorNone) {
     DLOGE("Unable to get demura panel ids");
     return err;
   }

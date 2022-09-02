@@ -417,7 +417,8 @@ struct LayerSolidFill {
 };
 
 struct LayerBufferMap {
-  std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> buffer_map;
+  std::unordered_map<uint64_t, std::unordered_map<uint32_t,
+                                                  std::shared_ptr<LayerBufferObject>>> buffer_map;
 };
 
 /*! @brief This structure defines display layer object which contains layer properties and a drawing

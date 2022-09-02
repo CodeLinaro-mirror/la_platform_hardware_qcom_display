@@ -107,7 +107,7 @@ FeatureInterface* GetPostedStartFeatureCheckIntf(HWInterface *intf,
  */
 class ColorManagerProxy {
  public:
-  static DisplayError Init(const HWResourceInfo &hw_res_info);
+  static DisplayError Init(const std::vector<HWResourceInfo> &hw_res_info);
   static void Deinit();
 
   /* Create ColorManagerProxy for this display object, following things need to be happening
@@ -117,8 +117,8 @@ class ColorManagerProxy {
    * 4. Need get panel name for hw_panel_info_.
    */
   static ColorManagerProxy *CreateColorManagerProxy(DisplayType type, HWInterface *hw_intf,
-                                                    const HWDisplayAttributes &attribute,
-                                                    const HWPanelInfo &panel_info,
+                                                    DisplayDeviceContext &device_ctx,
+                                                    DisplayClientContext &client_ctx,
                                                     DppsControlInterface *dpps_intf,
                                                     DisplayInterface *disp_intf);
 
@@ -168,7 +168,7 @@ class ColorManagerProxy {
   static DynLib stc_lib_;
   static CreateColorInterface create_intf_;
   static DestroyColorInterface destroy_intf_;
-  static HWResourceInfo hw_res_info_;
+  static std::vector<HWResourceInfo> hw_res_info_;
   static GetScPostBlendInterface create_stc_intf_;
 
   typedef DisplayError (ColorManagerProxy::*ConvertProc)(const HwConfigPayload &in_data,

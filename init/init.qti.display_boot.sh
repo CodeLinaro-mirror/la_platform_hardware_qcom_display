@@ -70,6 +70,27 @@ else
 fi
 
 case "$target" in
+    "anorak")
+    #SOC ID for Anorak is 549
+    case "$soc_hwid" in
+        549)
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 0
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 0
+        setprop vendor.display.target.version 3
+        setprop vendor.display.disable_mitigated_fps 1
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.enable_rounded_corner 0  #disable HW RC
+        setprop vendor.display.idle_time 0  #disable idle fallback
+        setprop vendor.display.idle_time_inactive 0  #disable idle fallback
+        setprop vendor.display.use_smooth_motion 0  #disable smooth motion
+        ;;
+    esac
+    ;;
     "taro")
     #Set property to differentiate Waipio
     #SOC ID for Waipio is 457

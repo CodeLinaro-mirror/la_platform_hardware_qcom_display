@@ -125,7 +125,6 @@ using drm_utils::DRMResMgr;
 using drm_utils::DRMLibLoader;
 using drm_utils::DRMBuffer;
 using sde_drm::GetDRMManager;
-using sde_drm::DestroyDRMManager;
 using sde_drm::DRMDisplayType;
 using sde_drm::DRMDisplayToken;
 using sde_drm::DRMConnectorInfo;
@@ -146,10 +145,10 @@ using sde_drm::DRMCWbCaptureMode;
 
 namespace sdm {
 
-std::atomic<uint32_t> HWDeviceDRM::hw_dest_scaler_blocks_used_(0);
-HWCwbConfig HWDeviceDRM::cwb_config_ = {};
-std::mutex HWDeviceDRM::cwb_state_lock_;
-int HWDeviceDRM::display_count_ = 0;
+std::unordered_map<uint32_t, std::atomic<uint32_t>> HWDeviceDRM::hw_dest_scaler_blocks_used_;
+std::unordered_map<uint32_t, HWCwbConfig> HWDeviceDRM::cwb_config_;
+std::unordered_map<uint32_t, std::mutex> HWDeviceDRM::cwb_state_lock_;
+std::unordered_map<uint32_t, int> HWDeviceDRM::display_count_;
 
 static PPBlock GetPPBlock(const HWToneMapLut &lut_type) {
   PPBlock pp_block = kPPBlockMax;
@@ -310,15 +309,13 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
 
 class FrameBufferObject : public LayerBufferObject {
  public:
-  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format,
+  explicit FrameBufferObject(uint32_t fb_id, DRMMaster *master, LayerBufferFormat format,
                              uint32_t width, uint32_t height)
-    :fb_id_(fb_id), format_(format), width_(width), height_(height) {
+    :fb_id_(fb_id), master_(master), format_(format), width_(width), height_(height) {
   }
 
   ~FrameBufferObject() {
-    DRMMaster *master;
-    DRMMaster::GetInstance(&master);
-    int ret = master->RemoveFbId(fb_id_);
+    int ret = master_->RemoveFbId(fb_id_);
     if (ret < 0) {
       DLOGE("Removing fb_id %d failed with error %d", fb_id_, errno);
     }
@@ -330,6 +327,7 @@ class FrameBufferObject : public LayerBufferObject {
 
  private:
   uint32_t fb_id_;
+  DRMMaster *master_;
   LayerBufferFormat format_;
   uint32_t width_;
   uint32_t height_;
@@ -367,8 +365,7 @@ void HWDeviceDRM::Registry::Register(HWLayersInfo *hw_layers_info) {
 }
 
 int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id) {
-  DRMMaster *master = nullptr;
-  DRMMaster::GetInstance(&master);
+  DRMMaster *master = reinterpret_cast<DRMMaster*>(master_);
   int ret = -1;
 
   if (!master) {
@@ -406,13 +403,17 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
   } else {
     auto it = layer->buffer_map->buffer_map.find(handle_id);
     if (it != layer->buffer_map->buffer_map.end()) {
-      FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(it->second.get());
-      if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height)) {
-        // Found fb_id for given handle_id key
-        return;
-      } else {
-        // Erase from fb_id map if format or size have been modified
-        layer->buffer_map->buffer_map.erase(it);
+      std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map = it->second;
+      auto itr = dpu_buffer_map.find(core_id_);
+      if (itr != dpu_buffer_map.end()) {
+        FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second.get());
+        if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height)) {
+          // Found fb_id for given handle_id key
+          return;
+        } else {
+          // Erase from fb_id map if format or size have been modified
+          layer->buffer_map->buffer_map.erase(it);
+        }
       }
     }
 
@@ -424,9 +425,19 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
 
   uint32_t fb_id = 0;
   if (CreateFbId(buffer, &fb_id) >= 0) {
-    // Create and cache the fb_id in map
-    layer->buffer_map->buffer_map[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
-        buffer.format, buffer.width, buffer.height);
+    auto it = layer->buffer_map->buffer_map.find(handle_id);
+    if (it != layer->buffer_map->buffer_map.end()) {
+      it->second.insert({core_id_, std::make_shared<FrameBufferObject>(fb_id,
+                                                     reinterpret_cast<DRMMaster*>(master_),
+                                                     buffer.format, buffer.width, buffer.height)});
+    } else {
+      // Create and cache the fb_id in map
+      std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map;
+      dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id,
+          reinterpret_cast<DRMMaster*>(master_),
+          buffer.format, buffer.width, buffer.height);
+      layer->buffer_map->buffer_map[handle_id] = dpu_buffer_map;
+    }
   }
 }
 
@@ -459,6 +470,7 @@ void HWDeviceDRM::Registry::MapOutputBufferToFbId(LayerBuffer *output_buffer) {
   uint32_t fb_id = 0;
   if (CreateFbId(*output_buffer, &fb_id) >= 0) {
     output_buffer_map_[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
+        reinterpret_cast<DRMMaster*>(master_),
         output_buffer->format, output_buffer->width, output_buffer->height);
   }
 }
@@ -470,8 +482,12 @@ void HWDeviceDRM::Registry::Clear() {
 uint32_t HWDeviceDRM::Registry::GetFbId(Layer *layer, uint64_t handle_id) {
   auto it = layer->buffer_map->buffer_map.find(handle_id);
   if (it != layer->buffer_map->buffer_map.end()) {
-    FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(it->second.get());
-    return fb_obj->GetFbId();
+    std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map = it->second;
+    auto itr = dpu_buffer_map.find(core_id_);
+    if (itr != dpu_buffer_map.end()) {
+      FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(itr->second.get());
+      return fb_obj->GetFbId();
+    }
   }
 
   return 0;
@@ -495,9 +511,9 @@ HWDeviceDRM::HWDeviceDRM(BufferAllocator *buffer_allocator, HWInfoInterface *hw_
 DisplayError HWDeviceDRM::Init() {
   int ret = 0;
   DRMMaster *drm_master = {};
-  DRMMaster::GetInstance(&drm_master);
+  DRMMaster::GetInstance(&drm_master, core_id_);
   drm_master->GetHandle(&dev_fd_);
-  DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+  DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance(core_id_);
 
   if (!drm_lib_loader) {
     DLOGW("Failed to retrieve DRMLibLoader instance");
@@ -522,7 +538,9 @@ DisplayError HWDeviceDRM::Init() {
     return kErrorNotSupported;
   }
 
+  registry_.Init(drm_master);
   display_id_ = static_cast<int32_t>(token_.conn_id);
+  registry_.core_id_ = core_id_;
 
   ret = drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
   if (ret) {
@@ -565,7 +583,7 @@ DisplayError HWDeviceDRM::Init() {
   hw_color_mgr_ = std::move(hw_color_mgr);
 
   GetCWBCapabilities();
-  display_count_ += 1;
+  display_count_[core_id_] += 1;
   return kErrorNone;
 }
 
@@ -608,8 +626,8 @@ DisplayError HWDeviceDRM::Deinit() {
   drm_mgr_intf_->DestroyAtomicReq(drm_atomic_intf_);
   drm_atomic_intf_ = {};
   drm_mgr_intf_->UnregisterDisplay(&token_);
-  hw_dest_scaler_blocks_used_ -= dest_scaler_blocks_used_;
-  display_count_ -= 1;
+  hw_dest_scaler_blocks_used_[core_id_] -= dest_scaler_blocks_used_;
+  display_count_[core_id_] -= 1;
   return err;
 }
 
@@ -1214,8 +1232,8 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
 
-  if (cwb_config_.cwb_disp_id == display_id_ && cwb_config_.enabled) {
-    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
+  if (cwb_config_[core_id_].cwb_disp_id == display_id_ && cwb_config_[core_id_].enabled) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_[core_id_].token.conn_id, 0);
     DLOGI("Tearing down the CWB topology");
   }
 
@@ -1227,12 +1245,13 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
     return kErrorHardware;
   }
 
-  if (cwb_config_.cwb_disp_id == display_id_) {  // Incase display power-off in cwb active/teardown
+  // Incase display power-off in cwb active/teardown
+  if (cwb_config_[core_id_].cwb_disp_id == display_id_) {
     // state, then reset cwb_display_id to un-block other displays from performing CWB.
-    if (cwb_config_.enabled) {
+    if (cwb_config_[core_id_].enabled) {
       FlushConcurrentWriteback();
     } else {  // for CWB Post-teardown (the frame following teardown) frame
-      cwb_config_.cwb_disp_id = -1;
+      cwb_config_[core_id_].cwb_disp_id = -1;
     }
   }
 
@@ -1357,11 +1376,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
 
   solid_fills_.clear();
   noise_cfg_ = {};
-  bool resource_update = hw_layers_info->updates_mask.test(kUpdateResources);
-  bool buffer_update = hw_layers_info->updates_mask.test(kSwapBuffers);
+  bool resource_update = hw_layers_info->common_info->updates_mask.test(kUpdateResources);
+  bool buffer_update = hw_layers_info->common_info->updates_mask.test(kSwapBuffers);
   bool update_config = resource_update || buffer_update || tui_state_ == kTUIStateEnd ||
-                       hw_layers_info->flags.geometry_changed;
-  bool update_luts = hw_layers_info->updates_mask.test(kUpdateLuts);
+                       hw_layers_info->common_info->flags.geometry_changed;
+  bool update_luts = hw_layers_info->common_info->updates_mask.test(kUpdateLuts);
 
   if (hw_panel_info_.partial_update && update_config) {
     if (IsFullFrameUpdate(*hw_layers_info)) {
@@ -1403,7 +1422,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
   }
 #endif
 
-  if (first_cycle_ && display_count_ == 1) {
+  if (first_cycle_ && display_count_[core_id_] == 1) {
     // Used in 2 cases:
     // 1. Since driver doesnt clear the SSPP luts during the adb shell stop/start, clear once
     // 2. On TUI start also, need to clear the SSPP luts.
@@ -1532,11 +1551,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_SECURITY_LEVEL, token_.crtc_id, crtc_security_level);
   }
 
-  if (hw_layers_info->hw_avr_info.update) {
+  if (hw_layers_info->common_info->hw_avr_info.update) {
     sde_drm::DRMQsyncMode mode = sde_drm::DRMQsyncMode::NONE;
-    if (hw_layers_info->hw_avr_info.mode == kContinuousMode) {
+    if (hw_layers_info->common_info->hw_avr_info.mode == kContinuousMode) {
       mode = sde_drm::DRMQsyncMode::CONTINUOUS;
-    } else if (hw_layers_info->hw_avr_info.mode == kOneShotMode) {
+    } else if (hw_layers_info->common_info->hw_avr_info.mode == kOneShotMode) {
       mode = sde_drm::DRMQsyncMode::ONESHOT;
     }
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_QSYNC_MODE, token_.conn_id, mode);
@@ -1640,11 +1659,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
                               current_mode.curr_compression_mode);
   }
 
-  if (!validate && (hw_layers_info->set_idle_time_ms >= 0)) {
+  if (!validate && (hw_layers_info->common_info->set_idle_time_ms >= 0)) {
     DLOGI_IF(kTagDriverConfig, "Setting idle timeout to = %d ms",
-             hw_layers_info->set_idle_time_ms);
+             hw_layers_info->common_info->set_idle_time_ms);
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_IDLE_TIMEOUT, token_.crtc_id,
-                              hw_layers_info->set_idle_time_ms);
+                              hw_layers_info->common_info->set_idle_time_ms);
   }
 
   if (hw_panel_info_.mode == kModeCommand) {
@@ -1817,12 +1836,12 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
 
   bool sync_commit = synchronous_commit_ || first_cycle_;
 
-  if (hw_layers_info->elapse_timestamp > 0) {
+  if (hw_layers_info->common_info->elapse_timestamp > 0) {
     struct timespec t = {0, 0};
     clock_gettime(CLOCK_MONOTONIC, &t);
     uint64_t current_time = (UINT64(t.tv_sec) * 1000000000LL + t.tv_nsec);
-    if (current_time < hw_layers_info->elapse_timestamp) {
-      usleep(UINT32((hw_layers_info->elapse_timestamp - current_time) / 1000));
+    if (current_time < hw_layers_info->common_info->elapse_timestamp) {
+      usleep(UINT32((hw_layers_info->common_info->elapse_timestamp - current_time) / 1000));
     }
   }
 
@@ -1891,7 +1910,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   panel_compression_changed_ = 0;
   first_cycle_ = false;
   update_mode_ = false;
-  hw_layers_info->updates_mask = 0;
   pending_power_state_ = kPowerStateNone;
   // Inherently a real commit ensures null commit properties have happened, so update the member
   first_null_cycle_ = false;
@@ -2664,11 +2682,12 @@ void HWDeviceDRM::DumpHWLayers(HWLayersInfo *hw_layers_info) {
   uint32_t hw_layer_count = UINT32(hw_layers_info->hw_layers.size());
   std::vector<LayerRect> &left_frame_roi = hw_layers_info->left_frame_roi;
   std::vector<LayerRect> &right_frame_roi = hw_layers_info->right_frame_roi;
-  DLOGI("HWLayers Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
-         hw_layer_count, hw_layers_info->app_layer_count, hw_layers_info->gpu_target_index);
+//  DLOGI("HWLayers Stack: layer_count: %d, app_layer_count: %d, gpu_target_index: %d",
+  //       hw_layer_count, hw_layers_info->app_layer_count, hw_layers_info->gpu_target_index);
   DLOGI("LayerStackFlags = 0x%" PRIu32 ",  blend_cs = {primaries = %d, transfer = %d}",
-         UINT32(hw_layers_info->flags.flags), UINT32(hw_layers_info->blend_cs.primaries),
-         UINT32(hw_layers_info->blend_cs.transfer));
+         UINT32(hw_layers_info->common_info->flags.flags),
+         UINT32(hw_layers_info->common_info->blend_cs.primaries),
+         UINT32(hw_layers_info->common_info->blend_cs.transfer));
   for (uint32_t i = 0; i < left_frame_roi.size(); i++) {
     DLOGI("left_frame_roi: x = %d, y = %d, w = %d, h = %d", INT(left_frame_roi[i].left),
         INT(left_frame_roi[i].top), INT(left_frame_roi[i].right), INT(left_frame_roi[i].bottom));
@@ -2866,41 +2885,43 @@ uint64_t HWDeviceDRM::GetSupportedBitClkRate(uint32_t new_mode_index,
 
 bool HWDeviceDRM::SetupConcurrentWriteback(const HWLayersInfo &hw_layer_info, bool validate,
                                            int64_t *release_fence_fd) {
-  std::lock_guard<std::mutex> lock(cwb_state_lock_);
+  std::lock_guard<std::mutex> lock(cwb_state_lock_[core_id_]);
   bool enable = hw_resource_.has_concurrent_writeback && hw_layer_info.output_buffer;
-  if (!(enable || cwb_config_.enabled)) {  // the frame is neither cwb setup nor cwb teardown frame
-    cwb_config_.cwb_disp_id = -1;
+  // the frame is neither cwb setup nor cwb teardown frame
+  if (!(enable || cwb_config_[core_id_].enabled)) {
+    cwb_config_[core_id_].cwb_disp_id = -1;
     return false;
   }
 
-  if (cwb_config_.cwb_disp_id != -1 && cwb_config_.cwb_disp_id != display_id_) {
+  if (cwb_config_[core_id_].cwb_disp_id != -1 && cwb_config_[core_id_].cwb_disp_id != display_id_) {
     // Either cwb is currently active or tearing down on display cwb_config_.cwb_disp_id
-    DLOGW("CWB already busy with display : %d", cwb_config_.cwb_disp_id);
+    DLOGW("CWB already busy with display : %d", cwb_config_[core_id_].cwb_disp_id);
     return false;
   } else {
-    cwb_config_.cwb_disp_id = display_id_;
+    cwb_config_[core_id_].cwb_disp_id = display_id_;
   }
 
-  bool setup_modes = enable && !cwb_config_.enabled;
+  bool setup_modes = enable && !cwb_config_[core_id_].enabled;
   // Modes can be setup in prepare or commit path.
   if (setup_modes && (SetupConcurrentWritebackModes() == kErrorNone)) {
-    cwb_config_.enabled = true;
+    cwb_config_[core_id_].enabled = true;
   }
 
-  if (cwb_config_.enabled) {
+  if (cwb_config_[core_id_].enabled) {
     if (enable) {
       // Set DRM properties for Concurrent Writeback.
       ConfigureConcurrentWriteback(hw_layer_info);
 
       if (!validate && release_fence_fd) {
         // Set GET_RETIRE_FENCE property to get Concurrent Writeback fence.
-        drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, cwb_config_.token.conn_id,
+        drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE,
+                                  cwb_config_[core_id_].token.conn_id,
                                   release_fence_fd);
         return true;
       }
     } else {
       // Tear down the Concurrent Writeback topology.
-      drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
+      drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_[core_id_].token.conn_id, 0);
       DLOGI("Tear down the Concurrent Writeback topology");
     }
   }
@@ -2910,7 +2931,7 @@ bool HWDeviceDRM::SetupConcurrentWriteback(const HWLayersInfo &hw_layer_info, bo
 
 DisplayError HWDeviceDRM::SetupConcurrentWritebackModes() {
   // To setup Concurrent Writeback topology, get the Connector ID of Virtual display
-  if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::VIRTUAL, &cwb_config_.token)) {
+  if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::VIRTUAL, &cwb_config_[core_id_].token)) {
     DLOGE("RegisterDisplay failed for Concurrent Writeback");
     return kErrorResources;
   }
@@ -2923,7 +2944,7 @@ DisplayError HWDeviceDRM::SetupConcurrentWritebackModes() {
 
   // Inform the mode list to driver.
   struct sde_drm_wb_cfg cwb_cfg = {};
-  cwb_cfg.connector_id = cwb_config_.token.conn_id;
+  cwb_cfg.connector_id = cwb_config_[core_id_].token.conn_id;
   cwb_cfg.flags = SDE_DRM_WB_CFG_FLAGS_CONNECTED;
   cwb_cfg.count_modes = UINT32(modes.size());
   cwb_cfg.modes = (uint64_t)modes.data();
@@ -2933,7 +2954,7 @@ DisplayError HWDeviceDRM::SetupConcurrentWritebackModes() {
   ret = drmIoctl(dev_fd_, DRM_IOCTL_SDE_WB_CONFIG, &cwb_cfg);
 #endif
   if (ret) {
-    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
+    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_[core_id_].token));
     DLOGE("Dump CWBConfig: mode_count %d flags %x", cwb_cfg.count_modes, cwb_cfg.flags);
     DumpConnectorModeInfo();
     return kErrorHardware;
@@ -2943,10 +2964,11 @@ DisplayError HWDeviceDRM::SetupConcurrentWritebackModes() {
 }
 
 void HWDeviceDRM::ConfigureConcurrentWriteback(const HWLayersInfo &hw_layer_info) {
-  CwbConfig *cwb_config = hw_layer_info.hw_cwb_config;
+  CwbConfig cwb = hw_layer_info.hw_cwb_config;
+  CwbConfig *cwb_config = &cwb;
   LayerBuffer *output_buffer = hw_layer_info.output_buffer;
   registry_.MapOutputBufferToFbId(output_buffer);
-  uint32_t &vitual_conn_id = cwb_config_.token.conn_id;
+  uint32_t &vitual_conn_id = cwb_config_[core_id_].token.conn_id;
 
   // Set the topology for Concurrent Writeback: [CRTC_PRIMARY_DISPLAY - CONNECTOR_VIRTUAL_DISPLAY].
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, vitual_conn_id, token_.crtc_id);
@@ -3030,9 +3052,9 @@ void HWDeviceDRM::ConfigureConcurrentWriteback(const HWLayersInfo &hw_layer_info
 }
 
 DisplayError HWDeviceDRM::TeardownConcurrentWriteback(void) {
-  if (cwb_config_.enabled) {
-    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
-    cwb_config_.enabled = false;
+  if (cwb_config_[core_id_].enabled) {
+    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_[core_id_].token));
+    cwb_config_[core_id_].enabled = false;
     registry_.Clear();
   }
 
@@ -3044,8 +3066,8 @@ void HWDeviceDRM::PostCommitConcurrentWriteback(LayerBuffer *output_buffer) {
     return;
   }
 
-  std::lock_guard<std::mutex> lock(cwb_state_lock_);
-  if (cwb_config_.cwb_disp_id == display_id_) {
+  std::lock_guard<std::mutex> lock(cwb_state_lock_[core_id_]);
+  if (cwb_config_[core_id_].cwb_disp_id == display_id_) {
     TeardownConcurrentWriteback();
   }
 }
@@ -3077,11 +3099,12 @@ DisplayError HWDeviceDRM::GetFeatureSupportStatus(const HWFeature feature, uint3
 }
 
 void HWDeviceDRM::FlushConcurrentWriteback() {
-  std::lock_guard<std::mutex> lock(cwb_state_lock_);
+  std::lock_guard<std::mutex> lock(cwb_state_lock_[core_id_]);
   TeardownConcurrentWriteback();
-  cwb_config_.cwb_disp_id = -1;
-  DLOGI("Flushing out CWB Config. cwb_enabled = %d , cwb_disp_id : %d", cwb_config_.enabled,
-        cwb_config_.cwb_disp_id);
+  cwb_config_[core_id_].cwb_disp_id = -1;
+  DLOGI("Flushing out CWB Config. cwb_enabled = %d , cwb_disp_id : %d",
+        cwb_config_[core_id_].enabled,
+        cwb_config_[core_id_].cwb_disp_id);
 }
 
 DisplayError HWDeviceDRM::ConfigureCWBDither(void *payload, uint32_t conn_id,

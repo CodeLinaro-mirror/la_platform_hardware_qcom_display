@@ -111,12 +111,18 @@ static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
 // TODO(user): Have a single structure handle carries all the interface pointers and variables.
 DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
                          HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-                         CompManager *comp_manager, HWInfoInterface *hw_info_intf)
+                         CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf)
   : display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
     buffer_allocator_(buffer_allocator), comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
   // Kick off worker thread and block the caller thread until worker thread has started and
   // ready to process commit requests.
   lock_guard<recursive_mutex> client_lock(disp_mutex_.client_mutex);
+
+  // TODO(user): fix after enabling virtual driver for multi-dpu usecase
+  core_count_ = 1;
+  default_clock_hz_.resize(1);
+  disp_layer_stack_.info.resize(1, {});
+  cached_framebuffer_.resize(1);
 
   // Start commit worker thread and wait for thread response.
   DLOGI("Starting commit thread for display: %d", display_type);
@@ -128,13 +134,20 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
   DLOGI("Commit thread started for display: %d", display_type);
 }
 
-DisplayBase::DisplayBase(int32_t display_id, DisplayType display_type,
+DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
                          DisplayEventHandler *event_handler, HWDeviceType hw_device_type,
                          BufferAllocator *buffer_allocator, CompManager *comp_manager,
-                         HWInfoInterface *hw_info_intf)
+                         std::vector<HWInfoInterface*> hw_info_intf)
   : DisplayBase(display_type, event_handler, hw_device_type,
                 buffer_allocator, comp_manager, hw_info_intf) {
-  display_id_ = display_id;
+  display_id_info_ = display_id;
+  display_id_ = display_id_info_.GetDisplayId();
+  core_id_ = display_id_info_.GetCoreIdMap();
+  std::bitset<32> core_id_bitset = std::bitset<32>(core_id_);
+  core_count_ = core_id_bitset.count();
+  disp_layer_stack_.info.resize(core_count_, {});
+  cached_framebuffer_.resize(core_count_);
+  default_clock_hz_.resize(core_count_);
 }
 
 DisplayBase::~DisplayBase() {
@@ -151,43 +164,59 @@ DisplayBase::~DisplayBase() {
 DisplayError DisplayBase::Init() {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
-  hw_panel_info_ = HWPanelInfo();
-  hw_intf_->GetHWPanelInfo(&hw_panel_info_);
-  if (hw_info_intf_) {
-    hw_info_intf_->GetHWResourceInfo(&hw_resource_info_);
+
+  dpu_core_mux_->GetHWPanelInfo(&device_ctx_, &client_ctx_);
+  for (auto info_intf : hw_info_intf_) {
+    HWResourceInfo res_info;
+    info_intf->GetHWResourceInfo(&res_info);
+    hw_resource_info_.push_back(res_info);
   }
-  auto max_mixer_stages = hw_resource_info_.num_blending_stages;
+
+  uint32_t num_blending_stages = INT_MAX;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    num_blending_stages = std::min(num_blending_stages, hw_resource_info_[i].num_blending_stages);
+  }
+
+  auto max_mixer_stages = num_blending_stages;
   int property_value = Debug::GetMaxPipesPerMixer(display_type_);
 
   uint32_t active_index = 0;
   int drop_vsync = 0;
   int hw_recovery_threshold = 1;
   int32_t prop = 0;
-  hw_intf_->GetActiveConfig(&active_index);
-  hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
-  fb_config_ = display_attributes_;
-  active_refresh_rate_ = display_attributes_.fps;
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  dpu_core_mux_->GetDisplayAttributes(active_index, &device_ctx_,
+                                      &client_ctx_);
 
-  if (!Debug::GetMixerResolution(&mixer_attributes_.width, &mixer_attributes_.height)) {
-    if (hw_intf_->SetMixerAttributes(mixer_attributes_) == kErrorNone) {
+  active_refresh_rate_ = client_ctx_.display_attributes.fps;
+
+  if (!Debug::GetMixerResolution(&client_ctx_.mixer_attributes.width,
+                                 &client_ctx_.mixer_attributes.height)) {
+    if (dpu_core_mux_->SetMixerAttributes(client_ctx_.mixer_attributes) == kErrorNone) {
       custom_mixer_resolution_ = true;
     }
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes_);
+  error = dpu_core_mux_->GetMixerAttributes(&device_ctx_,
+                                            &client_ctx_);
   if (error != kErrorNone) {
     return error;
   }
 
   // Override x_pixels and y_pixels of frame buffer with mixer width and height
-  fb_config_.x_pixels = mixer_attributes_.width;
-  fb_config_.y_pixels = mixer_attributes_.height;
+  dpu_core_mux_->GetFbConfig(client_ctx_.mixer_attributes.width,
+                             client_ctx_.mixer_attributes.height, &device_ctx_, &client_ctx_);
 
   if (IsPrimaryDisplayLocked()) {
     HWScaleLutInfo lut_info = {};
     error = comp_manager_->GetScaleLutConfig(&lut_info);
     if (error == kErrorNone) {
-      error = hw_intf_->SetScaleLutConfig(&lut_info);
+      error = dpu_core_mux_->SetScaleLutConfig(&lut_info);
       if (error != kErrorNone) {
         goto CleanupOnError;
       }
@@ -198,18 +227,18 @@ DisplayError DisplayBase::Init() {
   if (kBuiltIn == display_type_) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
-                                                            display_attributes_, hw_panel_info_,
+                                                            device_ctx_, client_ctx_,
                                                             dpps_intf, this);
   }
-
-  error = comp_manager_->RegisterDisplay(display_id_, display_type_, display_attributes_,
-                                         hw_panel_info_, mixer_attributes_, fb_config_,
-                                         &display_comp_ctx_, &cached_qos_data_);
+  error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, device_ctx_,
+                                         client_ctx_, &display_comp_ctx_, &cached_qos_data_);
   if (error != kErrorNone) {
     DLOGW("Display %d comp manager registration failed!", display_id_);
     goto CleanupOnError;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   if (color_modes_cs_.size() > 0) {
     error = comp_manager_->SetColorModesInfo(display_comp_ctx_, color_modes_cs_);
@@ -219,7 +248,7 @@ DisplayError DisplayBase::Init() {
   }
 
   if (property_value >= 0) {
-    max_mixer_stages = std::min(UINT32(property_value), hw_resource_info_.num_blending_stages);
+    max_mixer_stages = std::min(UINT32(property_value), num_blending_stages);
   }
   DisplayBase::SetMaxMixerStages(max_mixer_stages);
 
@@ -261,7 +290,7 @@ CleanupOnError:
 
 DisplayError DisplayBase::InitBorderLayers() {
   // Feature is limited to primary.
-  if (!hw_panel_info_.is_primary_panel) {
+  if (!client_ctx_.hw_panel_info.is_primary_panel) {
     return kErrorNone;
   }
 
@@ -295,8 +324,8 @@ DisplayError DisplayBase::InitBorderLayers() {
 std::vector<LayerRect> DisplayBase::GetBorderRects() {
   // Window rect can result 4 regions(max) to be blacked out.
   // Horizontal strip at top and bottom, pillar-box on each side.
-  float display_width = FLOAT(display_attributes_.x_pixels);
-  float display_height = FLOAT(display_attributes_.y_pixels);
+  float display_width = FLOAT(client_ctx_.display_attributes.x_pixels);
+  float display_height = FLOAT(client_ctx_.display_attributes.y_pixels);
   LayerRect win_rect = window_rect_;
   std::vector<LayerRect> border_rects;
   if (win_rect.left) {
@@ -354,11 +383,11 @@ DisplayError DisplayBase::Deinit() {
     ClientLock lock(disp_mutex_);
     ClearColorInfo();
     if (IsPrimaryDisplayLocked()) {
-      hw_intf_->UnsetScaleLutConfig();
+      dpu_core_mux_->UnsetScaleLutConfig();
     }
   }
   HWEventsInterface::Destroy(hw_events_intf_);
-  HWInterface::Destroy(hw_intf_);
+  dpu_core_mux_->Destroy();
 
   {  // Scope for lock
     ClientLock lock(disp_mutex_);
@@ -375,7 +404,9 @@ DisplayError DisplayBase::Deinit() {
     noise_plugin_intf_ = nullptr;
   }
 
-  CloseFd(&cached_framebuffer_.planes[0].fd);
+  for (int i = 0; i < cached_framebuffer_.size(); i++) {
+    CloseFd(&cached_framebuffer_[i].planes[0].fd);
+  }
 #ifdef TRUSTED_VM
   // release free memory from the heap, needed for Trusted_VM due to the limited
   // carveout size
@@ -421,9 +452,9 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
 }
 
 DisplayError DisplayBase::NoiseInit() {
-  if (!hw_resource_info_.has_noise_layer || noise_disable_prop_) {
+  if (!HasNoiseLayer() || noise_disable_prop_) {
     DLOGW("Noise Layer disabled on display %d-%d has_noise = %d noise_disable_prop = %d",
-          display_id_, display_type_, hw_resource_info_.has_noise_layer, noise_disable_prop_);
+          display_id_, display_type_, HasNoiseLayer(), noise_disable_prop_);
     return kErrorNone;
   }
 
@@ -452,13 +483,18 @@ DisplayError DisplayBase::NoiseInit() {
 
 // Query the dspp capabilities and enable the RC feature.
 DisplayError DisplayBase::InitRC() {
+  uint32_t rc_total_mem_size = INT_MAX;
+  for (auto val : hw_resource_info_) {
+    rc_total_mem_size = std::min(rc_total_mem_size, val.rc_total_mem_size);
+  }
+
   if (!rc_core_ && !first_cycle_ && rc_enable_prop_ && pf_factory_ && prop_intf_) {
     RCInputConfig input_cfg = {};
     input_cfg.display_id = display_id_;
     input_cfg.display_type = display_type_;
-    input_cfg.display_xres = display_attributes_.x_pixels;
-    input_cfg.display_yres = display_attributes_.y_pixels;
-    input_cfg.max_mem_size = hw_resource_info_.rc_total_mem_size;
+    input_cfg.display_xres = client_ctx_.display_attributes.x_pixels;
+    input_cfg.display_yres = client_ctx_.display_attributes.y_pixels;
+    input_cfg.max_mem_size = rc_total_mem_size;
     rc_core_ = pf_factory_->CreateRCIntf(input_cfg, prop_intf_);
     GenericPayload dummy;
     int err = 0;
@@ -538,7 +574,7 @@ DisplayError DisplayBase::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t
 
 DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
-  if (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer) {  // CWB requested
+  if (HasConcurrentWriteback() && layer_stack->output_buffer) {  // CWB requested
     comp_manager_->HandleCwbFrequencyBoost(true);
 
     if (!cwb_config_) {  // Instantiate cwb_config_ if cwb was not enabled in previous draw cycle.
@@ -577,8 +613,8 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
       }
     }
 
-    disp_layer_stack_.info.hw_cwb_config = cwb_config_;
-    error = ValidateCwbConfigInfo(disp_layer_stack_.info.hw_cwb_config,
+    disp_layer_stack_.stack_info.hw_cwb_config = cwb_config_;
+    error = ValidateCwbConfigInfo(disp_layer_stack_.stack_info.hw_cwb_config,
                                   layer_stack->output_buffer->format);
     if (error != kErrorNone) {
       DLOGE("CWB_config validation failed.");
@@ -595,8 +631,8 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
         // Note: If destin scalar is enabled, then there would be full frame update and the check
         // whether PU ROI contains CWB ROI isn't needed. CWB doesn't requires Validate call then.
         bool cwb_needs_validate = true;
-        for (uint32_t i = 0; i < disp_layer_stack_.info.left_frame_roi.size(); i++) {
-          auto &pu_roi = disp_layer_stack_.info.left_frame_roi.at(i);
+        for (uint32_t i = 0; i < disp_layer_stack_.stack_info.left_frame_roi.size(); i++) {
+          auto &pu_roi = disp_layer_stack_.stack_info.left_frame_roi.at(i);
           if (Contains(pu_roi, cwb_config_->cwb_roi)) {  // checking whether PU roi contain CWB roi
             DLOGI_IF(kTagDisplay, "PU ROI contains CWB ROI. Validate not needed for CWB.");
             cwb_needs_validate = false;
@@ -617,7 +653,7 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
     // Check and release cwb_config_ if it was instantiated in the previous draw cycle.
     delete cwb_config_;
     cwb_config_ = NULL;
-    disp_layer_stack_.info.hw_cwb_config = NULL;
+    disp_layer_stack_.stack_info.hw_cwb_config = NULL;
     needs_validate_ = true;  // Do not skip Validate in CWB teardown frame.
 
     comp_manager_->HandleCwbFrequencyBoost(false);
@@ -627,36 +663,48 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
 
 bool DisplayBase::IsWriteBackSupportedFormat(const LayerBufferFormat &format) {
   // check whether writeback supported for parameter color format or not.
-  std::map<HWSubBlockType, std::vector<LayerBufferFormat>>::iterator it =
-      hw_resource_info_.supported_formats_map.find(HWSubBlockType::kHWWBIntfOutput);
-  if (it == hw_resource_info_.supported_formats_map.end()) {
-    return false;
-  }
-  std::vector<LayerBufferFormat> &supported_sdm_formats = it->second;
-  if (supported_sdm_formats.empty()) {
-    return false;
-  }
-  for (int i = 0; i < supported_sdm_formats.size(); i++) {
-    if (supported_sdm_formats[i] == format) {
-      return true;
+  bool has_wb_support = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
     }
+
+    std::map<HWSubBlockType, std::vector<LayerBufferFormat>>::iterator it =
+    hw_resource_info_[i].supported_formats_map.find(HWSubBlockType::kHWWBIntfOutput);
+    if (it == hw_resource_info_[i].supported_formats_map.end()) {
+      return false;
+    }
+
+    std::vector<LayerBufferFormat> &supported_sdm_formats = it->second;
+    if (supported_sdm_formats.empty()) {
+      return false;
+    }
+    bool supp_format = false;
+    for (int i = 0; i < supported_sdm_formats.size(); i++) {
+      if (supported_sdm_formats[i] == format) {
+        supp_format = true;
+        break;
+      }
+    }
+    has_wb_support &= supp_format;
   }
-  return false;
+  return has_wb_support;
 }
 
 DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   std::vector<Layer *> &layers = layer_stack->layers;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
-  hw_layers_info.app_layer_count = 0;
-  hw_layers_info.gpu_target_index = -1;
-  hw_layers_info.stitch_target_index = -1;
-  hw_layers_info.noise_layer_index = -1;
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
+  stack_info.app_layer_count = 0;
+  stack_info.gpu_target_index = -1;
+  stack_info.stitch_target_index = -1;
+  stack_info.noise_layer_index = -1;
 
   disp_layer_stack_.stack = layer_stack;
-  hw_layers_info.flags = layer_stack->flags;
-  hw_layers_info.blend_cs = layer_stack->blend_cs;
-  hw_layers_info.wide_color_primaries.clear();
+  stack_info.common_info.flags = layer_stack->flags;
+  stack_info.common_info.blend_cs = layer_stack->blend_cs;
+  stack_info.wide_color_primaries.clear();
 
   int index = 0;
   for (auto &layer : layers) {
@@ -664,24 +712,24 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
       layer->buffer_map = std::make_shared<LayerBufferMap>();
     }
     if (layer->composition == kCompositionGPUTarget) {
-      hw_layers_info.gpu_target_index = hw_layers_info.app_layer_count;
+      stack_info.gpu_target_index = stack_info.app_layer_count;
     } else if (layer->composition == kCompositionStitchTarget) {
-      hw_layers_info.stitch_target_index = index;
+      stack_info.stitch_target_index = index;
     } else if (layer->flags.is_noise) {
-      hw_layers_info.flags.noise_present = true;
-      hw_layers_info.noise_layer_index = index;
-      hw_layers_info.noise_layer_info = noise_layer_info_;
+      stack_info.common_info.flags.noise_present = true;
+      stack_info.noise_layer_index = index;
+      stack_info.noise_layer_info = noise_layer_info_;
       DLOGV_IF(kTagDisplay, "Display %d-%d requested Noise at index = %d with zpos_n = %d",
                 display_id_, display_type_, index, noise_layer_info_.zpos_noise);
     } else {
-      hw_layers_info.app_layer_count++;
+      stack_info.app_layer_count++;
     }
     if (IsWideColor(layer->input_buffer.color_metadata.colorPrimaries)) {
-      hw_layers_info.wide_color_primaries.push_back(
+      stack_info.wide_color_primaries.push_back(
           layer->input_buffer.color_metadata.colorPrimaries);
     }
     if (layer->flags.is_game) {
-      hw_layers_info.game_present = true;
+      stack_info.game_present = true;
     }
     index++;
   }
@@ -689,16 +737,16 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
   DLOGD_IF(kTagDisplay, "LayerStack layer_count: %zu, app_layer_count: %d, "
                         "gpu_target_index: %d, stitch_index: %d game_present: %d "
                         " noise_present: %d display: %d-%d", layers.size(),
-                        hw_layers_info.app_layer_count, hw_layers_info.gpu_target_index,
-                        hw_layers_info.stitch_target_index, hw_layers_info.game_present,
-                        hw_layers_info.flags.noise_present, display_id_, display_type_);
+                        stack_info.app_layer_count, stack_info.gpu_target_index,
+                        stack_info.stitch_target_index, stack_info.game_present,
+                        stack_info.common_info.flags.noise_present, display_id_, display_type_);
 
-  if (!hw_layers_info.app_layer_count) {
+  if (!stack_info.app_layer_count) {
     DLOGW("Layer count is zero");
     return kErrorNoAppLayers;
   }
 
-  if (hw_layers_info.gpu_target_index > 0) {
+  if (stack_info.gpu_target_index > 0) {
     return ValidateGPUTargetParams();
   }
 
@@ -706,8 +754,8 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
 }
 
 DisplayError DisplayBase::ValidateGPUTargetParams() {
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
-  Layer *gpu_target_layer = disp_layer_stack_.stack->layers.at(hw_layers_info.gpu_target_index);
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
+  Layer *gpu_target_layer = disp_layer_stack_.stack->layers.at(stack_info.gpu_target_index);
 
   if (!IsValid(gpu_target_layer->src_rect)) {
     DLOGE("Invalid src rect for GPU target layer");
@@ -719,10 +767,10 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
     return kErrorParameters;
   }
 
-  float layer_mixer_width = FLOAT(mixer_attributes_.width);
-  float layer_mixer_height = FLOAT(mixer_attributes_.height);
-  float fb_width = FLOAT(fb_config_.x_pixels);
-  float fb_height = FLOAT(fb_config_.y_pixels);
+  float layer_mixer_width = FLOAT(client_ctx_.mixer_attributes.width);
+  float layer_mixer_height = FLOAT(client_ctx_.mixer_attributes.height);
+  float fb_width = FLOAT(client_ctx_.fb_config.x_pixels);
+  float fb_height = FLOAT(client_ctx_.fb_config.y_pixels);
   LayerRect src_domain = (LayerRect){0.0f, 0.0f, fb_width, fb_height};
   LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
   LayerRect out_rect = gpu_target_layer->dst_rect;
@@ -733,11 +781,11 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
   auto gpu_target_layer_dst_xpixels = out_rect.right - out_rect.left;
   auto gpu_target_layer_dst_ypixels = out_rect.bottom - out_rect.top;
 
-  if (gpu_target_layer_dst_xpixels > mixer_attributes_.width ||
-    gpu_target_layer_dst_ypixels > mixer_attributes_.height) {
+  if (gpu_target_layer_dst_xpixels > client_ctx_.mixer_attributes.width ||
+    gpu_target_layer_dst_ypixels > client_ctx_.mixer_attributes.height) {
     DLOGE("GPU target layer dst rect is not with in limits gpu wxh %fx%f, mixer wxh %dx%d",
                   gpu_target_layer_dst_xpixels, gpu_target_layer_dst_ypixels,
-                  mixer_attributes_.width, mixer_attributes_.height);
+                  client_ctx_.mixer_attributes.width, client_ctx_.mixer_attributes.height);
     return kErrorParameters;
   }
 
@@ -809,23 +857,24 @@ DisplayError DisplayBase::ForceToneMapUpdate(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   DisplayError error = kErrorNotSupported;
 
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    for (size_t hw_index = 0; hw_index < disp_layer_stack_.info[i].index.size(); hw_index++) {
+      size_t layer_index = disp_layer_stack_.info[i].index.at(hw_index);
 
-  for (size_t hw_index = 0; hw_index < disp_layer_stack_.info.index.size(); hw_index++) {
-    size_t layer_index = disp_layer_stack_.info.index.at(hw_index);
+      if (layer_index >= layer_stack->layers.size()) {
+        DLOGE("Error forcing TM update. Layer stack appears to have changed");
+        return error;
+      }
 
-    if (layer_index >= layer_stack->layers.size()) {
-      DLOGE("Error forcing TM update. Layer stack appears to have changed");
-      return error;
+      Layer *stack_layer = layer_stack->layers.at(layer_index);
+      Layer &cached_layer = disp_layer_stack_.info[i].hw_layers.at(hw_index);
+      HWLayerConfig &hw_config = disp_layer_stack_.info[i].config[hw_index];
+
+      cached_layer.input_buffer.hist_data = stack_layer->input_buffer.hist_data;
+      cached_layer.input_buffer.color_metadata = stack_layer->input_buffer.color_metadata;
+      hw_config.left_pipe.lut_info.clear();
+      hw_config.right_pipe.lut_info.clear();
     }
-
-    Layer *stack_layer = layer_stack->layers.at(layer_index);
-    Layer &cached_layer = disp_layer_stack_.info.hw_layers.at(hw_index);
-    HWLayerConfig &hw_config = disp_layer_stack_.info.config[hw_index];
-
-    cached_layer.input_buffer.hist_data = stack_layer->input_buffer.hist_data;
-    cached_layer.input_buffer.color_metadata = stack_layer->input_buffer.color_metadata;
-    hw_config.left_pipe.lut_info.clear();
-    hw_config.right_pipe.lut_info.clear();
   }
 
   error = comp_manager_->ForceToneMapConfigure(display_comp_ctx_, &disp_layer_stack_);
@@ -846,7 +895,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     return kErrorParameters;
   }
 
-  disp_layer_stack_.info.output_buffer = layer_stack->output_buffer;
+  disp_layer_stack_.stack_info.output_buffer = layer_stack->output_buffer;
 
   // Allow prepare as pending doze/pending_power_on is handled as a part of draw cycle
   if (!active_ && (pending_power_state_ == kPowerStateNone)) {
@@ -891,7 +940,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     disable_pu_one_frame_ = false;
   }
 
-  disp_layer_stack_.info.updates_mask.set(kUpdateResources);
+  disp_layer_stack_.stack_info.common_info.updates_mask.set(kUpdateResources);
   comp_manager_->GenerateROI(display_comp_ctx_, &disp_layer_stack_);
 
   CheckMMRMState();
@@ -903,8 +952,8 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     }
 
     // Trigger validate only if needed.
-    if (disp_layer_stack_.info.do_hw_validate) {
-      error = hw_intf_->Validate(&disp_layer_stack_.info);
+    if (disp_layer_stack_.stack_info.do_hw_validate) {
+      error = dpu_core_mux_->Validate(disp_layer_stack_.info);
     }
 
     if (error == kErrorNone) {
@@ -933,8 +982,8 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     }
   }
 
-  if (disp_layer_stack_.info.enable_self_refresh) {
-    hw_intf_->EnableSelfRefresh();
+  if (disp_layer_stack_.stack_info.enable_self_refresh) {
+    dpu_core_mux_->EnableSelfRefresh();
   }
 
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
@@ -943,7 +992,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 }
 
 void DisplayBase::FlushConcurrentWriteback() {
-  hw_intf_->FlushConcurrentWriteback();
+  dpu_core_mux_->FlushConcurrentWriteback();
 }
 
 DisplayError DisplayBase::HandleNoiseLayer(LayerStack *layer_stack) {
@@ -962,15 +1011,15 @@ DisplayError DisplayBase::HandleNoiseLayer(LayerStack *layer_stack) {
     return error;
   }
 
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
   if (!noise_layer_info_.enable) {
-    if (hw_layers_info.noise_layer_index != -1) {
+    if (stack_info.noise_layer_index != -1) {
       DLOGV_IF(kTagDisplay, "Noise layer disabled for display %d-%d", display_id_, display_type_);
       needs_validate_ = true;
     }
     return kErrorNone;
   } else {
-    if (hw_layers_info.noise_layer_index == -1) {
+    if (stack_info.noise_layer_index == -1) {
       DLOGV_IF(kTagDisplay, "Noise layer Enabled for display %d-%d", display_id_, display_type_);
       needs_validate_ = true;
     }
@@ -1107,8 +1156,8 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
 
   if (rc_prepared_) {
     // Set the RC data into LayerStack which was generated in PrePrepare()
-    disp_layer_stack_.info.rc_config = rc_config_enable_;
-    disp_layer_stack_.info.rc_layers_info = rc_info_;
+    disp_layer_stack_.stack_info.rc_config = rc_config_enable_;
+    disp_layer_stack_.stack_info.rc_layers_info = rc_info_;
     if (rc_config_enable_) {
       DLOGV_IF(kTagDisplay, "RC is prepared, top_height = %d, RC bot_height = %d",
                rc_info_.top_height, rc_info_.bottom_height);
@@ -1118,11 +1167,11 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
 
   DTRACE_SCOPED();
   int ret = -1;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
-  hw_layers_info.spr_enable = spr_enable_;
-  DLOGI_IF(kTagDisplay, "Display resolution: %dx%d", display_attributes_.x_pixels,
-           display_attributes_.y_pixels);
-  if (rc_cached_res_width_ != display_attributes_.x_pixels) {
+  LayerStackInfo &stack_info = disp_layer_stack_.stack_info;
+  stack_info.spr_enable = spr_enable_;
+  DLOGI_IF(kTagDisplay, "Display resolution: %dx%d", client_ctx_.display_attributes.x_pixels,
+           client_ctx_.display_attributes.y_pixels);
+  if (rc_cached_res_width_ != client_ctx_.display_attributes.x_pixels) {
     GenericPayload in;
     uint32_t *display_xres = nullptr;
     ret = in.CreatePayload<uint32_t>(display_xres);
@@ -1130,7 +1179,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *display_xres = rc_cached_res_width_ = display_attributes_.x_pixels;
+    *display_xres = rc_cached_res_width_ = client_ctx_.display_attributes.x_pixels;
     ret = rc_core_->SetParameter(kRCFeatureDisplayXRes, in);
     if (ret) {
       DLOGE("failed to set display X resolution. Error:%d", ret);
@@ -1138,7 +1187,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_res_height_ != display_attributes_.y_pixels) {
+  if (rc_cached_res_height_ != client_ctx_.display_attributes.y_pixels) {
     GenericPayload in;
     uint32_t *display_yres = nullptr;
     ret = in.CreatePayload<uint32_t>(display_yres);
@@ -1146,7 +1195,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *display_yres = rc_cached_res_height_ = display_attributes_.y_pixels;
+    *display_yres = rc_cached_res_height_ = client_ctx_.display_attributes.y_pixels;
     ret = rc_core_->SetParameter(kRCFeatureDisplayYRes, in);
     if (ret) {
       DLOGE("failed to set display Y resolution. Error:%d", ret);
@@ -1154,7 +1203,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_mixer_width_ != mixer_attributes_.width) {
+  if (rc_cached_mixer_width_ != client_ctx_.mixer_attributes.width) {
     GenericPayload in;
     uint32_t *mixer_width = nullptr;
     ret = in.CreatePayload<uint32_t>(mixer_width);
@@ -1162,7 +1211,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *mixer_width = rc_cached_mixer_width_ = mixer_attributes_.width;
+    *mixer_width = rc_cached_mixer_width_ = client_ctx_.mixer_attributes.width;
     ret = rc_core_->SetParameter(kRCFeatureMixerWidth, in);
     if (ret) {
       DLOGE("failed to set mixer width. Error:%d", ret);
@@ -1170,7 +1219,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_mixer_height_ != mixer_attributes_.height) {
+  if (rc_cached_mixer_height_ != client_ctx_.mixer_attributes.height) {
     GenericPayload in;
     uint32_t *mixer_height = nullptr;
     ret = in.CreatePayload<uint32_t>(mixer_height);
@@ -1178,7 +1227,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *mixer_height = rc_cached_mixer_height_ = mixer_attributes_.height;
+    *mixer_height = rc_cached_mixer_height_ = client_ctx_.mixer_attributes.height;
     ret = rc_core_->SetParameter(kRCFeatureMixerHeight, in);
     if (ret) {
       DLOGE("failed to set mixer height. Error:%d", ret);
@@ -1186,7 +1235,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_fb_width_ != fb_config_.x_pixels) {
+  if (rc_cached_fb_width_ != client_ctx_.fb_config.x_pixels) {
     GenericPayload in;
     uint32_t *fb_width = nullptr;
     ret = in.CreatePayload<uint32_t>(fb_width);
@@ -1194,7 +1243,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *fb_width = rc_cached_fb_width_ = fb_config_.x_pixels;
+    *fb_width = rc_cached_fb_width_ = client_ctx_.fb_config.x_pixels;
     ret = rc_core_->SetParameter(kRCFeatureFbWidth, in);
     if (ret) {
       DLOGE("failed to set fb width. Error:%d", ret);
@@ -1202,7 +1251,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     }
   }
 
-  if (rc_cached_fb_height_ != fb_config_.y_pixels) {
+  if (rc_cached_fb_height_ != client_ctx_.fb_config.y_pixels) {
     GenericPayload in;
     uint32_t *fb_height = nullptr;
     ret = in.CreatePayload<uint32_t>(fb_height);
@@ -1210,7 +1259,7 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
     }
-    *fb_height = rc_cached_fb_height_ = fb_config_.y_pixels;
+    *fb_height = rc_cached_fb_height_ = client_ctx_.fb_config.y_pixels;
     ret = rc_core_->SetParameter(kRCFeatureFbHeight, in);
     if (ret) {
       DLOGE("failed to set mixer height. Error:%d", ret);
@@ -1247,8 +1296,8 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     return kErrorUndefined;
   }
 
-  hw_layers_info.rc_layers_info.mask_layer_idx.clear();
-  hw_layers_info.rc_layers_info.rc_hw_layer_idx.clear();
+  stack_info.rc_layers_info.mask_layer_idx.clear();
+  stack_info.rc_layers_info.rc_hw_layer_idx.clear();
 
   ret = rc_core_->ProcessOps(kRCFeaturePrepare, in, &out);
   if (!ret) {
@@ -1257,14 +1306,14 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
     if (rc_out_config->rc_needs_full_roi) {
       DisablePartialUpdateOneFrameInternal();
     }
-    hw_layers_info.rc_config = true;
-    hw_layers_info.rc_layers_info.top_width = rc_out_config->top_width;
-    hw_layers_info.rc_layers_info.top_height = rc_out_config->top_height;
-    hw_layers_info.rc_layers_info.bottom_width = rc_out_config->bottom_width;
-    hw_layers_info.rc_layers_info.bottom_height = rc_out_config->bottom_height;
+    stack_info.rc_config = true;
+    stack_info.rc_layers_info.top_width = rc_out_config->top_width;
+    stack_info.rc_layers_info.top_height = rc_out_config->top_height;
+    stack_info.rc_layers_info.bottom_width = rc_out_config->bottom_width;
+    stack_info.rc_layers_info.bottom_height = rc_out_config->bottom_height;
 
     rc_config_enable_ = true;
-    rc_info_ = hw_layers_info.rc_layers_info;
+    rc_info_ = stack_info.rc_layers_info;
   } else {
     rc_config_enable_ = false;
     rc_info_ = {};
@@ -1272,10 +1321,10 @@ DisplayError DisplayBase::PrepareRC(LayerStack *layer_stack) {
 
   for (const auto &layer : layer_stack->layers) {
     if (layer->input_buffer.flags.mask_layer) {
-      hw_layers_info.rc_layers_info.mask_layer_idx.push_back(UINT32(layer->layer_id));
+      stack_info.rc_layers_info.mask_layer_idx.push_back(UINT32(layer->layer_id));
       rc_info_.mask_layer_idx.push_back(UINT32(layer->layer_id));
       if (layer->request.flags.rc && !ret) {
-        hw_layers_info.rc_layers_info.rc_hw_layer_idx.push_back(UINT32(layer->layer_id));
+        stack_info.rc_layers_info.rc_hw_layer_idx.push_back(UINT32(layer->layer_id));
         rc_info_.rc_hw_layer_idx.push_back(UINT32(layer->layer_id));
       }
     }
@@ -1335,7 +1384,7 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
   }
 
   // Trigger commit based on draw outcome.
-  bool async_commit = disp_layer_stack_.info.trigger_async_commit;
+  bool async_commit = disp_layer_stack_.stack_info.trigger_async_commit;
   DLOGV_IF(kTagDisplay, "Trigger async commit: %d", async_commit);
   if (async_commit) {
     // Copy layer stack attributes needed for commit.
@@ -1356,7 +1405,7 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
 void DisplayBase::HandleAsyncCommit() {
   // Do not acquire mutexes here.
   // Perform hw commit here.
-  PerformHwCommit(&disp_layer_stack_.info);
+  PerformHwCommit(disp_layer_stack_.info);
 }
 
 void DisplayBase::CommitThread() {
@@ -1421,18 +1470,24 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   }
 #endif
 
-  disp_layer_stack_.info.output_buffer = layer_stack->output_buffer;
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    disp_layer_stack_.info[i].output_buffer = layer_stack->output_buffer;
+  }
   if (layer_stack->request_flags.trigger_refresh) {
-    if (!disable_cwb_idle_fallback_ && disp_layer_stack_.info.output_buffer) {
-      cwb_fence_wait_ = true;
+    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+      if (!disable_cwb_idle_fallback_ && disp_layer_stack_.info[i].output_buffer) {
+        cwb_fence_wait_ = true;
+      }
     }
     layer_stack->output_buffer = nullptr;
   }
 
-  disp_layer_stack_.info.retire_fence_offset = retire_fence_offset_;
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    disp_layer_stack_.info[i].retire_fence_offset = retire_fence_offset_;
+  }
   // Regiser for power events on first cycle in unified draw.
   if (first_cycle_ && (draw_method_ != kDrawDefault) && (display_type_ != kVirtual) &&
-      !hw_panel_info_.is_primary_panel && (display_type_ != kHDMI)) {
+      !client_ctx_.hw_panel_info.is_primary_panel && (display_type_ != kHDMI)) {
     DLOGI("Registering for power events");
     hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
   }
@@ -1469,9 +1524,9 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   return error;
 }
 
-DisplayError DisplayBase::PerformCommit(HWLayersInfo *hw_layers_info) {
+DisplayError DisplayBase::PerformCommit(std::vector<HWLayersInfo> &hw_layers_info) {
   DTRACE_SCOPED();
-  DisplayError error = hw_intf_->Commit(hw_layers_info);
+  DisplayError error = dpu_core_mux_->Commit(hw_layers_info);
   if (error != kErrorNone) {
     DLOGE("COMMIT failed: %d ", error);
   }
@@ -1511,7 +1566,7 @@ DisplayError DisplayBase::CommitLocked(LayerStack *layer_stack) {
     return error;
   }
 
-  error = PerformHwCommit(&disp_layer_stack_.info);
+  error = PerformHwCommit(disp_layer_stack_.info);
   if (error != kErrorNone) {
     DLOGE("HwCommit failed %d", error);
   }
@@ -1519,7 +1574,7 @@ DisplayError DisplayBase::CommitLocked(LayerStack *layer_stack) {
   return error;
 }
 
-DisplayError DisplayBase::PerformHwCommit(HWLayersInfo *hw_layers_info) {
+DisplayError DisplayBase::PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_info) {
   DTRACE_SCOPED();
   DisplayError error = PerformCommit(hw_layers_info);
   if (error != kErrorNone) {
@@ -1535,18 +1590,22 @@ DisplayError DisplayBase::PerformHwCommit(HWLayersInfo *hw_layers_info) {
 
   // TODO(user): Workaround for messenger app flicker issue in CWB idle fallback,
   // to be removed when issue is fixed.
-  if (cwb_fence_wait_ && hw_layers_info->output_buffer &&
-      (hw_layers_info->output_buffer->release_fence != nullptr)) {
-    if (Fence::Wait(hw_layers_info->output_buffer->release_fence) != kErrorNone) {
+  // O/P buffer has merged release fences, so check on index 0 only
+  if (cwb_fence_wait_ && hw_layers_info[0].output_buffer &&
+      (hw_layers_info[0].output_buffer->release_fence != nullptr)) {
+    if (Fence::Wait(hw_layers_info[0].output_buffer->release_fence) != kErrorNone) {
       DLOGW("sync_wait error errno = %d, desc = %s", errno, strerror(errno));
     }
   }
+
   cwb_fence_wait_ = false;
 
-  error = PostCommit(hw_layers_info);
-  if (error != kErrorNone) {
-    DLOGE("Post Commit failed %d", error);
-    return error;
+  for (int i = 0; i < hw_layers_info.size(); i++) {
+    error = PostCommit(&hw_layers_info[i]);
+    if (error != kErrorNone) {
+      DLOGE("Post Commit failed %d", error);
+      return error;
+    }
   }
 
   DLOGI_IF(kTagDisplay, "Exiting commit for display: %d-%d", display_id_, display_type_);
@@ -1556,8 +1615,10 @@ DisplayError DisplayBase::PerformHwCommit(HWLayersInfo *hw_layers_info) {
 
 void DisplayBase::CleanupOnError() {
   // Buffer Fd's are duped for async thread operation.
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    CloseFd(&hw_layer.input_buffer.planes[0].fd);
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    for (auto &hw_layer : disp_layer_stack_.info[i].hw_layers) {
+      CloseFd(&hw_layer.input_buffer.planes[0].fd);
+    }
   }
 }
 
@@ -1571,7 +1632,7 @@ DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
   }
 
   int level = 0;
-  if (hw_intf_->GetPanelBrightness(&level) == kErrorNone) {
+  if (dpu_core_mux_->GetPanelBrightness(&level) == kErrorNone) {
     comp_manager_->SetBacklightLevel(display_comp_ctx_, level);
   }
 
@@ -1607,8 +1668,10 @@ DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
 
   CacheFrameBuffer();
 
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    CloseFd(&hw_layer.input_buffer.planes[0].fd);
+  for (int j = 0; j < disp_layer_stack_.info.size(); j++) {
+    for (auto &hw_layer : disp_layer_stack_.info[j].hw_layers) {
+      CloseFd(&hw_layer.input_buffer.planes[0].fd);
+    }
   }
 
   first_cycle_ = false;
@@ -1626,17 +1689,19 @@ void DisplayBase::CacheFrameBuffer() {
   }
 
   // Close current fd.
-  CloseFd(&cached_framebuffer_.planes[0].fd);
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    if (hw_layer.composition == kCompositionGPUTarget) {
-      cached_framebuffer_ = hw_layer.input_buffer;
-      break;
+  for (int i = 0; i < cached_framebuffer_.size(); i++) {
+    CloseFd(&cached_framebuffer_[i].planes[0].fd);
+    for (auto &hw_layer : disp_layer_stack_.info[i].hw_layers) {
+      if (hw_layer.composition == kCompositionGPUTarget) {
+        cached_framebuffer_[i] = hw_layer.input_buffer;
+        break;
+      }
     }
-  }
 
-  // Replace buffer fd with duped fd.
-  int new_fd = Sys::dup_(cached_framebuffer_.planes[0].fd);
-  cached_framebuffer_.planes[0].fd = new_fd;
+    // Replace buffer fd with duped fd.
+    int new_fd = Sys::dup_(cached_framebuffer_[i].planes[0].fd);
+    cached_framebuffer_[i].planes[0].fd = new_fd;
+  }
 }
 
 void DisplayBase::CacheDisplayComposition() {
@@ -1663,9 +1728,12 @@ DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
   if (!active_) {
     return kErrorPermission;
   }
-  disp_layer_stack_.info.hw_layers.clear();
+
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    disp_layer_stack_.info[i].hw_layers.clear();
+  }
   disp_layer_stack_.stack = layer_stack;
-  error = hw_intf_->Flush(&disp_layer_stack_.info);
+  error = dpu_core_mux_->Flush(disp_layer_stack_.info);
   if (error == kErrorNone) {
     comp_manager_->Purge(display_comp_ctx_);
     validated_ = false;
@@ -1674,7 +1742,7 @@ DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
     DLOGW("Unable to flush display %d-%d", display_id_, display_type_);
   }
   if (layer_stack) {
-    layer_stack->retire_fence = disp_layer_stack_.info.retire_fence;
+    layer_stack->retire_fence = disp_layer_stack_.stack_info.common_info.retire_fence;
   }
 
   return error;
@@ -1692,17 +1760,20 @@ DisplayError DisplayBase::GetDisplayState(DisplayState *state) {
 
 DisplayError DisplayBase::GetNumVariableInfoConfigs(uint32_t *count) {
   ClientLock lock(disp_mutex_);
-  return hw_intf_->GetNumDisplayAttributes(count);
+  return dpu_core_mux_->GetNumDisplayAttributes(count);
 }
 
 DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
-  HWDisplayAttributes attrib;
-  if (hw_intf_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
-    *variable_info = attrib;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  if (dpu_core_mux_->GetDisplayAttributes(index, &device_ctx, &client_ctx) == kErrorNone) {
+    *variable_info = client_ctx.display_attributes;
+
     if (custom_mixer_resolution_) {
-      variable_info->x_pixels = fb_config_.x_pixels;
-      variable_info->y_pixels = fb_config_.y_pixels;
+      variable_info->x_pixels = client_ctx_.fb_config.x_pixels;
+      variable_info->y_pixels = client_ctx_.fb_config.y_pixels;
     }
     return kErrorNone;
   }
@@ -1712,33 +1783,46 @@ DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *v
 
 DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   ClientLock lock(disp_mutex_);
-  fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+  fixed_info->is_cmdmode = (client_ctx_.hw_panel_info.mode == kModeCommand);
+  bool hdr_supported = true;
+  bool has_concurrent_writeback = true;
 
-  HWResourceInfo hw_resource_info = HWResourceInfo();
-  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-  bool hdr_supported = hw_resource_info.has_hdr;
-  bool hdr_plus_supported = false;
-  HWDisplayInterfaceInfo hw_disp_info = {};
-  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
-  if (hw_disp_info.type == kHDMI) {
-    hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    HWResourceInfo hw_resource_info = HWResourceInfo();
+    hw_info_intf_[i]->GetHWResourceInfo(&hw_resource_info);
+    hdr_supported &= hw_resource_info.has_hdr;
+    has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;
+    HWDisplayInterfaceInfo hw_disp_info = {};
+    hw_info_intf_[i]->GetFirstDisplayInterfaceType(&hw_disp_info);
+    if (hw_disp_info.type == kHDMI) {
+      hdr_supported &= (hdr_supported && client_ctx_.hw_panel_info.hdr_enabled);
+    }
   }
 
+  bool hdr_plus_supported = false;
   // Checking library support for HDR10+
   comp_manager_->GetHDR10PlusCapability(&hdr_plus_supported);
 
   fixed_info->hdr_supported = hdr_supported;
   // For non-builtin displays, check panel capability for HDR10+
   fixed_info->hdr_plus_supported =
-      hdr_supported && hw_panel_info_.hdr_plus_enabled && hdr_plus_supported;
+      hdr_supported && client_ctx_.hw_panel_info.hdr_plus_enabled && hdr_plus_supported;
   // Populate luminance values only if hdr will be supported on that display
-  fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
-  fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
-  fixed_info->min_luminance = fixed_info->hdr_supported ?  hw_panel_info_.blackness_level: 0;
-  fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
-  fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
-  fixed_info->partial_update = hw_panel_info_.partial_update;
-  fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+  fixed_info->max_luminance = fixed_info->hdr_supported ?
+                              client_ctx_.hw_panel_info.peak_luminance: 0;
+  fixed_info->average_luminance = fixed_info->hdr_supported ?
+                                  client_ctx_.hw_panel_info.average_luminance : 0;
+  fixed_info->min_luminance = fixed_info->hdr_supported ?
+                              client_ctx_.hw_panel_info.blackness_level: 0;
+  fixed_info->hdr_eotf = client_ctx_.hw_panel_info.hdr_eotf;
+  fixed_info->hdr_metadata_type_one = client_ctx_.hw_panel_info.hdr_metadata_type_one;
+  fixed_info->partial_update = client_ctx_.hw_panel_info.partial_update;
+  fixed_info->readback_supported = has_concurrent_writeback;
   fixed_info->supports_unified_draw = unified_draw_supported_;
 
   return kErrorNone;
@@ -1746,9 +1830,11 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
 
 DisplayError DisplayBase::GetRealConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
   ClientLock lock(disp_mutex_);
-  HWDisplayAttributes attrib;
-  if (hw_intf_->GetDisplayAttributes(index, &attrib) == kErrorNone) {
-    *variable_info = attrib;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  if (dpu_core_mux_->GetDisplayAttributes(index, &device_ctx, &client_ctx) == kErrorNone) {
+    *variable_info = client_ctx.display_attributes;
     return kErrorNone;
   }
 
@@ -1757,7 +1843,7 @@ DisplayError DisplayBase::GetRealConfig(uint32_t index, DisplayConfigVariableInf
 
 DisplayError DisplayBase::GetActiveConfig(uint32_t *index) {
   ClientLock lock(disp_mutex_);
-  return hw_intf_->GetActiveConfig(index);
+  return dpu_core_mux_->GetActiveConfig(index);
 }
 
 DisplayError DisplayBase::GetVSyncState(bool *enabled) {
@@ -1807,7 +1893,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   if (state == state_) {
     if (pending_power_state_ != kPowerStateNone) {
-      hw_intf_->CancelDeferredPowerMode();
+      dpu_core_mux_->CancelDeferredPowerMode();
       pending_power_state_ = kPowerStateNone;
     }
     DLOGI("Same state transition is requested.");
@@ -1827,8 +1913,10 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   switch (state) {
   case kStateOff:
-    disp_layer_stack_.info.hw_layers.clear();
-    error = hw_intf_->PowerOff(teardown, &sync_points);
+    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+      disp_layer_stack_.info[i].hw_layers.clear();
+    }
+    error = dpu_core_mux_->PowerOff(teardown, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateOff;
@@ -1840,7 +1928,10 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       pending_power_state_ = kPowerStateNone;
     }
     cached_qos_data_ = {};
-    cached_qos_data_.clock_hz = default_clock_hz_;
+    cached_qos_data_.resize(core_count_);
+    for (int i = 0; i < default_clock_hz_.size(); i++) {
+      cached_qos_data_[i].clock_hz = default_clock_hz_[i];
+    }
     break;
 
   case kStateOn:
@@ -1848,7 +1939,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
     }
 
-    error = hw_intf_->PowerOn(cached_qos_data_, &sync_points);
+    error = dpu_core_mux_->PowerOn(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateOn;
@@ -1860,19 +1951,20 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       pending_power_state_ = kPowerStateNone;
     }
 
-    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes_,
-                                              hw_panel_info_, mixer_attributes_, fb_config_,
+    error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx_, client_ctx_,
                                               &cached_qos_data_);
     if (error != kErrorNone) {
       return error;
     }
-    default_clock_hz_ = cached_qos_data_.clock_hz;
+    for (int i = 0; i < cached_qos_data_.size(); i++) {
+      default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+    }
 
     active = true;
     break;
 
   case kStateDoze:
-    error = hw_intf_->Doze(cached_qos_data_, &sync_points);
+    error = dpu_core_mux_->Doze(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDoze;
@@ -1887,7 +1979,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateDozeSuspend:
-    error = hw_intf_->DozeSuspend(cached_qos_data_, &sync_points);
+    error = dpu_core_mux_->DozeSuspend(cached_qos_data_, &sync_points);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_state_ = kPowerStateDozeSuspend;
@@ -1905,7 +1997,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateStandby:
-    error = hw_intf_->Standby(&sync_points);
+    error = dpu_core_mux_->Standby(&sync_points);
     break;
 
   default:
@@ -1958,7 +2050,7 @@ DisplayError DisplayBase::SetActiveConfig(uint32_t index) {
   uint32_t active_index = 0;
 
   validated_ = false;
-  hw_intf_->GetActiveConfig(&active_index);
+  dpu_core_mux_->GetActiveConfig(&active_index);
 
   if (active_index == index) {
     return kErrorNone;
@@ -1970,15 +2062,17 @@ DisplayError DisplayBase::SetActiveConfig(uint32_t index) {
     return kErrorNotSupported;
   }
 
-  error = hw_intf_->SetDisplayAttributes(index);
+  error = dpu_core_mux_->SetDisplayAttributes(index);
   if (error != kErrorNone) {
     return error;
   }
 
   // Cache last refresh rate set by SF
-  HWDisplayAttributes display_attributes = {};
-  hw_intf_->GetDisplayAttributes(index, &display_attributes);
-  active_refresh_rate_ = display_attributes.fps;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  dpu_core_mux_->GetDisplayAttributes(index, &device_ctx, &client_ctx);
+  active_refresh_rate_ = client_ctx.display_attributes.fps;
 
   return ReconfigureDisplay();
 }
@@ -1998,19 +2092,19 @@ DisplayError DisplayBase::SetMaxMixerStages(uint32_t max_mixer_stages) {
 }
 
 void DisplayBase::AppendRCMaskData(std::ostringstream &os) {
-  uint32_t num_mask_layers = disp_layer_stack_.info.rc_layers_info.mask_layer_idx.size();
-  uint32_t num_rc_hw_layers = disp_layer_stack_.info.rc_layers_info.rc_hw_layer_idx.size();
+  uint32_t num_mask_layers = disp_layer_stack_.stack_info.rc_layers_info.mask_layer_idx.size();
+  uint32_t num_rc_hw_layers = disp_layer_stack_.stack_info.rc_layers_info.rc_hw_layer_idx.size();
   if (num_mask_layers && rc_enable_prop_) {
     os << "\nRC HW Mask Layer Idx: [";
     for (uint32_t i = 0; i < num_rc_hw_layers; i++) {
-      os << disp_layer_stack_.info.rc_layers_info.rc_hw_layer_idx.at(i);
+      os << disp_layer_stack_.stack_info.rc_layers_info.rc_hw_layer_idx.at(i);
       if (i < (num_rc_hw_layers - 1)) {
         os << ", ";
       }
     }
     os << "] of [";
     for (uint32_t i = 0; i < num_mask_layers; i++) {
-      os << disp_layer_stack_.info.rc_layers_info.mask_layer_idx.at(i);
+      os << disp_layer_stack_.stack_info.rc_layers_info.mask_layer_idx.at(i);
       if (i < (num_mask_layers - 1)) {
         os << ", ";
       }
@@ -2021,58 +2115,59 @@ void DisplayBase::AppendRCMaskData(std::ostringstream &os) {
 
 std::string DisplayBase::Dump() {
   ClientLock lock(disp_mutex_);
-  HWDisplayAttributes attrib;
   uint32_t active_index = 0;
   uint32_t num_modes = 0;
   std::ostringstream os;
 
-  hw_intf_->GetNumDisplayAttributes(&num_modes);
-  hw_intf_->GetActiveConfig(&active_index);
-  hw_intf_->GetDisplayAttributes(active_index, &attrib);
+  dpu_core_mux_->GetNumDisplayAttributes(&num_modes);
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  HWPanelInfo hw_panel_info = client_ctx_.hw_panel_info;
+  HWDisplayAttributes display_attributes = client_ctx_.display_attributes;
+  HWMixerAttributes mixer_attributes = client_ctx_.mixer_attributes;
 
   os << "device type:" << display_type_;
   os << " DrawMethod: " << draw_method_;
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
-  if (disp_layer_stack_.info.noise_layer_info.enable) {
-    os << "\nNoise z-orders: [" << disp_layer_stack_.info.noise_layer_info.zpos_noise << "," <<
-        disp_layer_stack_.info.noise_layer_info.zpos_attn << "]";
+  if (disp_layer_stack_.stack_info.noise_layer_info.enable) {
+    os << "\nNoise z-orders: [" << disp_layer_stack_.stack_info.noise_layer_info.zpos_noise
+       << "," << disp_layer_stack_.stack_info.noise_layer_info.zpos_attn << "]";
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
-  os << "\n Mode:" << (hw_panel_info_.mode == kModeVideo ? "Video" : "Command");
+  os << "\n Mode:" << (hw_panel_info.mode == kModeVideo ? "Video" : "Command");
   os << std::boolalpha;
-  os << " Primary:" << hw_panel_info_.is_primary_panel;
-  os << " DynFPS:" << hw_panel_info_.dynamic_fps;
-  os << "\n HDR Panel:" << hw_panel_info_.hdr_enabled;
-  os << " QSync:" << hw_panel_info_.qsync_support;
-  os << " DynBitclk:" << hw_panel_info_.dyn_bitclk_support;
-  os << "\n Left Split:" << hw_panel_info_.split_info.left_split
-     << " Right Split:" << hw_panel_info_.split_info.right_split;
-  os << "\n PartialUpdate:" << hw_panel_info_.partial_update;
-  if (hw_panel_info_.partial_update) {
-    os << "\n ROI Min w:" << hw_panel_info_.min_roi_width;
-    os << " Min h:" << hw_panel_info_.min_roi_height;
-    os << " NeedsMerge: " << hw_panel_info_.needs_roi_merge;
-    os << " Alignment: l:" << hw_panel_info_.left_align << " w:" << hw_panel_info_.width_align;
-    os << " t:" << hw_panel_info_.top_align << " b:" << hw_panel_info_.height_align;
+  os << " Primary:" << hw_panel_info.is_primary_panel;
+  os << " DynFPS:" << hw_panel_info.dynamic_fps;
+  os << "\n HDR Panel:" << hw_panel_info.hdr_enabled;
+  os << " QSync:" << hw_panel_info.qsync_support;
+  os << " DynBitclk:" << hw_panel_info.dyn_bitclk_support;
+  os << "\n Left Split:" << hw_panel_info.split_info.left_split
+     << " Right Split:" << hw_panel_info.split_info.right_split;
+  os << "\n PartialUpdate:" << hw_panel_info.partial_update;
+  if (hw_panel_info.partial_update) {
+    os << "\n ROI Min w:" << hw_panel_info.min_roi_width;
+    os << " Min h:" << hw_panel_info.min_roi_height;
+    os << " NeedsMerge: " << hw_panel_info.needs_roi_merge;
+    os << " Alignment: l:" << hw_panel_info.left_align << " w:" << hw_panel_info.width_align;
+    os << " t:" << hw_panel_info.top_align << " b:" << hw_panel_info.height_align;
   }
-  os << "\n FPS min:" << hw_panel_info_.min_fps << " max:" << hw_panel_info_.max_fps
-     << " cur:" << display_attributes_.fps;
-  os << " TransferTime: " << hw_panel_info_.transfer_time_us << "us";
-  os << " MaxBrightness:" << hw_panel_info_.panel_max_brightness;
-  os << "\n Display WxH: " << display_attributes_.x_pixels << "x" << display_attributes_.y_pixels;
-  os << " MixerWxH: " << mixer_attributes_.width << "x" << mixer_attributes_.height;
-  os << " DPI: " << display_attributes_.x_dpi << "x" << display_attributes_.y_dpi;
-  os << " LM_Split: " << display_attributes_.is_device_split;
-  os << "\n vsync_period " << display_attributes_.vsync_period_ns;
-  os << " v_back_porch: " << display_attributes_.v_back_porch;
-  os << " v_front_porch: " << display_attributes_.v_front_porch;
-  os << " v_pulse_width: " << display_attributes_.v_pulse_width;
-  os << "\n v_total: " << display_attributes_.v_total;
-  os << " h_total: " << display_attributes_.h_total;
-  os << " clk: " << display_attributes_.clock_khz;
-  os << " Topology: " << display_attributes_.topology;
+  os << "\n FPS min:" << hw_panel_info.min_fps << " max:" << hw_panel_info.max_fps
+     << " cur:" << display_attributes.fps;
+  os << " TransferTime: " << hw_panel_info.transfer_time_us << "us";
+  os << " MaxBrightness:" << hw_panel_info.panel_max_brightness;
+  os << "\n Display WxH: " << display_attributes.x_pixels << "x" << display_attributes.y_pixels;
+  os << " MixerWxH: " << mixer_attributes.width << "x" << mixer_attributes.height;
+  os << " DPI: " << display_attributes.x_dpi << "x" << display_attributes.y_dpi;
+  os << " LM_Split: " << display_attributes.is_device_split;
+  os << "\n vsync_period " << display_attributes.vsync_period_ns;
+  os << " v_back_porch: " << display_attributes.v_back_porch;
+  os << " v_front_porch: " << display_attributes.v_front_porch;
+  os << " v_pulse_width: " << display_attributes.v_pulse_width;
+  os << "\n v_total: " << display_attributes.v_total;
+  os << " h_total: " << display_attributes.h_total;
+  os << " clk: " << display_attributes.clock_khz;
+  os << " Topology: " << display_attributes.topology;
   os << std::noboolalpha;
 
   os << "\nCurrent Color Mode: " << current_color_mode_.c_str();
@@ -2087,155 +2182,158 @@ std::string DisplayBase::Dump() {
     os << "\n";
   }
 
-  uint32_t num_hw_layers = UINT32(disp_layer_stack_.info.hw_layers.size());
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    uint32_t num_hw_layers = UINT32(disp_layer_stack_.info[j].hw_layers.size());
 
-  if (num_hw_layers == 0) {
-    os << "\nNo hardware layers programmed";
-    return os.str();
-  }
-
-  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
-  if (out_buffer) {
-    os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
-  }
-  HWLayersInfo &layer_info = disp_layer_stack_.info;
-  for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
-    LayerRect &l_roi = layer_info.left_frame_roi.at(i);
-    LayerRect &r_roi = layer_info.right_frame_roi.at(i);
-
-    os << "\nROI(LTRB)#" << i << " LEFT(" << INT(l_roi.left) << " " << INT(l_roi.top) << " " <<
-      INT(l_roi.right) << " " << INT(l_roi.bottom) << ")";
-    if (IsValid(r_roi)) {
-    os << " RIGHT(" << INT(r_roi.left) << " " << INT(r_roi.top) << " " << INT(r_roi.right) << " "
-      << INT(r_roi.bottom) << ")";
-    }
-  }
-
-  LayerRect &fb_roi = layer_info.partial_fb_roi;
-  if (IsValid(fb_roi)) {
-    os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
-      INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
-  }
-
-  AppendRCMaskData(os);
-
-  const char *header  = "\n| Idx |   Comp Type   |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
-  const char *newline = "\n|-----|---------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
-  const char *format  = "\n| %3s | %13s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
-
-  os << "\n";
-  os << newline;
-  os << header;
-  os << newline;
-
-  for (uint32_t i = 0; i < num_hw_layers; i++) {
-    uint32_t layer_index = disp_layer_stack_.info.index.at(i);
-    // hw-layer from hw layers info
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
-    LayerBuffer *input_buffer = &hw_layer.input_buffer;
-    HWLayerConfig &layer_config = disp_layer_stack_.info.config[i];
-    HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
-
-    const char *comp_type = GetName(hw_layer.composition);
-    const char *buffer_format = GetFormatString(input_buffer->format);
-    const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
-    const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
-    char idx[8];
-
-    snprintf(idx, sizeof(idx), "%d", layer_index);
-
-    for (uint32_t count = 0; count < hw_rotator_session.hw_block_count; count++) {
-      char row[1024];
-      HWRotateInfo &rotate = hw_rotator_session.hw_rotate_info[count];
-      LayerRect &src_roi = rotate.src_roi;
-      LayerRect &dst_roi = rotate.dst_roi;
-      char rot[12] = { 0 };
-
-      snprintf(rot, sizeof(rot), "Rot-%s-%d", layer_config.use_inline_rot ?
-               "inl" : "off", count + 1);
-
-      snprintf(row, sizeof(row), format, idx, comp_type, rot,
-               0, input_buffer->width, input_buffer->height, buffer_format,
-               INT(src_roi.left), INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
-               INT(dst_roi.left), INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
-               "-", "-    ", "-    ", "-", "-", "-");
-      os << row;
-      // print the below only once per layer block, fill with spaces for rest.
-      idx[0] = 0;
-      comp_type = "";
+    if (num_hw_layers == 0) {
+      os << "\nNo hardware layers programmed";
+      return os.str();
     }
 
-    if (hw_rotator_session.hw_block_count > 0) {
-      input_buffer = &hw_rotator_session.output_buffer;
-      buffer_format = GetFormatString(input_buffer->format);
+    os << "\n\n Table for DPU - " << j << "\n";
+    LayerBuffer *out_buffer = disp_layer_stack_.info[j].output_buffer;
+    if (out_buffer) {
+      os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
+         << " format: " << GetFormatString(out_buffer->format);
+    }
+    HWLayersInfo &layer_info = disp_layer_stack_.info[j];
+    for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
+      LayerRect &l_roi = layer_info.left_frame_roi.at(i);
+      LayerRect &r_roi = layer_info.right_frame_roi.at(i);
+
+      os << "\nROI(LTRB)#" << i << " LEFT(" << INT(l_roi.left) << " " << INT(l_roi.top) << " " <<
+        INT(l_roi.right) << " " << INT(l_roi.bottom) << ")";
+      if (IsValid(r_roi)) {
+      os << " RIGHT(" << INT(r_roi.left) << " " << INT(r_roi.top) << " " << INT(r_roi.right) << " "
+        << INT(r_roi.bottom) << ")";
+      }
     }
 
-    if (layer_config.use_solidfill_stage) {
-      LayerRect src_roi = layer_config.hw_solidfill_stage.roi;
-      const char *decimation = "";
-      char flags[16] = { 0 };
-      char z_order[8] = { 0 };
-      const char *color_primary = "";
-      const char *range = "";
-      const char *transfer = "";
-      char row[1024] = { 0 };
-
-      snprintf(z_order, sizeof(z_order), "%d", layer_config.hw_solidfill_stage.z_order);
-      snprintf(flags, sizeof(flags), "0x%08x", hw_layer.flags.flags);
-      snprintf(row, sizeof(row), format, idx, comp_type, pipe_split[0],
-               0, INT(src_roi.right), INT(src_roi.bottom),
-               buffer_format, INT(src_roi.left), INT(src_roi.top),
-               INT(src_roi.right), INT(src_roi.bottom), INT(src_roi.left),
-               INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
-               z_order, flags, decimation, color_primary, range, transfer);
-      os << row;
-      continue;
+    LayerRect &fb_roi = disp_layer_stack_.stack_info.partial_fb_roi;
+    if (IsValid(fb_roi)) {
+      os << "\nPartial FB ROI(LTRB):(" << INT(fb_roi.left) << " " << INT(fb_roi.top) << " " <<
+        INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
     }
 
-    for (uint32_t count = 0; count < 2; count++) {
-      char decimation[16] = { 0 };
-      char flags[16] = { 0 };
-      char z_order[8] = { 0 };
-      char color_primary[8] = { 0 };
-      char range[8] = { 0 };
-      char transfer[8] = { 0 };
-      bool rot = layer_config.use_inline_rot;
+    AppendRCMaskData(os);
 
-      HWPipeInfo &pipe = (count == 0) ? layer_config.left_pipe : layer_config.right_pipe;
+    const char *header  = "\n| Idx |   Comp Type   |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
+    const char *newline = "\n|-----|---------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
+    const char *format  = "\n| %3s | %13s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
 
-      if (!pipe.valid) {
+    os << "\n";
+    os << newline;
+    os << header;
+    os << newline;
+
+    for (uint32_t i = 0; i < num_hw_layers; i++) {
+      uint32_t layer_index = disp_layer_stack_.info[j].index.at(i);
+      // hw-layer from hw layers info
+      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      LayerBuffer *input_buffer = &hw_layer.input_buffer;
+      HWLayerConfig &layer_config = disp_layer_stack_.info[j].config[i];
+      HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
+
+      const char *comp_type = GetName(hw_layer.composition);
+      const char *buffer_format = GetFormatString(input_buffer->format);
+      const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
+      const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
+      char idx[8];
+
+      snprintf(idx, sizeof(idx), "%d", layer_index);
+
+      for (uint32_t count = 0; count < hw_rotator_session.hw_block_count; count++) {
+        char row[1024];
+        HWRotateInfo &rotate = hw_rotator_session.hw_rotate_info[count];
+        LayerRect &src_roi = rotate.src_roi;
+        LayerRect &dst_roi = rotate.dst_roi;
+        char rot[12] = { 0 };
+
+        snprintf(rot, sizeof(rot), "Rot-%s-%d", layer_config.use_inline_rot ?
+                 "inl" : "off", count + 1);
+
+        snprintf(row, sizeof(row), format, idx, comp_type, rot,
+                 0, input_buffer->width, input_buffer->height, buffer_format,
+                 INT(src_roi.left), INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
+                 INT(dst_roi.left), INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
+                 "-", "-    ", "-    ", "-", "-", "-");
+        os << row;
+        // print the below only once per layer block, fill with spaces for rest.
+        idx[0] = 0;
+        comp_type = "";
+      }
+
+      if (hw_rotator_session.hw_block_count > 0) {
+        input_buffer = &hw_rotator_session.output_buffer;
+        buffer_format = GetFormatString(input_buffer->format);
+      }
+
+      if (layer_config.use_solidfill_stage) {
+        LayerRect src_roi = layer_config.hw_solidfill_stage.roi;
+        const char *decimation = "";
+        char flags[16] = { 0 };
+        char z_order[8] = { 0 };
+        const char *color_primary = "";
+        const char *range = "";
+        const char *transfer = "";
+        char row[1024] = { 0 };
+
+        snprintf(z_order, sizeof(z_order), "%d", layer_config.hw_solidfill_stage.z_order);
+        snprintf(flags, sizeof(flags), "0x%08x", hw_layer.flags.flags);
+        snprintf(row, sizeof(row), format, idx, comp_type, pipe_split[0],
+                 0, INT(src_roi.right), INT(src_roi.bottom),
+                 buffer_format, INT(src_roi.left), INT(src_roi.top),
+                 INT(src_roi.right), INT(src_roi.bottom), INT(src_roi.left),
+                 INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
+                 z_order, flags, decimation, color_primary, range, transfer);
+        os << row;
         continue;
       }
 
-      LayerRect src_roi = pipe.src_roi;
-      LayerRect &dst_roi = pipe.dst_roi;
+      for (uint32_t count = 0; count < 2; count++) {
+        char decimation[16] = { 0 };
+        char flags[16] = { 0 };
+        char z_order[8] = { 0 };
+        char color_primary[8] = { 0 };
+        char range[8] = { 0 };
+        char transfer[8] = { 0 };
+        bool rot = layer_config.use_inline_rot;
 
-      snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
-      snprintf(flags, sizeof(flags), "0x%08x", pipe.flags);
-      snprintf(decimation, sizeof(decimation), "%3d x %3d", pipe.horizontal_decimation,
-               pipe.vertical_decimation);
-      ColorMetaData &color_metadata = hw_layer.input_buffer.color_metadata;
-      snprintf(color_primary, sizeof(color_primary), "%d", color_metadata.colorPrimaries);
-      snprintf(range, sizeof(range), "%d", color_metadata.range);
-      snprintf(transfer, sizeof(transfer), "%d", color_metadata.transfer);
+        HWPipeInfo &pipe = (count == 0) ? layer_config.left_pipe : layer_config.right_pipe;
 
-      char row[1024];
-      snprintf(row, sizeof(row), format, idx, comp_type, rot ? rot_pipe[count] : pipe_split[count],
-               pipe.pipe_id, input_buffer->width, input_buffer->height,
-               buffer_format, INT(src_roi.left), INT(src_roi.top),
-               INT(src_roi.right), INT(src_roi.bottom), INT(dst_roi.left),
-               INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
-               z_order, flags, decimation, color_primary, range, transfer);
+        if (!pipe.valid) {
+          continue;
+        }
 
-      os << row;
-      // print the below only once per layer block, fill with spaces for rest.
-      idx[0] = 0;
-      comp_type = "";
+        LayerRect src_roi = pipe.src_roi;
+        LayerRect &dst_roi = pipe.dst_roi;
+
+        snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
+        snprintf(flags, sizeof(flags), "0x%08x", pipe.flags);
+        snprintf(decimation, sizeof(decimation), "%3d x %3d", pipe.horizontal_decimation,
+                 pipe.vertical_decimation);
+        ColorMetaData &color_metadata = hw_layer.input_buffer.color_metadata;
+        snprintf(color_primary, sizeof(color_primary), "%d", color_metadata.colorPrimaries);
+        snprintf(range, sizeof(range), "%d", color_metadata.range);
+        snprintf(transfer, sizeof(transfer), "%d", color_metadata.transfer);
+
+        char row[1024];
+        snprintf(row, sizeof(row), format, idx, comp_type, rot ? rot_pipe[count] :
+                 pipe_split[count], pipe.pipe_id, input_buffer->width, input_buffer->height,
+                 buffer_format, INT(src_roi.left), INT(src_roi.top),
+                 INT(src_roi.right), INT(src_roi.bottom), INT(dst_roi.left),
+                 INT(dst_roi.top), INT(dst_roi.right), INT(dst_roi.bottom),
+                 z_order, flags, decimation, color_primary, range, transfer);
+
+        os << row;
+        // print the below only once per layer block, fill with spaces for rest.
+        idx[0] = 0;
+        comp_type = "";
+      }
     }
-  }
 
-  os << newline << "\n";
+    os << newline << "\n";
+  }
 
   return os.str();
 }
@@ -2348,7 +2446,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     DLOGE("SetBlendSpace failed, error = %d display_type_ = %d", error, display_type_);
   }
 
-  error = hw_intf_->SetBlendSpace(blend_space);
+  error = dpu_core_mux_->SetBlendSpace(blend_space);
   if (error != kErrorNone) {
     DLOGE("Failed to pass blend space, error = %d display_type_ = %d", error, display_type_);
   }
@@ -2619,7 +2717,7 @@ DisplayError DisplayBase::SetCursorPosition(int x, int y) {
   DisplayError error = comp_manager_->ValidateAndSetCursorPosition(display_comp_ctx_,
                                                                    &disp_layer_stack_, x, y);
   if (error == kErrorNone) {
-    return hw_intf_->SetCursorPosition(&disp_layer_stack_.info, x, y);
+    return dpu_core_mux_->SetCursorPosition(disp_layer_stack_.info, x, y);
   }
 
   return kErrorNone;
@@ -2630,16 +2728,18 @@ DisplayError DisplayBase::GetRefreshRateRange(uint32_t *min_refresh_rate,
   ClientLock lock(disp_mutex_);
   // The min and max refresh rates will be same when the HWPanelInfo does not contain valid rates.
   // Usually for secondary displays, command mode panels
-  HWDisplayAttributes display_attributes;
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
   uint32_t active_index = 0;
-  hw_intf_->GetActiveConfig(&active_index);
-  DisplayError error = hw_intf_->GetDisplayAttributes(active_index, &display_attributes);
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  DisplayError error = dpu_core_mux_->GetDisplayAttributes(active_index, &device_ctx, &client_ctx);
   if (error) {
     return error;
   }
 
-  *min_refresh_rate = display_attributes.fps;
-  *max_refresh_rate = display_attributes.fps;
+  *min_refresh_rate = client_ctx.display_attributes.fps;
+  *max_refresh_rate = client_ctx.display_attributes.fps;
 
   return error;
 }
@@ -2674,10 +2774,10 @@ DisplayError DisplayBase::SetVSyncStateLocked(bool enable) {
   }
   DisplayError error = kErrorNone;
   if (vsync_enable_ != enable) {
-    error = hw_intf_->SetVSyncState(enable);
+    error = dpu_core_mux_->SetVSyncState(enable);
     if (error == kErrorNotSupported) {
-      if (drop_skewed_vsync_ && (hw_panel_info_.mode == kModeVideo) &&
-        enable && (current_refresh_rate_ < hw_panel_info_.max_fps)) {
+      if (drop_skewed_vsync_ && (client_ctx_.hw_panel_info.mode == kModeVideo) &&
+        enable && (current_refresh_rate_ < client_ctx_.hw_panel_info.max_fps)) {
         drop_hw_vsync_ = true;
       }
       error = hw_events_intf_->SetEventState(HWEvent::VSYNC, enable);
@@ -2764,58 +2864,62 @@ DisplayError DisplayBase::SetNoisePlugInOverride(bool override_en, int32_t attn,
 DisplayError DisplayBase::ReconfigureDisplay() {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
-  HWDisplayAttributes display_attributes;
-  HWMixerAttributes mixer_attributes;
-  HWPanelInfo hw_panel_info;
   uint32_t active_index = 0;
 
   DTRACE_SCOPED();
 
-  error = hw_intf_->GetActiveConfig(&active_index);
+  DisplayClientContext client_ctx = {};
+  DisplayDeviceContext device_ctx;
+
+  client_ctx = client_ctx_;
+  device_ctx = device_ctx_;
+
+  error = dpu_core_mux_->GetActiveConfig(&active_index);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetDisplayAttributes(active_index, &display_attributes);
+  error = dpu_core_mux_->GetDisplayAttributes(active_index, &device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes);
+  error = dpu_core_mux_->GetMixerAttributes(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetHWPanelInfo(&hw_panel_info);
+  error = dpu_core_mux_->GetHWPanelInfo(&device_ctx, &client_ctx);
   if (error != kErrorNone) {
     return error;
   }
 
-  bool display_unchanged = (display_attributes == display_attributes_);
-  bool mixer_unchanged = (mixer_attributes == mixer_attributes_);
-  bool panel_unchanged = (hw_panel_info == hw_panel_info_);
+  bool display_unchanged = (client_ctx.display_attributes == client_ctx_.display_attributes);
+  bool mixer_unchanged = (client_ctx.mixer_attributes == client_ctx_.mixer_attributes);
+  bool panel_unchanged = (client_ctx.hw_panel_info == client_ctx_.hw_panel_info);
   if (display_unchanged && mixer_unchanged && panel_unchanged) {
     return kErrorNone;
   }
 
-  error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes, hw_panel_info,
-                                            mixer_attributes, fb_config_, &cached_qos_data_);
+  error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx,
+                                            client_ctx, &cached_qos_data_);
   if (error != kErrorNone) {
     return error;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
   // Disable Partial Update for one frame as PU not supported during modeset.
   DisablePartialUpdateOneFrameInternal();
 
-  display_attributes_ = display_attributes;
-  mixer_attributes_ = mixer_attributes;
-  hw_panel_info_ = hw_panel_info;
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
 
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
   SetPUonDestScaler();
-  if (hw_panel_info_.partial_update && !disable_pu_on_dest_scaler_) {
+  if (client_ctx_.hw_panel_info.partial_update && !disable_pu_on_dest_scaler_) {
     // If current panel supports Partial Update and destination scalar isn't enabled, then add
     // a pending PU request to be served in the first PU enable frame after the modeset frame.
     // Because if first PU enable frame, after transition, has a partial Frame-ROI and
@@ -2847,8 +2951,8 @@ DisplayError DisplayBase::GetMixerResolution(uint32_t *width, uint32_t *height) 
     return kErrorParameters;
   }
 
-  *width = mixer_attributes_.width;
-  *height = mixer_attributes_.height;
+  *width = client_ctx_.mixer_attributes.width;
+  *height = client_ctx_.mixer_attributes.height;
 
   return kErrorNone;
 }
@@ -2864,7 +2968,8 @@ DisplayError DisplayBase::ReconfigureMixer(uint32_t width, uint32_t height) {
 
   DLOGD_IF(kTagQDCM, "Reconfiguring mixer with width : %d, height : %d", width, height);
 
-  LayerRect fb_rect = { 0.0f, 0.0f, FLOAT(fb_config_.x_pixels), FLOAT(fb_config_.y_pixels) };
+  LayerRect fb_rect = { 0.0f, 0.0f, FLOAT(client_ctx_.fb_config.x_pixels),
+                        FLOAT(client_ctx_.fb_config.y_pixels) };
   LayerRect mixer_rect = { 0.0f, 0.0f, FLOAT(width), FLOAT(height) };
 
   error = comp_manager_->ValidateScaling(fb_rect, mixer_rect, false /* rotate90 */);
@@ -2876,7 +2981,7 @@ DisplayError DisplayBase::ReconfigureMixer(uint32_t width, uint32_t height) {
   mixer_attributes.width = width;
   mixer_attributes.height = height;
 
-  error = hw_intf_->SetMixerAttributes(mixer_attributes);
+  error = dpu_core_mux_->SetMixerAttributes(mixer_attributes);
   if (error != kErrorNone) {
     return error;
   }
@@ -2905,14 +3010,14 @@ bool DisplayBase::NeedsDownScale(const LayerRect &src_rect, const LayerRect &dst
 bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *new_mixer_width,
                                             uint32_t *new_mixer_height) {
   ClientLock lock(disp_mutex_);
-  uint32_t mixer_width = mixer_attributes_.width;
-  uint32_t mixer_height = mixer_attributes_.height;
-  uint32_t fb_width = fb_config_.x_pixels;
-  uint32_t fb_height = fb_config_.y_pixels;
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t mixer_width = client_ctx_.mixer_attributes.width;
+  uint32_t mixer_height = client_ctx_.mixer_attributes.height;
+  uint32_t fb_width = client_ctx_.fb_config.x_pixels;
+  uint32_t fb_height = client_ctx_.fb_config.y_pixels;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
-  if (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer) {
+  if (HasConcurrentWriteback() && layer_stack->output_buffer) {
     DLOGV_IF(kTagDisplay, "Found concurrent writeback, configure LM width:%d height:%d",
              fb_width, fb_height);
     *new_mixer_width = fb_width;
@@ -2951,7 +3056,7 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   uint32_t max_layer_area = 0;
   uint32_t max_area_layer_index = 0;
   std::vector<Layer *> layers = layer_stack->layers;
-  uint32_t align_x = display_attributes_.is_3d_mux_used ? 4 : 2;
+  uint32_t align_x = client_ctx_.display_attributes.is_3d_mux_used ? 4 : 2;
   uint32_t align_y = 2;
 
   for (uint32_t i = 0; i < layer_count; i++) {
@@ -3021,9 +3126,16 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
     return kErrorParameters;
   }
 
+  DisplayClientContext client_ctx = client_ctx_;
+  DisplayDeviceContext device_ctx = device_ctx_;
+
+  client_ctx.fb_config = variable_info;
+  dpu_core_mux_->GetFbConfig(width, height, &device_ctx, &client_ctx);
+
   // Create rects to represent the new source and destination crops
   LayerRect crop = LayerRect(0, 0, FLOAT(width), FLOAT(height));
-  LayerRect dst = LayerRect(0, 0, FLOAT(mixer_attributes_.width), FLOAT(mixer_attributes_.height));
+  LayerRect dst = LayerRect(0, 0, FLOAT(client_ctx.mixer_attributes.width),
+                            FLOAT(client_ctx.mixer_attributes.height));
   // Set rotate90 to false since this is taken care of during regular composition.
   bool rotate90 = false;
 
@@ -3033,17 +3145,20 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
     return kErrorParameters;
   }
 
-  error =  comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes_, hw_panel_info_,
-                                             mixer_attributes_, variable_info, &cached_qos_data_);
+  error =  comp_manager_->ReconfigureDisplay(display_comp_ctx_, device_ctx,
+                                             client_ctx, &cached_qos_data_);
   if (error != kErrorNone) {
     return error;
   }
-  default_clock_hz_ = cached_qos_data_.clock_hz;
+  for (int i = 0; i < cached_qos_data_.size(); i++) {
+    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  }
 
-  fb_config_.x_pixels = width;
-  fb_config_.y_pixels = height;
+  client_ctx_ = client_ctx;
+  device_ctx_ = device_ctx;
 
-  DLOGI("New framebuffer resolution (%dx%d)", fb_config_.x_pixels, fb_config_.y_pixels);
+  DLOGI("New framebuffer resolution (%dx%d)", client_ctx_.fb_config.x_pixels,
+                                              client_ctx_.fb_config.y_pixels);
 
   return kErrorNone;
 }
@@ -3055,7 +3170,7 @@ DisplayError DisplayBase::GetFrameBufferConfig(DisplayConfigVariableInfo *variab
     return kErrorParameters;
   }
 
-  *variable_info = fb_config_;
+  *variable_info = client_ctx_.fb_config;
 
   return kErrorNone;
 }
@@ -3086,7 +3201,7 @@ DisplayError DisplayBase::GetDisplayPort(DisplayPort *port) {
     return kErrorParameters;
   }
 
-  *port = hw_panel_info_.port;
+  *port = client_ctx_.hw_panel_info.port;
 
   return kErrorNone;
 }
@@ -3099,6 +3214,18 @@ DisplayError DisplayBase::GetDisplayId(int32_t *display_id) {
   }
 
   *display_id = display_id_;
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBase::GetConnectorId(int32_t *conn_id) {
+  ClientLock lock(disp_mutex_);
+
+  if (!conn_id) {
+    return kErrorParameters;
+  }
+
+  *conn_id = display_id_info_.GetConnId();
 
   return kErrorNone;
 }
@@ -3122,7 +3249,7 @@ bool DisplayBase::IsPrimaryDisplay() {
 }
 
 bool DisplayBase::IsPrimaryDisplayLocked() {
-  return hw_panel_info_.is_primary_panel;
+  return client_ctx_.hw_panel_info.is_primary_panel;
 }
 
 DisplayError DisplayBase::SetCompositionState(LayerComposition composition_type, bool enable) {
@@ -3138,38 +3265,40 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   }
 
   // Copy the acquire fence from clients layers  to HWLayers
-  uint32_t hw_layers_count = UINT32(disp_layer_stack_.info.hw_layers.size());
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    uint32_t hw_layers_count = UINT32(disp_layer_stack_.info[j].hw_layers.size());
 
-  for (uint32_t i = 0; i < hw_layers_count; i++) {
-    uint32_t sdm_layer_index = disp_layer_stack_.info.index.at(i);
-    Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
+    for (uint32_t i = 0; i < hw_layers_count; i++) {
+      uint32_t sdm_layer_index = disp_layer_stack_.info[j].index.at(i);
+      Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
+      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
 
-    hw_layer.input_buffer.planes[0].fd = Sys::dup_(sdm_layer->input_buffer.planes[0].fd);
-    hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
-    hw_layer.input_buffer.planes[0].stride = sdm_layer->input_buffer.planes[0].stride;
-    hw_layer.input_buffer.size = sdm_layer->input_buffer.size;
-    hw_layer.input_buffer.acquire_fence = sdm_layer->input_buffer.acquire_fence;
-    hw_layer.input_buffer.handle_id = sdm_layer->input_buffer.handle_id;
-    // All app buffer handles are set prior to prepare.
-    // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
-    // secure display flags are also updated during SetClientTarget() called between validate and
-    // commit. Need to revist this and update it accordingly for FBT layer.
-    if (disp_layer_stack_.info.gpu_target_index > 0 &&
-        (static_cast<uint32_t>(disp_layer_stack_.info.gpu_target_index) == sdm_layer_index)) {
-      hw_layer.input_buffer.flags.secure = sdm_layer->input_buffer.flags.secure;
-      hw_layer.input_buffer.format = sdm_layer->input_buffer.format;
-      hw_layer.input_buffer.width = sdm_layer->input_buffer.width;
-      hw_layer.input_buffer.height = sdm_layer->input_buffer.height;
-      hw_layer.input_buffer.unaligned_width = sdm_layer->input_buffer.unaligned_width;
-      hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
+      hw_layer.input_buffer.planes[0].fd = Sys::dup_(sdm_layer->input_buffer.planes[0].fd);
+      hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
+      hw_layer.input_buffer.planes[0].stride = sdm_layer->input_buffer.planes[0].stride;
+      hw_layer.input_buffer.size = sdm_layer->input_buffer.size;
+      hw_layer.input_buffer.acquire_fence = sdm_layer->input_buffer.acquire_fence;
+      hw_layer.input_buffer.handle_id = sdm_layer->input_buffer.handle_id;
+      // All app buffer handles are set prior to prepare.
+      // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
+      // secure display flags are also updated during SetClientTarget() called between validate and
+      // commit. Need to revist this and update it accordingly for FBT layer.
+      if (disp_layer_stack_.stack_info.gpu_target_index > 0 &&
+       (static_cast<uint32_t>(disp_layer_stack_.stack_info.gpu_target_index) == sdm_layer_index)) {
+        hw_layer.input_buffer.flags.secure = sdm_layer->input_buffer.flags.secure;
+        hw_layer.input_buffer.format = sdm_layer->input_buffer.format;
+        hw_layer.input_buffer.width = sdm_layer->input_buffer.width;
+        hw_layer.input_buffer.height = sdm_layer->input_buffer.height;
+        hw_layer.input_buffer.unaligned_width = sdm_layer->input_buffer.unaligned_width;
+        hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
+      }
     }
   }
 
   UpdateFrameBuffer();
 
   if (layer_stack->elapse_timestamp) {
-    disp_layer_stack_.info.elapse_timestamp = layer_stack->elapse_timestamp;
+    disp_layer_stack_.stack_info.common_info.elapse_timestamp = layer_stack->elapse_timestamp;
   }
 
   return;
@@ -3181,33 +3310,38 @@ void DisplayBase::UpdateFrameBuffer() {
   }
 
   bool client_target_present = false;
-  for (auto &hw_layer : disp_layer_stack_.info.hw_layers) {
-    if (hw_layer.composition == kCompositionGPUTarget) {
-      client_target_present = true;
-      break;
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    for (auto &hw_layer : disp_layer_stack_.info[j].hw_layers) {
+      if (hw_layer.composition == kCompositionGPUTarget) {
+        client_target_present = true;
+        break;
+      }
     }
   }
-
   bool need_cached_fb = !gpu_comp_frame_ && client_target_present;
   if (!need_cached_fb) {
     return;
   }
 
-  uint32_t hw_layers_count = disp_layer_stack_.info.hw_layers.size();
-  for (uint32_t i = 0; i < hw_layers_count; i++) {
-    uint32_t sdm_layer_index = disp_layer_stack_.info.index.at(i);
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
-    if (disp_layer_stack_.info.gpu_target_index == sdm_layer_index) {
-      // Update GPU target buffer with cached fd.
-      CloseFd(&hw_layer.input_buffer.planes[0].fd);
-      hw_layer.input_buffer = cached_framebuffer_;
-      hw_layer.input_buffer.planes[0].fd = Sys::dup_(hw_layer.input_buffer.planes[0].fd);
+  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
+    uint32_t hw_layers_count = disp_layer_stack_.info[j].hw_layers.size();
+    for (uint32_t i = 0; i < hw_layers_count; i++) {
+      uint32_t sdm_layer_index = disp_layer_stack_.info[j].index.at(i);
+      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      if (disp_layer_stack_.stack_info.gpu_target_index == sdm_layer_index) {
+        // Update GPU target buffer with cached fd.
+        CloseFd(&hw_layer.input_buffer.planes[0].fd);
+        hw_layer.input_buffer = cached_framebuffer_[j];
+        hw_layer.input_buffer.planes[0].fd = Sys::dup_(hw_layer.input_buffer.planes[0].fd);
+      }
     }
   }
 }
 
 void DisplayBase::PostCommitLayerParams() {
-  cached_qos_data_ = disp_layer_stack_.info.qos_data;
+  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+    cached_qos_data_[i] = disp_layer_stack_.info[i].qos_data;
+  }
 }
 
 DisplayError DisplayBase::InitializeColorModes() {
@@ -3259,7 +3393,7 @@ DisplayError DisplayBase::InitializeColorModes() {
           color_mode_attr_map_.insert(std::make_pair(color_modes_[i].name, var));
           // If target doesn't support SSPP tone maping and color mode is HDR,
           // add bt2020pq and bt2020hlg color modes.
-          if (hw_resource_info_.src_tone_map.none() && IsHdrMode(var)) {
+          if (!HasSrcTonemap() && IsHdrMode(var)) {
             std::string str_render_intent;
             GetValueOfModeAttribute(var, kRenderIntentAttribute, &str_render_intent);
             color_mode_map_.insert(std::make_pair(kBt2020Pq, &color_modes_[i]));
@@ -3296,7 +3430,7 @@ DisplayError DisplayBase::GetDisplayIdentificationData(uint8_t *out_port, uint32
     return kErrorParameters;
   }
 
-  return hw_intf_->GetDisplayIdentificationData(out_port, out_data_size, out_data);
+  return dpu_core_mux_->GetDisplayIdentificationData(out_port, out_data_size, out_data);
 }
 
 DisplayError DisplayBase::GetClientTargetSupport(uint32_t width, uint32_t height,
@@ -3327,7 +3461,7 @@ DisplayError DisplayBase::GetClientTargetSupport(uint32_t width, uint32_t height
 }
 
 bool DisplayBase::IsSupportSsppTonemap() {
-  if (hw_resource_info_.src_tone_map.none()) {
+  if (!HasSrcTonemap()) {
     return false;
   } else {
     return true;
@@ -3335,11 +3469,21 @@ bool DisplayBase::IsSupportSsppTonemap() {
 }
 
 DisplayError DisplayBase::ValidateScaling(uint32_t width, uint32_t height) {
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
-  float max_scale_down = FLOAT(hw_resource_info_.max_scale_down);
-  float max_scale_up = FLOAT(hw_resource_info_.max_scale_up);
+  uint32_t max_scale_down = INT_MAX;
+  uint32_t max_scale_up = INT_MAX;
+
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    max_scale_down = std::min(max_scale_down, hw_resource_info_[i].max_scale_down);
+    max_scale_up = std::min(max_scale_up, hw_resource_info_[i].max_scale_up);
+  }
 
   float scale_x = FLOAT(width / display_width);
   float scale_y = FLOAT(height / display_height);
@@ -3397,10 +3541,10 @@ DisplayError DisplayBase::ValidateDataspace(const ColorMetaData &color_metadata)
 // TODO(user): Temporary changes, to be removed when DRM driver supports
 // Partial update with Destination scaler enabled.
 void DisplayBase::SetPUonDestScaler() {
-  uint32_t mixer_width = mixer_attributes_.width;
-  uint32_t mixer_height = mixer_attributes_.height;
-  uint32_t display_width = display_attributes_.x_pixels;
-  uint32_t display_height = display_attributes_.y_pixels;
+  uint32_t mixer_width = client_ctx_.mixer_attributes.width;
+  uint32_t mixer_height = client_ctx_.mixer_attributes.height;
+  uint32_t display_width = client_ctx_.display_attributes.x_pixels;
+  uint32_t display_height = client_ctx_.display_attributes.y_pixels;
 
   disable_pu_on_dest_scaler_ = (mixer_width != display_width ||
                                 mixer_height != display_height) || de_enabled_;
@@ -3468,7 +3612,7 @@ void DisplayBase::HwRecovery(const HWRecoveryEvent sdm_event_code) {
     case HWRecoveryEvent::kCapture:
 #ifndef TRUSTED_VM
       if (!disable_hw_recovery_dump_ && !hw_recovery_logs_captured_) {
-        hw_intf_->DumpDebugData();
+        dpu_core_mux_->DumpDebugData();
         hw_recovery_logs_captured_ = true;
         DLOGI("Captured debugfs data for display = %d", display_type_);
       } else if (!disable_hw_recovery_dump_) {
@@ -3546,7 +3690,7 @@ void DisplayBase::EndDisplayPowerReset() {
 }
 
 bool DisplayBase::SetHdrModeAtStart(LayerStack *layer_stack) {
-  return (hw_resource_info_.src_tone_map.none() && layer_stack->flags.hdr_present);
+  return (!HasSrcTonemap() && layer_stack->flags.hdr_present);
 }
 
 PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
@@ -3575,7 +3719,7 @@ PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
     }
   }
   // TODO(user): Check is if someone calls with hal_display_p3
-  if (hw_resource_info_.src_tone_map.none() &&
+  if (!HasSrcTonemap() &&
       (pic_quality == kStandard && color_gamut == kBt2020)) {
     pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
     if (transfer == kHlg) {
@@ -3644,7 +3788,8 @@ DisplayError DisplayBase::ResetPendingPowerState(const shared_ptr<Fence> &retire
 }
 
 bool DisplayBase::CheckResourceState(bool *res_exhausted) {
-  return comp_manager_->CheckResourceState(display_comp_ctx_, res_exhausted, display_attributes_);
+  return comp_manager_->CheckResourceState(display_comp_ctx_, res_exhausted,
+                                           client_ctx_.display_attributes);
 }
 DisplayError DisplayBase::colorSamplingOn() {
   return kErrorNone;
@@ -3703,23 +3848,33 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
   switch (feature) {
     case kSupportedModeSwitch: {
       ClientLock lock(disp_mutex_);
-      error = hw_intf_->GetFeatureSupportStatus(kAllowedModeSwitch, supported);
+      error = dpu_core_mux_->GetFeatureSupportStatus(kAllowedModeSwitch, supported);
       break;
     }
     case kDestinationScalar:
       *supported = custom_mixer_resolution_;
       break;
     case kCwbDemuraTapPoint: {
-      std::vector<CwbTapPoint> &tappoints = hw_resource_info_.tap_points;
-      *supported = UINT32(std::find(tappoints.begin(), tappoints.end(),
-                                    CwbTapPoint::kDemuraTapPoint) != tappoints.end());
+      std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+      bool tap_point_supported = true;
+      for (int i = 0; i < core_id_map.size(); i++) {
+        if (!core_id_map[i]) {
+          continue;
+        }
+
+        std::vector<CwbTapPoint> &tappoints = hw_resource_info_[i].tap_points;
+        tap_point_supported = tap_point_supported &
+                              UINT32(std::find(tappoints.begin(), tappoints.end(),
+                                     CwbTapPoint::kDemuraTapPoint) != tappoints.end());
+      }
+      *supported = tap_point_supported;
       break;
     }
     case kCwbCrop:
-      error = hw_intf_->GetFeatureSupportStatus(kHasCwbCrop, supported);
+      error = dpu_core_mux_->GetFeatureSupportStatus(kHasCwbCrop, supported);
       break;
     case kDedicatedCwb:
-      error = hw_intf_->GetFeatureSupportStatus(kHasDedicatedCwb, supported);
+      error = dpu_core_mux_->GetFeatureSupportStatus(kHasDedicatedCwb, supported);
       break;
     default:
       DLOGW("Feature:%d is not present for display %d:%d", feature, display_id_, display_type_);
@@ -3776,7 +3931,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
       }
       vsync_enable_pending_ = true;
     }
-    *needs_refresh = (hw_panel_info_.mode == kModeCommand);
+    *needs_refresh = (client_ctx_.hw_panel_info.mode == kModeCommand);
     DisablePartialUpdateOneFrameInternal();
     err = hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, true);
     if (err != kErrorNone) {
@@ -3793,7 +3948,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
     SetPendingPowerState(state);
   }
 
-  err = hw_intf_->HandleSecureEvent(secure_event, cached_qos_data_);
+  err = dpu_core_mux_->HandleSecureEvent(secure_event, cached_qos_data_);
   if (err != kErrorNone) {
     return err;
   }
@@ -3840,7 +3995,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
 
 DisplayError DisplayBase::GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence) {
   ClientLock lock(disp_mutex_);
-  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
+  LayerBuffer *out_buffer = disp_layer_stack_.stack_info.output_buffer;
   if (out_buffer == nullptr) {
     return kErrorNotSupported;
   }
@@ -3853,7 +4008,7 @@ DisplayError DisplayBase::GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fen
 DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
   ClientLock lock(disp_mutex_);
   validated_ = false;
-  return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
+  return dpu_core_mux_->OnMinHdcpEncryptionLevelChange(min_enc_level);
 }
 
 void DisplayBase::CheckMMRMState() {
@@ -3864,7 +4019,13 @@ void DisplayBase::CheckMMRMState() {
   DTRACE_SCOPED();
   DLOGI("Handling updated MMRM request");
   mmrm_updated_ = false;
-  bool reduced_clk = (mmrm_requested_clk_ < hw_resource_info_.max_sde_clk) ? true : false;
+
+  uint32_t max_sde_clk = INT_MAX;
+  for (auto val : hw_resource_info_) {
+    max_sde_clk = std::min(max_sde_clk, val.max_sde_clk);
+  }
+
+  bool reduced_clk = (mmrm_requested_clk_ < max_sde_clk) ? true : false;
 
   // Check layers if clock is less than max
   LayerStack *stack = disp_layer_stack_.stack;
@@ -3925,7 +4086,7 @@ void DisplayBase::WaitForCompletion(SyncPoints *sync_points) {
 
   // Wait for CRTC power event on first cycle.
   if (first_cycle_) {
-    if (hw_panel_info_.is_primary_panel) {
+    if (client_ctx_.hw_panel_info.is_primary_panel) {
       DLOGI("Sync commit on primary");
       return;
     }
@@ -3953,7 +4114,7 @@ void DisplayBase::ProcessPowerEvent() {
 
 void DisplayBase::CacheRetireFence() {
   if (draw_method_ == kDrawDefault) {
-    retire_fence_ = disp_layer_stack_.info.retire_fence;
+    retire_fence_ = disp_layer_stack_.stack_info.common_info.retire_fence;
   } else {
     // For displays in unified draw, wait on cached retire fence in steady state.
     comp_manager_->GetRetireFence(display_comp_ctx_, &retire_fence_);
@@ -4058,7 +4219,7 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
 DisplayError DisplayBase::GetPanelBlMaxLvl(uint32_t *max_level) {
   ClientLock lock(disp_mutex_);
 
-  DisplayError err = hw_intf_->GetPanelBlMaxLvl(max_level);
+  DisplayError err = dpu_core_mux_->GetPanelBlMaxLvl(max_level);
   if (err) {
     DLOGE("Failed to get panel max backlight level %d", err);
   } else {
@@ -4070,7 +4231,7 @@ DisplayError DisplayBase::GetPanelBlMaxLvl(uint32_t *max_level) {
 DisplayError DisplayBase::SetDimmingConfig(void *payload, size_t size) {
   ClientLock lock(disp_mutex_);
 
-  DisplayError err = hw_intf_->SetDimmingConfig(payload, size);
+  DisplayError err = dpu_core_mux_->SetDimmingConfig(payload, size);
   if (err) {
     DLOGE("Failed to set dimming config %d", err);
   } else {
@@ -4146,7 +4307,7 @@ void DisplayBase::PrepareForAsyncTransition() {
 }
 
 std::chrono::system_clock::time_point DisplayBase::WaitUntil() {
-  int idle_time_ms = disp_layer_stack_.info.set_idle_time_ms;
+  int idle_time_ms = disp_layer_stack_.stack_info.common_info.set_idle_time_ms;
   std::chrono::system_clock::time_point timeout_time;
   // Indefinite wait if state is off or idle timeout has triggered
   if (state_ == kStateOff || idle_time_ms == 0 || handle_idle_timeout_) {
@@ -4170,13 +4331,18 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
   if (layer_stack->cwb_config == NULL) {
     cwb_config_->tap_point = CwbTapPoint::kLmTapPoint;
     // Setting full frame ROI
-    cwb_config_->cwb_full_rect = LayerRect(0.0f, 0.0f, FLOAT(mixer_attributes_.width),
-                                           FLOAT(mixer_attributes_.height));
+    cwb_config_->cwb_full_rect = LayerRect(0.0f, 0.0f, FLOAT(client_ctx_.mixer_attributes.width),
+                                           FLOAT(client_ctx_.mixer_attributes.height));
     cwb_config_->cwb_roi = cwb_config_->cwb_full_rect;
   }
 
-  disp_layer_stack_.info.hw_cwb_config = cwb_config_;
-  error = ValidateCwbConfigInfo(disp_layer_stack_.info.hw_cwb_config,
+  disp_layer_stack_.stack_info.hw_cwb_config = cwb_config_;
+  if (cwb_config_) {
+    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+      disp_layer_stack_.info[i].hw_cwb_config = *cwb_config_;
+    }
+  }
+  error = ValidateCwbConfigInfo(disp_layer_stack_.stack_info.hw_cwb_config,
                                 layer_stack->output_buffer->format);
   if (error != kErrorNone) {
     DLOGE("CWB_config validation failed.");
@@ -4184,6 +4350,49 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
   }
 
   return error;
+}
+
+bool DisplayBase::HasNoiseLayer() {
+  bool has_noise_layer = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    has_noise_layer = has_noise_layer & hw_resource_info_[i].has_noise_layer;
+  }
+
+  return has_noise_layer;
+}
+
+bool DisplayBase::HasConcurrentWriteback() {
+  bool has_concurrent_writeback = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    has_concurrent_writeback = has_concurrent_writeback &
+                               hw_resource_info_[i].has_concurrent_writeback;
+  }
+
+  return has_concurrent_writeback;
+}
+
+bool DisplayBase::HasSrcTonemap() {
+  bool has_src_tone_map = true;
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    has_src_tone_map = has_src_tone_map & hw_resource_info_[i].src_tone_map.any();
+  }
+
+  return has_src_tone_map;
 }
 
 }  // namespace sdm

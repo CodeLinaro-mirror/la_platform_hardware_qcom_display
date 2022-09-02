@@ -127,11 +127,11 @@ class DisplayIPCVmCallbackImpl : public IPCVmCallbackIntf {
 
 class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
  public:
-  DisplayBuiltIn(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+  DisplayBuiltIn(DisplayEventHandler *event_handler, std::vector<HWInfoInterface*> hw_info_intf,
                  BufferAllocator *buffer_allocator, CompManager *comp_manager,
                  std::shared_ptr<IPCIntf> ipc_intf);
-  DisplayBuiltIn(int32_t display_id, DisplayEventHandler *event_handler,
-                 HWInfoInterface *hw_info_intf, BufferAllocator *buffer_allocator,
+  DisplayBuiltIn(DisplayId display_id, DisplayEventHandler *event_handler,
+                 std::vector<HWInfoInterface*> hw_info_intf, BufferAllocator *buffer_allocator,
                  CompManager *comp_manager, std::shared_ptr<IPCIntf> ipc_intf);
   virtual ~DisplayBuiltIn();
 
@@ -253,8 +253,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   float cached_brightness_ = 0.0f;
   bool pending_brightness_ = false;
   recursive_mutex brightness_lock_;
-  LayerRect left_frame_roi_ = {};
-  LayerRect right_frame_roi_ = {};
+  vector<LayerRect> left_frame_roi_ = {};
+  vector<LayerRect> right_frame_roi_ = {};
   Locker dpps_pu_lock_;
   bool dpps_pu_nofiy_pending_ = false;
   enum class SamplingState { Off, On } samplingState = SamplingState::Off;

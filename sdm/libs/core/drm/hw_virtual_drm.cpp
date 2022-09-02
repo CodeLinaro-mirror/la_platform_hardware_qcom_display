@@ -57,6 +57,7 @@ HWVirtualDRM::HWVirtualDRM(int32_t display_id, BufferAllocator *buffer_allocator
   HWDeviceDRM::device_name_ = "Virtual";
   HWDeviceDRM::disp_type_ = DRMDisplayType::VIRTUAL;
   HWDeviceDRM::display_id_ = display_id;
+  HWDeviceDRM::core_id_ = hw_info_intf->GetCoreId();
 }
 
 void HWVirtualDRM::ConfigureWbConnectorFbId(uint32_t fb_id) {

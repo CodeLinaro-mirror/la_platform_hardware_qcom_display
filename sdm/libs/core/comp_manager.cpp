@@ -64,6 +64,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <map>
 #include <utility>
 
@@ -74,7 +75,7 @@
 
 namespace sdm {
 
-DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
+DisplayError CompManager::Init(const std::vector<HWResourceInfo> &hw_res_info,
                                ExtensionInterface *extension_intf,
                                BufferAllocator *buffer_allocator,
                                SocketHandler *socket_handler) {
@@ -119,12 +120,11 @@ DisplayError CompManager::Deinit() {
   return kErrorNone;
 }
 
-DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
-                                          const HWDisplayAttributes &display_attributes,
-                                          const HWPanelInfo &hw_panel_info,
-                                          const HWMixerAttributes &mixer_attributes,
-                                          const DisplayConfigVariableInfo &fb_config,
-                                          Handle *display_ctx, HWQosData*default_qos_data) {
+DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type,
+                                          DisplayDeviceContext &device_ctx,
+                                          DisplayClientContext &client_ctx,
+                                          Handle *display_ctx,
+                                          vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
 
   DisplayError error = kErrorNone;
@@ -136,8 +136,7 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
 
   Strategy *&strategy = display_comp_ctx->strategy;
   strategy = new Strategy(extension_intf_, buffer_allocator_, display_id, type,
-                          hw_res_info_, hw_panel_info, mixer_attributes, display_attributes,
-                          fb_config);
+                          hw_res_info_, client_ctx);
   if (!strategy) {
     DLOGE("Unable to create strategy");
     delete display_comp_ctx;
@@ -151,10 +150,7 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     return error;
   }
 
-  Resolution fb_resolution = {fb_config.x_pixels, fb_config.y_pixels};
-
-  error = resource_intf_->RegisterDisplay(display_id, type, display_attributes, hw_panel_info,
-                                          mixer_attributes, fb_resolution,
+  error = resource_intf_->RegisterDisplay(display_id, type, device_ctx, client_ctx,
                                           &display_comp_ctx->display_resource_ctx);
   if (error != kErrorNone) {
     strategy->Deinit();
@@ -164,8 +160,8 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     return error;
   }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                  display_comp_ctx->display_resource_ctx, default_qos_data);
+  error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                            default_qos_data);
   if (error != kErrorNone) {
     strategy->Deinit();
     delete strategy;
@@ -186,12 +182,12 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     return error;
   }
 
-  registered_displays_.insert(display_id);
-  display_comp_ctx->is_primary_panel = hw_panel_info.is_primary_panel;
+  registered_displays_.insert(display_id.GetDisplayId());
+  display_comp_ctx->is_primary_panel = client_ctx.hw_panel_info.is_primary_panel;
   display_comp_ctx->display_id = display_id;
   display_comp_ctx->display_type = type;
-  display_comp_ctx->fb_config = fb_config;
-  display_comp_ctx->dest_scaler_blocks_used = mixer_attributes.dest_scaler_blocks_used;
+  display_comp_ctx->fb_config = client_ctx.fb_config;
+  display_comp_ctx->dest_scaler_blocks_used = client_ctx.mixer_attributes.dest_scaler_blocks_used;
   *display_ctx = display_comp_ctx;
   // New non-primary display device has been added, so move the composition mode to safe mode until
   // resources for the added display is configured properly.
@@ -199,10 +195,11 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     max_sde_secondary_fetch_layers_ = UINT32(Debug::GetSecondaryMaxFetchLayers());
   }
 
-  display_demura_status_[display_id] = false;
+  display_demura_status_[display_id.GetDisplayId()] = false;
 
   DLOGV_IF(kTagCompManager, "Registered displays [%s], display %d-%d",
-           StringDisplayList(registered_displays_).c_str(), display_comp_ctx->display_id,
+           StringDisplayList(registered_displays_).c_str(),
+                             display_comp_ctx->display_id.GetDisplayId(),
            display_comp_ctx->display_type);
 
   return kErrorNone;
@@ -224,11 +221,12 @@ DisplayError CompManager::UnregisterDisplay(Handle display_ctx) {
   strategy->Deinit();
   delete strategy;
 
-  registered_displays_.erase(display_comp_ctx->display_id);
-  powered_on_displays_.erase(display_comp_ctx->display_id);
+  registered_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
+  powered_on_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
 
   DLOGV_IF(kTagCompManager, "Registered displays [%s], display %d-%d",
-           StringDisplayList(registered_displays_).c_str(), display_comp_ctx->display_id,
+           StringDisplayList(registered_displays_).c_str(),
+           display_comp_ctx->display_id.GetDisplayId(),
            display_comp_ctx->display_type);
 
   delete display_comp_ctx;
@@ -249,11 +247,9 @@ DisplayError CompManager::CheckEnforceSplit(Handle comp_handle,
 }
 
 DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
-                                             const HWDisplayAttributes &display_attributes,
-                                             const HWPanelInfo &hw_panel_info,
-                                             const HWMixerAttributes &mixer_attributes,
-                                             const DisplayConfigVariableInfo &fb_config,
-                                             HWQosData*default_qos_data) {
+                                             DisplayDeviceContext &device_ctx,
+                                             DisplayClientContext &client_ctx,
+                                             vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DTRACE_SCOPED();
 
@@ -261,33 +257,30 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(comp_handle);
 
-  Resolution fb_resolution = {fb_config.x_pixels, fb_config.y_pixels};
-
   error = resource_intf_->ReconfigureDisplay(display_comp_ctx->display_resource_ctx,
-                                             display_attributes, hw_panel_info, mixer_attributes,
-                                             fb_resolution);
+                                             device_ctx, client_ctx);
   if (error != kErrorNone) {
     DLOGW("ReconfigureDisplay returned error=%d", error);
     return error;
   }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                  display_comp_ctx->display_resource_ctx, default_qos_data);
+  error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                            default_qos_data);
   if (error != kErrorNone) {
     DLOGW("GetDefaultQosData Data returned error=%d", error);
     return error;
   }
 
   error = resource_intf_->Perform(ResourceInterface::kCmdCheckEnforceSplit,
-                                  display_comp_ctx->display_resource_ctx, display_attributes.fps);
+                                  display_comp_ctx->display_resource_ctx,
+                                  client_ctx.display_attributes.fps);
   if (error != kErrorNone) {
     DLOGW("CheckEnforceSplit returned error=%d", error);
     return error;
   }
 
   if (display_comp_ctx->strategy) {
-    error = display_comp_ctx->strategy->Reconfigure(hw_panel_info, display_attributes,
-                                                    mixer_attributes, fb_config);
+    error = display_comp_ctx->strategy->Reconfigure(client_ctx);
     if (error != kErrorNone) {
       DLOGE("Unable to Reconfigure strategy.");
       display_comp_ctx->strategy->Deinit();
@@ -298,7 +291,7 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
   }
 
   // Update new resolution.
-  display_comp_ctx->fb_config = fb_config;
+  display_comp_ctx->fb_config = client_ctx.fb_config;
   return error;
 }
 
@@ -310,22 +303,41 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
   Handle &display_resource_ctx = display_comp_ctx->display_resource_ctx;
 
   // Call Layer Precheck to get feedback
-  LayerFeedback feedback(disp_layer_stack->info.app_layer_count);
+  LayerFeedback feedback(disp_layer_stack->stack_info.app_layer_count);
   if (resource_intf_)
     resource_intf_->Precheck(display_resource_ctx, disp_layer_stack, &feedback);
 
   constraints->safe_mode = safe_mode_;
-  constraints->max_layers = hw_res_info_.num_blending_stages;
+  uint32_t num_blending_stages = INT_MAX;
+  uint32_t num_vig_pipe = INT_MAX;
+  uint32_t num_dma_pipe = INT_MAX;
+  uint32_t num_rgb_pipe = INT_MAX;
+  bool separate_rotator = true;
+
+  std::bitset<8> core_id_map = display_comp_ctx->display_id.GetCoreIdMap();
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
+
+    num_blending_stages = std::min(num_blending_stages, hw_res_info_[i].num_blending_stages);
+    num_vig_pipe = std::min(num_vig_pipe, hw_res_info_[i].num_vig_pipe);
+    num_dma_pipe = std::min(num_dma_pipe, hw_res_info_[i].num_dma_pipe);
+    num_rgb_pipe = std::min(num_rgb_pipe, hw_res_info_[i].num_rgb_pipe);
+    separate_rotator &=  hw_res_info_[i].separate_rotator;
+  }
+
+  constraints->max_layers = num_blending_stages;
   constraints->feedback = feedback;
 
   // Limit 2 layer SDE Comp if its not a Primary Display.
   // Safe mode is the policy for External display on a low end device.
   if (!display_comp_ctx->is_primary_panel) {
-    bool low_end_hw = ((hw_res_info_.num_vig_pipe + hw_res_info_.num_rgb_pipe +
-                        hw_res_info_.num_dma_pipe) <= kSafeModeThreshold);
+    bool low_end_hw = ((num_vig_pipe + num_rgb_pipe +
+                        num_dma_pipe) <= kSafeModeThreshold);
     constraints->max_layers = display_comp_ctx->display_type == kBuiltIn ?
                               max_sde_builtin_fetch_layers_ : max_sde_secondary_fetch_layers_;
-    constraints->safe_mode = (low_end_hw && !hw_res_info_.separate_rotator) ? true : safe_mode_;
+    constraints->safe_mode = (low_end_hw && !separate_rotator) ? true : safe_mode_;
   }
 
   // If a strategy fails after successfully allocating resources, then set safe mode
@@ -338,11 +350,11 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
   }
 
   uint32_t size_ff = 1;  // gpu target layer always present
-  if (disp_layer_stack->info.stitch_present)
+  if (disp_layer_stack->stack_info.stitch_present)
     size_ff++;
-  if (disp_layer_stack->info.demura_present)
+  if (disp_layer_stack->stack_info.demura_present)
     size_ff++;
-  if (disp_layer_stack->info.cwb_present)
+  if (disp_layer_stack->stack_info.cwb_present)
     size_ff++;
   uint32_t app_layer_count = UINT32(disp_layer_stack->stack->layers.size()) - size_ff;
   if (display_comp_ctx->idle_fallback) {
@@ -407,7 +419,7 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
     }
 
     if (!exit) {
-      LayerFeedback updated_feedback(disp_layer_stack->info.app_layer_count);
+      LayerFeedback updated_feedback(disp_layer_stack->stack_info.app_layer_count);
       error = resource_intf_->Prepare(display_resource_ctx, disp_layer_stack, &updated_feedback);
       // Exit if successfully prepared resource, else try next strategy.
       exit = (error == kErrorNone);
@@ -419,7 +431,7 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
   if (error != kErrorNone) {
     resource_intf_->Stop(display_resource_ctx, disp_layer_stack);
     DLOGE("Composition strategies exhausted for display = %d-%d. (first frame = %s)",
-          display_comp_ctx->display_id, display_comp_ctx->display_type,
+          display_comp_ctx->display_id.GetDisplayId(), display_comp_ctx->display_type,
           display_comp_ctx->first_cycle_ ? "True" : "False");
     return error;
   }
@@ -461,8 +473,17 @@ DisplayError CompManager::Commit(Handle display_ctx, DispLayerStack *disp_layer_
   if (error != kErrorNone) {
     return error;
   }
+  vector<HWQosData> default_qos_data;
   if (secure_event_ == kTUITransitionStart) {
-    return GetDefaultQosData(display_ctx, &disp_layer_stack->info.qos_data);
+    error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                              &default_qos_data);
+    if (error != kErrorNone) {
+      return error;
+    }
+
+    for (int i = 0; i < default_qos_data.size(); i++) {
+      disp_layer_stack->info[i].qos_data = default_qos_data[i];
+    }
   }
   return kErrorNone;
 }
@@ -484,7 +505,8 @@ DisplayError CompManager::PostCommit(Handle display_ctx, DispLayerStack *disp_la
   display_comp_ctx->constraints.idle_timeout = false;
 
   DLOGV_IF(kTagCompManager, "Registered displays [%s], display %d-%d",
-           StringDisplayList(registered_displays_).c_str(), display_comp_ctx->display_id,
+           StringDisplayList(registered_displays_).c_str(),
+           display_comp_ctx->display_id.GetDisplayId(),
            display_comp_ctx->display_type);
 
   return kErrorNone;
@@ -633,7 +655,12 @@ DisplayError CompManager::ControlDpps(bool enable) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   // DPPS feature and HDR using SSPP tone mapping can co-exist
   // DPPS feature and HDR using DSPP tone mapping are mutually exclusive
-  if (dpps_ctrl_intf_ && hw_res_info_.src_tone_map.none()) {
+  bool src_tone_map = true;
+  for (auto val : hw_res_info_) {
+    src_tone_map = src_tone_map & val.src_tone_map.any();
+  }
+
+  if (dpps_ctrl_intf_ && !src_tone_map) {
     int err = 0;
     if (enable) {
       err = dpps_ctrl_intf_->On();
@@ -660,18 +687,18 @@ bool CompManager::SetDisplayState(Handle display_ctx, DisplayState state,
   switch (state) {
   case kStateOff:
     Purge(display_ctx);
-    powered_on_displays_.erase(display_comp_ctx->display_id);
+    powered_on_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
     break;
 
   case kStateOn:
   case kStateDoze:
     resource_intf_->Perform(ResourceInterface::kCmdDedicatePipes,
                             display_comp_ctx->display_resource_ctx);
-    powered_on_displays_.insert(display_comp_ctx->display_id);
+    powered_on_displays_.insert(display_comp_ctx->display_id.GetDisplayId());
     break;
 
   case kStateDozeSuspend:
-    powered_on_displays_.erase(display_comp_ctx->display_id);
+    powered_on_displays_.erase(display_comp_ctx->display_id.GetDisplayId());
     break;
 
   default:
@@ -765,13 +792,19 @@ bool CompManager::CheckResourceState(Handle display_ctx, bool *res_exhausted,
   return res_wait_needed;
 }
 
-DisplayError CompManager::GetConcurrencyFps(DisplayConcurrencyType type, float *fps) {
+DisplayError CompManager::GetConcurrencyFps(Handle display_ctx, DisplayConcurrencyType type,
+                                            float *fps) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  DisplayCompositionContext *display_comp_ctx =
+                  reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+
   ResourceConstraintsIn res_constraints_in;
   res_constraints_in.concurrency_type = type;
   ResourceConstraintsOut res_constraints_out;
 
   auto error = resource_intf_->Perform(ResourceInterface::kCmdGetResourceConstraints,
+                                       display_comp_ctx->display_resource_ctx,
                                        &res_constraints_in, &res_constraints_out);
   *fps = res_constraints_out.fps;
   return error;
@@ -808,8 +841,7 @@ DisplayError CompManager::FreeDemuraFetchResources(const uint32_t &display_id) {
   return resource_intf_->FreeDemuraFetchResources(display_id);
 }
 
-DisplayError CompManager::GetDemuraFetchResourceCount(
-                          std::map<uint32_t, uint8_t> *fetch_resource_cnt) {
+DisplayError CompManager::GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   return resource_intf_->GetDemuraFetchResourceCount(fetch_resource_cnt);
 }
@@ -820,7 +852,8 @@ DisplayError CompManager::ReserveDemuraFetchResources(const uint32_t &display_id
   return resource_intf_->ReserveDemuraFetchResources(display_id, preferred_rect);
 }
 
-DisplayError CompManager::GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl) {
+DisplayError CompManager::GetDemuraFetchResources(Handle display_ctx,
+                                                  vector<FetchResourceList> *frl) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
@@ -881,12 +914,13 @@ DisplayError CompManager::ForceToneMapConfigure(Handle display_ctx,
                                                disp_layer_stack);
 }
 
-DisplayError CompManager::GetDefaultQosData(Handle display_ctx, HWQosData *qos_data) {
+DisplayError CompManager::GetDefaultQosData(Handle display_ctx,
+                                            vector <HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-  return resource_intf_->Perform(ResourceInterface::kCmdGetDefaultQosData,
-                                 display_comp_ctx->display_resource_ctx, qos_data);
+  return resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
+                                           default_qos_data);
 }
 
 DisplayError CompManager::HandleCwbFrequencyBoost(bool isRequest) {

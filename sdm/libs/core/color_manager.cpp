@@ -45,7 +45,7 @@ DynLib ColorManagerProxy::color_lib_;
 DynLib ColorManagerProxy::stc_lib_;
 CreateColorInterface ColorManagerProxy::create_intf_ = NULL;
 DestroyColorInterface ColorManagerProxy::destroy_intf_ = NULL;
-HWResourceInfo ColorManagerProxy::hw_res_info_;
+std::vector<HWResourceInfo> ColorManagerProxy::hw_res_info_;
 
 GetScPostBlendInterface ColorManagerProxy::create_stc_intf_ = NULL;
 
@@ -96,7 +96,7 @@ FeatureInterface* GetPostedStartFeatureCheckIntf(HWInterface *intf, PPFeaturesCo
   return new ColorFeatureCheckingImpl(intf, config, dyn_switch);
 }
 
-DisplayError ColorManagerProxy::Init(const HWResourceInfo &hw_res_info) {
+DisplayError ColorManagerProxy::Init(const std::vector<HWResourceInfo> &hw_res_info) {
   DisplayError error = kErrorNone;
 
   // Load color service library and retrieve its entry points.
@@ -166,11 +166,13 @@ ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, HWInterface *
 
 ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
                                                               HWInterface *hw_intf,
-                                                              const HWDisplayAttributes &attribute,
-                                                              const HWPanelInfo &panel_info,
+                                                              DisplayDeviceContext &device_ctx,
+                                                              DisplayClientContext &client_ctx,
                                                               DppsControlInterface *dpps_intf,
                                                               DisplayInterface *disp_intf) {
   DisplayError error = kErrorNone;
+  const HWDisplayAttributes &attribute = client_ctx.display_attributes;
+  const HWPanelInfo &panel_info = client_ctx.hw_panel_info;
   PPFeatureVersion versions;
   int32_t display_id = -1;
   ColorManagerProxy *color_manager_proxy = NULL;
@@ -197,7 +199,7 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
     if (error != kErrorNone) {
       DLOGW("Fail to get DSPP feature versions");
     } else {
-      hw_attr.Set(hw_res_info_, panel_info, attribute, versions, dpps_intf);
+      hw_attr.Set(hw_res_info_[0], panel_info, attribute, versions, dpps_intf);
       DLOGI("PAV2 version is versions = %d, version = %d ",
             hw_attr.version.version[kGlobalColorFeaturePaV2],
             versions.version[kGlobalColorFeaturePaV2]);
@@ -502,12 +504,13 @@ DisplayError ColorManagerProxy::Validate(DispLayerStack *disp_layer_stack) {
   Layer hdr_layer = {};
   bool hdr_present = false;
 
-  valid_meta_data = NeedsToneMap(disp_layer_stack->info.hw_layers);
+  // ToDo(devanshi): handle for vector of HWLayersInfo
+  valid_meta_data = NeedsToneMap(disp_layer_stack->info[0].hw_layers);
   if (valid_meta_data) {
-    if (disp_layer_stack->info.hdr_layer_info.in_hdr_mode &&
-          disp_layer_stack->info.hdr_layer_info.operation == HWHDRLayerInfo::kSet) {
+    if (disp_layer_stack->info[0].hdr_layer_info.in_hdr_mode &&
+          disp_layer_stack->info[0].hdr_layer_info.operation == HWHDRLayerInfo::kSet) {
       hdr_layer = *(disp_layer_stack->stack->layers.at(
-                                 UINT32(disp_layer_stack->info.hdr_layer_info.layer_index)));
+                                 UINT32(disp_layer_stack->info[0].hdr_layer_info.layer_index)));
       hdr_present = true;
     }
 

@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __RESOURCE_DEFAULT_H__
 #define __RESOURCE_DEFAULT_H__
 
@@ -38,21 +44,17 @@ namespace sdm {
 
 class ResourceDefault : public ResourceInterface {
  public:
-  static DisplayError CreateResourceDefault(const HWResourceInfo &hw_resource_info,
+  static DisplayError CreateResourceDefault(const std::vector<HWResourceInfo> &hw_resource_info,
                                             ResourceInterface **resource_intf);
   static DisplayError DestroyResourceDefault(ResourceInterface *resource_intf);
-  virtual DisplayError RegisterDisplay(int32_t display_id, DisplayType type,
-                                       const HWDisplayAttributes &display_attributes,
-                                       const HWPanelInfo &hw_panel_info,
-                                       const HWMixerAttributes &mixer_attributes,
-                                       const Resolution &fb_resolution,
+  virtual DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
+                                       DisplayDeviceContext &device_ctx,
+                                       DisplayClientContext &client_ctx,
                                        Handle *display_ctx);
   virtual DisplayError UnregisterDisplay(Handle display_ctx);
   virtual DisplayError ReconfigureDisplay(Handle display_ctx,
-                                          const HWDisplayAttributes &display_attributes,
-                                          const HWPanelInfo &hw_panel_info,
-                                          const HWMixerAttributes &mixer_attributes,
-                                          const Resolution &fb_resolution);
+                                          DisplayDeviceContext &device_ctx,
+                                          DisplayClientContext &client_ctx);
   virtual DisplayError Start(Handle display_ctx, LayerStack *layer_stack);
   virtual DisplayError Stop(Handle display_ctx, DispLayerStack *disp_layer_stack);
   virtual DisplayError SetDrawMethod(Handle display_ctx, const DisplayDrawMethod &draw_method);
@@ -75,23 +77,25 @@ class ResourceDefault : public ResourceInterface {
                                              const DisplayDetailEnhancerData &de_data);
   virtual DisplayError UpdateSyncHandle(Handle display_ctx, const SyncPoints &sync_points);
   virtual DisplayError Perform(int cmd, ...) { return kErrorNone; }
-  DisplayError SetDisplayState(int32_t display_id, DisplayState state) { return kErrorNone; }
+  DisplayError SetDisplayState(DisplayId display_id, DisplayState state) { return kErrorNone; }
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) { return false; }
   virtual DisplayError FreeDemuraFetchResources(const int32_t &display_id) { return kErrorNone; }
-  virtual DisplayError GetDemuraFetchResourceCount(
-                       std::map<uint32_t, uint8_t> *fetch_resource_cnt) {
+  virtual DisplayError GetDemuraFetchResourceCount(MultiDpuDemuraMap *fetch_resource_cnt) {
     return kErrorNone;
   }
   virtual DisplayError ReserveDemuraFetchResources(const int32_t &display_id,
                                                    const int8_t &preferred_rect) {
     return kErrorNone;
   }
-  virtual DisplayError GetDemuraFetchResources(Handle display_ctx, FetchResourceList *frl) {
+  virtual DisplayError GetDemuraFetchResources(Handle display_ctx, vector<FetchResourceList> *frl) {
     return kErrorNone;
   }
   virtual DisplayError SetMaxSDEClk(Handle display_ctx, uint32_t clk) { return kErrorNotSupported; }
   virtual DisplayError ForceToneMapConfigure(Handle display_ctx, DispLayerStack *disp_layer_stack) {
     return kErrorNotSupported;
+  }
+  virtual DisplayError GetDefaultQoSData(Handle display_ctx, vector <HWQosData> *default_qos_data) {
+    return kErrorNone;
   }
 
  private:
@@ -139,7 +143,7 @@ class ResourceDefault : public ResourceInterface {
     HWBlockContext() : is_in_use(false) { }
   };
 
-  explicit ResourceDefault(const HWResourceInfo &hw_res_info);
+  explicit ResourceDefault(const std::vector<HWResourceInfo> &hw_res_info);
   DisplayError Init();
   DisplayError Deinit();
   uint32_t NextPipe(PipeType pipe_type, HWBlockType hw_block_type);
@@ -170,11 +174,17 @@ class ResourceDefault : public ResourceInterface {
   void ResourceStateLog(void);
   DisplayError CalculateDecimation(float downscale, uint8_t *decimation);
   DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
-
-  HWResourceInfo hw_res_info_;
+  void CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
+                                LayerRect *in_rect, LayerRect *out_rect);
+  void CalculateSrcRect(float split_ratio, float src_width,
+                                LayerRect *in_rect, LayerRect *out_rect);
+  DisplayClientContext client_ctx_;
+  DisplayDeviceContext device_ctx_;
+  vector<HWResourceInfo> hw_res_info_;
   HWBlockContext hw_block_ctx_[kHWBlockMax];
-  std::vector<SourcePipe> src_pipes_;
-  uint32_t num_pipe_ = 0;
+  vector<std::vector<SourcePipe>> src_pipes_;
+  vector<uint32_t> num_pipe_;
+  int core_id_;
 };
 
 }  // namespace sdm

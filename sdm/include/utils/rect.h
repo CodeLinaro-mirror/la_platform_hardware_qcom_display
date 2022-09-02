@@ -43,6 +43,15 @@ namespace sdm {
     kOrientationUnknown,
   };
 
+  enum Transform {
+    kTransform90,
+    kTransform180,
+    kTransform270,
+    kTransformFlipHorizontal,
+    kTransformFlipVertical,
+    kTransformNone
+  };
+
   bool IsValid(const LayerRect &rect);
   bool IsCongruent(const LayerRect &rect1, const LayerRect &rect2);
   void LogI(DebugTag debug_tag, const char *prefix, const LayerRect &roi);
@@ -68,6 +77,15 @@ namespace sdm {
                                      float *dst_width, float *dst_height);
   DisplayError GetScaleFactor(const LayerRect &crop, const LayerRect &dst, bool rotate90,
                               float *scale_x, float *scale_y);
+  int ComputeTransform(const LayerTransform &transform);
+  void SplitFromLeft(float split_factor, const Layer &layer, const float start_index,
+                     LayerRect *out_rect);
+  void SplitFromRight(float split_factor, const Layer &layer, const float start_index,
+                      LayerRect *out_rect);
+  void SplitFromTop(float split_factor, const Layer &layer, const float start_index,
+                    LayerRect *out_rect);
+  void SplitFromBottom(float split_factor, const Layer &layer, const float start_index,
+                       LayerRect *out_rect);
 }  // namespace sdm
 
 #endif  // __RECT_H__

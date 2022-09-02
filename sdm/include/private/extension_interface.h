@@ -28,6 +28,8 @@
 #include <core/sdm_types.h>
 #include <core/display_interface.h>
 
+#include <vector>
+
 #include "partial_update_interface.h"
 #include "strategy_interface.h"
 #include "resource_interface.h"
@@ -53,25 +55,20 @@ typedef DisplayError (*DestroyExtensionInterface)(ExtensionInterface *interface)
 
 class ExtensionInterface {
  public:
-  virtual DisplayError CreatePartialUpdate(int32_t display_id, DisplayType type,
-                                           const HWResourceInfo &hw_resource_info,
-                                           const HWPanelInfo &hw_panel_info,
-                                           const HWMixerAttributes &mixer_attributes,
-                                           const HWDisplayAttributes &display_attributes,
-                                           const DisplayConfigVariableInfo &fb_config,
+  virtual DisplayError CreatePartialUpdate(DisplayId display_id, DisplayType type,
+                                           const std::vector<HWResourceInfo> &hw_resource_info,
+                                           const DisplayInfoContext &info_ctx,
                                            PartialUpdateInterface **interface) = 0;
   virtual DisplayError DestroyPartialUpdate(PartialUpdateInterface *interface) = 0;
 
-  virtual DisplayError CreateStrategyExtn(int32_t display_id, DisplayType type,
+  virtual DisplayError CreateStrategyExtn(DisplayId display_id, DisplayType type,
                                           BufferAllocator *buffer_allocator,
-                                          const HWResourceInfo &hw_resource_info,
-                                          const HWPanelInfo &hw_panel_info,
-                                          const HWMixerAttributes &mixer_attributes,
-                                          const DisplayConfigVariableInfo &fb_config,
+                                          const std::vector<HWResourceInfo> &hw_resource_info,
+                                          const DisplayInfoContext &info_ctx,
                                           StrategyInterface **interface) = 0;
   virtual DisplayError DestroyStrategyExtn(StrategyInterface *interface) = 0;
 
-  virtual DisplayError CreateResourceExtn(const HWResourceInfo &hw_resource_info,
+  virtual DisplayError CreateResourceExtn(const std::vector<HWResourceInfo> &hw_resource_info,
                                           BufferAllocator *buffer_allocator,
                                           ResourceInterface **interface) = 0;
   virtual DisplayError DestroyResourceExtn(ResourceInterface *interface) = 0;

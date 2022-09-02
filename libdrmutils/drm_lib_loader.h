@@ -31,6 +31,7 @@
 #define __DRM_LIB_LOADER_H__
 
 #include <drm_interface.h>
+#include <utils/multi_core_instantiator.h>
 #include <mutex>
 
 namespace drm_utils {
@@ -42,8 +43,8 @@ class DRMLibLoader {
   sde_drm::GetDRMManager FuncGetDRMManager() { return func_get_drm_manager_; }
   sde_drm::DestroyDRMManager FuncDestroyDRMManager() { return func_destroy_drm_manager_; }
 
-  static DRMLibLoader *GetInstance();
-  static void Destroy();
+  static DRMLibLoader *GetInstance(uint32_t core_id);
+  static void Destroy(uint32_t core_id);
 
  private:
   DRMLibLoader();
@@ -55,7 +56,7 @@ class DRMLibLoader {
   sde_drm::DestroyDRMManager func_destroy_drm_manager_ = {};
   bool is_loaded_ = false;
 
-  static DRMLibLoader *s_instance;  // Singleton instance
+  static sdm::MultiCoreInstance<uint32_t, DRMLibLoader*> s_instance;
   static std::mutex s_lock;
 };
 

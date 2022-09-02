@@ -428,6 +428,7 @@ struct HWResourceInfo {
   bool has_noise_layer = false;
   uint32_t dsc_block_count = 0;
   DDRVersion ddr_version = kDDRVersion5;
+  uint32_t core_id = 0;
 };
 
 struct HWSplitInfo {
@@ -510,7 +511,7 @@ struct HWPanelInfo {
             (dynamic_fps != panel_info.dynamic_fps) || (min_fps != panel_info.min_fps) ||
             (dfps_porch_mode != panel_info.dfps_porch_mode) ||
             (ping_pong_split != panel_info.ping_pong_split) ||
-            (max_fps != panel_info.max_fps) || (is_primary_panel != panel_info.is_primary_panel) ||
+            (max_fps != panel_info.max_fps) ||
             (split_info != panel_info.split_info) ||
             (left_roi_count != panel_info.left_roi_count) ||
             (right_roi_count != panel_info.right_roi_count) ||
@@ -807,7 +808,19 @@ enum UpdateType {
   kUpdateMax,
 };
 
-struct HWLayersInfo {
+struct CommonStackInfo {
+  int set_idle_time_ms = -1;    // Set idle time to the new specified value.
+                                //    -1 indicates no change in idle time since last set value.
+  std::bitset<kUpdateMax> updates_mask = 0;
+  LayerStackFlags flags;               //!< Flags associated with this layer set.
+  uint64_t elapse_timestamp = 0;
+  HWAVRInfo hw_avr_info = {};
+  PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
+  shared_ptr<Fence> retire_fence = nullptr;
+  shared_ptr<Fence> sync_handle = nullptr;
+};
+
+struct LayerStackInfo {
   uint32_t app_layer_count = 0;      // Total number of app layers. Must not be 0.
   int32_t gpu_target_index = -1;     // GPU target layer index. -1 if not present.
   int32_t stitch_target_index = -1;  // Blit target layer index. -1 if not present.
@@ -815,7 +828,38 @@ struct HWLayersInfo {
   int32_t noise_layer_index = -1;    // Noise layer index. -1 if not present.
   int32_t cwb_target_index = -1;     // CWB target layer index. -1 if not present.
   std::vector<ColorPrimaries> wide_color_primaries = {};  // list of wide color primaries
+  std::vector<LayerRect> left_frame_roi = {};   // Left ROI.
+  std::vector<LayerRect> right_frame_roi = {};  // Right ROI.
+  DestScaleInfoMap dest_scale_info_map = {};
+  bool roi_split = false;          // Indicates separated left and right ROI
+  bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
+  HWHDRLayerInfo hdr_layer_info = {};
+  bool game_present = false;  // Indicates there is game layer or not
+  bool do_hw_validate = true;
+  bool trigger_async_commit = false;  // This field hints if asynchronous commit can be triggered.
+  NoiseLayerConfig noise_layer_info = {};
+  LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
 
+  bool stitch_present = false;  // Indicates there is stitch layer or not
+  bool demura_present = false;  // Indicates there is demura layer or not
+  bool cwb_present = false;  // Indicates there is cwb layer or not
+  bool lower_fps = false;  // This field hints to lower the fps in case of idle fallback
+  bool enable_self_refresh = false;  // This field hints to enable self refresh when idle timeout
+  LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
+                                       //!< rendered for virtual displays.
+                                       //!< NOTE: This field applies to a virtual display only.
+  CwbConfig *hw_cwb_config = NULL;     //!< Struct that contains CWB configuration passed to
+                                       //!< driver by SDM.
+  bool rc_config = false;
+  bool spr_enable = false;
+  RCLayersInfo rc_layers_info = {};
+  CommonStackInfo common_info = {};
+  Handle comp_stack = nullptr;
+};
+
+struct HWLayersInfo {
+  uint32_t core_id = 0;
+  CommonStackInfo *common_info = nullptr;
   std::vector<Layer> hw_layers = {};  // Layers which need to be programmed on the HW
   std::vector<LayerExt> layer_exts = {};  // Extention layer having list of
                                           // exclusion rectangles for each layer
@@ -823,48 +867,26 @@ struct HWLayersInfo {
                                  // be programmed on hardware.
   std::vector<uint32_t> roi_index {};  // Stores the ROI index where the layers are visible.
   shared_ptr<Fence> sync_handle = nullptr;  // Release fence id for current draw cycle.
-  int set_idle_time_ms = -1;    // Set idle time to the new specified value.
-                                //    -1 indicates no change in idle time since last set value.
   std::vector<LayerRect> left_frame_roi = {};   // Left ROI.
   std::vector<LayerRect> right_frame_roi = {};  // Right ROI.
-  LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
-  bool roi_split = false;          // Indicates separated left and right ROI
-  bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
   DestScaleInfoMap dest_scale_info_map = {};
-  HWHDRLayerInfo hdr_layer_info = {};
-  Handle pvt_data = NULL;   // Private data used by sdm extension only.
-  bool game_present = false;  // Indicates there is game layer or not
-  bool rc_config = false;
-  RCLayersInfo rc_layers_info = {};
-  bool spr_enable = false;
   HWLayerConfig config[kMaxSDELayers] {};
+  HWHDRLayerInfo hdr_layer_info = {};
   float output_compression = 1.0f;
   HWQosData qos_data = {};
-  HWAVRInfo hw_avr_info = {};
-  NoiseLayerConfig noise_layer_info = {};
-  std::bitset<kUpdateMax> updates_mask = 0;
-  uint64_t elapse_timestamp = 0;
-  bool do_hw_validate = true;
   uint32_t retire_fence_offset = 0;
-  bool trigger_async_commit = false;  // This field hints if asynchronous commit can be triggered.
   shared_ptr<Fence> retire_fence = nullptr;  // Retire fence for current draw cycle.
-  LayerStackFlags flags;               //!< Flags associated with this layer set.
-  PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
   LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
                                        //!< rendered for virtual displays.
                                        //!< NOTE: This field applies to a virtual display only.
-  CwbConfig *hw_cwb_config = NULL;     //!< Struct that contains CWB configuration passed to
+  CwbConfig hw_cwb_config = {};     //!< Struct that contains CWB configuration passed to
                                        //!< driver by SDM.
-  bool stitch_present = false;  // Indicates there is stitch layer or not
-  bool demura_present = false;  // Indicates there is demura layer or not
-  bool cwb_present = false;  // Indicates there is cwb layer or not
-  bool lower_fps = false;  // This field hints to lower the fps in case of idle fallback
-  bool enable_self_refresh = false;  // This field hints to enable self refresh when idle timeout
 };
 
 struct DispLayerStack {
   LayerStack *stack = NULL;          // Input layer stack. Set by the caller.
-  HWLayersInfo info {};
+  LayerStackInfo stack_info = {};  // Composition layer stack as seen by client
+  std::vector<HWLayersInfo> info;
 };
 
 struct HWDisplayAttributes : DisplayConfigVariableInfo {
@@ -933,6 +955,60 @@ struct Resolution {
   uint32_t y_pixels;
 };
 
+class DisplayId {
+ public:
+  DisplayId() { }
+
+  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_(conn_id) {
+    core_id_bitset_ = std::bitset<32>((1 << core_id));
+    display_id_ = ((core_id_bitset_.to_ulong()) << 16) | (conn_id_ & 0xFFFF);
+  }
+
+  explicit DisplayId(uint32_t display_id) : display_id_(display_id) {
+    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> 16);
+    core_id_bitset_ = std::bitset<32>(core_id);
+    conn_id_ = (display_id_) < 0 ? 0 : ((display_id_) & 0xFFFF);
+  }
+
+  inline uint32_t GetDisplayId() {
+    return display_id_;
+  }
+
+  inline uint32_t GetCoreIdMap() {
+    return core_id_bitset_.to_ulong();
+  }
+
+  static uint32_t GetCoreIdMap(uint32_t display_id) {
+    return (display_id) < 0 ? 0 : ((display_id) >> 16);
+  }
+
+  inline uint32_t GetConnId() {
+    return conn_id_;
+  }
+
+  static uint32_t GetConnId(uint32_t display_id) {
+    return (display_id) < 0 ? 0 : ((display_id) & 0xFFFF);;
+  }
+
+  ~DisplayId() {}
+
+ private:
+  int32_t display_id_ = -1;
+  std::bitset<32> core_id_bitset_ = 0;
+  uint32_t conn_id_ = -1;
+};
+
+typedef std::map<uint32_t, std::map<uint32_t, uint8_t>> MultiDpuDemuraMap;
+
+struct DisplayInfoContext {
+  HWDisplayAttributes display_attributes = {};
+  HWMixerAttributes mixer_attributes = {};
+  HWPanelInfo hw_panel_info = {};
+  DisplayConfigVariableInfo fb_config = {};
+};
+
+typedef DisplayInfoContext DisplayClientContext;
+typedef std::map<uint32_t, DisplayInfoContext> DisplayDeviceContext;
 }  // namespace sdm
 
 #endif  // __HW_INFO_TYPES_H__

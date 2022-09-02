@@ -1307,6 +1307,7 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError PostHandleSecureEvent(SecureEvent secure_event) = 0;
+  virtual DisplayError GetConnectorId(int32_t *conn_id) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

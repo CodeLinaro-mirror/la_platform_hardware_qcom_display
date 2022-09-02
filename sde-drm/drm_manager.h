@@ -31,6 +31,7 @@
 #define __DRM_MANAGER_H__
 
 #include <drm_interface.h>
+#include <utils/multi_core_instantiator.h>
 #include <mutex>
 #include "drm_dpps_mgr_intf.h"
 #include "drm_panel_feature_mgr_intf.h"
@@ -81,7 +82,7 @@ class DRMManager : public DRMManagerInterface {
   DRMPanelFeatureMgrIntf *GetPanelFeatureMgrIntf();
 
   static DRMManager *GetInstance(int fd);
-  static void Destroy();
+  static void Destroy(int fd);
 
  private:
   int Init(int drm_fd);
@@ -94,7 +95,7 @@ class DRMManager : public DRMManagerInterface {
   DRMDppsManagerIntf *dpps_mgr_intf_ = {};
   DRMPanelFeatureMgrIntf *panel_feature_mgr_intf_ = {};
 
-  static DRMManager *s_drm_instance;
+  static sdm::MultiCoreInstance<int, DRMManager*> s_drm_instance;
   static std::mutex s_lock;
 };
 

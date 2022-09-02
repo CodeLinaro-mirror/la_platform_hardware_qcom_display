@@ -90,6 +90,7 @@ HWPeripheralDRM::HWPeripheralDRM(int32_t display_id, BufferAllocator *buffer_all
   disp_type_ = DRMDisplayType::PERIPHERAL;
   device_name_ = "Peripheral";
   display_id_ = display_id;
+  core_id_ = hw_info_intf->GetCoreId();
 }
 
 DisplayError HWPeripheralDRM::Init() {
@@ -126,9 +127,9 @@ void HWPeripheralDRM::InitDestScaler() {
       dest_scaler_blocks_used_ = 2;
     }
     if (hw_resource_.hw_dest_scalar_info.count >=
-        (hw_dest_scaler_blocks_used_ + dest_scaler_blocks_used_)) {
+        (hw_dest_scaler_blocks_used_[core_id_] + dest_scaler_blocks_used_)) {
       // Enough destination scaler blocks available so update the static counter.
-      hw_dest_scaler_blocks_used_ += dest_scaler_blocks_used_;
+      hw_dest_scaler_blocks_used_[core_id_] += dest_scaler_blocks_used_;
     } else {
       dest_scaler_blocks_used_ = 0;
     }
