@@ -78,9 +78,6 @@
 #include <display/drm/msm_drm_pp.h>
 #include <display/drm/sde_drm.h>
 
-#ifdef KERNEL_5_4
-#include <drm/sde_drm.h>
-#endif
 
 namespace sde_drm {
 

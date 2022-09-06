@@ -63,6 +63,9 @@
 
 #ifndef QMAA
 #include <display/media/mmm_color_fmt.h>
+#ifdef KERNEL_5_4
+#include <vidc/media/msm_media_info.h>
+#endif
 #include <display/drm/sde_drm.h>
 #endif
 
