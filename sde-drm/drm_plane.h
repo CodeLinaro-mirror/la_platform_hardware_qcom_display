@@ -111,6 +111,9 @@ class DRMPlane {
   const DRMPlaneTypeInfo& GetPlaneTypeInfo() { return plane_type_info_; }
   void SetDecimation(drmModeAtomicReq *req, uint32_t prop_id, uint32_t prop_value);
   void SetExclRect(drmModeAtomicReq *req, DRMRect rect);
+  void SetSrcExtnRect(drmModeAtomicReq *req, DRMRect rect);
+  void SetDstExtnRect(drmModeAtomicReq *req, DRMRect rect);
+  void SetImgSizeRect(drmModeAtomicReq *req, DRMRect rect);
   void Perform(DRMOps code, drmModeAtomicReq *req, va_list args);
   void Dump();
   void SetMultiRectMode(drmModeAtomicReq *req, DRMMultiRectMode drm_multirect_mode);
@@ -126,6 +129,7 @@ class DRMPlane {
   void ResetPlanesLUT(drmModeAtomicReq *req);
   void GetIndex(uint8_t *index) { *index = plane_type_info_.pipe_idx; }
   void GetRect(uint8_t *rect) { *rect = plane_type_info_.master_plane_id ? 1 : 0; }
+  void SetCacType(drmModeAtomicReq *req, DRMCacMode drm_cac_mode);
 
  private:
   typedef std::map<DRMProperty, std::tuple<uint64_t, drmModePropertyRes *>> PropertyMap;
@@ -142,6 +146,9 @@ class DRMPlane {
   DRMPropertyManager prop_mgr_ {};
   bool has_excl_rect_ = false;
   drm_clip_rect excl_rect_copy_ = {};
+  drm_clip_rect src_rect_extn_copy_ = {};
+  drm_clip_rect dst_rect_extn_copy_ = {};
+  drm_clip_rect img_size_rect_copy_ = {};
   std::unique_ptr<DRMPPManager> pp_mgr_ {};
   std::unordered_map<uint32_t, uint64_t> tmp_prop_val_map_ {};
   std::unordered_map<uint32_t, uint64_t> committed_prop_val_map_ {};

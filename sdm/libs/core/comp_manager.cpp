@@ -389,6 +389,9 @@ DisplayError CompManager::PrePrepare(Handle display_ctx, DispLayerStack *disp_la
                                                          &display_comp_ctx->constraints);
   display_comp_ctx->remaining_strategies = display_comp_ctx->max_strategies;
 
+  resource_intf_->Perform(ResourceInterface::kCmdSetCacMode, display_comp_ctx->display_resource_ctx,
+                          &disp_layer_stack->stack_info.enable_cac);
+
   // Select a composition strategy, and try to allocate resources for it.
   resource_intf_->Start(display_comp_ctx->display_resource_ctx, disp_layer_stack->stack);
 
@@ -405,6 +408,10 @@ DisplayError CompManager::Prepare(Handle display_ctx, DispLayerStack *disp_layer
   DisplayError error = kErrorUndefined;
 
   PrepareStrategyConstraints(display_ctx, disp_layer_stack);
+
+  resource_intf_->Perform(ResourceInterface::kCmdSetCacMode, display_comp_ctx->display_resource_ctx,
+                          &disp_layer_stack->stack_info.enable_cac);
+
   // Select a composition strategy, and try to allocate resources for it.
   resource_intf_->Start(display_resource_ctx, disp_layer_stack->stack);
 

@@ -85,6 +85,7 @@ public:
       SET_NOISE_PLUGIN_OVERRIDE = 53,          // Override NoisePlugIn parameters
       SET_DIMMING_ENABLE = 54,                 // Set display dimming enablement
       SET_DIMMING_MIN_BL = 55,                 // Set display dimming minimal backlight value
+      PERFORM_CAC_CONFIG = 56,                 // Set CAC Configuration for the display
       COMMAND_LIST_END = 400,
     };
 

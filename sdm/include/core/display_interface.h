@@ -1309,6 +1309,14 @@ class DisplayInterface {
   virtual DisplayError PostHandleSecureEvent(SecureEvent secure_event) = 0;
   virtual DisplayError GetConnectorId(int32_t *conn_id) = 0;
 
+  /*! @brief Method to handle CAC configuration.
+
+    @param[in] config \link CacConfig \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError PerformCacConfig(CacConfig config, bool enable) = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };

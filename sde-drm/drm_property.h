@@ -185,6 +185,11 @@ enum struct DRMProperty {
   DIMMING_BL_LUT,
   DIMMING_DYN_CTRL,
   DIMMING_MIN_BL,
+  CAC_TYPE,
+  SRC_RECT_EXT,
+  DST_RECT_EXT,
+  BG_ALPHA,
+  IMG_SIZE_RECT,
 
   // Insert above
   MAX

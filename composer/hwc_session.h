@@ -303,6 +303,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t GetDisplayConnectionType(hwc2_display_t display, HwcDisplayConnectionType *type);
   int32_t SetDimmingEnable(hwc2_display_t display, int32_t int_enabled);
   int32_t SetDimmingMinBl(hwc2_display_t display, int32_t min_bl);
+  int32_t PerformCacConfig(const android::Parcel *input_parcel);
   int32_t GetClientTargetProperty(hwc2_display_t display,
                                   HwcClientTargetProperty *outClientTargetProperty);
 

@@ -49,6 +49,7 @@ class ResourceInterface {
     kCmdSetBacklightLevel,
     kCmdSetCwbBoost,
     kCmdGetResourceConstraints,
+    kCmdSetCacMode,
     kCmdMax,
   };
 
