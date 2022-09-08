@@ -187,6 +187,7 @@ subdirs = [
     "libhistogram",
     "liblight",
     "composer",
+    "composer_test_service",
     "gralloc",
     "gpu_tonemapper",
     "hdmi_cec",
