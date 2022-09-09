@@ -44,12 +44,14 @@ Strategy::Strategy(ExtensionInterface *extension_intf,
                    BufferAllocator *buffer_allocator,
                    DisplayId display_id, DisplayType type,
                    const std::vector<HWResourceInfo> &hw_resource_info,
-                   DisplayInfoContext &info_ctx)
+                   DisplayInfoContext &info_ctx,
+                   DisplayDeviceContext &device_ctx)
   : extension_intf_(extension_intf),
     display_id_info_(display_id),
     display_type_(type),
     hw_resource_info_(hw_resource_info),
     info_ctx_(info_ctx),
+    device_ctx_(device_ctx),
     buffer_allocator_(buffer_allocator) {
     display_id_ = display_id_info_.GetDisplayId();
   }
@@ -59,7 +61,8 @@ DisplayError Strategy::Init() {
 
   if (extension_intf_) {
     error = extension_intf_->CreateStrategyExtn(display_id_info_, display_type_, buffer_allocator_,
-                                                hw_resource_info_, info_ctx_, &strategy_intf_);
+                                                hw_resource_info_, info_ctx_, device_ctx_,
+                                                &strategy_intf_);
     if (error != kErrorNone) {
       DLOGE("Failed to create strategy for display %d-%d", display_id_, display_type_);
       return error;
@@ -219,7 +222,8 @@ void Strategy::GenerateROI() {
   }
 }
 
-DisplayError Strategy::Reconfigure(DisplayInfoContext &info_ctx) {
+DisplayError Strategy::Reconfigure(DisplayInfoContext &info_ctx,
+                                   DisplayDeviceContext &device_ctx) {
   DisplayError error = kErrorNone;
 
   if (!extension_intf_) {
@@ -236,12 +240,13 @@ DisplayError Strategy::Reconfigure(DisplayInfoContext &info_ctx) {
   extension_intf_->CreatePartialUpdate(display_id_info_, display_type_, hw_resource_info_,
                                        info_ctx, &partial_update_intf_);
 
-  error = strategy_intf_->Reconfigure(info_ctx, hw_resource_info_);
+  error = strategy_intf_->Reconfigure(info_ctx, device_ctx, hw_resource_info_);
   if (error != kErrorNone) {
     return error;
   }
 
   info_ctx_ = info_ctx;
+  device_ctx_ = device_ctx;
 
   return kErrorNone;
 }

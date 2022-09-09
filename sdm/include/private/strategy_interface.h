@@ -60,7 +60,7 @@ class StrategyInterface {
   virtual DisplayError GetNextStrategy() = 0;
   virtual DisplayError Stop() = 0;
   virtual DisplayError SetDrawMethod(const DisplayDrawMethod &draw_method) = 0;
-  virtual DisplayError Reconfigure(DisplayInfoContext &info_ctx,
+  virtual DisplayError Reconfigure(DisplayInfoContext &info_ctx, DisplayDeviceContext &device_ctx,
                                    const std::vector<HWResourceInfo> &hw_res_info) = 0;
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;
   virtual DisplayError Purge() = 0;

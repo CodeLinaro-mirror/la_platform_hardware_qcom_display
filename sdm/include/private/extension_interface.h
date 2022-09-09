@@ -73,6 +73,7 @@ class ExtensionInterface {
                                           BufferAllocator *buffer_allocator,
                                           const std::vector<HWResourceInfo> &hw_resource_info,
                                           const DisplayInfoContext &info_ctx,
+                                          const DisplayDeviceContext &device_ctx,
                                           StrategyInterface **interface) = 0;
   virtual DisplayError DestroyStrategyExtn(StrategyInterface *interface) = 0;
 
