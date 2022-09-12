@@ -793,9 +793,8 @@ Return<int32_t> HWCSession::destroyTunnelledLayer()  {
   SetLayerIsTunneled(HWC_DISPLAY_PRIMARY, tunneled_layer_, false);
 
   int error = DestroyLayer(HWC_DISPLAY_PRIMARY, tunneled_layer_);
-    if (error != HWC2_ERROR_NONE) {
-      DLOGE("DestroyLayer failed! Exiting destroyTunnelledLayer.\n");
-      return error;
+  if (error != HWC2_ERROR_NONE) {
+      DLOGE("DestroyLayer failed! Tunneled Layer not found\n");
   }
 
   tunneled_layer_ = -1;
