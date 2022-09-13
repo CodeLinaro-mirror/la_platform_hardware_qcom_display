@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 /*! @file core_interface.h
   @brief Interface file for core of the display subsystem.
 
@@ -153,6 +159,7 @@ class CoreInterface {
                                  SocketHandler *socket_handler,
                                  std::shared_ptr<IPCIntf> ipc_intf,
                                  CoreInterface **interface,
+                                 std::bitset<8> core_ids = std::bitset<8>(0xFF),
                                  uint32_t version = SDM_VERSION_TAG);
 
   /*! @brief Method to release handle to display core interface.

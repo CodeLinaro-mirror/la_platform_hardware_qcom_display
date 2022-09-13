@@ -83,8 +83,10 @@
 namespace sdm {
 
 CoreImpl::CoreImpl(BufferAllocator *buffer_allocator,
-                   SocketHandler *socket_handler, std::shared_ptr<IPCIntf> ipc_intf)
-  : buffer_allocator_(buffer_allocator), socket_handler_(socket_handler), ipc_intf_(ipc_intf) {
+                   SocketHandler *socket_handler, std::shared_ptr<IPCIntf> ipc_intf,
+                   std::bitset<8> core_ids)
+  : buffer_allocator_(buffer_allocator), socket_handler_(socket_handler), ipc_intf_(ipc_intf),
+    core_ids_(core_ids) {
 }
 
 DisplayError CoreImpl::Init() {
@@ -116,7 +118,7 @@ DisplayError CoreImpl::Init() {
 #endif
   }
 
-  error = HWInfoInterface::Create(&hw_info_intf_);
+  error = HWInfoInterface::Create(&hw_info_intf_, core_ids_);
   if (error != kErrorNone) {
     goto CleanupOnError;
   }
