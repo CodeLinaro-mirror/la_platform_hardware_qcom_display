@@ -274,7 +274,7 @@ DisplayError DPUCoreMux::PowerOff(bool teardown, SyncPoints *sync_points) {
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
-  for (int i = 0; i < hw_intf_.size(); i++) {
+  for (uint32_t i : op_sync_sequence_) {
     error = hw_intf_[i]->PowerOff(teardown, &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
