@@ -15,6 +15,40 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <core/buffer_allocator.h>
@@ -768,7 +802,7 @@ static int32_t SetCursorPosition(hwc2_device_t *device, hwc2_display_t display, 
   return status;
 }
 
-static int32_t SetLayerBlendMode(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+int32_t HWCSession::SetLayerBlendMode(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
                                  int32_t int_mode) {
   if (int_mode < HWC2_BLEND_MODE_INVALID || int_mode > HWC2_BLEND_MODE_COVERAGE) {
     return HWC2_ERROR_BAD_PARAMETER;
@@ -777,8 +811,9 @@ static int32_t SetLayerBlendMode(hwc2_device_t *device, hwc2_display_t display, 
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerBlendMode, mode);
 }
 
-static int32_t SetLayerBuffer(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                              buffer_handle_t buffer, int32_t acquire_fence) {
+int32_t HWCSession::SetLayerBuffer(hwc2_device_t *device, hwc2_display_t display,
+                                   hwc2_layer_t layer, buffer_handle_t buffer,
+                                   int32_t acquire_fence) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerBuffer, buffer,
                                        acquire_fence);
 }
@@ -795,26 +830,26 @@ static int32_t SetLayerCompositionType(hwc2_device_t *device, hwc2_display_t dis
                                        type);
 }
 
-static int32_t SetLayerDataspace(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                 int32_t dataspace) {
+int32_t HWCSession::SetLayerDataspace(hwc2_device_t *device, hwc2_display_t display,
+                                      hwc2_layer_t layer, int32_t dataspace) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerDataspace,
                                        dataspace);
 }
 
-static int32_t SetLayerDisplayFrame(hwc2_device_t *device, hwc2_display_t display,
-                                    hwc2_layer_t layer, hwc_rect_t frame) {
+int32_t HWCSession::SetLayerDisplayFrame(hwc2_device_t *device, hwc2_display_t display,
+                                         hwc2_layer_t layer, hwc_rect_t frame) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerDisplayFrame,
                                        frame);
 }
 
-static int32_t SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                  float alpha) {
+int32_t HWCSession::SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display,
+                                       hwc2_layer_t layer, float alpha) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerPlaneAlpha,
                                        alpha);
 }
 
-static int32_t SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                  hwc_frect_t crop) {
+int32_t HWCSession::SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display,
+                                       hwc2_layer_t layer, hwc_frect_t crop) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerSourceCrop, crop);
 }
 
@@ -824,8 +859,8 @@ static int32_t SetLayerSurfaceDamage(hwc2_device_t *device, hwc2_display_t displ
                                        damage);
 }
 
-static int32_t SetLayerTransform(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                 int32_t int_transform) {
+int32_t HWCSession::SetLayerTransform(hwc2_device_t *device, hwc2_display_t display,
+                                      hwc2_layer_t layer, int32_t int_transform) {
   auto transform = static_cast<HWC2::Transform>(int_transform);
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerTransform,
                                        transform);
@@ -837,9 +872,20 @@ static int32_t SetLayerVisibleRegion(hwc2_device_t *device, hwc2_display_t displ
                                        visible);
 }
 
-static int32_t SetLayerZOrder(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                              uint32_t z) {
+int32_t HWCSession::SetLayerZOrder(hwc2_device_t *device, hwc2_display_t display,
+                                   hwc2_layer_t layer, uint32_t z) {
   return HWCSession::CallDisplayFunction(device, display, &HWCDisplay::SetLayerZOrder, layer, z);
+}
+
+int32_t HWCSession::SetLayerIsTunneled(hwc2_device_t *device, hwc2_display_t display,
+                                       hwc2_layer_t layer, bool tunneled) {
+  return CallDisplayFunction(device, display, &HWCDisplay::SetLayerIsTunneled, layer, tunneled);
+}
+
+int32_t HWCSession::IsTunnelledLayerPresent(hwc2_device_t *device, hwc2_display_t display,
+                                            bool *tunnelled_layer_present) {
+  return CallDisplayFunction(device, display, &HWCDisplay::IsTunnelledLayerPresent,
+                             tunnelled_layer_present);
 }
 
 int32_t HWCSession::SetOutputBuffer(hwc2_device_t *device, hwc2_display_t display,

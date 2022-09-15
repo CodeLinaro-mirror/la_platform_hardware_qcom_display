@@ -21,11 +21,14 @@ display_config_version := $(shell \
 display_config_version := $(shell \
     if [ -d "$(TOP)/vendor/qcom/opensource/interfaces/display/config/1.9" ];\
     then echo DISPLAY_CONFIG_1_9; fi)
+display_config_version := $(shell \
+    if [ -d "$(TOP)/vendor/qcom/opensource/interfaces/display/config/1.21" ];\
+    then echo DISPLAY_CONFIG_1_21; fi)
 
 #Common C flags
 common_flags := -Wno-missing-field-initializers
 common_flags += -Wconversion -Wall -Werror -std=c++14
-common_flags += -DUSE_GRALLOC1
+common_flags += -DUSE_GRALLOC1 -Wno-unused-function -Wno-sign-conversion
 ifeq ($(TARGET_IS_HEADLESS), true)
     common_flags += -DTARGET_HEADLESS
     LOCAL_CLANG := false
@@ -58,6 +61,12 @@ ifeq ($(display_config_version), DISPLAY_CONFIG_1_9)
     common_flags += -DDISPLAY_CONFIG_1_1 -DDISPLAY_CONFIG_1_2 -DDISPLAY_CONFIG_1_3
     common_flags += -DDISPLAY_CONFIG_1_4 -DDISPLAY_CONFIG_1_5 -DDISPLAY_CONFIG_1_6
     common_flags += -DDISPLAY_CONFIG_1_7 -DDISPLAY_CONFIG_1_8 -DDISPLAY_CONFIG_1_9
+endif
+ifeq ($(display_config_version), DISPLAY_CONFIG_1_21)
+    common_flags += -DDISPLAY_CONFIG_1_1 -DDISPLAY_CONFIG_1_2 -DDISPLAY_CONFIG_1_3
+    common_flags += -DDISPLAY_CONFIG_1_4 -DDISPLAY_CONFIG_1_5 -DDISPLAY_CONFIG_1_6
+    common_flags += -DDISPLAY_CONFIG_1_7 -DDISPLAY_CONFIG_1_8 -DDISPLAY_CONFIG_1_9
+    common_flags += -DDISPLAY_CONFIG_1_21
 endif
 
 ifeq ($(TARGET_USES_COLOR_METADATA), true)
