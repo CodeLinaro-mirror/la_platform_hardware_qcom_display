@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -167,6 +167,10 @@ HWC3::Error HWCDisplayVirtualDPU::PreValidateDisplay(bool *exit_validate) {
     }
   }
 
+  if (force_gpu_comp_ && !layer_stack_.flags.secure_present) {
+    MarkLayersForClientComposition();
+  }
+
   *exit_validate = false;
 
   return HWC3::Error::None;
@@ -235,6 +239,12 @@ HWC3::Error HWCDisplayVirtualDPU::SetPanelLuminanceAttributes(float min_lum, flo
   if (err != kErrorNone) {
     return HWC3::Error::BadParameter;
   }
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplayVirtualDPU::SetColorTransform(const float *matrix,
+                                                    android_color_transform_t hint) {
+  force_gpu_comp_ = (hint != HAL_COLOR_TRANSFORM_IDENTITY) ? true : false;
   return HWC3::Error::None;
 }
 
