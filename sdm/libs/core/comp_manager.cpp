@@ -136,7 +136,7 @@ DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type
 
   Strategy *&strategy = display_comp_ctx->strategy;
   strategy = new Strategy(extension_intf_, buffer_allocator_, display_id, type,
-                          hw_res_info_, client_ctx);
+                          hw_res_info_, client_ctx, device_ctx);
   if (!strategy) {
     DLOGE("Unable to create strategy");
     delete display_comp_ctx;
@@ -280,7 +280,7 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
   }
 
   if (display_comp_ctx->strategy) {
-    error = display_comp_ctx->strategy->Reconfigure(client_ctx);
+    error = display_comp_ctx->strategy->Reconfigure(client_ctx, device_ctx);
     if (error != kErrorNone) {
       DLOGE("Unable to Reconfigure strategy.");
       display_comp_ctx->strategy->Deinit();

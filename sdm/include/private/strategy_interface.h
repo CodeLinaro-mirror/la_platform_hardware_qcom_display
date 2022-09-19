@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __STRATEGY_INTERFACE_H__
 #define __STRATEGY_INTERFACE_H__
 
@@ -52,7 +58,7 @@ class StrategyInterface {
   virtual DisplayError GetNextStrategy() = 0;
   virtual DisplayError Stop() = 0;
   virtual DisplayError SetDrawMethod(const DisplayDrawMethod &draw_method) = 0;
-  virtual DisplayError Reconfigure(DisplayInfoContext &info_ctx,
+  virtual DisplayError Reconfigure(DisplayInfoContext &info_ctx, DisplayDeviceContext &device_ctx,
                                    const std::vector<HWResourceInfo> &hw_res_info) = 0;
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;
   virtual DisplayError Purge() = 0;
