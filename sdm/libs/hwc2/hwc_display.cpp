@@ -17,6 +17,42 @@
  * limitations under the License.
  */
 
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <cutils/properties.h>
 #include <errno.h>
 #include <math.h>
@@ -81,6 +117,10 @@ HWC2::Error HWCColorMode::DeInit() {
   return HWC2::Error::None;
 }
 
+void HWCColorMode::UpdateDisplayIntf(DisplayInterface *display_intf) {
+  display_intf_ = display_intf;
+}
+
 uint32_t HWCColorMode::GetColorModeCount() {
   uint32_t count = UINT32(color_mode_transform_map_.size());
   DLOGI("Supported color mode count = %d", count);
@@ -121,6 +161,10 @@ HWC2::Error HWCColorMode::SetColorMode(android_color_mode_t mode) {
 }
 
 HWC2::Error HWCColorMode::SetColorModeById(int32_t color_mode_id) {
+  if (!display_intf_) {
+    DLOGE("Display interface is not available");
+  }
+
   DLOGI("Applying mode: %d", color_mode_id);
   DisplayError error = display_intf_->SetColorModeById(color_mode_id);
   if (error != kErrorNone) {
@@ -131,6 +175,10 @@ HWC2::Error HWCColorMode::SetColorModeById(int32_t color_mode_id) {
 }
 
 HWC2::Error HWCColorMode::RestoreColorTransform() {
+  if (!display_intf_) {
+    DLOGE("Display interface is not available");
+  }
+
   DisplayError error = display_intf_->SetColorTransform(kColorTransformMatrixCount, color_matrix_);
   if (error != kErrorNone) {
     DLOGE("Failed to set Color Transform");
@@ -159,6 +207,11 @@ HWC2::Error HWCColorMode::HandleColorModeTransform(android_color_mode_t mode,
   android_color_transform_t transform_hint = hint;
   std::string color_mode_transform;
   bool use_matrix = false;
+
+  if (!display_intf_) {
+    DLOGE("Display interface is not available");
+  }
+
   if (hint != HAL_COLOR_TRANSFORM_ARBITRARY_MATRIX) {
     // if the mode + transfrom request from HWC matches one mode in SDM, set that
     if (color_mode_transform.empty()) {
@@ -203,6 +256,11 @@ HWC2::Error HWCColorMode::HandleColorModeTransform(android_color_mode_t mode,
 
 void HWCColorMode::PopulateColorModes() {
   uint32_t color_mode_count = 0;
+
+  if (!display_intf_) {
+    DLOGE("Display interface is not available");
+  }
+
   // SDM returns modes which is string combination of mode + transform.
   DisplayError error = display_intf_->GetColorModeCount(&color_mode_count);
   if (error != kErrorNone || (color_mode_count == 0)) {
@@ -298,6 +356,11 @@ void HWCColorMode::PopulateTransform(const android_color_mode_t &mode,
 
 HWC2::Error HWCColorMode::ApplyDefaultColorMode() {
   android_color_mode_t color_mode = HAL_COLOR_MODE_NATIVE;
+
+  if (!display_intf_) {
+    DLOGE("Display interface is not available");
+  }
+
   if (color_mode_transform_map_.size() == 1U) {
     color_mode = color_mode_transform_map_.begin()->first;
   } else if (color_mode_transform_map_.size() > 1U) {

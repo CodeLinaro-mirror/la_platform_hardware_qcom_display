@@ -27,6 +27,42 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <cutils/properties.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -103,6 +139,22 @@ HWCDisplayPluggable::HWCDisplayPluggable(CoreInterface *core_intf,
                                        int32_t sdm_id)
     : HWCDisplay(core_intf, buffer_allocator, callbacks, qservice, kPluggable, id, sdm_id, false,
                  DISPLAY_CLASS_PLUGGABLE) {
+}
+
+int HWCDisplayPluggable::Init() {
+  int status = HWCDisplay::Init();
+  if (status) {
+    return status;
+  }
+
+  HWCDebugHandler::Get()->GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL,
+                                  &enable_qdcm_colormodes_on_external_);
+  if (enable_qdcm_colormodes_on_external_) {
+    color_mode_ = new HWCColorMode(display_intf_);
+    color_mode_->Init();
+  }
+
+  return status;
 }
 
 HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
@@ -234,6 +286,9 @@ int HWCDisplayPluggable::SetState(bool connected) {
         return -EINVAL;
       }
 
+      if (color_mode_) {
+        color_mode_->UpdateDisplayIntf(display_intf_);
+      }
       // Restore HDMI attributes when display is reconnected.
       // This is to ensure that surfaceflinger & sdm are in sync.
       display_null_.GetFrameBufferConfig(&fb_config);
@@ -276,10 +331,14 @@ int HWCDisplayPluggable::SetState(bool connected) {
       display_null_.SetFrameBufferConfig(fb_config);
 
       SetVsyncEnabled(HWC2::Vsync::Disable);
-      core_intf_->DestroyDisplay(display_intf_);
-      display_intf_ = &display_null_;
 
       display_null_.SetActive(true);
+      if (color_mode_) {
+        color_mode_->UpdateDisplayIntf(nullptr);
+      }
+
+      core_intf_->DestroyDisplay(display_intf_);
+      display_intf_ = &display_null_;
       DLOGI("Display is disconnected successfully.");
     } else {
       DLOGI("Display is already disconnected.");
@@ -299,6 +358,67 @@ void HWCDisplayPluggable::GetUnderScanConfig() {
 
 DisplayError HWCDisplayPluggable::Flush() {
   return display_intf_->Flush(&layer_stack_);
+}
+
+HWC2::Error HWCDisplayPluggable::GetColorModes(uint32_t *out_num_modes,
+                                             android_color_mode_t *out_modes) {
+  if (display_null_.IsActive()) {
+    return HWC2::Error::None;
+  }
+
+  if (!color_mode_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  if (out_modes == nullptr) {
+    *out_num_modes = color_mode_->GetColorModeCount();
+  } else {
+    color_mode_->GetColorModes(out_num_modes, out_modes);
+  }
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayPluggable::SetColorMode(android_color_mode_t mode) {
+  if (display_null_.IsActive()) {
+    return HWC2::Error::None;
+  }
+
+  if (!color_mode_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  auto status = color_mode_->SetColorMode(mode);
+  if (status != HWC2::Error::None) {
+    DLOGE("failed for mode = %d", mode);
+    return status;
+  }
+
+  callbacks_->Refresh(id_);
+  validated_ = false;
+
+  return status;
+}
+
+HWC2::Error HWCDisplayPluggable::SetColorModeById(int32_t color_mode_id) {
+  if (display_null_.IsActive()) {
+    return HWC2::Error::None;
+  }
+
+  if (!color_mode_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  auto status = color_mode_->SetColorModeById(color_mode_id);
+  if (status != HWC2::Error::None) {
+    DLOGE("failed for mode = %d", color_mode_id);
+    return status;
+  }
+
+  callbacks_->Refresh(id_);
+  validated_ = false;
+
+  return status;
 }
 
 }  // namespace sdm

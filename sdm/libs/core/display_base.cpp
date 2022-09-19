@@ -627,6 +627,7 @@ std::string DisplayBase::Dump() {
     << max_mixer_stages_;
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
 
+  os << "\nCurrent Color Mode: " << current_color_mode_.c_str();
   os << "\nAvailable Color Modes:\n";
   for (auto it : color_mode_map_) {
     os << "  " << it.first << " " << std::setw(35 - INT(it.first.length())) <<
@@ -913,7 +914,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     }
     // Store the new SDR color mode request by client
     if (dynamic_range_type == kSdrType) {
-      current_color_mode_ = color_mode;
+      pre_color_mode_ = color_mode;
     }
     return error;
   }
@@ -927,7 +928,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
         return error;
       }
     } else if (dynamic_range_type == kSdrType) {
-      current_color_mode_ = color_mode;
+      pre_color_mode_ = color_mode;
     }
   } else {
     // HDR playback off, do not apply HDR mode
@@ -939,14 +940,20 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     if (error != kErrorNone) {
       return error;
     }
-    current_color_mode_ = color_mode;
+    pre_color_mode_ = color_mode;
   }
 
   return error;
 }
 
 DisplayError DisplayBase::SetColorModeById(int32_t color_mode_id) {
-  return color_mgr_->ColorMgrSetMode(color_mode_id);
+  for (const auto& it : color_mode_map_) {
+    if (it.second->id == color_mode_id) {
+      return SetColorMode(it.first);
+    }
+  }
+
+  return kErrorNotSupported;
 }
 
 DisplayError DisplayBase::SetColorModeInternal(const std::string &color_mode) {
@@ -968,6 +975,7 @@ DisplayError DisplayBase::SetColorModeInternal(const std::string &color_mode) {
     DLOGE("Failed for mode id = %d", sde_display_mode->id);
     return error;
   }
+  current_color_mode_ = color_mode;
 
   return error;
 }
@@ -1607,9 +1615,10 @@ DisplayError DisplayBase::SetHDRMode(bool set) {
           color_mode = "hal_hdr";
         }
       }
+      pre_color_mode_ = current_color_mode_;
     } else {
       // HDR playback off - set prev mode
-      color_mode = current_color_mode_;
+      color_mode = pre_color_mode_;
     }
     DLOGI("Setting color mode = %s", color_mode.c_str());
     error = SetColorModeInternal(color_mode);
@@ -1826,7 +1835,8 @@ bool DisplayBase::NeedsGpuFallback(const Layer *layer) {
 }
 
 bool DisplayBase::NeedsHdrHandling() {
-  if (display_type_ != kPrimary || !num_color_modes_ || gpu_fallback_) {
+  if ((display_type_ != kPrimary && !enable_qdcm_colormodes_on_external_)
+      || !num_color_modes_ || gpu_fallback_) {
     // No HDR Handling for non-primary displays or when color modes are not present or
     // if frame is falling back to GPU
     return false;

@@ -246,6 +246,7 @@ class DisplayBase : public DisplayInterface {
   uint32_t req_mixer_width_ = 0;
   uint32_t req_mixer_height_ = 0;
   std::string current_color_mode_ = "hal_native";
+  std::string pre_color_mode_ = "";
   bool hdr_playback_ = false;
   bool hdr_mode_ = false;
   int disable_hdr_lut_gen_ = 0;
