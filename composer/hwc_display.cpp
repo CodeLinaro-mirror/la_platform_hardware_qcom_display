@@ -1660,6 +1660,11 @@ HWC2::Error HWCDisplay::AcceptDisplayChanges() {
       DLOGW("Invalid layer: %" PRIu64, change.first);
     }
   }
+
+  // Clear layer changes, so that they don't get applied in next commit ie;
+  // cases where Prepare doesn't go through.
+  layer_changes_.clear();
+
   return HWC2::Error::None;
 }
 
@@ -3160,6 +3165,10 @@ DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs
   if (secure_event == kTUITransitionEnd || secure_event == kTUITransitionUnPrepare) {
     DLOGI("Resume display %d-%d",  sdm_id_, type_);
     display_paused_ = false;
+    if (*needs_refresh == false) {
+      secure_event_ = kSecureEventMax;
+      return kErrorNone;
+    }
   } else if (secure_event == kTUITransitionPrepare || secure_event == kTUITransitionStart) {
     if (*needs_refresh) {
       display_pause_pending_ = true;
