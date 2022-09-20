@@ -901,7 +901,7 @@ HWC2::Error HWCDisplay::SetLayerIsTunneled(hwc2_layer_t layer_id, bool tunneled)
   }
   const auto layer = map_layer->second;
   layer->SetTunneled(tunneled);
-  this->SetTunneledLayer(true);
+  this->SetTunneledLayer(tunneled);
   return HWC2::Error::None;
 }
 
