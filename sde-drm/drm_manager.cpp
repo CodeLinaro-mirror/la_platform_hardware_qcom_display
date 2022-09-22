@@ -514,4 +514,9 @@ void DRMManager::GetInitialDemuraInfo(std::vector<uint32_t> *initial_demura_plan
     plane_mgr_->GetPlaneIdsFromDescriptions(frl, initial_demura_planes);
   }
 }
+
+int DRMManager::GetPossibleEncoders(uint32_t connector_id, std::set<uint32_t> *possible_encoders) {
+  int ret = conn_mgr_->GetPossibleEncoders(connector_id, possible_encoders);
+  return ret;
+}
 }  // namespace sde_drm
