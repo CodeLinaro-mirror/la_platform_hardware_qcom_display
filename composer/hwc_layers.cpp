@@ -16,6 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include "hwc_layers.h"
 #include <qdMetaData.h>
@@ -1133,6 +1138,16 @@ void HWCLayer::SetDirtyRegions(hwc_region_t surface_damage) {
 void HWCLayer::SetLayerAsMask() {
   layer_->input_buffer.flags.mask_layer = true;
   DLOGV_IF(kTagClient, " Layer Id: ""[%" PRIu64 "]", id_);
+}
+
+void HWCLayer::CloseReleaseFences() {
+  // Close and Clear all the release fences
+  while (!release_fences_.empty()) {
+    int32_t rel_f = release_fences_.front();
+    DLOGV_IF(kTagClient, "Layer Id ""[%" PRIu64 "] Closing rel fence = %d", id_, rel_f);
+    ::close(rel_f);
+    release_fences_.pop_front();
+  }
 }
 
 }  // namespace sdm

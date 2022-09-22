@@ -2141,6 +2141,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   validated_ = false;
   frame_split_rect_ = {};  // clear the frame_split_rect_
   CacCommitDone(false);
+  CloseFenceFds();  // close the fences when switching in/out of WB CAC
   callbacks_->Refresh(id_);
 
   return 0;
