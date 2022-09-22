@@ -360,28 +360,37 @@ DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
     hw_displays_info->insert(display_infos.begin(), display_infos.end());
   }
 
-  // To-Do: Merge two display ids if the one display has two DPU
-  std::map<uint32_t , std::pair<int32_t, HWDisplayInfo>> conn_to_dispinfo;
+  // To-Do: Make more generic to handle multiple DPU, multiple display scenarios
+  std::map<uint32_t , HWDisplayInfo> disp_id_to_dispinfo_map;
+  uint32_t cached_disp_id_in_other_core = UINT32_MAX;
   for (auto disp_id_to_disp_info_pair : *hw_displays_info) {
     uint32_t disp_id = disp_id_to_disp_info_pair.first;
-    uint32_t conn_id = DisplayId(disp_id).GetConnId();
+    HWDisplayInfo disp_info = disp_id_to_disp_info_pair.second;
+    DisplayType disp_type = disp_id_to_disp_info_pair.second.display_type;
+    bool has_disp_in_other_core = disp_id_to_disp_info_pair.second.has_disp_in_other_core;
 
-    if (conn_to_dispinfo.find(conn_id) == conn_to_dispinfo.end()) {
-    conn_to_dispinfo[conn_id] = disp_id_to_disp_info_pair;
-    continue;
+    // merge two displays if same type and on two DPU
+    if (has_disp_in_other_core) {
+      if (cached_disp_id_in_other_core == UINT32_MAX) {
+        cached_disp_id_in_other_core = disp_id;
+      } else if (disp_type == disp_id_to_dispinfo_map[cached_disp_id_in_other_core].display_type) {
+        uint32_t merged_disp_id = disp_id | cached_disp_id_in_other_core;
+        HWDisplayInfo merged_disp_info = disp_id_to_dispinfo_map[cached_disp_id_in_other_core];
+        merged_disp_info.display_id = merged_disp_id;
+
+        // replace individual display with merged display
+        disp_id_to_dispinfo_map.erase(cached_disp_id_in_other_core);
+        disp_id_to_dispinfo_map[merged_disp_id] = merged_disp_info;
+        cached_disp_id_in_other_core = merged_disp_id;
+        continue;
+      }
     }
 
-    uint32_t cached_disp_id = conn_to_dispinfo[conn_id].first;
-    HWDisplayInfo cached_disp_info = conn_to_dispinfo[conn_id].second;
-    cached_disp_info.display_id = disp_id | cached_disp_id;
-
-    conn_to_dispinfo[conn_id] = std::make_pair(disp_id | cached_disp_id, cached_disp_info);
+    disp_id_to_dispinfo_map[disp_id] = disp_info;
   }
 
   hw_displays_info->clear();
-  for (auto val : conn_to_dispinfo) {
-    hw_displays_info->insert(val.second);
-  }
+  hw_displays_info->insert(disp_id_to_dispinfo_map.begin(), disp_id_to_dispinfo_map.end());
 
   hw_displays_info_ = *hw_displays_info;
 

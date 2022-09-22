@@ -852,6 +852,7 @@ struct DRMConnectorInfo {
   uint32_t max_os_brightness;
   uint32_t max_panel_backlight;
   bool dpu_ctl_op_sync = false;
+  bool has_disp_in_other_core = false;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>
