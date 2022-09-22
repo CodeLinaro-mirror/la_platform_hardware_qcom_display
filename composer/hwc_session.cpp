@@ -263,14 +263,14 @@ int HWCSession::Init() {
   DLOGI("async_vds_creation: %d", async_vds_creation_);
 
   value = 0;
-  Debug::Get()->GetProperty(DISABLE_VDS_HWC, &value);
-  disable_vds_hwc_ = (value == 1);
-  DLOGI("disable_vds_hwc: %d", disable_vds_hwc_);
+  Debug::Get()->GetProperty(DISABLE_NON_WFD_VDS, &value);
+  disable_non_wfd_vds_ = (value == 1);
+  DLOGI("disable_non_wfd_vds: %d", disable_non_wfd_vds_);
 
-  value = 0;
-  Debug::Get()->GetProperty(VDS_ALLOW_HWC, &value);
-  vds_allow_hwc_ = (value == 1);
-  DLOGI("vds_allow_hwc: %d", vds_allow_hwc_);
+  char prop_str[64] = {};
+  Debug::Get()->GetProperty(ENABLE_HWC_VDS, prop_str);
+  debug_enable_hwc_vds_ = (strcmp(prop_str, "true") == 0);
+  DLOGI("debug_enable_hwc_vds: %d", debug_enable_hwc_vds_);
 
   DLOGI("Initializing supported display slots");
   InitSupportedDisplaySlots();
@@ -631,11 +631,11 @@ void HWCSession::Dump(uint32_t *out_size, char *out_buffer) {
 }
 
 uint32_t HWCSession::GetMaxVirtualDisplayCount() {
-  if (!disable_vds_hwc_) {
+  if (!disable_non_wfd_vds_) {
     return map_info_virtual_.size();
   }
 
-  return is_client_up_ && !vds_allow_hwc_ ? map_info_virtual_.size() : 0;
+  return is_client_up_ && !debug_enable_hwc_vds_ ? map_info_virtual_.size() : 0;
 }
 
 int32_t HWCSession::GetActiveConfig(hwc2_display_t display, hwc2_config_t *out_config) {
@@ -3964,7 +3964,15 @@ int HWCSession::WaitForResources(bool wait_for_resources, hwc2_display_t active_
       {
         std::unique_lock<std::mutex> caller_lock(hotplug_mutex_);
         resource_ready_ = false;
-        hotplug_cv_.wait(caller_lock);
+        if (hotplug_cv_.wait_for(caller_lock, std::chrono::seconds(5))
+            == std::cv_status::timeout) {
+          if (!client_connected_) {
+            DLOGW("Client is not connected!");
+            break;
+          } else {
+            continue;
+          }
+        }
         if (active_display_id_ == active_builtin_id && needs_active_builtin_reconfig &&
             cached_retire_fence_) {
           Fence::Wait(cached_retire_fence_);
@@ -4015,9 +4023,11 @@ int HWCSession::WaitForCommitDoneAsync(hwc2_display_t display, int client_id) {
   commit_done_future_ = std::async([](HWCSession* session, hwc2_display_t display, int client_id) {
                                       return session->WaitForCommitDone(display, client_id);
                                      }, this, display, client_id);
-  auto ret = (commit_done_future_.wait_for(span) == std::future_status::timeout) ?
-             -EINVAL : commit_done_future_.get();
-  return ret;
+  if (commit_done_future_.wait_for(span) == std::future_status::timeout) {
+    DLOGW("WaitForCommitDoneAsync timed out");
+    return -ETIMEDOUT;
+  }
+  return commit_done_future_.get();
 }
 
 int HWCSession::WaitForCommitDone(hwc2_display_t display, int client_id) {
@@ -4153,7 +4163,9 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
 
   int ret = WaitForCommitDoneAsync(target_display, kClientTrustedUI);
   if (ret != 0) {
-    DLOGE("WaitForCommitDone failed with error = %d", ret);
+    if (ret != -ETIMEDOUT) {
+      DLOGE("WaitForCommitDone failed with error = %d", ret);
+    }
     return -EINVAL;
   }
 
@@ -4241,7 +4253,9 @@ android::status_t HWCSession::TUITransitionEnd(int disp_id) {
     DLOGI("Waiting for device unassign");
     int ret = WaitForCommitDoneAsync(target_display, kClientTrustedUI);
     if (ret != 0) {
-      DLOGE("Device unassign failed with error %d", ret);
+      if (ret != -ETIMEDOUT) {
+        DLOGE("Device unassign failed with error %d", ret);
+      }
       tui_start_success_ = false;
       return -EINVAL;
     }
@@ -4300,9 +4314,11 @@ android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
   }
   if (trigger_refresh) {
     for (int i = 0; i < 2; i++) {
-      int ret = WaitForCommitDone(target_display, kClientTrustedUI);
+      int ret = WaitForCommitDoneAsync(target_display, kClientTrustedUI);
       if (ret != 0) {
-        DLOGE("WaitForCommitDone failed with error %d", ret);
+        if (ret != -ETIMEDOUT) {
+          DLOGE("WaitForCommitDone failed with error %d", ret);
+        }
         return -EINVAL;
       }
     }
