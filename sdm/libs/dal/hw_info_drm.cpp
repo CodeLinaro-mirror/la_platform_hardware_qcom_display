@@ -1009,13 +1009,15 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
       hw_info.max_cwb = max_cwb_;
     }
 
+    hw_info.has_disp_in_other_core = iter.second.has_disp_in_other_core;
     if (hw_info.display_id >= 0) {
       (*hw_displays_info)[hw_info.display_id] = hw_info;
     }
 
-    DLOGI_IF(log_once, "display: %4d-%d, connected: %s, primary: %s", hw_info.display_id,
-             hw_info.display_type, hw_info.is_connected ? "true" : "false",
-             hw_info.is_primary ? "true" : "false");
+    DLOGI_IF(log_once, "display: %4d-%d, connected: %s, primary: %s, in other core: %s",
+             hw_info.display_id, hw_info.display_type, hw_info.is_connected ? "true" : "false",
+             hw_info.is_primary ? "true" : "false",
+             hw_info.has_disp_in_other_core ? "true" : "false");
   }
 
   log_once = kTagDisplay;

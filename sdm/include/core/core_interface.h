@@ -122,6 +122,7 @@ struct HWDisplayInfo {
   uint32_t max_linewidth = 0;                  //!< max width supported by connector
   uint32_t max_cwb = 0;                        //!< Maximum CWB instances supported concurrently,
                                                //!< and it is valid only for virtual display.
+  bool has_disp_in_other_core = false;         //!< check if display is also present in other core
 };
 
 /*! @brief Information on all displays as a map with display_id as key.

@@ -672,6 +672,7 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   const string max_os_brightness = "max os brightness=";
   const string max_panel_backlight = "max panel backlight=";
   const string backlight_type = "backlight type=";
+  const string has_disp_in_other_core = "has_disp_in_other_core=";
 
   while (std::getline(stream, line)) {
     if (line.find(pixel_formats) != string::npos) {
@@ -715,6 +716,8 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
       if (string(line, backlight_type.length()) == "dcs") {
         info->backlight_type = string(line, backlight_type.length());
       }
+    } else if (line.find(has_disp_in_other_core) != string::npos) {
+      info->has_disp_in_other_core = (string(line, has_disp_in_other_core.length()) == "true");
     }
 
   }
