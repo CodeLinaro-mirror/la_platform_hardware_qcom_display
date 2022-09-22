@@ -32,7 +32,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -86,6 +86,7 @@ class HWInfoDRM : public HWInfoInterface {
   void PopulatePipeBWCaps(const sde_drm::DRMPlaneTypeInfo &info, HWResourceInfo *hw_resource);
   void MapPlaneToConnector(HWResourceInfo *hw_resource);
   void GetInitialDemuraInfo(HWResourceInfo *hw_resource);
+  int GetConnectorTypeforTMDS(const uint32_t encoder_id, sde_drm::DRMEncoderInfo info);
 
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};
   bool default_mode_ = false;
