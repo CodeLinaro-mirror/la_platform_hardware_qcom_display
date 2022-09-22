@@ -116,7 +116,7 @@ class ResourceInterface {
   virtual void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map) = 0;
   virtual bool IsDisplayHWAvailable() = 0;
   virtual DisplayError GetDefaultQoSData(Handle display_ctx,
-                                         vector <HWQosData> *default_qos_data) = 0;
+                                         std::map<uint32_t, HWQosData> *default_qos_data) = 0;
 };
 
 }  // namespace sdm

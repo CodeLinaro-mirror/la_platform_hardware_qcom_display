@@ -342,7 +342,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   void CheckMMRMState();
   DisplayError SetVSyncStateLocked(bool enable);
   virtual DisplayError SetUpCommit(LayerStack *layer_stack);
-  DisplayError PerformCommit(std::vector<HWLayersInfo> &hw_layers_info);
+  DisplayError PerformCommit(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
   virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
   bool IsPrimaryDisplayLocked();
   virtual DisplayError CommitLocked(LayerStack *layer_stack);
@@ -408,8 +408,8 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   int disable_hw_recovery_dump_ = 0;
   uint32_t hw_recovery_count_ = 0;
   uint32_t hw_recovery_threshold_ = 1;
-  std::vector<HWQosData> cached_qos_data_;
-  std::vector<uint32_t> default_clock_hz_;
+  std::map<uint32_t, HWQosData> cached_qos_data_;
+  std::map<uint32_t, uint32_t> default_clock_hz_;
   bool drop_hw_vsync_ = false;
   uint32_t current_refresh_rate_ = 0;
   bool drop_skewed_vsync_ = false;
@@ -469,7 +469,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   DisplayError GetNoisePluginParams(LayerStack *layer_stack);
   DisplayError InsertNoiseLayer(LayerStack *layer_stack);
   void WaitForCompletion(SyncPoints *sync_points);
-  DisplayError PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_info);
+  DisplayError PerformHwCommit(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
   void CacheRetireFence();
   void CacheFrameBuffer();
   void CacheDisplayComposition();
@@ -498,7 +498,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   uint32_t retire_fence_offset_ = 0;
   std::mutex power_mutex_;
   std::condition_variable cv_;
-  std::vector<LayerBuffer> cached_framebuffer_ = {};
+  std::map<uint32_t, LayerBuffer> cached_framebuffer_ = {};
   Layer noise_layer_ = {};
   DisplayError ConfigureCwbForIdleFallback(LayerStack *layer_stack);
   bool cwb_fence_wait_ = false;

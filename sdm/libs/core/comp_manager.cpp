@@ -97,7 +97,8 @@ DisplayError CompManager::Deinit() {
 DisplayError CompManager::RegisterDisplay(DisplayId display_id, DisplayType type,
                                           DisplayDeviceContext &device_ctx,
                                           DisplayClientContext &client_ctx,
-                                          Handle *display_ctx, vector<HWQosData> *default_qos_data,
+                                          Handle *display_ctx,
+                                          std::map<uint32_t, HWQosData> *default_qos_data,
                                           CompManagerEventHandler *event_handler) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
 
@@ -225,7 +226,7 @@ DisplayError CompManager::CheckEnforceSplit(Handle comp_handle,
 DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
                                              DisplayDeviceContext &device_ctx,
                                              DisplayClientContext &client_ctx,
-                                             vector <HWQosData> *default_qos_data) {
+                                             std::map<uint32_t, HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DTRACE_SCOPED();
 
@@ -294,16 +295,15 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
   bool separate_rotator = true;
 
   std::bitset<8> core_id_map = display_comp_ctx->display_id.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
+  for (auto& res_info : hw_res_info_) {
+    if (!core_id_map[res_info.core_id]) {
       continue;
     }
-
-    num_blending_stages = std::min(num_blending_stages, hw_res_info_[i].num_blending_stages);
-    num_vig_pipe = std::min(num_vig_pipe, hw_res_info_[i].num_vig_pipe);
-    num_dma_pipe = std::min(num_dma_pipe, hw_res_info_[i].num_dma_pipe);
-    num_rgb_pipe = std::min(num_rgb_pipe, hw_res_info_[i].num_rgb_pipe);
-    separate_rotator &=  hw_res_info_[i].separate_rotator;
+    num_blending_stages = std::min(num_blending_stages, res_info.num_blending_stages);
+    num_vig_pipe = std::min(num_vig_pipe, res_info.num_vig_pipe);
+    num_dma_pipe = std::min(num_dma_pipe, res_info.num_dma_pipe);
+    num_rgb_pipe = std::min(num_rgb_pipe, res_info.num_rgb_pipe);
+    separate_rotator &= res_info.separate_rotator;
   }
 
   constraints->max_layers = num_blending_stages;
@@ -460,7 +460,7 @@ DisplayError CompManager::Commit(Handle display_ctx, DispLayerStack *disp_layer_
   if (error != kErrorNone) {
     return error;
   }
-  vector<HWQosData> default_qos_data;
+  std::map<uint32_t, HWQosData> default_qos_data;
   if (secure_event_ == kTUITransitionStart) {
     error = resource_intf_->GetDefaultQoSData(display_comp_ctx->display_resource_ctx,
                                               &default_qos_data);
@@ -468,8 +468,8 @@ DisplayError CompManager::Commit(Handle display_ctx, DispLayerStack *disp_layer_
       return error;
     }
 
-    for (int i = 0; i < default_qos_data.size(); i++) {
-      disp_layer_stack->info[i].qos_data = default_qos_data[i];
+    for (auto& info : disp_layer_stack->info) {
+      info.second.qos_data = default_qos_data[info.first];
     }
   }
   return kErrorNone;
@@ -664,7 +664,7 @@ DisplayError CompManager::ControlDpps(bool enable) {
   // DPPS feature and HDR using SSPP tone mapping can co-exist
   // DPPS feature and HDR using DSPP tone mapping are mutually exclusive
   bool src_tone_map = true;
-  for (auto val : hw_res_info_) {
+  for (auto& val : hw_res_info_) {
     src_tone_map = src_tone_map & val.src_tone_map.any();
   }
 
@@ -940,7 +940,7 @@ DisplayError CompManager::ForceToneMapConfigure(Handle display_ctx,
 }
 
 DisplayError CompManager::GetDefaultQosData(Handle display_ctx,
-                                            vector <HWQosData> *default_qos_data) {
+                                            std::map<uint32_t, HWQosData> *default_qos_data) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);

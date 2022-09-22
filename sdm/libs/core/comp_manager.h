@@ -72,12 +72,12 @@ class CompManager : public CwbCallback {
   DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
                                DisplayDeviceContext &device_ctx,
                                DisplayClientContext &client_ctx, Handle *display_ctx,
-                               std::vector<HWQosData> *default_qos_data,
+                               std::map<uint32_t, HWQosData> *default_qos_data,
                                CompManagerEventHandler *event_handler);
   DisplayError UnregisterDisplay(Handle display_ctx);
   DisplayError ReconfigureDisplay(Handle display_ctx, DisplayDeviceContext &device_ctx,
                                   DisplayClientContext &client_ctx,
-                                  std::vector<HWQosData> *default_qos_data);
+                                  std::map<uint32_t, HWQosData> *default_qos_data);
   DisplayError PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Commit(Handle display_ctx, DispLayerStack *disp_layer_stack);
@@ -129,7 +129,8 @@ class CompManager : public CwbCallback {
   DisplayError SetBacklightLevel(Handle display_ctx, const uint32_t &backlight_level);
   DisplayError GetHDRCapability(bool *hdr_plus_support, bool *dolby_vision_supported);
   DisplayError ForceToneMapConfigure(Handle display_ctx, DispLayerStack *disp_layer_stack);
-  DisplayError GetDefaultQosData(Handle display_ctx, std::vector<HWQosData> *default_qos_data);
+  DisplayError GetDefaultQosData(Handle display_ctx,
+                                 std::map<uint32_t, HWQosData> *default_qos_data);
   DisplayError HandleCwbFrequencyBoost(bool isRequest);
   DisplayError PreCommit(Handle display_ctx);
   DisplayError CaptureCwb(Handle display_ctx, const LayerBuffer &buffer, const CwbConfig &config);

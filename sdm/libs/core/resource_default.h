@@ -118,7 +118,8 @@ class ResourceDefault : public ResourceInterface {
   virtual void HandleTUITransition(Handle display_ctx, bool tui_active);
   virtual void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map) { return; }
   virtual bool IsDisplayHWAvailable() { return true; }
-  virtual DisplayError GetDefaultQoSData(Handle display_ctx, vector <HWQosData> *default_qos_data) {
+  virtual DisplayError GetDefaultQoSData(Handle display_ctx,
+                                         std::map<uint32_t, HWQosData> *default_qos_data) {
     return kErrorNone;
   }
 

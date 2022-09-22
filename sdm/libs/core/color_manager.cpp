@@ -517,12 +517,12 @@ DisplayError ColorManagerProxy::Validate(DispLayerStack *disp_layer_stack) {
   bool hdr_present = false;
 
   // ToDo(devanshi): handle for vector of HWLayersInfo
-  valid_meta_data = NeedsToneMap(disp_layer_stack->info[0].hw_layers);
+  valid_meta_data = NeedsToneMap(disp_layer_stack->info.begin()->second.hw_layers);
   if (valid_meta_data) {
-    if (disp_layer_stack->info[0].hdr_layer_info.in_hdr_mode &&
-        disp_layer_stack->info[0].hdr_layer_info.operation == HWHDRLayerInfo::kSet) {
+    if (disp_layer_stack->info.begin()->second.hdr_layer_info.in_hdr_mode &&
+        disp_layer_stack->info.begin()->second.hdr_layer_info.operation == HWHDRLayerInfo::kSet) {
       hdr_layer = *(disp_layer_stack->stack->layers.at(
-                    UINT32(disp_layer_stack->info[0].hdr_layer_info.layer_index)));
+                    UINT32(disp_layer_stack->info.begin()->second.hdr_layer_info.layer_index)));
       hdr_present = true;
     }
 
