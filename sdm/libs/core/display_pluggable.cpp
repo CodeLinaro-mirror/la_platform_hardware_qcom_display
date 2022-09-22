@@ -161,7 +161,13 @@ DisplayError DisplayPluggable::Prepare(LayerStack *layer_stack) {
 
   // Clean display layer stack for reuse.
   disp_layer_stack_ = DispLayerStack();
-  disp_layer_stack_.info.resize(core_count_, {});
+
+  for (int i = 0; i < core_id_.size(); i++) {
+    if (!core_id_[i]) {
+      continue;
+    }
+    disp_layer_stack_.info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
+  }
 
   return DisplayBase::Prepare(layer_stack);
 }
@@ -288,13 +294,9 @@ DisplayError DisplayPluggable::InitializeColorModes() {
   PrimariesTransfer pt = {};
   AttrVal var = {};
   bool hdr_supported = true;
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
 
-    hdr_supported &= hw_resource_info_[i].has_hdr;
+  for (auto& res_info : hw_resource_info_) {
+    hdr_supported &= res_info.has_hdr;
   }
 
   if ((!client_ctx_.hw_panel_info.hdr_enabled &&

@@ -87,11 +87,11 @@ class CompManager {
   DisplayError RegisterDisplay(DisplayId display_id, DisplayType type,
                                DisplayDeviceContext &device_ctx,
                                DisplayClientContext &client_ctx, Handle *display_ctx,
-                               std::vector<HWQosData> *default_qos_data);
+                               std::map<uint32_t, HWQosData> *default_qos_data);
   DisplayError UnregisterDisplay(Handle display_ctx);
   DisplayError ReconfigureDisplay(Handle display_ctx, DisplayDeviceContext &device_ctx,
                                   DisplayClientContext &client_ctx,
-                                  std::vector<HWQosData> *default_qos_data);
+                                  std::map<uint32_t, HWQosData> *default_qos_data);
   DisplayError PrePrepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError Commit(Handle display_ctx, DispLayerStack *disp_layer_stack);
@@ -142,7 +142,8 @@ class CompManager {
   DisplayError SetBacklightLevel(Handle display_ctx, const uint32_t &backlight_level);
   DisplayError GetHDR10PlusCapability(bool *hdr_plus_support);
   DisplayError ForceToneMapConfigure(Handle display_ctx, DispLayerStack *disp_layer_stack);
-  DisplayError GetDefaultQosData(Handle display_ctx, std::vector<HWQosData> *default_qos_data);
+  DisplayError GetDefaultQosData(Handle display_ctx,
+                                 std::map<uint32_t, HWQosData> *default_qos_data);
   DisplayError HandleCwbFrequencyBoost(bool isRequest);
 
  private:

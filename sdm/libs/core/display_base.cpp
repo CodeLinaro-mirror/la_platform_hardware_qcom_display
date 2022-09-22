@@ -73,6 +73,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <utility>
 
 #include "display_base.h"
 #include "hw_info_interface.h"
@@ -120,9 +121,11 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
 
   // TODO(user): fix after enabling virtual driver for multi-dpu usecase
   core_count_ = 1;
-  default_clock_hz_.resize(1);
-  disp_layer_stack_.info.resize(1, {});
-  cached_framebuffer_.resize(1);
+  core_id_ = std::bitset<32>(1);
+  default_clock_hz_.insert(std::pair<uint32_t, uint32_t>(0, 0));
+  cached_framebuffer_.insert(std::pair<uint32_t, LayerBuffer>(0, {}));
+  cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(0, {}));
+  disp_layer_stack_.info.insert(std::pair<uint32_t, HWLayersInfo>(0, {}));
 
   // Start commit worker thread and wait for thread response.
   DLOGI("Starting commit thread for display: %d", display_type);
@@ -145,9 +148,15 @@ DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
   core_id_ = display_id_info_.GetCoreIdMap();
   std::bitset<32> core_id_bitset = std::bitset<32>(core_id_);
   core_count_ = core_id_bitset.count();
-  disp_layer_stack_.info.resize(core_count_, {});
-  cached_framebuffer_.resize(core_count_);
-  default_clock_hz_.resize(core_count_);
+  for (int i = 0; i < core_id_.size(); i++) {
+    if (!core_id_[i]) {
+      continue;
+    }
+    default_clock_hz_.insert(std::pair<uint32_t, uint32_t>(i, 0));
+    cached_framebuffer_.insert(std::pair<uint32_t, LayerBuffer>(i, {}));
+    cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(i, {}));
+    disp_layer_stack_.info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
+  }
 }
 
 DisplayBase::~DisplayBase() {
@@ -173,13 +182,8 @@ DisplayError DisplayBase::Init() {
   }
 
   uint32_t num_blending_stages = INT_MAX;
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
-    num_blending_stages = std::min(num_blending_stages, hw_resource_info_[i].num_blending_stages);
+  for (auto& res_info : hw_resource_info_) {
+    num_blending_stages = std::min(num_blending_stages, res_info.num_blending_stages);
   }
 
   auto max_mixer_stages = num_blending_stages;
@@ -254,8 +258,9 @@ DisplayError DisplayBase::Init() {
     DLOGW("Display %d comp manager registration failed!", display_id_);
     goto CleanupOnError;
   }
-  for (int i = 0; i < cached_qos_data_.size(); i++) {
-    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+
+  for (auto& qos_data : cached_qos_data_) {
+    default_clock_hz_.at(qos_data.first) = qos_data.second.clock_hz;
   }
 
   if (color_modes_cs_.size() > 0) {
@@ -422,8 +427,8 @@ DisplayError DisplayBase::Deinit() {
     noise_plugin_intf_ = nullptr;
   }
 
-  for (int i = 0; i < cached_framebuffer_.size(); i++) {
-    CloseFd(&cached_framebuffer_[i].planes[0].fd);
+  for (auto& it : cached_framebuffer_) {
+    CloseFd(&it.second.planes[0].fd);
   }
 #ifdef TRUSTED_VM
   // release free memory from the heap, needed for Trusted_VM due to the limited
@@ -502,7 +507,7 @@ DisplayError DisplayBase::NoiseInit() {
 // Query the dspp capabilities and enable the RC feature.
 DisplayError DisplayBase::InitRC() {
   uint32_t rc_total_mem_size = INT_MAX;
-  for (auto val : hw_resource_info_) {
+  for (auto& val : hw_resource_info_) {
     rc_total_mem_size = std::min(rc_total_mem_size, val.rc_total_mem_size);
   }
 
@@ -682,15 +687,10 @@ DisplayError DisplayBase::ConfigureCwb(LayerStack *layer_stack) {
 bool DisplayBase::IsWriteBackSupportedFormat(const LayerBufferFormat &format) {
   // check whether writeback supported for parameter color format or not.
   bool has_wb_support = true;
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
+  for (auto& res_info : hw_resource_info_) {
     std::map<HWSubBlockType, std::vector<LayerBufferFormat>>::iterator it =
-    hw_resource_info_[i].supported_formats_map.find(HWSubBlockType::kHWWBIntfOutput);
-    if (it == hw_resource_info_[i].supported_formats_map.end()) {
+    res_info.supported_formats_map.find(HWSubBlockType::kHWWBIntfOutput);
+    if (it == res_info.supported_formats_map.end()) {
       return false;
     }
 
@@ -875,9 +875,9 @@ DisplayError DisplayBase::ForceToneMapUpdate(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   DisplayError error = kErrorNotSupported;
 
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    for (size_t hw_index = 0; hw_index < disp_layer_stack_.info[i].index.size(); hw_index++) {
-      size_t layer_index = disp_layer_stack_.info[i].index.at(hw_index);
+  for (auto& info : disp_layer_stack_.info) {
+    for (size_t hw_index = 0; hw_index < info.second.index.size(); hw_index++) {
+      size_t layer_index = info.second.index.at(hw_index);
 
       if (layer_index >= layer_stack->layers.size()) {
         DLOGE("Error forcing TM update. Layer stack appears to have changed");
@@ -885,8 +885,8 @@ DisplayError DisplayBase::ForceToneMapUpdate(LayerStack *layer_stack) {
       }
 
       Layer *stack_layer = layer_stack->layers.at(layer_index);
-      Layer &cached_layer = disp_layer_stack_.info[i].hw_layers.at(hw_index);
-      HWLayerConfig &hw_config = disp_layer_stack_.info[i].config[hw_index];
+      Layer &cached_layer = info.second.hw_layers.at(hw_index);
+      HWLayerConfig &hw_config = info.second.config[hw_index];
 
       cached_layer.input_buffer.hist_data = stack_layer->input_buffer.hist_data;
       cached_layer.input_buffer.color_metadata = stack_layer->input_buffer.color_metadata;
@@ -1488,20 +1488,20 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   }
 #endif
 
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    disp_layer_stack_.info[i].output_buffer = layer_stack->output_buffer;
+  for (auto& info : disp_layer_stack_.info) {
+    info.second.output_buffer = layer_stack->output_buffer;
   }
   if (layer_stack->request_flags.trigger_refresh) {
-    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-      if (!disable_cwb_idle_fallback_ && disp_layer_stack_.info[i].output_buffer) {
+    for (auto& info : disp_layer_stack_.info) {
+      if (!disable_cwb_idle_fallback_ && info.second.output_buffer) {
         cwb_fence_wait_ = true;
       }
     }
     layer_stack->output_buffer = nullptr;
   }
 
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    disp_layer_stack_.info[i].retire_fence_offset = retire_fence_offset_;
+  for (auto& info : disp_layer_stack_.info) {
+    info.second.retire_fence_offset = retire_fence_offset_;
   }
   // Regiser for power events on first cycle in unified draw.
   if (first_cycle_ && (draw_method_ != kDrawDefault) && (display_type_ != kVirtual) &&
@@ -1542,7 +1542,7 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   return error;
 }
 
-DisplayError DisplayBase::PerformCommit(std::vector<HWLayersInfo> &hw_layers_info) {
+DisplayError DisplayBase::PerformCommit(std::map<uint32_t, HWLayersInfo> &hw_layers_info) {
   DTRACE_SCOPED();
   DisplayError error = dpu_core_mux_->Commit(hw_layers_info);
   if (error != kErrorNone) {
@@ -1592,7 +1592,7 @@ DisplayError DisplayBase::CommitLocked(LayerStack *layer_stack) {
   return error;
 }
 
-DisplayError DisplayBase::PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_info) {
+DisplayError DisplayBase::PerformHwCommit(std::map<uint32_t, HWLayersInfo> &hw_layers_info) {
   DTRACE_SCOPED();
   DisplayError error = PerformCommit(hw_layers_info);
   if (error != kErrorNone) {
@@ -1609,9 +1609,9 @@ DisplayError DisplayBase::PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_i
   // TODO(user): Workaround for messenger app flicker issue in CWB idle fallback,
   // to be removed when issue is fixed.
   // O/P buffer has merged release fences, so check on index 0 only
-  if (cwb_fence_wait_ && hw_layers_info[0].output_buffer &&
-      (hw_layers_info[0].output_buffer->release_fence != nullptr)) {
-    if (Fence::Wait(hw_layers_info[0].output_buffer->release_fence) != kErrorNone) {
+  if (cwb_fence_wait_ && hw_layers_info.begin()->second.output_buffer &&
+      (hw_layers_info.begin()->second.output_buffer->release_fence != nullptr)) {
+    if (Fence::Wait(hw_layers_info.begin()->second.output_buffer->release_fence) != kErrorNone) {
       DLOGW("sync_wait error errno = %d, desc = %s", errno, strerror(errno));
     }
   }
@@ -1631,8 +1631,8 @@ DisplayError DisplayBase::PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_i
 
 void DisplayBase::CleanupOnError() {
   // Buffer Fd's are duped for async thread operation.
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    for (auto &hw_layer : disp_layer_stack_.info[i].hw_layers) {
+  for (auto& info : disp_layer_stack_.info) {
+    for (auto &hw_layer : info.second.hw_layers) {
       CloseFd(&hw_layer.input_buffer.planes[0].fd);
     }
   }
@@ -1684,8 +1684,8 @@ DisplayError DisplayBase::PostCommit() {
 
   CacheFrameBuffer();
 
-  for (int j = 0; j < disp_layer_stack_.info.size(); j++) {
-    for (auto &hw_layer : disp_layer_stack_.info[j].hw_layers) {
+  for (auto& info : disp_layer_stack_.info) {
+    for (auto &hw_layer : info.second.hw_layers) {
       CloseFd(&hw_layer.input_buffer.planes[0].fd);
     }
   }
@@ -1705,18 +1705,18 @@ void DisplayBase::CacheFrameBuffer() {
   }
 
   // Close current fd.
-  for (int i = 0; i < cached_framebuffer_.size(); i++) {
-    CloseFd(&cached_framebuffer_[i].planes[0].fd);
-    for (auto &hw_layer : disp_layer_stack_.info[i].hw_layers) {
+  for (auto& it : cached_framebuffer_) {
+    CloseFd(&it.second.planes[0].fd);
+    for (auto &hw_layer : disp_layer_stack_.info.at(it.first).hw_layers) {
       if (hw_layer.composition == kCompositionGPUTarget) {
-        cached_framebuffer_[i] = hw_layer.input_buffer;
+        it.second = hw_layer.input_buffer;
         break;
       }
     }
 
     // Replace buffer fd with duped fd.
-    int new_fd = Sys::dup_(cached_framebuffer_[i].planes[0].fd);
-    cached_framebuffer_[i].planes[0].fd = new_fd;
+    int new_fd = Sys::dup_(it.second.planes[0].fd);
+    it.second.planes[0].fd = new_fd;
   }
 }
 
@@ -1745,8 +1745,8 @@ DisplayError DisplayBase::FlushLocked(LayerStack *layer_stack) {
     return kErrorPermission;
   }
 
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    disp_layer_stack_.info[i].hw_layers.clear();
+  for (auto& info : disp_layer_stack_.info) {
+    info.second.hw_layers.clear();
   }
   disp_layer_stack_.stack = layer_stack;
   error = dpu_core_mux_->Flush(disp_layer_stack_.info);
@@ -1803,18 +1803,13 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   bool hdr_supported = true;
   bool has_concurrent_writeback = true;
 
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
+  for (auto info_intf : hw_info_intf_) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    hw_info_intf_[i]->GetHWResourceInfo(&hw_resource_info);
+    info_intf->GetHWResourceInfo(&hw_resource_info);
     hdr_supported &= hw_resource_info.has_hdr;
     has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;
     HWDisplayInterfaceInfo hw_disp_info = {};
-    hw_info_intf_[i]->GetFirstDisplayInterfaceType(&hw_disp_info);
+    info_intf->GetFirstDisplayInterfaceType(&hw_disp_info);
     if (hw_disp_info.type == kHDMI) {
       hdr_supported &= (hdr_supported && client_ctx_.hw_panel_info.hdr_enabled);
     }
@@ -1929,8 +1924,8 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   switch (state) {
   case kStateOff:
-    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-      disp_layer_stack_.info[i].hw_layers.clear();
+    for (auto& info : disp_layer_stack_.info) {
+      info.second.hw_layers.clear();
     }
     error = dpu_core_mux_->PowerOff(teardown, &sync_points);
     if (error != kErrorNone) {
@@ -1943,10 +1938,11 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     } else {
       pending_power_state_ = kPowerStateNone;
     }
+
     cached_qos_data_ = {};
-    cached_qos_data_.resize(core_count_);
-    for (int i = 0; i < default_clock_hz_.size(); i++) {
-      cached_qos_data_[i].clock_hz = default_clock_hz_[i];
+    for (auto& it : default_clock_hz_) {
+      cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(it.first, {}));
+      cached_qos_data_.at(it.first).clock_hz = it.second;
     }
     break;
 
@@ -1972,8 +1968,8 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     if (error != kErrorNone) {
       return error;
     }
-    for (int i = 0; i < cached_qos_data_.size(); i++) {
-      default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+    for (auto& qos_data : cached_qos_data_) {
+      default_clock_hz_.at(qos_data.first) = qos_data.second.clock_hz;
     }
 
     active = true;
@@ -2198,8 +2194,9 @@ std::string DisplayBase::Dump() {
     os << "\n";
   }
 
-  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
-    uint32_t num_hw_layers = UINT32(disp_layer_stack_.info[j].hw_layers.size());
+  for (int j = 0; j < core_count_; j++) {
+    uint32_t core_id = hw_resource_info_[j].core_id;
+    uint32_t num_hw_layers = UINT32(disp_layer_stack_.info.at(core_id).hw_layers.size());
 
     if (num_hw_layers == 0) {
       os << "\nNo hardware layers programmed";
@@ -2207,12 +2204,12 @@ std::string DisplayBase::Dump() {
     }
 
     os << "\n\n Table for DPU - " << j << "\n";
-    LayerBuffer *out_buffer = disp_layer_stack_.info[j].output_buffer;
+    LayerBuffer *out_buffer = disp_layer_stack_.info.at(core_id).output_buffer;
     if (out_buffer) {
       os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
          << " format: " << GetFormatString(out_buffer->format);
     }
-    HWLayersInfo &layer_info = disp_layer_stack_.info[j];
+    HWLayersInfo &layer_info = disp_layer_stack_.info.at(core_id);
     for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
       LayerRect &l_roi = layer_info.left_frame_roi.at(i);
       LayerRect &r_roi = layer_info.right_frame_roi.at(i);
@@ -2243,11 +2240,11 @@ std::string DisplayBase::Dump() {
     os << newline;
 
     for (uint32_t i = 0; i < num_hw_layers; i++) {
-      uint32_t layer_index = disp_layer_stack_.info[j].index.at(i);
+      uint32_t layer_index = disp_layer_stack_.info.at(core_id).index.at(i);
       // hw-layer from hw layers info
-      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      Layer &hw_layer = disp_layer_stack_.info.at(core_id).hw_layers.at(i);
       LayerBuffer *input_buffer = &hw_layer.input_buffer;
-      HWLayerConfig &layer_config = disp_layer_stack_.info[j].config[i];
+      HWLayerConfig &layer_config = disp_layer_stack_.info.at(core_id).config[i];
       HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
 
       const char *comp_type = GetName(hw_layer.composition);
@@ -2926,8 +2923,8 @@ DisplayError DisplayBase::ReconfigureDisplay() {
   if (error != kErrorNone) {
     return error;
   }
-  for (int i = 0; i < cached_qos_data_.size(); i++) {
-    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  for (auto& qos_data : cached_qos_data_) {
+    default_clock_hz_.at(qos_data.first) = qos_data.second.clock_hz;
   }
 
   // Disable Partial Update for one frame as PU not supported during modeset.
@@ -3170,8 +3167,8 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
   if (error != kErrorNone) {
     return error;
   }
-  for (int i = 0; i < cached_qos_data_.size(); i++) {
-    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  for (auto& qos_data : cached_qos_data_) {
+    default_clock_hz_.at(qos_data.first) = qos_data.second.clock_hz;
   }
 
   client_ctx_ = client_ctx;
@@ -3285,13 +3282,13 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   }
 
   // Copy the acquire fence from clients layers  to HWLayers
-  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
-    uint32_t hw_layers_count = UINT32(disp_layer_stack_.info[j].hw_layers.size());
+  for (auto& info : disp_layer_stack_.info) {
+    uint32_t hw_layers_count = UINT32(info.second.hw_layers.size());
 
     for (uint32_t i = 0; i < hw_layers_count; i++) {
-      uint32_t sdm_layer_index = disp_layer_stack_.info[j].index.at(i);
+      uint32_t sdm_layer_index = info.second.index.at(i);
       Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
-      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      Layer &hw_layer = info.second.hw_layers.at(i);
 
       hw_layer.input_buffer.planes[0].fd = Sys::dup_(sdm_layer->input_buffer.planes[0].fd);
       hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
@@ -3330,8 +3327,8 @@ void DisplayBase::UpdateFrameBuffer() {
   }
 
   bool client_target_present = false;
-  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
-    for (auto &hw_layer : disp_layer_stack_.info[j].hw_layers) {
+  for (auto& info : disp_layer_stack_.info) {
+    for (auto &hw_layer : info.second.hw_layers) {
       if (hw_layer.composition == kCompositionGPUTarget) {
         client_target_present = true;
         break;
@@ -3343,15 +3340,15 @@ void DisplayBase::UpdateFrameBuffer() {
     return;
   }
 
-  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
-    uint32_t hw_layers_count = disp_layer_stack_.info[j].hw_layers.size();
+  for (auto& info : disp_layer_stack_.info) {
+    uint32_t hw_layers_count = info.second.hw_layers.size();
     for (uint32_t i = 0; i < hw_layers_count; i++) {
-      uint32_t sdm_layer_index = disp_layer_stack_.info[j].index.at(i);
-      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      uint32_t sdm_layer_index = info.second.index.at(i);
+      Layer &hw_layer = info.second.hw_layers.at(i);
       if (disp_layer_stack_.stack_info.gpu_target_index == sdm_layer_index) {
         // Update GPU target buffer with cached fd.
         CloseFd(&hw_layer.input_buffer.planes[0].fd);
-        hw_layer.input_buffer = cached_framebuffer_[j];
+        hw_layer.input_buffer = cached_framebuffer_.at(info.first);
         hw_layer.input_buffer.planes[0].fd = Sys::dup_(hw_layer.input_buffer.planes[0].fd);
       }
     }
@@ -3359,8 +3356,8 @@ void DisplayBase::UpdateFrameBuffer() {
 }
 
 void DisplayBase::PostCommitLayerParams() {
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    cached_qos_data_[i] = disp_layer_stack_.info[i].qos_data;
+  for (auto& info : disp_layer_stack_.info) {
+    cached_qos_data_.at(info.first) = info.second.qos_data;
   }
 }
 
@@ -3495,14 +3492,9 @@ DisplayError DisplayBase::ValidateScaling(uint32_t width, uint32_t height) {
   uint32_t max_scale_down = INT_MAX;
   uint32_t max_scale_up = INT_MAX;
 
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
-    max_scale_down = std::min(max_scale_down, hw_resource_info_[i].max_scale_down);
-    max_scale_up = std::min(max_scale_up, hw_resource_info_[i].max_scale_up);
+  for (auto& res_info : hw_resource_info_) {
+    max_scale_down = std::min(max_scale_down, res_info.max_scale_down);
+    max_scale_up = std::min(max_scale_up, res_info.max_scale_up);
   }
 
   float scale_x = FLOAT(width / display_width);
@@ -3875,14 +3867,9 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
       *supported = custom_mixer_resolution_;
       break;
     case kCwbDemuraTapPoint: {
-      std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
       bool tap_point_supported = true;
-      for (int i = 0; i < core_id_map.size(); i++) {
-        if (!core_id_map[i]) {
-          continue;
-        }
-
-        std::vector<CwbTapPoint> &tappoints = hw_resource_info_[i].tap_points;
+      for (auto& res_info : hw_resource_info_) {
+        std::vector<CwbTapPoint> &tappoints = res_info.tap_points;
         tap_point_supported = tap_point_supported &
                               UINT32(std::find(tappoints.begin(), tappoints.end(),
                                      CwbTapPoint::kDemuraTapPoint) != tappoints.end());
@@ -4041,7 +4028,7 @@ void DisplayBase::CheckMMRMState() {
   mmrm_updated_ = false;
 
   uint32_t max_sde_clk = INT_MAX;
-  for (auto val : hw_resource_info_) {
+  for (auto& val : hw_resource_info_) {
     max_sde_clk = std::min(max_sde_clk, val.max_sde_clk);
   }
 
@@ -4359,8 +4346,8 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
 
   disp_layer_stack_.stack_info.hw_cwb_config = cwb_config_;
   if (cwb_config_) {
-    for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-      disp_layer_stack_.info[i].hw_cwb_config = *cwb_config_;
+    for (auto& info : disp_layer_stack_.info) {
+      info.second.hw_cwb_config = *cwb_config_;
     }
   }
   error = ValidateCwbConfigInfo(disp_layer_stack_.stack_info.hw_cwb_config,
@@ -4375,13 +4362,8 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
 
 bool DisplayBase::HasNoiseLayer() {
   bool has_noise_layer = true;
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
-    has_noise_layer = has_noise_layer & hw_resource_info_[i].has_noise_layer;
+  for (auto& res_info : hw_resource_info_) {
+    has_noise_layer = has_noise_layer & res_info.has_noise_layer;
   }
 
   return has_noise_layer;
@@ -4389,14 +4371,9 @@ bool DisplayBase::HasNoiseLayer() {
 
 bool DisplayBase::HasConcurrentWriteback() {
   bool has_concurrent_writeback = true;
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
+  for (auto& res_info : hw_resource_info_) {
     has_concurrent_writeback = has_concurrent_writeback &
-                               hw_resource_info_[i].has_concurrent_writeback;
+                               res_info.has_concurrent_writeback;
   }
 
   return has_concurrent_writeback;
@@ -4404,13 +4381,8 @@ bool DisplayBase::HasConcurrentWriteback() {
 
 bool DisplayBase::HasSrcTonemap() {
   bool has_src_tone_map = true;
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
-    has_src_tone_map = has_src_tone_map & hw_resource_info_[i].src_tone_map.any();
+  for (auto& res_info : hw_resource_info_) {
+    has_src_tone_map = has_src_tone_map & res_info.src_tone_map.any();
   }
 
   return has_src_tone_map;
