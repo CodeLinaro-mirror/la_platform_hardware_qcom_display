@@ -88,6 +88,7 @@ class HWInfoDRM : public HWInfoInterface {
   void PopulatePipeBWCaps(const sde_drm::DRMPlaneTypeInfo &info, HWResourceInfo *hw_resource);
   void MapPlaneToConnector(HWResourceInfo *hw_resource);
   void GetInitialDemuraInfo(HWResourceInfo *hw_resource);
+  int GetConnectorTypeforTMDS(const uint32_t encoder_id, sde_drm::DRMEncoderInfo info);
 
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = NULL;
   bool default_mode_ = false;

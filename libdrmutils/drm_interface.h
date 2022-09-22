@@ -78,6 +78,7 @@
 #include <utility>
 #include <vector>
 #include <array>
+#include <set>
 
 #include "xf86drm.h"
 #include "xf86drmMode.h"
@@ -1497,6 +1498,12 @@ class DRMManagerInterface {
   */
   virtual uint32_t GetCrtcCount() = 0;
 
+  /*
+  *Get the set of possible encoders for any connector
+  [input]: Connector id
+  [output]: set of possible encoder's id
+  */
+  virtual int GetPossibleEncoders(uint32_t connector_id, std::set<uint32_t> *possible_encoders) = 0;
 };
 
 }  // namespace sde_drm
