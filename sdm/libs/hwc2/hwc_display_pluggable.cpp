@@ -167,6 +167,11 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
     return status;
   }
 
+  if (color_tranform_failed_) {
+    // Must fall back to client composition
+    MarkLayersForClientComposition();
+  }
+
   if (config_pending_) {
     if (display_intf_->SetActiveConfig(display_config_) != kErrorNone) {
       DLOGW("Invalid display config %d", display_config_);
@@ -417,6 +422,54 @@ HWC2::Error HWCDisplayPluggable::SetColorModeById(int32_t color_mode_id) {
 
   callbacks_->Refresh(id_);
   validated_ = false;
+
+  return status;
+}
+
+HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
+                                                 android_color_transform_t hint) {
+  if (display_null_.IsActive()) {
+    return HWC2::Error::None;
+  }
+
+  if (!color_mode_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  if (!matrix) {
+    return HWC2::Error::BadParameter;
+  }
+
+  auto status = color_mode_->SetColorTransform(matrix, hint);
+  if (status != HWC2::Error::None) {
+    DLOGE("failed for hint = %d", hint);
+    color_tranform_failed_ = true;
+    return status;
+  }
+
+  callbacks_->Refresh(id_);
+  color_tranform_failed_ = false;
+  validated_ = false;
+
+  return status;
+}
+
+HWC2::Error HWCDisplayPluggable::RestoreColorTransform() {
+  if (display_null_.IsActive()) {
+    return HWC2::Error::None;
+  }
+
+  if (!color_mode_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  auto status = color_mode_->RestoreColorTransform();
+  if (status != HWC2::Error::None) {
+    DLOGE("failed to RestoreColorTransform");
+    return status;
+  }
+
+  callbacks_->Refresh(id_);
 
   return status;
 }

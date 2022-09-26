@@ -86,6 +86,8 @@ class HWCDisplayPluggable : public HWCDisplay {
   virtual HWC2::Error SetColorModeById(int32_t color_mode_id);
   virtual HWC2::Error GetColorModes(uint32_t *out_num_modes, android_color_mode_t *out_modes);
   virtual HWC2::Error SetColorMode(android_color_mode_t mode);
+  virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
+  virtual HWC2::Error RestoreColorTransform();
 
  private:
   HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
