@@ -1638,6 +1638,12 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       qtigralloc::encodeVideoTimestampInfo(metadata->videoTsInfo, out);
       break;
 #endif
+#ifdef QTI_EARLYNOTIFY_LINECOUNT
+    case QTI_EARLYNOTIFY_LINECOUNT:
+        android::gralloc4::encodeInt32(qtigralloc::MetadataType_VideoEarlyNotifyLineCount,
+                                       metadata->videoEarlyNotifyLineCount, out);
+      break;
+#endif
 #ifdef QTI_CUSTOM_DIMENSIONS_STRIDE
     case QTI_CUSTOM_DIMENSIONS_STRIDE: {
       int32_t stride;
@@ -1989,6 +1995,12 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
                                       IMapper_4_0_Error::NONE) {
         return Error::UNSUPPORTED;
       }
+      break;
+#endif
+#ifdef QTI_EARLYNOTIFY_LINECOUNT
+    case QTI_EARLYNOTIFY_LINECOUNT:
+      android::gralloc4::decodeInt32(qtigralloc::MetadataType_VideoEarlyNotifyLineCount, in,
+                                     &metadata->videoEarlyNotifyLineCount);
       break;
 #endif
     default:
