@@ -182,6 +182,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   uint32_t CalculateMetaDataRefreshRate();
   uint32_t SanitizeRefreshRate(uint32_t req_refresh_rate, uint32_t max_refresh_rate,
                                uint32_t min_refresh_rate);
+  DisplayError PerformCacConfig(CacConfig config, bool enable) override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;
@@ -291,6 +292,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayIPCVmCallbackImpl *vm_cb_intf_ = nullptr;
   Layer cwb_layer_ = {};
   bool lower_fps_ = false;
+  bool enable_cac_ = false;
+  CacConfig cac_config_ = {};
 };
 
 }  // namespace sdm

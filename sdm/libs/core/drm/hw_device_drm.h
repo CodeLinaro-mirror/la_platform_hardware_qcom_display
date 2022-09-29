@@ -266,6 +266,7 @@ class HWDeviceDRM : public HWInterface {
   DisplayError SetDimmingConfig(void *payload, size_t size);
   DisplayError GetQsyncFps(uint32_t *qsync_fps) { return kErrorNotSupported; }
   void SetTopologyMuxUsage(HWTopology hw_topology, bool *is_3d_mux_used);
+  void SetCacType(const HWPipeCacMode &cac_mode, sde_drm::DRMCacMode *target);
 
   class Registry {
    public:
@@ -277,13 +278,13 @@ class HWDeviceDRM : public HWInterface {
     // Called on display disconnect to clear output buffer map and remove fb_ids.
     void Clear();
     // Create the fd_id for the given buffer.
-    int CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id);
+    int CreateFbId(const LayerBuffer &buffer, std::vector<uint32_t> *fb_id);
     // Find handle_id in the layer map. Else create fb_id and add <handle_id,fb_id> in map.
-    void MapBufferToFbId(Layer* layer, const LayerBuffer &buffer);
+    void MapBufferToFbId(Layer* layer, const LayerBuffer &buffer, bool is_cac_buffer);
     // Find handle_id in output buffer map. Else create fb_id and add <handle_id,fb_id> in map.
     void MapOutputBufferToFbId(LayerBuffer* buffer);
     // Find fb_id for given handle_id in the layer map.
-    uint32_t GetFbId(Layer *layer, uint64_t handle_id);
+    std::vector<uint32_t> GetFbId(Layer *layer, uint64_t handle_id);
     // Find fb_id for given handle_id in output buffer map.
     uint32_t GetOutputFbId(uint64_t handle_id);
     uint32_t core_id_;

@@ -108,6 +108,9 @@ class DisplayNull : public DisplayInterface {
   virtual void FlushConcurrentWriteback() {}
   virtual void ScreenRefresh() { }
   virtual bool IsWriteBackSupportedFormat(const LayerBufferFormat &format) { return false; }
+  virtual DisplayError PerformCacConfig(CacConfig config, bool enable) {
+    return kErrorNotSupported;
+  }
 
   MAKE_NO_OP(CommitOrPrepare(LayerStack *))
   MAKE_NO_OP(PrePrepare(LayerStack *))

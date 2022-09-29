@@ -483,6 +483,7 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
   string skip_inline_rot_threshold="skip_inline_rot_threshold=";
   string dsc_block_count = "dsc_block_count=";
   string ddr_version = "DDR version=";
+  string cac_version = "cac_version=";
 
   while (std::getline(stream, line)) {
     if (line.find(max_blendstages) != string::npos) {
@@ -618,6 +619,12 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
         crtc_info_.ddr_version = DDRVersion::kDDRVersion4;
       } else if(string(line, ddr_version.length()) == "DDR5") {
         crtc_info_.ddr_version = DDRVersion::kDDRVersion5;
+      }
+    } else if (line.find(cac_version) != string::npos) {
+      if (string(line, cac_version.length()) == "cac_v1") {
+        crtc_info_.cac_version = CacVersion::V1;
+      } else if (string(line, cac_version.length()) == "cac_v2") {
+        crtc_info_.cac_version = CacVersion::V2;
       }
     }
   }

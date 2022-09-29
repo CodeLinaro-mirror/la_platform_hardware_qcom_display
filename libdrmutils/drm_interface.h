@@ -217,6 +217,34 @@ enum struct DRMOps {
    */
   PLANES_RESET_LUT,
   /*
+   * Op: Sets CAC mode for the plane
+   */
+  PLANE_SET_CAC_TYPE,
+  /*
+   * Op: Sets plane extended source crop
+   * Arg: uint32_t - Plane ID
+   *      DRMRect  - Extended Source Rectangle
+   */
+  PLANE_SET_SRC_RECT_EXT,
+  /*
+   * Op: Sets plane extended destination crop
+   * Arg: uint32_t - Plane ID
+   *      DRMRect  - Extended Destination Rectangle
+   */
+  PLANE_SET_DST_RECT_EXT,
+  /*
+   * Op: Sets BG plane alpha
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - alpha value
+   */
+  PLANE_SET_BG_ALPHA,
+  /*
+   * Op: Sets plane image size rectangle
+   * Arg: uint32_t - Plane ID
+   *      DRMRect  - Image ROI Rectangle
+   */
+  PLANE_SET_IMG_SIZE_RECT,
+  /*
    * Op: Activate or deactivate a CRTC
    * Arg: uint32_t - CRTC ID
    *      uint32_t - 1 to enable, 0 to disable
@@ -606,6 +634,12 @@ enum struct DDRVersion {
   kDDRVersion5,
 };
 
+enum struct CacVersion {
+  NONE,
+  V1,
+  V2,
+};
+
 /* Type for panel feature resource reservation info */
 typedef std::tuple<std::string, int32_t, int8_t> FetchResource;
 typedef std::vector<FetchResource> FetchResourceList;
@@ -661,6 +695,7 @@ struct DRMCrtcInfo {
   bool has_noise_layer = false;
   uint32_t dsc_block_count = 0;
   DDRVersion ddr_version = DDRVersion::kDDRVersion5;
+  CacVersion cac_version = CacVersion::NONE;
 };
 
 enum struct DRMPlaneType {
@@ -680,6 +715,12 @@ enum struct DRMTonemapLutType {
   DMA_1D_IGC,
   VIG_1D_IGC,
   VIG_3D_GAMUT,
+};
+
+enum struct DRMCacMode {
+  CAC_MODE_DISABLED,
+  CAC_MODE_UNPACK,
+  CAC_MODE_FETCH,
 };
 
 struct DRMPlaneTypeInfo {
@@ -710,6 +751,8 @@ struct DRMPlaneTypeInfo {
   bool block_sec_ui = false;
   int32_t pipe_idx = -1;
   int32_t demura_block_capability = -1;
+  DRMCacMode cac_mode = DRMCacMode::CAC_MODE_DISABLED;
+  int32_t cac_parent_rect = -1;
 };
 
 // All DRM Planes as map<Plane_id , plane_type_info> listed from highest to lowest priority

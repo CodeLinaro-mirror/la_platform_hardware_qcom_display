@@ -189,6 +189,7 @@ DisplayError DPUCoreMux::GetHWPanelInfo(DisplayDeviceContext *device_ctx,
       itr->second.hw_panel_info = i->second;
     }
     client_ctx->hw_panel_info.min_roi_width += i->second.min_roi_width;
+    client_ctx->hw_panel_info.split_info.left_split += i->second.split_info.left_split;
   }
 
   SetOpSyncHint(panel_info_map[zero_index].dpu_ctl_op_sync);
@@ -274,7 +275,7 @@ DisplayError DPUCoreMux::PowerOff(bool teardown, SyncPoints *sync_points) {
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
-  for (int i = 0; i < hw_intf_.size(); i++) {
+  for (uint32_t i : op_sync_sequence_) {
     error = hw_intf_[i]->PowerOff(teardown, &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
@@ -694,6 +695,7 @@ DisplayError DPUCoreMux::GetMixerAttributes(DisplayDeviceContext *device_ctx,
     }
     device_ctx->at(i->first).mixer_attributes = i->second;
     client_ctx->mixer_attributes.width += i->second.width;
+    client_ctx->mixer_attributes.split_left += i->second.split_left;
   }
   return kErrorNone;
 }

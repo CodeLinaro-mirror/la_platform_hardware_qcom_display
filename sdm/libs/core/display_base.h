@@ -264,6 +264,9 @@ class DisplayBase : public DisplayInterface {
   virtual bool HasNoiseLayer();
   virtual bool HasConcurrentWriteback();
   virtual bool HasSrcTonemap();
+  virtual DisplayError PerformCacConfig(CacConfig config, bool enable) {
+    return kErrorNotSupported;
+  }
 
  protected:
   struct DisplayMutex {

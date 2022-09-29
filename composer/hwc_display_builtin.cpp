@@ -1606,6 +1606,18 @@ HWC2::Error HWCDisplayBuiltIn::SetDimmingMinBl(int min_bl) {
   return HWC2::Error::None;
 }
 
+HWC2::Error HWCDisplayBuiltIn::PerformCacConfig(CacConfig config, bool enable) {
+  DLOGV("Display ID: %" PRId64 " cac_enable: %d", id_, enable);
+  DisplayError error = display_intf_->PerformCacConfig(config, enable);
+
+  if (error != kErrorNone) {
+    DLOGE("Failed to set CAC Config: %d error = %d", enable, error);
+    return HWC2::Error::Unsupported;
+  }
+
+  return HWC2::Error::None;
+}
+
 void HWCDisplayBuiltIn::HandleLargeCompositionHint(bool release) {
   if (!cpu_hint_) {
     return;
