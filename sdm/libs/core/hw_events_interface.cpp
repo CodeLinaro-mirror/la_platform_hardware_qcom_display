@@ -53,6 +53,10 @@ DisplayError HWEventsInterface::Create(int display_id, DisplayType display_type,
   } else {
     hw_events = new HWEventsDRM();
   }
+  if (!hw_events) {
+    DLOGE("could not allocate hw_events");
+    return kErrorMemory;
+  }
 
   error = hw_events->Init(display_id, display_type, event_handler, event_list, hw_intf);
   if (error != kErrorNone) {
