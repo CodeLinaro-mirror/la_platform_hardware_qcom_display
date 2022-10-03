@@ -451,14 +451,21 @@ DisplayError DPUCoreMux::GetPPFeaturesVersion(PPFeatureVersion *vers) {
   return hw_intf_[0]->GetPPFeaturesVersion(vers);
 }
 
-DisplayError DPUCoreMux::SetPPFeatures(PPFeaturesConfig *feature_list) {
-  for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf.second->SetPPFeatures(feature_list);
-     if (error != kErrorNone) {
-       return error;
-     }
+DisplayError DPUCoreMux::SetPPFeatures(PPFeaturesConfig *feature_list, uint32_t &core_id) {
+  DisplayError error = kErrorNone;
+
+  if (hw_intf_.find(core_id) == hw_intf_.end()) {
+    DLOGE("hw_intf is not present for core_id=%u", core_id);
+    return kErrorNotSupported;
   }
-  return kErrorNone;
+
+  error = hw_intf_[core_id]->SetPPFeatures(feature_list);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set pp feature for core_id=%u", core_id);
+    return error;
+  }
+
+  return error;
 }
 
 DisplayError DPUCoreMux::SetVSyncState(bool enable) {

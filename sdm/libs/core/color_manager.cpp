@@ -27,6 +27,12 @@
  *
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <dlfcn.h>
 #include <private/color_interface.h>
 #include <utils/constants.h>
@@ -34,6 +40,7 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <set>
 
 #include "color_manager.h"
 
@@ -45,7 +52,6 @@ DynLib ColorManagerProxy::color_lib_;
 DynLib ColorManagerProxy::stc_lib_;
 CreateColorInterface ColorManagerProxy::create_intf_ = NULL;
 DestroyColorInterface ColorManagerProxy::destroy_intf_ = NULL;
-std::vector<HWResourceInfo> ColorManagerProxy::hw_res_info_;
 
 GetScPostBlendInterface ColorManagerProxy::create_stc_intf_ = NULL;
 
@@ -91,51 +97,61 @@ DisplayError PPFeaturesConfig::RetrieveNextFeature(PPFeatureInfo **feature) {
   return ret;
 }
 
-FeatureInterface* GetPostedStartFeatureCheckIntf(HWInterface *intf, PPFeaturesConfig *config,
-                                                 bool dyn_switch) {
-  return new ColorFeatureCheckingImpl(intf, config, dyn_switch);
+// TBD: handle Posted start for command mode
+FeatureInterface* GetPostedStartFeatureCheckIntf(DPUCoreMux *dpu_core_mux,
+                                                  PPFeaturesConfig *config,
+                                                  bool dyn_switch) {
+  return new ColorFeatureCheckingImpl(dpu_core_mux, config, dyn_switch);
 }
 
-DisplayError ColorManagerProxy::Init(const std::vector<HWResourceInfo> &hw_res_info) {
+DisplayError ColorManagerProxy::Init() {
   DisplayError error = kErrorNone;
 
   // Load color service library and retrieve its entry points.
-  if (color_lib_.Open(COLORMGR_LIBRARY_NAME)) {
-    if (!color_lib_.Sym(CREATE_COLOR_INTERFACE_NAME, reinterpret_cast<void **>(&create_intf_)) ||
-        !color_lib_.Sym(DESTROY_COLOR_INTERFACE_NAME, reinterpret_cast<void **>(&destroy_intf_))) {
-      DLOGW("Fail to retrieve = %s from %s", CREATE_COLOR_INTERFACE_NAME, COLORMGR_LIBRARY_NAME);
+  if (!color_lib_) {
+    if (color_lib_.Open(COLORMGR_LIBRARY_NAME)) {
+      if (!color_lib_.Sym(CREATE_COLOR_INTERFACE_NAME, reinterpret_cast<void **>(&create_intf_)) ||
+          !color_lib_.Sym(DESTROY_COLOR_INTERFACE_NAME,
+                                              reinterpret_cast<void **>(&destroy_intf_))) {
+        DLOGW("Fail to retrieve = %s from %s", CREATE_COLOR_INTERFACE_NAME, COLORMGR_LIBRARY_NAME);
+        error = kErrorResources;
+      }
+    } else {
+      DLOGW("Fail to load = %s", COLORMGR_LIBRARY_NAME);
       error = kErrorResources;
     }
-  } else {
-    DLOGW("Fail to load = %s", COLORMGR_LIBRARY_NAME);
-    error = kErrorResources;
   }
 
-  hw_res_info_ = hw_res_info;
-
   // Load Stc manager library and retrieve its entry points.
-  if (stc_lib_.Open(STCMGR_LIBRARY_NAME)) {
-    if (!stc_lib_.Sym(CREATE_STC_INTERFACE_NAME, reinterpret_cast<void **>(&create_stc_intf_))) {
-      DLOGW("Fail to retrieve = %s from %s", CREATE_STC_INTERFACE_NAME, STCMGR_LIBRARY_NAME);
+  if (!stc_lib_) {
+    if (stc_lib_.Open(STCMGR_LIBRARY_NAME)) {
+      if (!stc_lib_.Sym(CREATE_STC_INTERFACE_NAME, reinterpret_cast<void **>(&create_stc_intf_))) {
+        DLOGW("Fail to retrieve = %s from %s", CREATE_STC_INTERFACE_NAME, STCMGR_LIBRARY_NAME);
+        error = kErrorResources;
+      }
+    } else {
+      DLOGW("Fail to load = %s", STCMGR_LIBRARY_NAME);
       error = kErrorResources;
     }
-  } else {
-    DLOGW("Fail to load = %s", STCMGR_LIBRARY_NAME);
-    error = kErrorResources;
   }
 
   return error;
 }
 
 void ColorManagerProxy::Deinit() {
-  color_lib_.~DynLib();
-  stc_lib_.~DynLib();
+  if (color_lib_) {
+    color_lib_.~DynLib();
+  }
+
+  if (stc_lib_) {
+    stc_lib_.~DynLib();
+  }
 }
 
-ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, HWInterface *intf,
+ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, DPUCoreMux *dpu_core_mux,
                                      const HWDisplayAttributes &attr,
                                      const HWPanelInfo &info)
-    : display_id_(id), device_type_(type), pp_hw_attributes_(), hw_intf_(intf),
+    : display_id_(id), device_type_(type), pp_hw_attributes_(), dpu_core_mux_(dpu_core_mux),
       color_intf_(NULL), pp_features_(), feature_intf_(NULL) {
   int32_t enable_posted_start_dyn = 0;
   bool dyn_switch = false;
@@ -146,7 +162,7 @@ ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, HWInterface *
       dyn_switch = true;
       [[fallthrough]];
     case kControlPostedStart:
-      feature_intf_ = GetPostedStartFeatureCheckIntf(intf, &pp_features_, dyn_switch);
+      feature_intf_ = GetPostedStartFeatureCheckIntf(dpu_core_mux, &pp_features_, dyn_switch);
       if (!feature_intf_) {
         DLOGI("Failed to create feature interface");
       } else {
@@ -165,16 +181,15 @@ ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, HWInterface *
 }
 
 ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
-                                                              HWInterface *hw_intf,
-                                                              DisplayDeviceContext &device_ctx,
-                                                              DisplayClientContext &client_ctx,
+                                                              DPUCoreMux *dpu_core_mux,
+                                                              const HWDisplayAttributes &attribute,
+                                                              const HWPanelInfo &panel_info,
                                                               DppsControlInterface *dpps_intf,
-                                                              DisplayInterface *disp_intf) {
+                                                              DisplayInterface *disp_intf,
+                                                              const HWResourceInfo &hw_res_info,
+                                                              uint32_t display_id) {
   DisplayError error = kErrorNone;
-  const HWDisplayAttributes &attribute = client_ctx.display_attributes;
-  const HWPanelInfo &panel_info = client_ctx.hw_panel_info;
   PPFeatureVersion versions;
-  int32_t display_id = -1;
   ColorManagerProxy *color_manager_proxy = NULL;
 
   // check if all resources are available before invoking factory method from libsdm-color.so.
@@ -189,17 +204,18 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
     return NULL;
   }
 
-  hw_intf->GetDisplayId(&display_id);
-  color_manager_proxy = new ColorManagerProxy(display_id, type, hw_intf, attribute, panel_info);
+  color_manager_proxy = new ColorManagerProxy(display_id, type, dpu_core_mux,
+                                                        attribute, panel_info);
 
   if (color_manager_proxy) {
+    color_manager_proxy->hw_res_info_ = hw_res_info;
     // 1. need query post-processing feature version from HWInterface.
-    error = color_manager_proxy->hw_intf_->GetPPFeaturesVersion(&versions);
+    error = color_manager_proxy->dpu_core_mux_->GetPPFeaturesVersion(&versions);
     PPHWAttributes &hw_attr = color_manager_proxy->pp_hw_attributes_;
     if (error != kErrorNone) {
       DLOGW("Fail to get DSPP feature versions");
     } else {
-      hw_attr.Set(hw_res_info_[0], panel_info, attribute, versions, dpps_intf);
+      hw_attr.Set(color_manager_proxy->hw_res_info_, panel_info, attribute, versions, dpps_intf);
       DLOGI("PAV2 version is versions = %d, version = %d ",
             hw_attr.version.version[kGlobalColorFeaturePaV2],
             versions.version[kGlobalColorFeaturePaV2]);
@@ -334,6 +350,12 @@ DisplayError ColorManagerProxy::ApplyDefaultDisplayMode(void) {
   return ret;
 }
 
+// Update cfg write status per physical display
+void ColorManagerProxy::SetDETuningCFGpending(bool cfg_pending) {
+  PPDETuningCfgData *de_tuning_cfg_data(pp_features_.GetDETuningCfgData());
+  de_tuning_cfg_data->cfg_pending = cfg_pending;
+}
+
 bool ColorManagerProxy::NeedsPartialUpdateDisable() {
   Locker &locker(pp_features_.GetLocker());
   SCOPE_LOCK(locker);
@@ -347,17 +369,46 @@ bool ColorManagerProxy::NeedsPartialUpdateDisable() {
     pp_features_.IsSwAssetDirty());
 }
 
+void ColorManagerProxy::getCoreId(uint32_t &core_id) {
+  uint16_t core_id_bit_map;
+  int i = 0;
+
+  core_id_bit_map = (display_id_ < 0) ? 0 : (display_id_ >> 16);
+  if (core_id_bit_map <= 0) {
+    DLOGE("Invalid core id = %d", core_id_bit_map);
+    core_id = -1;
+    return;
+  }
+
+  // return the MSB set to get the core ID
+  while (!(core_id_bit_map & (1 << i))) {
+    i++;
+  }
+
+  core_id = i;
+}
+
 DisplayError ColorManagerProxy::Commit() {
   Locker &locker(pp_features_.GetLocker());
   SCOPE_LOCK(locker);
 
+  uint32_t core_id = 0;
   DisplayError ret = kErrorNone;
   bool is_dirty = pp_features_.IsDirty();
   if (feature_intf_) {
     feature_intf_->SetParams(kFeatureSwitchMode, &is_dirty);
   }
+
   if (is_dirty) {
-    ret = hw_intf_->SetPPFeatures(&pp_features_);
+    getCoreId(core_id);
+    if (core_id < 0) {
+      DLOGE("invalid core_id = %d", core_id);
+      return kErrorNotSupported;
+    }
+
+    // pass core to set PP features on sepcific core
+    DLOGV("Setting PPFeatures for core_id=%d", core_id);
+    ret = dpu_core_mux_->SetPPFeatures(&pp_features_, core_id);
   }
 
   return ret;
@@ -829,10 +880,10 @@ DisplayError ColorManagerProxy::ConfigureCWBDither(CwbConfig *cwb_cfg, bool free
   return error;
 }
 
-ColorFeatureCheckingImpl::ColorFeatureCheckingImpl(HWInterface *hw_intf,
+ColorFeatureCheckingImpl::ColorFeatureCheckingImpl(DPUCoreMux *dpu_core_mux,
                                                    PPFeaturesConfig *pp_features,
                                                    bool dyn_switch)
-  : hw_intf_(hw_intf), pp_features_(pp_features), dyn_switch_(dyn_switch) {}
+  : dpu_core_mux_(dpu_core_mux), pp_features_(pp_features), dyn_switch_(dyn_switch) {}
 
 DisplayError ColorFeatureCheckingImpl::Init() {
   states_.at(kFrameTriggerDefault) = new FeatureStateDefaultTrigger(this);
@@ -1010,7 +1061,7 @@ DisplayError FeatureStatePostedStart::SetParams(FeatureOps param_type,
       return kErrorParameters;
     }
     if (mode != kFrameTriggerPostedStart) {
-      error = obj_->hw_intf_->SetFrameTrigger(mode);
+      error = obj_->dpu_core_mux_->SetFrameTrigger(mode);
       if (!error) {
         obj_->curr_state_ = obj_->states_.at(mode);
       }
@@ -1087,7 +1138,7 @@ DisplayError FeatureStateDefaultTrigger::SetParams(FeatureOps param_type,
       return kErrorParameters;
     }
     if (mode != kFrameTriggerDefault) {
-      error = obj_->hw_intf_->SetFrameTrigger(mode);
+      error = obj_->dpu_core_mux_->SetFrameTrigger(mode);
       if (!error) {
         obj_->curr_state_ = obj_->states_.at(mode);
       }
@@ -1164,7 +1215,7 @@ DisplayError FeatureStateSerializedTrigger::SetParams(FeatureOps param_type,
       return kErrorParameters;
     }
     if (mode != kFrameTriggerSerialize) {
-      error = obj_->hw_intf_->SetFrameTrigger(mode);
+      error = obj_->dpu_core_mux_->SetFrameTrigger(mode);
       if (!error) {
         obj_->curr_state_ = obj_->states_.at(mode);
       }
@@ -1205,6 +1256,604 @@ DisplayError FeatureStateSerializedTrigger::GetParams(FeatureOps param_type,
   }
 
   return error;
+}
+
+#undef __CLASS__
+#define __CLASS__ "DPUColorManager"
+
+// make display ID for each physical display,
+// with combination of core id, connector id
+#define MAKE_DISPLAY_ID(core_id, conn_id) (((core_id) << 16) | (conn_id & 0xFFFF))
+
+DPUColorManager::DPUColorManager(DisplayId id_info)
+                                : display_id_info_(id_info) {
+}
+
+DPUColorManager::~DPUColorManager() {
+}
+
+DisplayError DPUColorManager::Init(const std::vector<HWResourceInfo>& hw_res_info) {
+  return kErrorNone;
+}
+
+void DPUColorManager::Deinit() {
+}
+
+int DPUColorManager::CreatePhysicalDisplayIds(DisplayId display_id_info) {
+  int ret = 0, conn_id = 0, core_id = 0;
+
+  conn_id = display_id_info.GetConnId();
+  core_id = display_id_info.GetCoreIdMap();
+
+  if (!core_id) {
+    DLOGE("No dpu is present core_id = %d", core_id);
+    return -EINVAL;
+  }
+
+  // Create physical display ID for each physical display
+  // display_id_0 = (core_id & 0x1) << 16) | (conn_id & 0xFFFF)
+  for (int i = 0; core_id >> i; i++) {
+    uint32_t disp_id = 0;
+    if (core_id & (1 << i)) {
+      disp_id = MAKE_DISPLAY_ID(core_id & (1 << i), conn_id);
+      DLOGV("Creating local color display id for display=%d, id=%d", i, disp_id);
+      display_id_list_.push_back(disp_id);
+    }
+  }
+
+  return ret;
+}
+
+// Create physical display ID and create color manager proxy per physical display
+DPUColorManager *DPUColorManager::CreateDpuColorManager(DisplayType type,
+                                                        DPUCoreMux *dpu_core_mux,
+                                                        DisplayDeviceContext &display_device_ctx,
+                                                        DisplayClientContext &display_client_ctx,
+                                                        DppsControlInterface *dpps_intf,
+                                                        DisplayInterface *disp_intf,
+                                                        vector<HWResourceInfo> &hw_res_info,
+                                                        DisplayId display_id_info) {
+  DPUColorManager *dpu_color_manager = NULL;
+  int ret = 0;
+
+  dpu_color_manager = new DPUColorManager(display_id_info);
+  if (!dpu_color_manager) {
+    DLOGE("failed to create dpu color_manager");
+    return NULL;
+  }
+
+  // From a logical display ID create physical display ID per physical display
+  ret = dpu_color_manager->CreatePhysicalDisplayIds(display_id_info);
+  if (ret || dpu_color_manager->display_id_list_.size() == 0) {
+    DLOGE("Failed to create local display ids ret=%d, display_id count=%d",
+            ret, dpu_color_manager->display_id_list_.size());
+    return NULL;
+  }
+
+  dpu_color_manager->hw_res_info_ = hw_res_info;
+
+  // Create color manager proxy per physical display
+  for (int i = 0; i < dpu_color_manager->display_id_list_.size(); i++) {
+    ColorManagerProxy *colorManager = NULL;
+    DLOGV("Creating colorManagerProxy for core=%d, display_id=%d",
+                                              i, dpu_color_manager->display_id_list_[i]);
+    colorManager = ColorManagerProxy::CreateColorManagerProxy(type, dpu_core_mux,
+                                                          display_device_ctx[i].display_attributes,
+                                                          display_device_ctx[i].hw_panel_info,
+                                                          dpps_intf, disp_intf, hw_res_info[i],
+                                                          dpu_color_manager->display_id_list_[i]);
+    if (!colorManager) {
+      DLOGE("Failed to create ColorManagerProxy for core=%d, display id=%d",
+                                              i, dpu_color_manager->display_id_list_[i]);
+      goto exit;
+    }
+
+    dpu_color_manager->color_manager_proxy_list_.push_back(colorManager);
+  }
+
+  return dpu_color_manager;
+
+exit:
+  delete dpu_color_manager;
+  dpu_color_manager = NULL;
+  return dpu_color_manager;
+}
+
+bool DPUColorManager::ComparePendingAction(vector<PPPendingParams>& pending_action) {
+  bool same_pending_action = true;
+
+  for (int i = 1; i < pending_action.size(); i++) {
+    if (pending_action[0].action != pending_action[i].action) {
+        same_pending_action = false;
+        DLOGE("pending action are different for cores, core_0=%d, core_%d=%d",
+                        pending_action[0].action, i, pending_action[i].action);
+        return same_pending_action;
+    }
+  }
+
+  return same_pending_action;
+}
+
+DisplayError DPUColorManager::ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
+                                                    PPDisplayAPIPayload *out_payload,
+                                                    PPPendingParams *out_pending_action) {
+  DisplayError error = kErrorNone;
+  int color_mgr_cnt = color_manager_proxy_list_.size();
+  PPPendingParams pending_action;
+  vector<PPPendingParams> pending_action_list;
+  bool same_pending_action = true;
+
+  pending_action_list.reserve(color_mgr_cnt);
+
+  // loop through for each physical display and get the pending data
+  for (int i = 0; i < color_mgr_cnt; i++) {
+    DLOGV("Getting Color SVC Request Route for core=%d", i);
+    pending_action.action = out_pending_action->action;
+    pending_action.params = out_pending_action->params;
+    error = color_manager_proxy_list_[i]->ColorSVCRequestRoute(in_payload, out_payload,
+                                                                         &pending_action);
+    if (error) {
+        DLOGE("failed to Request SVC Route error=%d", error);
+        return error;
+    }
+
+    pending_action_list.push_back(pending_action);
+  }
+
+  // compare that the pending actions are same across all the displays
+  if (color_mgr_cnt > 1) {
+    same_pending_action = ComparePendingAction(pending_action_list);
+    if (!same_pending_action) {
+      error = kErrorNotSupported;
+      DLOGE("pending actions are not same error=%d", error);
+      return error;
+    }
+  }
+
+  // Return only one pending action as both are same.
+  out_pending_action->action = pending_action_list[0].action;
+  out_pending_action->params = pending_action_list[0].params;
+
+  return error;
+}
+
+void DPUColorManager::SetDETuningCFGpending(bool cfg_pending) {
+  for (auto& color_mgr : color_manager_proxy_list_)
+    color_mgr->SetDETuningCFGpending(cfg_pending);
+}
+
+DisplayError DPUColorManager::ColorMgrGetNumOfModes(uint32_t *mode_cnt) {
+  DisplayError error = kErrorNone;
+  // std::set holds unique, ordered elements
+  std::set<uint32_t> mode_count_set;
+  uint32_t mode_count;
+  int i = 0;
+
+  // Get mode count for both DPU's
+  // Check whether mode_count is same for both DPU or not
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    DLOGV("Get num of modes for core=%d", i++);
+    error = color_mgr->ColorMgrGetNumOfModes(&mode_count);
+    if (error) {
+      DLOGE("Failed to get mode count %d", error);
+      return error;
+    }
+
+    mode_count_set.insert(mode_count);
+  }
+
+  // check if mode count is same for all displays
+  if (mode_count_set.size() > 1) {
+    DLOGE("Different num of mode for both displays mode_count %d", mode_count_set.size());
+    error = kErrorNotSupported;
+    return error;
+  }
+
+  DLOGV("num of modes for all cores is %d", mode_count);
+  *mode_cnt = mode_count;
+
+  return error;
+}
+
+// compare and check if all displays have same modes or not
+bool DPUColorManager::CompareSDEDisplayModes(vector<SDEDisplayMode>& mode) {
+  bool is_same_mode = true;
+
+  for (int i = 1; i < mode.size(); i++) {
+    if ((mode[0].id != mode[i].id) && (mode[0].type != mode[i].type) &&
+          (mode[0].name != mode[i].name))
+      is_same_mode = false;
+  }
+
+  return is_same_mode;
+}
+
+DisplayError DPUColorManager::ColorMgrGetModes(uint32_t *out_mode_cnt,
+                                                    SDEDisplayMode *out_mode) {
+  DisplayError error = kErrorNone;
+  int color_mgr_cnt = color_manager_proxy_list_.size();
+  vector<uint32_t> mode_count;
+  vector<SDEDisplayMode> modes;
+  bool equal_mode_count = false;
+
+  mode_count.reserve(color_mgr_cnt);
+  modes.reserve(color_mgr_cnt);
+
+  // loop for all physical display and get color modes for each
+  for (int i = 0; i < color_mgr_cnt; i++) {
+    DLOGV("Get mode for core=%d", i);
+    mode_count[i] = *out_mode_cnt;
+    error = color_manager_proxy_list_[i]->ColorMgrGetModes(&mode_count[i], &modes[i]);
+    if (error) {
+      DLOGE("Failed to get mode count %d", error);
+      return error;
+    }
+  }
+
+  // Check if mode count is same or not for all the DPU
+  equal_mode_count = std::equal(mode_count.begin(), mode_count.end(), mode_count.begin());
+  if (!equal_mode_count) {
+    error = kErrorNotSupported;
+    DLOGE("Received mode count is not same error: %d", error);
+    return error;
+  }
+
+  if (!CompareSDEDisplayModes(modes)) {
+    error = kErrorNotSupported;
+    DLOGE("Received modes are not same, error: %d", error);
+    return error;
+  }
+
+  // return only 1 mode as all the modes are same
+  *out_mode_cnt = mode_count[0];
+  out_mode->id = modes[0].id;
+  out_mode->type = modes[0].type;
+  snprintf(out_mode->name, out_mode->kMaxModeNameSize, "%s", modes[0].name);
+
+  return error;
+}
+
+DisplayError DPUColorManager::CompareAttrVal(vector<AttrVal>& query) {
+  DisplayError error = kErrorNone;
+
+  for (int i = 1; i < query.size(); i++) {
+    auto& attribute1 = query[0];
+    auto& attribute2 = query[i];
+
+    if (attribute1.size() != attribute2.size()) {
+      DLOGE("attribute size is different");
+      return kErrorNotSupported;
+    } else {
+      for (int j = 0; j < attribute1.size(); j++) {
+          if ((attribute1[j].first != attribute2[j].first) ||
+              (attribute1[j].second != attribute2[j].second))
+              return kErrorNotSupported;
+      }
+    }
+  }
+
+  return error;
+}
+
+DisplayError DPUColorManager::ColorMgrSetMode(int32_t color_mode_id) {
+  DisplayError error = kErrorNone;
+
+  // set color mode to all the physical displays
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    error = color_mgr->ColorMgrSetMode(color_mode_id);
+    if (error) {
+      DLOGE("Failed to set mode error=%d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+DisplayError DPUColorManager::ColorMgrGetModeInfo(int32_t in_mode_id,
+                                                    AttrVal *out_query) {
+  DisplayError error = kErrorNone;
+  int color_mgr_cnt = color_manager_proxy_list_.size();
+  vector<AttrVal> query;
+
+  query.reserve(color_mgr_cnt);
+
+  // loop for all physical display and get mode info
+  for (int i = 0; i < color_mgr_cnt; i++) {
+    DLOGV("Get Mode Info for core=%d", i);
+    error = color_manager_proxy_list_[i]->ColorMgrGetModeInfo(in_mode_id, &query[i]);
+    if (error) {
+      DLOGE("Failed to get mode count %d", error);
+      return error;
+    }
+  }
+
+  // compare and check if mode info is same across all the displays or not
+  error = CompareAttrVal(query);
+  if (!error) {
+    DLOGE("Received attribute values are different for DPU's");
+    return kErrorNotSupported;
+  }
+
+  // assing only one vector, as all are same
+  out_query->assign(query[0].begin(), query[0].end());
+
+  return error;
+}
+
+DisplayError DPUColorManager::ColorMgrSetColorTransform(uint32_t length,
+                                                    const double *trans_data) {
+  DisplayError error = kErrorNone;
+
+  // set color transform for each physical display
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    error = color_mgr->ColorMgrSetColorTransform(length, trans_data);
+    if (error) {
+      DLOGE("Failed to set color transform, error=%d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+// DPUColorManager is only for video mode
+bool DPUColorManager::NeedsPartialUpdateDisable() {
+  return true;
+}
+
+DisplayError DPUColorManager::Commit() {
+  DisplayError error = kErrorNone;
+
+  // commit for each physical display
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    error = color_mgr->Commit();
+    if (error) {
+      DLOGE("Failed to commit, error=%d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+DisplayError DPUColorManager::ColorMgrSetModeWithRenderIntent(int32_t color_mode_id,
+                                              const PrimariesTransfer &blend_space,
+                                              uint32_t intent) {
+  DisplayError error = kErrorNone;
+  int i = 0;
+
+  // for each physical display set same color mode with render intent
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    DLOGI("Set Mode with render intent for core=%d", i++);
+    error = color_mgr->ColorMgrSetModeWithRenderIntent(color_mode_id, blend_space, intent);
+    if (error) {
+      DLOGE("Failed to set color mode with render intent, error=%d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+DisplayError DPUColorManager::Validate(DispLayerStack *disp_layer_stack) {
+  DisplayError error = kErrorNone;
+  int i = 0;
+
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    DLOGV("Validate for core=%d", i++);
+    error = color_mgr->Validate(disp_layer_stack);
+    if (error) {
+      DLOGE("Failed to get mode count %d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+// game enhance is not supported
+bool DPUColorManager::GameEnhanceSupported() {
+  return false;
+}
+
+// compare and check if the mode list is same for all the physical displays
+DisplayError DPUColorManager::CompareColorModeList(std::vector<ColorModeList>& mode_list) {
+  DisplayError error = kErrorNone;
+
+  for (int i = 1; i < mode_list.size(); i++) {
+    if (mode_list[0].version != mode_list[i].version) {
+      return kErrorUndefined;
+    }
+
+    if (mode_list[0].list.size() != mode_list[i].list.size()) {
+      return kErrorNotSupported;
+    } else {
+      for (int j = 0; j < mode_list[0].list.size(); j++) {
+        if ((mode_list[0].list[j].gamut != mode_list[i].list[j].gamut) ||
+            (mode_list[0].list[j].gamma != mode_list[i].list[j].gamma) ||
+            (mode_list[0].list[j].intent != mode_list[i].list[j].intent) ||
+            (mode_list[0].list[j].intent_name != mode_list[i].list[j].intent_name))
+            return kErrorNotSupported;
+      }
+    }
+  }
+
+  return error;
+}
+
+DisplayError DPUColorManager::ColorMgrGetStcModes(ColorModeList *out_mode_list) {
+  DisplayError error = kErrorNone;
+  ColorModeList mode;
+  std::vector<ColorModeList> mode_list;
+
+  // loop throught all the physical displays and get mode list for each
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    error = color_mgr->ColorMgrGetStcModes(&mode);
+    if (error) {
+      DLOGE("Failed to get mode %d", error);
+      return error;
+    }
+
+    mode_list.push_back(mode);
+
+    // To avoid push_back into same local mode list by STC Manager
+    mode.list.clear();
+  }
+
+  // compare and check if the mode list is same for all the physical displays
+  if (color_manager_proxy_list_.size() > 1) {
+    error = CompareColorModeList(mode_list);
+    if (error) {
+      DLOGE("Received Color Mode list is different, error=%d", error);
+      return error;
+    }
+  }
+
+  // mode_list conatins same modes. Copy 1st mode to out mode.
+  out_mode_list->list = mode_list[0].list;
+
+  return error;
+}
+
+DisplayError DPUColorManager::ColorMgrSetStcMode(const ColorMode &color_mode) {
+  DisplayError error = kErrorNone;
+  int i = 0;
+
+  // set color mode for each physical display
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    DLOGV("Set STC Mode for core=%d", i++);
+    error = color_mgr->ColorMgrSetStcMode(color_mode);
+    if (error) {
+      DLOGE("Failed to set stc mode, error=%d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+DisplayError DPUColorManager::Prepare() {
+  DisplayError error = kErrorNone;
+  int i = 0;
+
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    DLOGV("calling prepare for core=%d", i++);
+    error = color_mgr->Prepare();
+    if (error) {
+      DLOGE("Failed to prepare, error=%d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+bool DPUColorManager::IsValidateNeeded() {
+  int color_mgr_cnt = color_manager_proxy_list_.size();
+  vector<bool> needed(color_mgr_cnt, false);  // assigning all to false
+
+  for (int i = 0; i < color_mgr_cnt; i++) {
+    DLOGV("Check if validation needed for core=%d", i);
+    needed[i] = color_manager_proxy_list_[i]->IsValidateNeeded();
+  }
+
+  for (int i = 1; i < color_mgr_cnt; i++) {
+    if (needed[0] != needed[i]) {
+      DLOGW("Need validate for DPU's are different, DPU0=%d, DPU%d=%d",
+                                    needed[0], i, needed[i]);
+    }
+  }
+
+  return needed[0];
+}
+
+DisplayError DPUColorManager::ConfigureCWBDither(CwbConfig *cwb_cfg, bool free_data) {
+  return kErrorNotSupported;
+}
+
+// TBD: Not validated, requires validation
+DisplayError DPUColorManager::NotifyDisplayCalibrationMode(bool in_calibration) {
+  DisplayError error = kErrorNone;
+  int i = 0;
+
+  for (auto& color_mgr : color_manager_proxy_list_) {
+    DLOGV("Notify Display Calibration Mode for core=%d", i++);
+    error = color_mgr->NotifyDisplayCalibrationMode(in_calibration);
+    if (error) {
+      DLOGE("Failed to Notify Display Calibration Mode, error=%d", error);
+      return error;
+    }
+  }
+
+  return error;
+}
+
+DisplayError DPUColorManager::ColorMgrSetLtmPccConfig(void *pcc_input, size_t size) {
+  return kErrorNotSupported;
+}
+
+DisplayError DPUColorManager::ColorMgrSetSprIntf(std::shared_ptr<SPRIntf> spr_intf) {
+  return kErrorNotSupported;
+}
+
+// TBD: Should remove this legacy API?
+DisplayError DPUColorManager::ApplyDefaultDisplayMode() {
+  return kErrorNotSupported;
+}
+
+// TBD: Should remove this legacy API?
+DisplayError DPUColorManager::ColorMgrGetDefaultModeID(int32_t *mode_id) {
+  return kErrorNotSupported;
+}
+
+// TBD: Should remove this legacy API?
+DisplayError DPUColorManager::ColorMgrCombineColorModes() {
+  return kErrorNotSupported;
+}
+
+#undef __CLASS__
+#define __CLASS__ "ColorMgrFactoryIntfImpl"
+
+static ColorMgrFactoryIntfImpl color_mgr_impl;
+
+ColorManagerIntf* ColorMgrFactoryIntfImpl::CreateColorManagerIntf(DisplayType type,
+                                                    DPUCoreMux *dpu_core_mux,
+                                                    DisplayDeviceContext &display_device_ctx,
+                                                    DisplayClientContext &display_client_ctx,
+                                                    DppsControlInterface *dpps_intf,
+                                                    DisplayInterface *disp_intf,
+                                                    vector<HWResourceInfo> &hw_res_info,
+                                                    DisplayId display_id_info) {
+  ColorManagerIntf* ptr;
+  // extract core id, logical display ID from DisplayId class
+  uint32_t core_id_map = display_id_info.GetCoreIdMap();
+  uint32_t display_id = display_id_info.GetDisplayId();
+
+  // Depending of core count either create DPUColorManager or create ColorManagerProxy
+  if (core_id_map > 1) {
+    DLOGV("Creating CreateDpuColorManager");
+    ptr = DPUColorManager::CreateDpuColorManager(type, dpu_core_mux,
+                                                  display_device_ctx,
+                                                  display_client_ctx,
+                                                  dpps_intf, disp_intf,
+                                                  hw_res_info,
+                                                  display_id_info);
+  } else {
+    DLOGV("Creating CreateColorManagerProxy");
+    ptr = ColorManagerProxy::CreateColorManagerProxy(type, dpu_core_mux,
+                                                    display_client_ctx.display_attributes,
+                                                    display_client_ctx.hw_panel_info,
+                                                    dpps_intf, disp_intf,
+                                                    hw_res_info[0],
+                                                    display_id);
+  }
+
+  return ptr;
+}
+
+ColorMgrFactoryIntf* GetColorMgrFactoryIntf() {
+  return &color_mgr_impl;
 }
 
 }  // namespace sdm
