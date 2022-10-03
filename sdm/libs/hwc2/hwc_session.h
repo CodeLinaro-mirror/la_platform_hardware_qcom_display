@@ -211,6 +211,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   static int32_t AcceptDisplayChanges(hwc2_device_t *device, hwc2_display_t display);
   static int32_t CreateLayer(hwc2_device_t *device, hwc2_display_t display,
                              hwc2_layer_t *out_layer_id);
+  static int32_t GetTunneledLayer(hwc2_device_t *device, hwc2_display_t display,
+                                  hwc2_layer_t *out_layer_id);
   static int32_t CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, uint32_t height,
                                       int32_t *format, hwc2_display_t *out_display_id);
   static int32_t DestroyLayer(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer);
@@ -268,6 +270,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
                                 uint32_t z);
   static int32_t SetLayerDataspace(hwc2_device_t *device, hwc2_display_t display,
                                    hwc2_layer_t layer, int32_t dataspace);
+  static int32_t SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display,
+                                        hwc2_layer_t layer, const native_handle_t *stream);
 
   static Locker locker_[HWCCallbacks::kNumDisplays];
 
@@ -321,7 +325,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t SetDynamicDSIClock(int64_t disp_id, uint32_t bitrate);
   int32_t IsWbUbwcSupported(int *value);
   bool HasHDRSupport(HWCDisplay *hwc_display);
-  int32_t CreateTunneledLayerInternal();
+
+  // Tunneling internal methods
+  int32_t TunnelingInitInternal();
+  int32_t TunnelingDeinitInternal();
 
   // service methods
   void StartServices();

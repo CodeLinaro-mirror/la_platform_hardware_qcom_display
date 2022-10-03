@@ -114,6 +114,7 @@ class HWCLayer {
   HWC2::Error SetLayerDisplayFrame(hwc_rect_t frame);
   HWC2::Error SetCursorPosition(int32_t x, int32_t y);
   HWC2::Error SetLayerPlaneAlpha(float alpha);
+  HWC2::Error SetLayerSidebandStream(const native_handle_t *stream);
   HWC2::Error SetLayerSourceCrop(hwc_frect_t crop);
   HWC2::Error SetLayerSurfaceDamage(hwc_region_t damage);
   HWC2::Error SetLayerTransform(HWC2::Transform transform);

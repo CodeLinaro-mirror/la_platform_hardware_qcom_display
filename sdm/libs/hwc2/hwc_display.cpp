@@ -740,6 +740,16 @@ HWC2::Error HWCDisplay::IsTunnelledLayerPresent(bool *tunnelled_layer_present) {
   return HWC2::Error::None;
 }
 
+HWC2::Error HWCDisplay::GetTunneledLayer(hwc2_layer_t *out_layer_id) {
+  for (auto hwc_layer : layer_set_) {
+    if (hwc_layer->IsTunneled()) {
+      *out_layer_id = hwc_layer->GetId();
+      break;
+    }
+  }
+  return HWC2::Error::None;
+}
+
 HWC2::Error HWCDisplay::SetLayerZOrder(hwc2_layer_t layer_id, uint32_t z) {
   const auto map_layer = layer_map_.find(layer_id);
   if (map_layer == layer_map_.end()) {
@@ -1214,17 +1224,14 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     hwc_layer->SetComposition(composition);
     HWC2::Composition device_composition  = hwc_layer->GetDeviceSelectedCompositionType();
     if (hwc_layer->IsTunneled() && (composition != kCompositionSDE)) {
-      has_tunneled_layer_ = false;
-      if (DestroyLayer(hwc_layer->GetId()) != HWC2::Error::None) {
-        DLOGW("DestroyLayer failed for layer = %lu!", hwc_layer->GetId());
-      }
-      continue;
+      DLOGI("Tunneled layer is going for GPU composition.");
     }
     if (device_composition == HWC2::Composition::Client) {
       has_client_composition_ = true;
     }
     // Update the changes list only if the requested composition is different from SDM comp type
     // TODO(user): Take Care of other comptypes(BLIT)
+    // TODO(user): Take care of Sideband Layer types (requested (SIDEBAND), device (DEVICE))
     if (requested_composition != device_composition) {
       layer_changes_[hwc_layer->GetId()] = device_composition;
     }
