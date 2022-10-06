@@ -197,7 +197,8 @@ DisplayError DisplayBuiltIn::Init() {
     if (SetupDemura() != kErrorNone) {
       // Non-fatal but not expected, log error
       DLOGE("Demura failed to initialize, Error = %d", error);
-      comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
+      uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+      comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId(base_core_id));
       comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
       if (demura_) {
         SetDemuraIntfStatus(false);
@@ -524,7 +525,8 @@ DisplayError DisplayBuiltIn::SetupSPR() {
 
 DisplayError DisplayBuiltIn::SetupDemura() {
   if (!comp_manager_->GetDemuraStatus()) {
-    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
+    uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId(base_core_id));
     comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
     return kErrorNone;
   }
@@ -2520,7 +2522,8 @@ void DisplayBuiltIn::InitCWBBuffer() {
 
   HWDisplaysInfo hw_displays_info = {};
   bool is_wb_ubwc_supported = false;
-  hw_info_intf_[primary_core_id_]->GetDisplaysStatus(&hw_displays_info);
+  uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+  hw_info_intf_[base_core_id]->GetDisplaysStatus(&hw_displays_info);
   for (auto &iter : hw_displays_info) {
     auto &info = iter.second;
     if (info.display_type == kVirtual && info.is_wb_ubwc_supported) {

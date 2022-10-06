@@ -20,12 +20,12 @@ DPUCoreMux::DPUCoreMux(DisplayId display_id, DisplayType type,
   DisplayError error = kErrorNone;
   for (uint32_t i = 0; i < hw_info_intf.size(); i++) {
     HWInterface *hw = nullptr;
-    error = HWInterface::Create(display_id.GetConnId(), type, hw_info_intf[i],
+    uint32_t core_id = hw_info_intf[i]->GetCoreId();
+    error = HWInterface::Create(display_id.GetConnId(core_id), type, hw_info_intf[i],
                                 buffer_allocator, &hw);
     if (error != kErrorNone) {
       DLOGE("HW interface create failed");
     }
-    uint32_t core_id = hw_info_intf[i]->GetCoreId();
     hw_intf_.insert(std::make_pair(core_id, hw));
     core_ids_.push_back(core_id);
   }
