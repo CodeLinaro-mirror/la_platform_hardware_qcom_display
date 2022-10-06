@@ -368,7 +368,7 @@ void ColorManagerProxy::getCoreId(uint32_t &core_id) {
   uint16_t core_id_bit_map;
   int i = 0;
 
-  core_id_bit_map = (display_id_ < 0) ? 0 : (display_id_ >> 16);
+  core_id_bit_map = DisplayId::GetCoreIdMap(display_id_);
   if (core_id_bit_map <= 0) {
     DLOGE("Invalid core id = %d", core_id_bit_map);
     core_id = -1;
@@ -1265,10 +1265,6 @@ DisplayError FeatureStateSerializedTrigger::GetParams(FeatureOps param_type,
 #undef __CLASS__
 #define __CLASS__ "DPUColorManager"
 
-// make display ID for each physical display,
-// with combination of core id, connector id
-#define MAKE_DISPLAY_ID(core_id, conn_id) (((core_id) << 16) | (conn_id & 0xFFFF))
-
 DPUColorManager::DPUColorManager(DisplayId id_info)
                                 : display_id_info_(id_info) {
 }
@@ -1286,7 +1282,6 @@ void DPUColorManager::Deinit() {
 int DPUColorManager::CreatePhysicalDisplayIds(DisplayId display_id_info) {
   int ret = 0, conn_id = 0, core_id = 0;
 
-  conn_id = display_id_info.GetConnId();
   core_id = display_id_info.GetCoreIdMap();
 
   if (!core_id) {
@@ -1299,7 +1294,12 @@ int DPUColorManager::CreatePhysicalDisplayIds(DisplayId display_id_info) {
   for (int i = 0; core_id >> i; i++) {
     uint32_t disp_id = 0;
     if (core_id & (1 << i)) {
-      disp_id = MAKE_DISPLAY_ID(core_id & (1 << i), conn_id);
+      conn_id = display_id_info.GetConnId(i);
+      uint32_t core_index  = 0;
+      while (!((core_id & (1 << i)) & (1 << core_index))) {
+        core_index++;
+      }
+      disp_id = DisplayId(core_index, conn_id).GetDisplayId();
       DLOGV("Creating local color display id for display=%d, id=%d", i, disp_id);
       display_id_list_.push_back(disp_id);
     }

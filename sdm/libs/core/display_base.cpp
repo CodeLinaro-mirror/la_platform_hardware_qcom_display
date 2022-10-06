@@ -234,8 +234,7 @@ DisplayError DisplayBase::Init() {
     if (!color_mgr_factory) {
       DLOGW("failed to create color manager factory");
     } else {
-      DLOGV("Creating color_mgr_ for display_id=%d, conn_id=%d",
-              display_id_info_.GetDisplayId(), display_id_info_.GetConnId());
+      DLOGV("Creating color_mgr_ for display_id=%d", display_id_info_.GetDisplayId());
       color_mgr_ = color_mgr_factory->CreateColorManagerIntf(display_type_,
                                                               dpu_core_mux_,
                                                               device_ctx_,
@@ -963,8 +962,8 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   disp_layer_stack_->stack_info.output_buffer = layer_stack->output_buffer;
   disp_layer_stack_->stack_info.hw_cwb_config = layer_stack->cwb_config;
-  for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
-    disp_layer_stack_->info[i].cwb_id = DisplayId(layer_stack->cwb_id).GetConnId();
+  for (auto& info : disp_layer_stack_->info) {
+    info.second.cwb_id = DisplayId(layer_stack->cwb_id).GetConnId(info.first);
   }
 
   EnableLlccDuringAodMode(layer_stack);
@@ -1533,7 +1532,7 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
 
   for (auto& info : disp_layer_stack_->info) {
     info.second.output_buffer = layer_stack->output_buffer;
-    info.second.cwb_id = DisplayId(layer_stack->cwb_id).GetConnId();
+    info.second.cwb_id = DisplayId(layer_stack->cwb_id).GetConnId(info.first);
   }
   if (layer_stack->request_flags.trigger_refresh) {
     for (auto& info : disp_layer_stack_->info) {
@@ -3334,7 +3333,8 @@ DisplayError DisplayBase::GetConnectorId(int32_t *conn_id) {
     return kErrorParameters;
   }
 
-  *conn_id = display_id_info_.GetConnId();
+  uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+  *conn_id = display_id_info_.GetConnId(base_core_id);
 
   return kErrorNone;
 }

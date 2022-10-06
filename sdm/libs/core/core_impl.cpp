@@ -600,7 +600,8 @@ DisplayError CoreImpl::ReserveDemuraResources() {
        r != dpu_required_demura_fetch_cnt.end(); r++) {
     uint32_t disp_id = r->first;
     for (auto display_info : hw_displays_info_) {
-      if (DisplayId::GetConnId(display_info.first) == r->first) {
+      uint32_t base_core_id = DisplayId::GetBaseCoreId(display_info.first);
+      if (DisplayId::GetConnId(display_info.first, base_core_id) == r->first) {
         disp_id = display_info.first;
       }
     }

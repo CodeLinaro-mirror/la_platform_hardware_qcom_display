@@ -722,7 +722,8 @@ DisplayError DisplayBuiltIn::SetupDemuraT0AndTn() {
   bool demura_allowed = false, demuratn_allowed = false;
 
   if (!comp_manager_->GetDemuraStatus()) {
-    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
+    uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId(base_core_id));
     comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
     return kErrorNone;
   }
@@ -744,7 +745,8 @@ DisplayError DisplayBuiltIn::SetupDemuraT0AndTn() {
   }
 
   if (value > 0) {
-    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
+    uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+    comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId(base_core_id));
     comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
     return kErrorNone;
   } else if (value < 0) {
@@ -833,7 +835,8 @@ DisplayError DisplayBuiltIn::SetupDemuraT0AndTn() {
       // Non-fatal but not expected, log error
       DLOGE("Demura failed to initialize on display %d-%d, Error = %d", display_id_, display_type_,
             error);
-      comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId());
+      uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+      comp_manager_->FreeDemuraFetchResources(display_id_info_.GetConnId(base_core_id));
       comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
       if (demura_) {
         SetDemuraIntfStatus(false);
