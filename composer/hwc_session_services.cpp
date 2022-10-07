@@ -25,6 +25,40 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <core/buffer_allocator.h>
@@ -481,6 +515,324 @@ Return<void> HWCSession::getHDRCapabilities(IDisplayConfig::DisplayType dpy,
   _hidl_cb(error, hdr_caps);
 
   return Void();
+}
+
+Return<int32_t> HWCSession::tunnellingInit() {
+  char property[PROPERTY_VALUE_MAX] = {0};
+  property_get(ENABLE_TUNNELLING, property, "0");
+  if (!(strncmp(property, "0", PROPERTY_VALUE_MAX))) {
+     DLOGE("Tunnlling property not set. Exiting tunnellingInit!\n");
+     return EINVAL;
+  }
+
+  tunneling_enabled_ = true;
+  return 0;
+}
+
+Return<void> HWCSession::getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
+                                        getFSCRGBOrder_cb _hidl_cb) {
+  return Void();
+}
+
+Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, float green,
+                                      float blue) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
+                                            const IDisplayConfig::CacEyeConfig& left,
+                                            const IDisplayConfig::CacEyeConfig& right) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::createTunnelledLayer(const IDisplayConfig::LayerInfo& layer) {
+  if (tunneling_enabled_ == false) {
+    DLOGE("Tunneling not enabled\n");
+    return EINVAL;
+  }
+
+  tunneled_layer_params_ = layer;
+  return 0;
+}
+
+int32_t HWCSession::CreateTunneledLayerInternal() {
+  int32_t error = -EINVAL;
+  error = CreateLayer(HWC_DISPLAY_PRIMARY, &tunneled_layer_);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("CreateLayer failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+  SetLayerIsTunneled(HWC_DISPLAY_PRIMARY, tunneled_layer_, true);
+  error = SetLayerZOrder(HWC_DISPLAY_PRIMARY,tunneled_layer_, tunneled_layer_params_.z_order);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerZOrder failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+
+  hwc_frect_t rect;
+  rect.left = tunneled_layer_params_.src_rect.left;
+  rect.top = tunneled_layer_params_.src_rect.top;
+  rect.right = tunneled_layer_params_.src_rect.right;
+  rect.bottom = tunneled_layer_params_.src_rect.bottom;
+  error = SetLayerSourceCrop(HWC_DISPLAY_PRIMARY, tunneled_layer_, rect);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerSourceCrop failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+
+  error = SetLayerTransform(HWC_DISPLAY_PRIMARY, tunneled_layer_,
+                            (int32_t)tunneled_layer_params_.layer_transform );
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerTransform failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+
+  hwc_rect_t dst_rect;
+  dst_rect.left = tunneled_layer_params_.dst_rect.left;
+  dst_rect.top = tunneled_layer_params_.dst_rect.top;
+  dst_rect.right = tunneled_layer_params_.dst_rect.right;
+  dst_rect.bottom = tunneled_layer_params_.dst_rect.bottom;
+  error = SetLayerDisplayFrame(HWC_DISPLAY_PRIMARY, tunneled_layer_, dst_rect);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerDisplayFrame failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+
+  error = SetLayerPlaneAlpha(HWC_DISPLAY_PRIMARY, tunneled_layer_, (float)tunneled_layer_params_.plane_alpha);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerPlaneAlpha failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+
+  error = SetLayerDataspace(HWC_DISPLAY_PRIMARY, tunneled_layer_, tunneled_layer_params_.dataspace);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerDataspace failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+
+  error = SetLayerBlendMode(HWC_DISPLAY_PRIMARY, tunneled_layer_, (int32_t)tunneled_layer_params_.blending);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerBlendMode failed! Exiting createTunnelledLayer.\n");
+    return error;
+  }
+
+  return 0;
+
+}
+
+Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
+                                                dequeueTunnelledBuffer_cb _hidl_cb) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+  native_handle_t* handle = nullptr;
+  if (tunneling_enabled_ == false) {
+    DLOGE("Tunneling not enabled\n");
+    _hidl_cb(-EINVAL, handle);
+    return Void();
+  }
+
+  DTRACE_SCOPED();
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = buffer.getNativeHandle();
+  if (!buffer_handle) {
+    DLOGE("Invalid native handle");
+    _hidl_cb(-EINVAL, handle);
+    return Void();
+  }
+
+  uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
+  if (tunneling_map_buffer_native_handle_.find(buffer_id) !=
+      tunneling_map_buffer_native_handle_.end()) {
+    native_handle = tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = buffer_allocator_.ImportBuffer(buffer_handle);
+    if (native_handle == nullptr) {
+      _hidl_cb(-EINVAL, handle);
+      return Void();
+    }
+    tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id] = native_handle;
+  }
+  private_handle_t *private_handle = (private_handle_t *)native_handle;
+  if(private_handle == nullptr) {
+    _hidl_cb(-EINVAL, handle);
+    return Void();;
+  }
+
+  if (tunneling_map_buffer_release_fence_.find(private_handle->id) ==
+      tunneling_map_buffer_release_fence_.end()) {
+    _hidl_cb(-EINVAL, handle);
+    return Void();
+  }
+
+  int32_t release_fence = tunneling_map_buffer_release_fence_[private_handle->id];
+
+  NATIVE_HANDLE_DECLARE_STORAGE(fenceStorage, 1, 0);
+  if (release_fence >= 0) {
+    tunneled_layer_rf_ = release_fence;
+    handle = native_handle_init(fenceStorage, 1, 0);
+    if (handle) {
+     handle->data[0] = release_fence;
+    }
+  }
+
+  DLOGV("dequeueTunnelledBuffer successful.\n");
+
+  _hidl_cb(0, handle);
+  return Void();
+}
+
+Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
+                                                 const hidl_handle& acquire_fence) {
+  if (tunneling_enabled_ == false) {
+    DLOGW("Tunneling not enabled\n");
+    return EINVAL;
+  }
+
+  int32_t error = -EINVAL;
+  if(tunneled_layer_ == -1) {
+    error = CreateTunneledLayerInternal();
+    if (error != HWC2_ERROR_NONE) {
+      return EINVAL;
+    }
+  }
+
+  DTRACE_SCOPED();
+
+  bool tunneled_layer_present = false;
+  IsTunnelledLayerPresent(HWC_DISPLAY_PRIMARY, &tunneled_layer_present);
+  if (tunneled_layer_present == false || tunneled_layer_ == -1) {
+    tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return EINVAL;
+  }
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = buffer.getNativeHandle();
+  if (!buffer_handle) {
+    DLOGE("Invalid native handle");
+    return EINVAL;
+  }
+
+  uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
+  if (tunneling_map_buffer_native_handle_.find(buffer_id) !=
+      tunneling_map_buffer_native_handle_.end()) {
+    native_handle = tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = buffer_allocator_.ImportBuffer(buffer_handle);
+    if (native_handle == nullptr) {
+      return EINVAL;
+    }
+    tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id] = native_handle;
+  }
+
+  uint32_t types_count = 0;
+  uint32_t reqs_count = 0;
+  HWCDisplay *hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
+  const native_handle_t* native_fence_handle = acquire_fence.getNativeHandle();
+  int acquire_fence_fd = -1;
+  // if native_fence_handle is NULL, acquire fence fd is considered -1
+  if (native_fence_handle) {
+     acquire_fence_fd = dup(native_fence_handle->data[0]);
+  }
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+  }
+  error = SetLayerBuffer(HWC_DISPLAY_PRIMARY, tunneled_layer_, native_handle, acquire_fence_fd);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerBuffer failed! Exiting queueTunnelledBuffer.\n");
+    return error;
+  }
+
+  if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
+    error = ValidateDisplay(HWC_DISPLAY_PRIMARY, &types_count, &reqs_count);
+    if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
+      DLOGE("ValidateDisplay failed! Exiting queueTunnelledBuffer.\n");
+      return error;
+    }
+  }
+
+  int presentfence = 0;
+  error = PresentDisplay(HWC_DISPLAY_PRIMARY, &presentfence);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("PresentDisplay failed! Exiting queueTunnelledBuffer.\n");
+    return error;
+  }
+  close(presentfence);
+  auto hwc_layer = hwc_display->GetHWCLayer(tunneled_layer_);
+  if (hwc_layer == nullptr) {
+    DLOGE("Unable to fetch corresponding hwc_layer for tunneled layer");
+    return EINVAL;
+  }
+  int release_fence = hwc_layer->PopBackReleaseFence();
+  close(tunneled_layer_rf_);
+  tunneling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id] = release_fence;
+
+  DLOGV("queueTunnelledBuffer successful.\n");
+  return 0;
+}
+
+Return<int32_t> HWCSession::destroyTunnelledLayer()  {
+  if (tunneling_enabled_ == false) {
+    DLOGE("Tunneling not enabled\n");
+    return EINVAL;
+  }
+  DTRACE_SCOPED();
+
+  bool tunneled_layer_present = false;
+  IsTunnelledLayerPresent(HWC_DISPLAY_PRIMARY, &tunneled_layer_present);
+  if (tunneled_layer_present == false || tunneled_layer_ == -1) {
+    tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting destroyTunnelledLayer");
+    return EINVAL;
+  }
+
+  SetLayerIsTunneled(HWC_DISPLAY_PRIMARY, tunneled_layer_, false);
+
+  int error = DestroyLayer(HWC_DISPLAY_PRIMARY, tunneled_layer_);
+  if (error != HWC2_ERROR_NONE) {
+      DLOGE("DestroyLayer failed! Tunneled Layer not found\n");
+  }
+
+  tunneled_layer_ = -1;
+
+  uint32_t types_count = 0;
+  uint32_t reqs_count = 0;
+
+  error = ValidateDisplay(HWC_DISPLAY_PRIMARY, &types_count, &reqs_count);
+
+  if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
+    DLOGE("ValidateDisplay failed! Exiting destroyTunnelledLayer.\n");
+    return error;
+  }
+
+  int presentfence = 0;
+  error = PresentDisplay(HWC_DISPLAY_PRIMARY, &presentfence);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("PresentDisplay failed! Exiting destroyTunnelledLayer.\n");
+    return error;
+  }
+  return 0;
+}
+
+Return<int32_t> HWCSession::tunnellingDeinit() {
+  tunneling_enabled_ = false;
+  for (auto i : tunneling_map_buffer_native_handle_) {
+    native_handle_close(i.second);
+  }
+  for (auto i : tunneling_map_buffer_release_fence_) {
+    close(i.second);
+  }
+  tunneling_map_buffer_native_handle_.clear();
+  tunneling_map_buffer_release_fence_.clear();
+  return 0;
+}
+
+Return<int32_t> HWCSession::allowIdleFallback() {
+  return 0;
 }
 
 Return<int32_t> HWCSession::setCameraLaunchStatus(uint32_t on) {
