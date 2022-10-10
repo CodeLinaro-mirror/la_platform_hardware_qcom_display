@@ -728,6 +728,10 @@ int HWCSession::DisplayConfigImpl::IsWCGSupported(uint32_t disp_id, bool *suppor
 }
 
 int HWCSession::DisplayConfigImpl::SetLayerAsMask(uint32_t disp_id, uint64_t layer_id) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   HWCDisplay *hwc_display = hwc_session_->hwc_display_[disp_id];
   if (!hwc_display) {
@@ -833,6 +837,10 @@ int HWCSession::DisplayConfigImpl::IsBuiltInDisplay(uint32_t disp_id, bool *is_b
 
 int HWCSession::DisplayConfigImpl::GetSupportedDSIBitClks(uint32_t disp_id,
                                                           std::vector<uint64_t> *bit_clks) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -EINVAL;
@@ -843,6 +851,10 @@ int HWCSession::DisplayConfigImpl::GetSupportedDSIBitClks(uint32_t disp_id,
 }
 
 int HWCSession::DisplayConfigImpl::GetDSIClk(uint32_t disp_id, uint64_t *bit_clk) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -EINVAL;
@@ -854,6 +866,10 @@ int HWCSession::DisplayConfigImpl::GetDSIClk(uint32_t disp_id, uint64_t *bit_clk
 }
 
 int HWCSession::DisplayConfigImpl::SetDSIClk(uint32_t disp_id, uint64_t bit_clk) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -1;
@@ -884,6 +900,10 @@ bool HWCSession::isSmartPanelConfig(uint32_t disp_id, uint32_t config_id) {
 }
 
 int HWCSession::DisplayConfigImpl::SetQsyncMode(uint32_t disp_id, DisplayConfig::QsyncMode mode) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -1;
