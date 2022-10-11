@@ -58,7 +58,7 @@ class DPUCoreMux {
   DisplayError Commit(std::vector<HWLayersInfo> &hw_layers_info);
   DisplayError Flush(std::vector<HWLayersInfo> &hw_layers_info);
   DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
-  DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
+  DisplayError SetPPFeatures(PPFeaturesConfig *feature_list, uint32_t &core_id);
   DisplayError SetVSyncState(bool enable);
   void SetIdleTimeoutMs(uint32_t timeout_ms);
   DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);

@@ -137,7 +137,7 @@ DisplayError CoreImpl::Init() {
     goto CleanupOnError;
   }
 
-  error = ColorManagerProxy::Init(hw_resource_);
+  error = ColorManagerProxy::Init();
   // if failed, doesn't affect display core functionalities.
   if (error != kErrorNone) {
     DLOGW("Unable creating color manager and continue without it.");
@@ -192,6 +192,7 @@ DisplayError CoreImpl::Deinit() {
   }
 
   ReleaseDemuraResources();
+  // Clear color manager, stc lib
   ColorManagerProxy::Deinit();
 
   comp_mgr_.Deinit();
