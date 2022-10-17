@@ -115,10 +115,6 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
                          CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf)
   : display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
     buffer_allocator_(buffer_allocator), comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
-  // Kick off worker thread and block the caller thread until worker thread has started and
-  // ready to process commit requests.
-  lock_guard<recursive_mutex> client_lock(disp_mutex_.client_mutex);
-
   // TODO(user): fix after enabling virtual driver for multi-dpu usecase
   core_count_ = 1;
   core_id_ = std::bitset<32>(1);
@@ -128,26 +124,33 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
   disp_layer_stack_.info.insert(std::pair<uint32_t, HWLayersInfo>(0, {}));
 
   // Start commit worker thread and wait for thread response.
-  DLOGI("Starting commit thread for display: %d", display_type);
+  StartCommitThread();
+}
 
+void DisplayBase::StartCommitThread() {
+  // Kick off worker thread and block the caller thread until worker thread has started and
+  // ready to process commit requests.
+  lock_guard<recursive_mutex> client_lock(disp_mutex_.client_mutex);
+
+  DLOGI("Starting commit thread for display: %d", display_type_);
   std::thread commit_thread(&DisplayBase::CommitThread, this);
   disp_mutex_.client_cv.wait(disp_mutex_.client_mutex);
   commit_thread_.swap(commit_thread);
-
-  DLOGI("Commit thread started for display: %d", display_type);
+  DLOGI("Commit thread started for display: %d", display_type_);
 }
 
 DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
                          DisplayEventHandler *event_handler, HWDeviceType hw_device_type,
                          BufferAllocator *buffer_allocator, CompManager *comp_manager,
                          std::vector<HWInfoInterface*> hw_info_intf)
-  : DisplayBase(display_type, event_handler, hw_device_type,
-                buffer_allocator, comp_manager, hw_info_intf) {
+  : display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
+    buffer_allocator_(buffer_allocator), comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
   display_id_info_ = display_id;
   display_id_ = display_id_info_.GetDisplayId();
   core_id_ = display_id_info_.GetCoreIdMap();
   std::bitset<32> core_id_bitset = std::bitset<32>(core_id_);
   core_count_ = core_id_bitset.count();
+
   for (int i = 0; i < core_id_.size(); i++) {
     if (!core_id_[i]) {
       continue;
@@ -157,6 +160,9 @@ DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
     cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(i, {}));
     disp_layer_stack_.info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
   }
+
+  // Start commit worker thread and wait for thread response.
+  StartCommitThread();
 }
 
 DisplayBase::~DisplayBase() {
