@@ -949,8 +949,8 @@ struct HWLayersInfo {
 
 struct DispLayerStack {
   LayerStack *stack = NULL;          // Input layer stack. Set by the caller.
-  LayerStackInfo stack_info = {};  // Composition layer stack as seen by client
-  std::vector<HWLayersInfo> info;
+  LayerStackInfo stack_info = {};    // Composition layer stack as seen by client
+  std::map<uint32_t, HWLayersInfo> info;
 };
 
 struct HWDisplayAttributes : DisplayConfigVariableInfo {

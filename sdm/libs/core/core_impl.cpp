@@ -412,7 +412,7 @@ void CoreImpl::InitializeSDMUtils() {
 
   sdm_utils_factory_intf_ = get_sdm_utils_f_ptr();
   for (int i = 0; i < hw_resource_.size(); i++) {
-    sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[i], i);
+    sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[i]);
   }
 }
 

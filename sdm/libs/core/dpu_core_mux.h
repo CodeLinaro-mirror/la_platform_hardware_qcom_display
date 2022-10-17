@@ -49,14 +49,14 @@ class DPUCoreMux {
   DisplayError SetDisplayAttributes(uint32_t index);
   DisplayError SetDisplayAttributes(const HWDisplayAttributes &display_attributes);
   DisplayError GetConfigIndex(char *mode, uint32_t *index);
-  DisplayError PowerOn(std::vector<HWQosData> &qos_data, SyncPoints *sync_points);
+  DisplayError PowerOn(std::map<uint32_t, HWQosData> &qos_data, SyncPoints *sync_points);
   DisplayError PowerOff(bool teardown, SyncPoints *sync_points);
-  DisplayError Doze(std::vector<HWQosData> &qos_data, SyncPoints *sync_points);
-  DisplayError DozeSuspend(std::vector<HWQosData> &qos_data, SyncPoints *sync_points);
+  DisplayError Doze(std::map<uint32_t, HWQosData> &qos_data, SyncPoints *sync_points);
+  DisplayError DozeSuspend(std::map<uint32_t, HWQosData> &qos_data, SyncPoints *sync_points);
   DisplayError Standby(SyncPoints *sync_points);
-  DisplayError Validate(std::vector<HWLayersInfo> &hw_layers_info);
-  DisplayError Commit(std::vector<HWLayersInfo> &hw_layers_info);
-  DisplayError Flush(std::vector<HWLayersInfo> &hw_layers_info);
+  DisplayError Validate(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
+  DisplayError Commit(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
+  DisplayError Flush(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
   DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
   DisplayError SetPPFeatures(PPFeaturesConfig *feature_list, uint32_t &core_id);
   DisplayError SetVSyncState(bool enable);
@@ -67,7 +67,7 @@ class DPUCoreMux {
   DisplayError GetHWScanInfo(HWScanInfo *scan_info);
   DisplayError GetVideoFormat(uint32_t config_index, uint32_t *video_format);
   DisplayError GetMaxCEAFormat(uint32_t *max_cea_format);
-  DisplayError SetCursorPosition(std::vector<HWLayersInfo> &hw_layers_info, int x, int y);
+  DisplayError SetCursorPosition(std::map<uint32_t, HWLayersInfo> &hw_layers_info, int x, int y);
   DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
   DisplayError GetPanelBrightness(int *level);
   DisplayError SetAutoRefresh(bool enable);
@@ -79,7 +79,7 @@ class DPUCoreMux {
   DisplayError DumpDebugData();
   DisplayError SetDppsFeature(void *payload, size_t size);
   DisplayError GetDppsFeatureInfo(void *payload, size_t size);
-  DisplayError HandleSecureEvent(SecureEvent secure_event, std::vector<HWQosData> &qos_data);
+  DisplayError HandleSecureEvent(SecureEvent secure_event, std::map<uint32_t, HWQosData> &qos_data);
   DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous);
   DisplayError SetDisplayDppsAdROI(void *payload);
   DisplayError SetDynamicDSIClock(uint64_t bit_clk_rate);
@@ -110,6 +110,7 @@ class DPUCoreMux {
 
  private:
   std::map<uint32_t, HWInterface*> hw_intf_;
+  std::vector<uint32_t> core_ids_;
   DisplayId display_id_ = {};
   bool dpu_ctl_op_sync_ = false;
   std::vector<uint32_t> op_sync_sequence_;
