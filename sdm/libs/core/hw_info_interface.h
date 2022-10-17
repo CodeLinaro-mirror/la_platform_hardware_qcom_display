@@ -73,7 +73,7 @@ namespace sdm {
 
 class HWInfoInterface {
  public:
-  static DisplayError Create(std::vector<HWInfoInterface*> *intfs);
+  static DisplayError Create(std::vector<HWInfoInterface*> *intfs, std::bitset<8> core_ids);
   static DisplayError Destroy(HWInfoInterface *intf);
   virtual DisplayError Init() = 0;
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;
@@ -87,7 +87,6 @@ class HWInfoInterface {
   virtual uint32_t GetCoreId() = 0;
  protected:
   virtual ~HWInfoInterface() { }
-  static const int kMaxCore = 12;
 };
 
 }  // namespace sdm
