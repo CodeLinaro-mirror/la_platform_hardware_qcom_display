@@ -461,6 +461,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   // Max tolerable power-state-change wait-times in milliseconds.
   static const int kPowerStateTimeout = 5000;
 
+  void StartCommitThread();
   bool StartDisplayPowerReset();
   void EndDisplayPowerReset();
   DisplayError PrepareRC(LayerStack *layer_stack);
