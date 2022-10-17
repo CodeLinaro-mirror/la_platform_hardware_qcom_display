@@ -349,8 +349,13 @@ void HWCSession::InitSupportedDisplaySlots() {
   ipc_intf_ = std::make_shared<IPCImpl>(IPCImpl());
   ipc_intf_->Init();
 
+  int core_id_mask = 0Xff ;  // Default value when property is not present.
+  Debug::Get()->GetProperty(CORE_ID_MASK, &core_id_mask);
+  DLOGI("core id mask: %d", core_id_mask);
+  std::bitset<8> core_ids(core_id_mask);
   DisplayError error = CoreInterface::CreateCore(&buffer_allocator_, nullptr,
-                                                 &socket_handler_, ipc_intf_, &core_intf_);
+                                                 &socket_handler_, ipc_intf_,
+                                                 &core_intf_, core_ids);
   if (error != kErrorNone) {
     DLOGE("Failed to create CoreInterface");
     return;
