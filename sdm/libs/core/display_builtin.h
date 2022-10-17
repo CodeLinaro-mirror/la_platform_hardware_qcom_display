@@ -91,12 +91,10 @@ class DppsInfo {
   bool disable_pu_ = false;
 
  private:
-  const char *kDppsLib_ = "libdpps.so";
   DynLib dpps_impl_lib_;
   static DppsInterface *dpps_intf_;
   static std::vector<int32_t> display_id_;
   std::mutex lock_;
-  DppsInterface *(*GetDppsInterface)() = NULL;
 };
 
 class DisplayIPCVmCallbackImpl : public IPCVmCallbackIntf {
