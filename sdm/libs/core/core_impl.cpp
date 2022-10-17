@@ -283,17 +283,25 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
     return kErrorCriticalResource;
   }
 
+  std::vector<HWInfoInterface*> hw_info_intf;
+  std::bitset<32> core_id_map = disp_id.GetCoreIdMap();
+  for (auto info_intf : hw_info_intf_) {
+    if (core_id_map[info_intf->GetCoreId()]) {
+      hw_info_intf.push_back(info_intf);
+    }
+  }
+
   switch (display_type) {
     case kBuiltIn:
-      display_base = new DisplayBuiltIn(disp_id, event_handler, hw_info_intf_,
+      display_base = new DisplayBuiltIn(disp_id, event_handler, hw_info_intf,
                                         buffer_allocator_, &comp_mgr_, ipc_intf_);
       break;
     case kPluggable:
-      display_base = new DisplayPluggable(disp_id, event_handler, hw_info_intf_,
+      display_base = new DisplayPluggable(disp_id, event_handler, hw_info_intf,
                                           buffer_allocator_, &comp_mgr_);
       break;
     case kVirtual:
-      display_base = new DisplayVirtual(disp_id, event_handler, hw_info_intf_,
+      display_base = new DisplayVirtual(disp_id, event_handler, hw_info_intf,
                                         buffer_allocator_, &comp_mgr_);
       break;
     default:
