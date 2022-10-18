@@ -807,7 +807,18 @@ DisplayError DPUCoreMux::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
 
 DisplayError DPUCoreMux::GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                       uint8_t *out_data) {
-  return hw_intf_.at(core_ids_[0])->GetDisplayIdentificationData(out_port, out_data_size, out_data);
+  uint8_t out_port_temp = 0;
+  *out_port = 0;
+  for (auto hw_intf : hw_intf_) {
+    DisplayError error = hw_intf.second->GetDisplayIdentificationData(&out_port_temp,
+                                                                      out_data_size,
+                                                                      out_data);
+    if (error != kErrorNone) {
+      return error;
+    }
+    *out_port = *out_port | out_port_temp;
+  }
+  return kErrorNone;
 }
 
 DisplayError DPUCoreMux::SetFrameTrigger(FrameTriggerMode mode) {
