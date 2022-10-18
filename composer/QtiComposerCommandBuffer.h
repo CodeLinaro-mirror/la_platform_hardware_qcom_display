@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __QTICOMPOSERCOMMANDBUFFER_H__
 #define __QTICOMPOSERCOMMANDBUFFER_H__
 
@@ -36,7 +42,7 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V3_1 {
+namespace V3_2 {
 
 using ::android::hardware::graphics::common::V1_0::ColorTransform;
 using ::android::hardware::graphics::common::V1_0::Dataspace;
@@ -441,6 +447,14 @@ class CommandWriter {
   void setLayerFlag(uint32_t type) {
     beginCommand(IQtiComposerClient::Command::SET_LAYER_FLAG_3_1, kSetLayerTypeLength);
     write(type);
+    endCommand();
+  }
+
+  static constexpr uint16_t kSetLayerSinlgeBufferLength = 1;
+  void setSingleBufferMode(uint32_t isAutoRefresh) {
+    beginCommand(IQtiComposerClient::Command::SET_SINGLE_BUFFER_MODE_3_2,
+                 kSetLayerSinlgeBufferLength);
+    write(isAutoRefresh);
     endCommand();
   }
 
@@ -887,7 +901,7 @@ class CommandReaderBase {
   hidl_vec<hidl_handle> mDataHandles;
 };
 
-}  // namespace V3_1
+}  // namespace V3_2
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware

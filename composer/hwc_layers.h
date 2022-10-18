@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_LAYERS_H__
 #define __HWC_LAYERS_H__
 
@@ -34,7 +40,7 @@
 #undef HWC2_INCLUDE_STRINGIFICATION
 #undef HWC2_USE_CPP11
 #include <android/hardware/graphics/composer/2.3/IComposerClient.h>
-#include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
+#include <vendor/qti/hardware/display/composer/3.2/IQtiComposerClient.h>
 
 #include <map>
 #include <set>
@@ -44,7 +50,7 @@
 
 using PerFrameMetadataKey =
     android::hardware::graphics::composer::V2_3::IComposerClient::PerFrameMetadataKey;
-using vendor::qti::hardware::display::composer::V3_1::IQtiComposerClient;
+using vendor::qti::hardware::display::composer::V3_2::IQtiComposerClient;
 using android::hardware::graphics::common::V1_2::Dataspace;
 
 namespace sdm {
@@ -94,6 +100,7 @@ class HWCLayer {
   HWC2::Error SetLayerZOrder(uint32_t z);
   HWC2::Error SetLayerType(IQtiComposerClient::LayerType type);
   HWC2::Error SetLayerFlag(IQtiComposerClient::LayerFlag flag);
+  HWC2::Error SetSingleBufferMode(uint32_t mode);
   HWC2::Error SetLayerColorTransform(const float *matrix);
   void SetComposition(const LayerComposition &sdm_composition);
   HWC2::Composition GetClientRequestedCompositionType() { return client_requested_; }

@@ -26,6 +26,13 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <android-base/logging.h>
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
@@ -40,8 +47,8 @@ using android::sp;
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
 using android::hardware::graphics::composer::V2_3::IComposer;
-using vendor::qti::hardware::display::composer::V3_1::IQtiComposer;
-using vendor::qti::hardware::display::composer::V3_1::implementation::QtiComposer;
+using vendor::qti::hardware::display::composer::V3_2::IQtiComposer;
+using vendor::qti::hardware::display::composer::V3_2::implementation::QtiComposer;
 
 int main(int, char **) {
   ALOGI("Creating Display HW Composer HAL");

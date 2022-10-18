@@ -56,7 +56,7 @@
 #ifndef __HWC_SESSION_H__
 #define __HWC_SESSION_H__
 
-#include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
+#include <vendor/qti/hardware/display/composer/3.2/IQtiComposerClient.h>
 #include <config/device_interface.h>
 #include <aidl/vendor/qti/hardware/display/config/BnDisplayConfig.h>
 #include <aidl/vendor/qti/hardware/display/config/BnDisplayConfigCallback.h>
@@ -116,7 +116,7 @@ namespace aidl::vendor::qti::hardware::display::config {
 
 namespace sdm {
 
-using vendor::qti::hardware::display::composer::V3_1::IQtiComposerClient;
+using vendor::qti::hardware::display::composer::V3_2::IQtiComposerClient;
 
 int32_t GetDataspaceFromColorMode(ColorMode mode);
 
@@ -320,6 +320,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
                        IQtiComposerClient::LayerType type);
   int32_t SetLayerFlag(hwc2_display_t display, hwc2_layer_t layer,
                        IQtiComposerClient::LayerFlag flag);
+  int32_t SetSingleBufferMode(hwc2_display_t display, hwc2_layer_t layer, uint32_t mode);
   int32_t SetLayerSurfaceDamage(hwc2_display_t display, hwc2_layer_t layer, hwc_region_t damage);
   int32_t SetLayerVisibleRegion(hwc2_display_t display, hwc2_layer_t layer, hwc_region_t damage);
   int32_t SetLayerCompositionType(hwc2_display_t display, hwc2_layer_t layer, int32_t int_type);
