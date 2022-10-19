@@ -1724,55 +1724,8 @@ std::vector<int32_t> DppsInfo::display_id_ = {};
 
 void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
   std::lock_guard<std::mutex> guard(lock_);
-  int error = 0;
 
-  if (!intf) {
-    DLOGE("Invalid intf is null");
-    return;
-  }
-
-  DppsDisplayInfo info_payload = {};
-  DisplayError ret = intf->DppsProcessOps(kDppsGetDisplayInfo, &info_payload, sizeof(info_payload));
-  if (ret != kErrorNone) {
-    DLOGE("Get display information failed, ret %d", ret);
-    return;
-  }
-
-  if (std::find(display_id_.begin(), display_id_.end(), info_payload.display_id)
-    != display_id_.end()) {
-    return;
-  }
-  DLOGI("Ready to register display id %d ", info_payload.display_id);
-
-  if (!dpps_intf_) {
-    if (!dpps_impl_lib_.Open(kDppsLib_)) {
-      DLOGW("Failed to load Dpps lib %s", kDppsLib_);
-      goto exit;
-    }
-
-    if (!dpps_impl_lib_.Sym("GetDppsInterface", reinterpret_cast<void **>(&GetDppsInterface))) {
-      DLOGE("GetDppsInterface not found!, err %s", dlerror());
-      goto exit;
-    }
-
-    dpps_intf_ = GetDppsInterface();
-    if (!dpps_intf_) {
-      DLOGE("Failed to get Dpps Interface!");
-      goto exit;
-    }
-  }
-  error = dpps_intf_->Init(intf, panel_name);
-  if (error) {
-    DLOGE("DPPS Interface init failure with err %d", error);
-    goto exit;
-  }
-
-  display_id_.push_back(info_payload.display_id);
-  DLOGI("Register display id %d successfully", info_payload.display_id);
-  return;
-
-exit:
-  Deinit();
+  // TBD: anorak does not support visibility, power saving features
   dpps_intf_ = new DppsDummyImpl();
 }
 
