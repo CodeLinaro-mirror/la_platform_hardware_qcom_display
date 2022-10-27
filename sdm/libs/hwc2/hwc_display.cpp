@@ -531,7 +531,9 @@ void HWCDisplay::BuildLayerStack() {
     Layer *layer = hwc_layer->GetSDMLayer();
     layer->flags = {};   // Reset earlier flags
     if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Client) {
-      layer->flags.skip = true;
+      if (!hwc_layer->IsTunneled()) {
+        layer->flags.skip = true;
+      }
     } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::SolidColor) {
       layer->flags.solid_fill = true;
     }
