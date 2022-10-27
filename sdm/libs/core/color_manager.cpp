@@ -1426,7 +1426,7 @@ DisplayError DPUColorManager::ColorMgrGetNumOfModes(uint32_t *mode_cnt) {
   DisplayError error = kErrorNone;
   // std::set holds unique, ordered elements
   std::set<uint32_t> mode_count_set;
-  uint32_t mode_count;
+  uint32_t mode_count = 0;
   int i = 0;
 
   // Get mode count for both DPU's
