@@ -425,6 +425,7 @@ void HWCSession::InitSupportedDisplaySlots() {
   }
 
   disp_count = UINT32(std::min(max_builtin, HWCCallbacks::kNumBuiltIn));
+  base_id = qdutils::DISPLAY_BUILTIN_2;
   map_info_builtin_.resize(disp_count);
   for (auto &map_info : map_info_builtin_) {
     map_info.client_id = base_id++;
