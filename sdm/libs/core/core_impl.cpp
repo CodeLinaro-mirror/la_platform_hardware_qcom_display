@@ -83,8 +83,10 @@
 namespace sdm {
 
 CoreImpl::CoreImpl(BufferAllocator *buffer_allocator,
-                   SocketHandler *socket_handler, std::shared_ptr<IPCIntf> ipc_intf)
-  : buffer_allocator_(buffer_allocator), socket_handler_(socket_handler), ipc_intf_(ipc_intf) {
+                   SocketHandler *socket_handler, std::shared_ptr<IPCIntf> ipc_intf,
+                   std::bitset<8> core_ids)
+  : buffer_allocator_(buffer_allocator), socket_handler_(socket_handler), ipc_intf_(ipc_intf),
+    core_ids_(core_ids) {
 }
 
 DisplayError CoreImpl::Init() {
@@ -116,7 +118,7 @@ DisplayError CoreImpl::Init() {
 #endif
   }
 
-  error = HWInfoInterface::Create(&hw_info_intf_);
+  error = HWInfoInterface::Create(&hw_info_intf_, core_ids_);
   if (error != kErrorNone) {
     goto CleanupOnError;
   }
@@ -137,7 +139,7 @@ DisplayError CoreImpl::Init() {
     goto CleanupOnError;
   }
 
-  error = ColorManagerProxy::Init(hw_resource_);
+  error = ColorManagerProxy::Init();
   // if failed, doesn't affect display core functionalities.
   if (error != kErrorNone) {
     DLOGW("Unable creating color manager and continue without it.");
@@ -192,6 +194,7 @@ DisplayError CoreImpl::Deinit() {
   }
 
   ReleaseDemuraResources();
+  // Clear color manager, stc lib
   ColorManagerProxy::Deinit();
 
   comp_mgr_.Deinit();
@@ -280,17 +283,25 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
     return kErrorCriticalResource;
   }
 
+  std::vector<HWInfoInterface*> hw_info_intf;
+  std::bitset<32> core_id_map = disp_id.GetCoreIdMap();
+  for (auto info_intf : hw_info_intf_) {
+    if (core_id_map[info_intf->GetCoreId()]) {
+      hw_info_intf.push_back(info_intf);
+    }
+  }
+
   switch (display_type) {
     case kBuiltIn:
-      display_base = new DisplayBuiltIn(disp_id, event_handler, hw_info_intf_,
+      display_base = new DisplayBuiltIn(disp_id, event_handler, hw_info_intf,
                                         buffer_allocator_, &comp_mgr_, ipc_intf_);
       break;
     case kPluggable:
-      display_base = new DisplayPluggable(disp_id, event_handler, hw_info_intf_,
+      display_base = new DisplayPluggable(disp_id, event_handler, hw_info_intf,
                                           buffer_allocator_, &comp_mgr_);
       break;
     case kVirtual:
-      display_base = new DisplayVirtual(disp_id, event_handler, hw_info_intf_,
+      display_base = new DisplayVirtual(disp_id, event_handler, hw_info_intf,
                                         buffer_allocator_, &comp_mgr_);
       break;
     default:
@@ -349,28 +360,37 @@ DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
     hw_displays_info->insert(display_infos.begin(), display_infos.end());
   }
 
-  // To-Do: Merge two display ids if the one display has two DPU
-  std::map<uint32_t , std::pair<int32_t, HWDisplayInfo>> conn_to_dispinfo;
+  // To-Do: Make more generic to handle multiple DPU, multiple display scenarios
+  std::map<uint32_t , HWDisplayInfo> disp_id_to_dispinfo_map;
+  uint32_t cached_disp_id_in_other_core = UINT32_MAX;
   for (auto disp_id_to_disp_info_pair : *hw_displays_info) {
     uint32_t disp_id = disp_id_to_disp_info_pair.first;
-    uint32_t conn_id = DisplayId(disp_id).GetConnId();
+    HWDisplayInfo disp_info = disp_id_to_disp_info_pair.second;
+    DisplayType disp_type = disp_id_to_disp_info_pair.second.display_type;
+    bool has_disp_in_other_core = disp_id_to_disp_info_pair.second.has_disp_in_other_core;
 
-    if (conn_to_dispinfo.find(conn_id) == conn_to_dispinfo.end()) {
-    conn_to_dispinfo[conn_id] = disp_id_to_disp_info_pair;
-    continue;
+    // merge two displays if same type and on two DPU
+    if (has_disp_in_other_core) {
+      if (cached_disp_id_in_other_core == UINT32_MAX) {
+        cached_disp_id_in_other_core = disp_id;
+      } else if (disp_type == disp_id_to_dispinfo_map[cached_disp_id_in_other_core].display_type) {
+        uint32_t merged_disp_id = disp_id | cached_disp_id_in_other_core;
+        HWDisplayInfo merged_disp_info = disp_id_to_dispinfo_map[cached_disp_id_in_other_core];
+        merged_disp_info.display_id = merged_disp_id;
+
+        // replace individual display with merged display
+        disp_id_to_dispinfo_map.erase(cached_disp_id_in_other_core);
+        disp_id_to_dispinfo_map[merged_disp_id] = merged_disp_info;
+        cached_disp_id_in_other_core = merged_disp_id;
+        continue;
+      }
     }
 
-    uint32_t cached_disp_id = conn_to_dispinfo[conn_id].first;
-    HWDisplayInfo cached_disp_info = conn_to_dispinfo[conn_id].second;
-    cached_disp_info.display_id = disp_id | cached_disp_id;
-
-    conn_to_dispinfo[conn_id] = std::make_pair(disp_id | cached_disp_id, cached_disp_info);
+    disp_id_to_dispinfo_map[disp_id] = disp_info;
   }
 
   hw_displays_info->clear();
-  for (auto val : conn_to_dispinfo) {
-    hw_displays_info->insert(val.second);
-  }
+  hw_displays_info->insert(disp_id_to_dispinfo_map.begin(), disp_id_to_dispinfo_map.end());
 
   hw_displays_info_ = *hw_displays_info;
 
@@ -409,7 +429,7 @@ void CoreImpl::InitializeSDMUtils() {
 
   sdm_utils_factory_intf_ = get_sdm_utils_f_ptr();
   for (int i = 0; i < hw_resource_.size(); i++) {
-    sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[i], i);
+    sdm_utils_factory_intf_->CreateSDMPropUtils(hw_resource_[i]);
   }
 }
 

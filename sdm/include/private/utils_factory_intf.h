@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __UTILS_FACTORY_INTF_H__
 #define __UTILS_FACTORY_INTF_H__
 
@@ -42,7 +48,7 @@ typedef UtilsFactoryIntf* (*GetUtilsFactory)();
 
 class UtilsFactoryIntf {
  public:
-  virtual void CreateSDMPropUtils(const HWResourceInfo& hw_res_info, uint32_t core_id) = 0;
+  virtual void CreateSDMPropUtils(const HWResourceInfo& hw_res_info) = 0;
   virtual ~UtilsFactoryIntf() {}
 };
 

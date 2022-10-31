@@ -32,6 +32,7 @@
 #include <utils/debug.h>
 #include <algorithm>
 #include <vector>
+#include <utility>
 #include "display_virtual.h"
 #include "hw_interface.h"
 #include "hw_info_interface.h"
@@ -79,13 +80,9 @@ DisplayError DisplayVirtual::Init() {
   }
 
   uint32_t max_mixer_stages = INT_MAX;
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
 
-    max_mixer_stages = std::min(max_mixer_stages, hw_resource_info_[i].num_blending_stages);
+  for (auto& res_info : hw_resource_info_) {
+    max_mixer_stages = std::min(max_mixer_stages, res_info.num_blending_stages);
   }
 
   int property_value = Debug::GetMaxPipesPerMixer(display_type_);
@@ -220,8 +217,8 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
     }
   }
 
-  for (int i = 0; i < cached_qos_data_.size(); i++) {
-    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  for (auto& qos_data : cached_qos_data_) {
+    default_clock_hz_.at(qos_data.first) = qos_data.second.clock_hz;
   }
 
   client_ctx_ = client_ctx;
@@ -247,7 +244,14 @@ DisplayError DisplayVirtual::Prepare(LayerStack *layer_stack) {
 
   // Clean display layer stack for reuse.
   disp_layer_stack_ = DispLayerStack();
-  disp_layer_stack_.info.resize(core_count_, {});
+
+  for (int i = 0; i < core_id_.size(); i++) {
+    if (!core_id_[i]) {
+      continue;
+    }
+    disp_layer_stack_.info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
+  }
+
   return DisplayBase::Prepare(layer_stack);
 }
 

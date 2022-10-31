@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __RESOURCE_INTERFACE_H__
 #define __RESOURCE_INTERFACE_H__
 
@@ -96,7 +102,7 @@ class ResourceInterface {
   virtual DisplayError ForceToneMapConfigure(Handle display_ctx,
                                              DispLayerStack *disp_layer_stack) = 0;
   virtual DisplayError GetDefaultQoSData(Handle display_ctx,
-                                         vector <HWQosData> *default_qos_data) = 0;
+                                         std::map<uint32_t, HWQosData> *default_qos_data) = 0;
 };
 
 }  // namespace sdm

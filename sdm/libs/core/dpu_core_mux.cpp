@@ -27,6 +27,7 @@ DPUCoreMux::DPUCoreMux(DisplayId display_id, DisplayType type,
     }
     uint32_t core_id = hw_info_intf[i]->GetCoreId();
     hw_intf_.insert(std::make_pair(core_id, hw));
+    core_ids_.push_back(core_id);
   }
 }
 
@@ -38,7 +39,7 @@ DisplayError DPUCoreMux::Destroy() {
 }
 
 DisplayError DPUCoreMux::GetDisplayId(int32_t *display_id) {
-  return hw_intf_[0]->GetDisplayId(display_id);
+  return hw_intf_.at(core_ids_[0])->GetDisplayId(display_id);
 }
 
 DisplayError DPUCoreMux::GetActiveConfig(uint32_t *active_config) {
@@ -119,13 +120,13 @@ DisplayError DPUCoreMux::GetDisplayAttributes(uint32_t index,
     }
   }
 
-  client_ctx->display_attributes = display_attr_map[0];
+  client_ctx->display_attributes = display_attr_map[core_ids_[0]];
   DisplayInfoContext info_ctx = {};
-  info_ctx.display_attributes =  display_attr_map[0];
-  if (device_ctx->find(0) == device_ctx->end()) {
-    device_ctx->insert({0, info_ctx});
+  info_ctx.display_attributes =  display_attr_map[core_ids_[0]];
+  if (device_ctx->find(core_ids_[0]) == device_ctx->end()) {
+    device_ctx->insert({core_ids_[0], info_ctx});
   } else {
-    device_ctx->at(0).display_attributes = info_ctx.display_attributes;
+    device_ctx->at(core_ids_[0]).display_attributes = info_ctx.display_attributes;
   }
 
   auto i = display_attr_map.begin();
@@ -168,13 +169,14 @@ DisplayError DPUCoreMux::GetHWPanelInfo(DisplayDeviceContext *device_ctx,
       return error;
     }
   }
-  client_ctx->hw_panel_info = panel_info_map[0];
+
+  client_ctx->hw_panel_info = panel_info_map[core_ids_[0]];
   DisplayInfoContext info_ctx = {};
-  info_ctx.hw_panel_info = panel_info_map[0];
-  if (device_ctx->find(0) == device_ctx->end()) {
-    device_ctx->insert({0, info_ctx});
+  info_ctx.hw_panel_info = panel_info_map[core_ids_[0]];
+  if (device_ctx->find(core_ids_[0]) == device_ctx->end()) {
+    device_ctx->insert({core_ids_[0], info_ctx});
   } else {
-    device_ctx->at(0).hw_panel_info = info_ctx.hw_panel_info;
+    device_ctx->at(core_ids_[0]).hw_panel_info = info_ctx.hw_panel_info;
   }
 
   auto i = panel_info_map.begin();
@@ -192,7 +194,7 @@ DisplayError DPUCoreMux::GetHWPanelInfo(DisplayDeviceContext *device_ctx,
     client_ctx->hw_panel_info.split_info.left_split += i->second.split_info.left_split;
   }
 
-  SetOpSyncHint(panel_info_map[zero_index].dpu_ctl_op_sync);
+  SetOpSyncHint(panel_info_map[core_ids_[0]].dpu_ctl_op_sync);
 
   return kErrorNone;
 }
@@ -240,13 +242,13 @@ DisplayError DPUCoreMux::GetConfigIndex(char *mode, uint32_t *index) {
   return kErrorNone;
 }
 
-DisplayError DPUCoreMux::PowerOn(std::vector<HWQosData> &qos_data, SyncPoints *sync_points) {
+DisplayError DPUCoreMux::PowerOn(std::map<uint32_t, HWQosData> &qos_data, SyncPoints *sync_points) {
   std::vector<SyncPoints> sync_points_list;
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
   for (uint32_t i : op_sync_sequence_) {
-    error = hw_intf_[i]->PowerOn(qos_data[i], &sync_points_val);
+    error = hw_intf_.at(core_ids_[i])->PowerOn(qos_data.at(core_ids_[i]), &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
     }
@@ -275,8 +277,9 @@ DisplayError DPUCoreMux::PowerOff(bool teardown, SyncPoints *sync_points) {
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
-  for (uint32_t i : op_sync_sequence_) {
-    error = hw_intf_[i]->PowerOff(teardown, &sync_points_val);
+
+  for (auto hw_intf : hw_intf_) {
+    error = hw_intf.second->PowerOff(teardown, &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
     }
@@ -299,13 +302,13 @@ DisplayError DPUCoreMux::PowerOff(bool teardown, SyncPoints *sync_points) {
   return error;
 }
 
-DisplayError DPUCoreMux::Doze(std::vector<HWQosData> &qos_data, SyncPoints *sync_points) {
+DisplayError DPUCoreMux::Doze(std::map<uint32_t, HWQosData> &qos_data, SyncPoints *sync_points) {
   std::vector<SyncPoints> sync_points_list;
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
   for (uint32_t i : op_sync_sequence_) {
-    error = hw_intf_[i]->Doze(qos_data[i], &sync_points_val);
+    error = hw_intf_.at(core_ids_[i])->Doze(qos_data.at(core_ids_[i]), &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
     }
@@ -324,13 +327,14 @@ DisplayError DPUCoreMux::Doze(std::vector<HWQosData> &qos_data, SyncPoints *sync
   return error;
 }
 
-DisplayError DPUCoreMux::DozeSuspend(std::vector<HWQosData> &qos_data, SyncPoints *sync_points) {
+DisplayError DPUCoreMux::DozeSuspend(std::map<uint32_t, HWQosData> &qos_data,
+                                     SyncPoints *sync_points) {
   std::vector<SyncPoints> sync_points_list;
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
   for (uint32_t i : op_sync_sequence_) {
-    error = hw_intf_[i]->DozeSuspend(qos_data[i], &sync_points_val);
+    error = hw_intf_.at(core_ids_[i])->DozeSuspend(qos_data.at(core_ids_[i]), &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
     }
@@ -354,8 +358,8 @@ DisplayError DPUCoreMux::Standby(SyncPoints *sync_points) {
   SyncPoints sync_points_val;
   DisplayError error = kErrorNone;
 
-  for (int i = 0; i < hw_intf_.size(); i++) {
-    error = hw_intf_[i]->Standby(&sync_points_val);
+  for (auto hw_intf : hw_intf_) {
+    error = hw_intf.second->Standby(&sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
     }
@@ -374,9 +378,9 @@ DisplayError DPUCoreMux::Standby(SyncPoints *sync_points) {
   return error;
 }
 
-DisplayError DPUCoreMux::Validate(std::vector<HWLayersInfo> &hw_layers_info) {
-  for (int i = 0; i < hw_intf_.size(); i++) {
-    DisplayError error = hw_intf_[i]->Validate(&hw_layers_info[i]);
+DisplayError DPUCoreMux::Validate(std::map<uint32_t, HWLayersInfo> &hw_layers_info) {
+  for (auto hw_intf : hw_intf_) {
+    DisplayError error = hw_intf.second->Validate(&hw_layers_info.at(hw_intf.first));
     if (error != kErrorNone) {
       return error;
     }
@@ -385,18 +389,18 @@ DisplayError DPUCoreMux::Validate(std::vector<HWLayersInfo> &hw_layers_info) {
   return kErrorNone;
 }
 
-DisplayError DPUCoreMux::Commit(std::vector<HWLayersInfo> &hw_layers_info) {
+DisplayError DPUCoreMux::Commit(std::map<uint32_t, HWLayersInfo> &hw_layers_info) {
   for (uint32_t i : op_sync_sequence_) {
-    DisplayError error = hw_intf_[i]->Commit(&hw_layers_info[i]);
+    DisplayError error = hw_intf_.at(core_ids_[i])->Commit(&hw_layers_info.at(core_ids_[i]));
     if (error != kErrorNone) {
       return error;
     }
   }
 
-  shared_ptr<Fence> retire_fence = hw_layers_info[0].retire_fence;
-  shared_ptr<Fence> sync_handle = hw_layers_info[0].sync_handle;
-  shared_ptr<Fence> op_release_fence = hw_layers_info[0].output_buffer ?
-                                       hw_layers_info[0].output_buffer->release_fence : nullptr;
+  shared_ptr<Fence> retire_fence = hw_layers_info.at(core_ids_[0]).retire_fence;
+  shared_ptr<Fence> sync_handle = hw_layers_info.at(core_ids_[0]).sync_handle;
+  shared_ptr<Fence> op_release_fence = hw_layers_info.at(core_ids_[0]).output_buffer ?
+      hw_layers_info.at(core_ids_[0]).output_buffer->release_fence : nullptr;
 
 #ifndef SDM_VIRTUAL_DRIVER
   if (!retire_fence || !sync_handle) {
@@ -404,42 +408,42 @@ DisplayError DPUCoreMux::Commit(std::vector<HWLayersInfo> &hw_layers_info) {
   }
 #endif
 
-  for (int i = 1; i < hw_layers_info.size(); i++) {
-    retire_fence = Fence::Merge(hw_layers_info[i].retire_fence, retire_fence);
-    sync_handle = Fence::Merge(hw_layers_info[i].sync_handle, sync_handle);
+  for (auto& layers_info : hw_layers_info) {
+    retire_fence = Fence::Merge(layers_info.second.retire_fence, retire_fence);
+    sync_handle = Fence::Merge(layers_info.second.sync_handle, sync_handle);
 
-    if (hw_layers_info[i].output_buffer) {
-      op_release_fence = Fence::Merge(hw_layers_info[i].output_buffer->release_fence,
+    if (layers_info.second.output_buffer) {
+      op_release_fence = Fence::Merge(layers_info.second.output_buffer->release_fence,
                                       op_release_fence);
     }
   }
 
-  for (int i = 0; i < hw_layers_info.size(); i++) {
-    if (!hw_layers_info[i].output_buffer) {
+  for (auto& layers_info : hw_layers_info) {
+    if (!layers_info.second.output_buffer) {
       continue;
     }
 
-    hw_layers_info[i].output_buffer->release_fence = op_release_fence;
+    layers_info.second.output_buffer->release_fence = op_release_fence;
   }
 
-  hw_layers_info[0].common_info->retire_fence = retire_fence;
-  hw_layers_info[0].common_info->sync_handle = sync_handle;
+  hw_layers_info.at(core_ids_[0]).common_info->retire_fence = retire_fence;
+  hw_layers_info.at(core_ids_[0]).common_info->sync_handle = sync_handle;
 
   for (auto layers_info : hw_layers_info) {
-    std::vector<Layer> &hw_layers = layers_info.hw_layers;
+    std::vector<Layer> &hw_layers = layers_info.second.hw_layers;
     for (auto &layer : hw_layers) {
       layer.input_buffer.release_fence = sync_handle;
     }
   }
 
   // To-Do: Revisit update_mask
-  hw_layers_info[0].common_info->updates_mask = 0;
+  hw_layers_info.at(core_ids_[0]).common_info->updates_mask = 0;
   return kErrorNone;
 }
 
-DisplayError DPUCoreMux::Flush(std::vector<HWLayersInfo> &hw_layers_info) {
-  for (int i = 0; i < hw_intf_.size(); i++) {
-    DisplayError error = hw_intf_[i]->Flush(&hw_layers_info[i]);
+DisplayError DPUCoreMux::Flush(std::map<uint32_t, HWLayersInfo> &hw_layers_info) {
+  for (auto hw_intf : hw_intf_) {
+    DisplayError error = hw_intf.second->Flush(&hw_layers_info.at(hw_intf.first));
     if (error != kErrorNone) {
       return error;
     }
@@ -449,17 +453,24 @@ DisplayError DPUCoreMux::Flush(std::vector<HWLayersInfo> &hw_layers_info) {
 }
 
 DisplayError DPUCoreMux::GetPPFeaturesVersion(PPFeatureVersion *vers) {
-  return hw_intf_[0]->GetPPFeaturesVersion(vers);
+  return hw_intf_.at(core_ids_[0])->GetPPFeaturesVersion(vers);
 }
 
-DisplayError DPUCoreMux::SetPPFeatures(PPFeaturesConfig *feature_list) {
-  for (auto hw_intf : hw_intf_) {
-     DisplayError error = hw_intf.second->SetPPFeatures(feature_list);
-     if (error != kErrorNone) {
-       return error;
-     }
+DisplayError DPUCoreMux::SetPPFeatures(PPFeaturesConfig *feature_list, uint32_t &core_id) {
+  DisplayError error = kErrorNone;
+
+  if (hw_intf_.find(core_id) == hw_intf_.end()) {
+    DLOGE("hw_intf is not present for core_id=%u", core_id);
+    return kErrorNotSupported;
   }
-  return kErrorNone;
+
+  error = hw_intf_[core_id]->SetPPFeatures(feature_list);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set pp feature for core_id=%u", core_id);
+    return error;
+  }
+
+  return error;
 }
 
 DisplayError DPUCoreMux::SetVSyncState(bool enable) {
@@ -574,10 +585,10 @@ DisplayError DPUCoreMux::GetMaxCEAFormat(uint32_t *max_cea_format) {
   return kErrorNone;
 }
 
-DisplayError DPUCoreMux::SetCursorPosition(std::vector<HWLayersInfo> &hw_layers_info,
+DisplayError DPUCoreMux::SetCursorPosition(std::map<uint32_t, HWLayersInfo> &hw_layers_info,
                                                int x, int y) {
-  for (int i = 0; i < hw_intf_.size(); i++) {
-    DisplayError error = hw_intf_[i]->SetCursorPosition(&hw_layers_info[i], x, y);
+  for (auto hw_intf : hw_intf_) {
+    DisplayError error = hw_intf.second->SetCursorPosition(&hw_layers_info.at(hw_intf.first), x, y);
     if (error != kErrorNone) {
       return error;
     }
@@ -673,13 +684,13 @@ DisplayError DPUCoreMux::GetMixerAttributes(DisplayDeviceContext *device_ctx,
     }
   }
 
-  client_ctx->mixer_attributes = mixer_attr_map[0];
+  client_ctx->mixer_attributes = mixer_attr_map[core_ids_[0]];
   DisplayInfoContext info_ctx = {};
-  info_ctx.mixer_attributes = mixer_attr_map[0];
-  if (device_ctx->find(0) == device_ctx->end()) {
-    device_ctx->insert({0, info_ctx});
+  info_ctx.mixer_attributes = mixer_attr_map[core_ids_[0]];
+  if (device_ctx->find(core_ids_[0]) == device_ctx->end()) {
+    device_ctx->insert({core_ids_[0], info_ctx});
   } else {
-    device_ctx->at(0).mixer_attributes = info_ctx.mixer_attributes;
+    device_ctx->at(core_ids_[0]).mixer_attributes = info_ctx.mixer_attributes;
   }
 
   auto i = mixer_attr_map.begin();
@@ -723,13 +734,14 @@ DisplayError DPUCoreMux::SetDppsFeature(void *payload, size_t size) {
 }
 
 DisplayError DPUCoreMux::GetDppsFeatureInfo(void *payload, size_t size) {
-  return hw_intf_[0]->GetDppsFeatureInfo(payload, size);
+  return hw_intf_.at(core_ids_[0])->GetDppsFeatureInfo(payload, size);
 }
 
 DisplayError DPUCoreMux::HandleSecureEvent(SecureEvent secure_event,
-                                               std::vector<HWQosData> &qos_data) {
+                                           std::map<uint32_t, HWQosData> &qos_data) {
   for (int i = 0; i < hw_intf_.size(); i++) {
-    DisplayError error = hw_intf_[i]->HandleSecureEvent(secure_event, qos_data[i]);
+    DisplayError error = hw_intf_.at(core_ids_[i])->HandleSecureEvent(secure_event,
+                                                                      qos_data.at(core_ids_[i]));
     if (error != kErrorNone) {
       return error;
     }
@@ -794,7 +806,7 @@ DisplayError DPUCoreMux::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
 
 DisplayError DPUCoreMux::GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                       uint8_t *out_data) {
-  return hw_intf_[zero_index]->GetDisplayIdentificationData(out_port, out_data_size, out_data);
+  return hw_intf_.at(core_ids_[0])->GetDisplayIdentificationData(out_port, out_data_size, out_data);
 }
 
 DisplayError DPUCoreMux::SetFrameTrigger(FrameTriggerMode mode) {
@@ -852,7 +864,7 @@ DisplayError DPUCoreMux::SetDimmingConfig(void *payload, size_t size) {
 }
 
 DisplayError DPUCoreMux::GetPanelBrightnessBasePath(std::string *base_path) const {
-  return hw_intf_.at(zero_index)->GetPanelBrightnessBasePath(base_path);
+  return hw_intf_.at(core_ids_[0])->GetPanelBrightnessBasePath(base_path);
 }
 
 DisplayError DPUCoreMux::SetBlendSpace(const PrimariesTransfer &blend_space) {
@@ -948,11 +960,11 @@ DisplayError DPUCoreMux::CancelDeferredPowerMode() {
 }
 
 PanelFeaturePropertyIntf* DPUCoreMux::GetPanelFeaturePropertyIntf() {
-  return hw_intf_[zero_index]->GetPanelFeaturePropertyIntf();
+  return hw_intf_.at(core_ids_[0])->GetPanelFeaturePropertyIntf();
 }
 
 void DPUCoreMux::GetHWInterface(HWInterface **intf) {
-  *intf = hw_intf_[zero_index];
+  *intf = hw_intf_.at(core_ids_[0]);
 }
 
 template <typename T>
@@ -972,7 +984,7 @@ bool DPUCoreMux::AreAllEntriesSame(std::vector<T>& entries) {
 }
 
 void DPUCoreMux::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const {
-  hw_intf_.at(zero_index)->GetDRMDisplayToken(token);
+  hw_intf_.at(core_ids_[0])->GetDRMDisplayToken(token);
 }
 
 bool DPUCoreMux::IsPrimaryDisplay() const {
@@ -992,12 +1004,12 @@ DisplayError DPUCoreMux::GetFbConfig(uint32_t width, uint32_t height,
   client_ctx->fb_config.y_pixels = height;
 
   for (uint32_t i = 0; i < device_ctx->size(); i++) {
-    device_ctx->at(i).fb_config = client_ctx->fb_config;
+    device_ctx->at(core_ids_[i]).fb_config = client_ctx->fb_config;
 
     uint32_t dpu_fb_width = client_ctx->fb_config.x_pixels *
-                            (device_ctx->at(i).display_attributes.x_pixels /
+                            (device_ctx->at(core_ids_[i]).display_attributes.x_pixels /
                              client_ctx->display_attributes.x_pixels);
-    device_ctx->at(i).fb_config.x_pixels = dpu_fb_width;
+    device_ctx->at(core_ids_[i]).fb_config.x_pixels = dpu_fb_width;
   }
   return error;
 }

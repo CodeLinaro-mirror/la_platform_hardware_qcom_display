@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <core/buffer_allocator.h>
 #include <utils/debug.h>
 #include <utils/constants.h>
@@ -1397,6 +1403,11 @@ int HWCSession::DisplayConfigImpl::IsSmartPanelConfig(uint32_t disp_id, uint32_t
 }
 
 int HWCSession::DisplayConfigImpl::IsAsyncVDSCreationSupported(bool *supported) {
+  if(hwc_session_->disable_vds_hwc_ && hwc_session_->vds_allow_hwc_) {
+    *supported = false;
+    return 0;
+  }
+
   if (!hwc_session_->async_vds_creation_) {
     *supported = false;
     return 0;

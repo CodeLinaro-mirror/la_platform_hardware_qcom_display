@@ -262,6 +262,16 @@ int HWCSession::Init() {
   async_vds_creation_ = (value == 1);
   DLOGI("async_vds_creation: %d", async_vds_creation_);
 
+  value = 0;
+  Debug::Get()->GetProperty(DISABLE_VDS_HWC, &value);
+  disable_vds_hwc_ = (value == 1);
+  DLOGI("disable_vds_hwc: %d", disable_vds_hwc_);
+
+  value = 0;
+  Debug::Get()->GetProperty(VDS_ALLOW_HWC, &value);
+  vds_allow_hwc_ = (value == 1);
+  DLOGI("vds_allow_hwc: %d", vds_allow_hwc_);
+
   DLOGI("Initializing supported display slots");
   InitSupportedDisplaySlots();
   DLOGI("Initializing supported display slots...done!");
@@ -349,8 +359,13 @@ void HWCSession::InitSupportedDisplaySlots() {
   ipc_intf_ = std::make_shared<IPCImpl>(IPCImpl());
   ipc_intf_->Init();
 
+  int core_id_mask = 0Xff ;  // Default value when property is not present.
+  Debug::Get()->GetProperty(CORE_ID_MASK, &core_id_mask);
+  DLOGI("core id mask: %d", core_id_mask);
+  std::bitset<8> core_ids(core_id_mask);
   DisplayError error = CoreInterface::CreateCore(&buffer_allocator_, nullptr,
-                                                 &socket_handler_, ipc_intf_, &core_intf_);
+                                                 &socket_handler_, ipc_intf_,
+                                                 &core_intf_, core_ids);
   if (error != kErrorNone) {
     DLOGE("Failed to create CoreInterface");
     return;
@@ -621,7 +636,11 @@ void HWCSession::Dump(uint32_t *out_size, char *out_buffer) {
 }
 
 uint32_t HWCSession::GetMaxVirtualDisplayCount() {
-  return map_info_virtual_.size();
+  if (!disable_vds_hwc_) {
+    return map_info_virtual_.size();
+  }
+
+  return is_client_up_ && !vds_allow_hwc_ ? map_info_virtual_.size() : 0;
 }
 
 int32_t HWCSession::GetActiveConfig(hwc2_display_t display, hwc2_config_t *out_config) {

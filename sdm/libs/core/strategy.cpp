@@ -146,16 +146,16 @@ DisplayError Strategy::GetNextStrategy() {
     layer_stack->layers.at(i)->request.flags.request_flags = 0;  // Reset layer request
   }
 
-  for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
-    disp_layer_stack_->info[i].hw_layers.clear();
-    disp_layer_stack_->info[i].index.clear();
-    disp_layer_stack_->info[i].roi_index.clear();
+  for (auto& info : disp_layer_stack_->info) {
+    info.second.hw_layers.clear();
+    info.second.index.clear();
+    info.second.roi_index.clear();
   }
 
   // When mixer resolution and panel resolutions are same (1600x2560) and FB resolution is
   // 1080x1920 FB_Target destination coordinates(mapped to FB resolution 1080x1920) need to
   // be mapped to destination coordinates of mixer resolution(1600x2560).
-  for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
+  for (auto& info : disp_layer_stack_->info) {
     Layer *gpu_target_layer =
                            layer_stack->layers.at(disp_layer_stack_->stack_info.gpu_target_index);
     float layer_mixer_width = FLOAT(info_ctx_.mixer_attributes.width);
@@ -166,15 +166,15 @@ DisplayError Strategy::GetNextStrategy() {
     LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
 
     Layer layer = *gpu_target_layer;
-    disp_layer_stack_->info[i].index.push_back(disp_layer_stack_->stack_info.gpu_target_index);
-    disp_layer_stack_->info[i].roi_index.push_back(0);
+    info.second.index.push_back(disp_layer_stack_->stack_info.gpu_target_index);
+    info.second.roi_index.push_back(0);
     layer.transform.flip_horizontal ^= info_ctx_.hw_panel_info.panel_orientation.flip_horizontal;
     layer.transform.flip_vertical ^= info_ctx_.hw_panel_info.panel_orientation.flip_vertical;
     // Flip rect to match transform.
     TransformHV(src_domain, layer.dst_rect, layer.transform, &layer.dst_rect);
     // Scale to mixer resolution.
     MapRect(src_domain, dst_domain, layer.dst_rect, &layer.dst_rect);
-    disp_layer_stack_->info[i].hw_layers.push_back(layer);
+    info.second.hw_layers.push_back(layer);
   }
 
   return kErrorNone;
@@ -192,12 +192,11 @@ void Strategy::GenerateROI() {
 
   bool is_src_split = true;
   std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
+  for (auto& res_info : hw_resource_info_) {
+    if (!core_id_map[res_info.core_id]) {
       continue;
     }
-
-    is_src_split &= hw_resource_info_[i].is_src_split;
+    is_src_split &= res_info.is_src_split;
   }
 
   if (!is_src_split && info_ctx_.display_attributes.is_device_split) {

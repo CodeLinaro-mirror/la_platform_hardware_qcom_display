@@ -72,6 +72,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "display_builtin.h"
 #include "drm_interface.h"
@@ -347,8 +348,14 @@ DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
   DTRACE_BEGIN("Reset DispLayerStack");
   // Clean display layer stack for reuse.
   disp_layer_stack_ = DispLayerStack();
-  disp_layer_stack_.info.resize(core_count_, {});
   DTRACE_END();
+
+  for (int i = 0; i < core_id_.size(); i++) {
+    if (!core_id_[i]) {
+      continue;
+    }
+    disp_layer_stack_.info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
+  }
 
   error = HandleSPR();
   if (error != kErrorNone) {
@@ -384,13 +391,14 @@ void DisplayBuiltIn::NotifyDppsHdrPresent(LayerStack *layer_stack) {
 }
 
 void DisplayBuiltIn::CacheFrameROI() {
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+  for (int i = 0; i < core_count_; i++) {
+    uint32_t core_id = hw_resource_info_[i].core_id;
     left_frame_roi_[i] = {};
     right_frame_roi_[i] = {};
-    if (disp_layer_stack_.info[i].left_frame_roi.size() &&
-      disp_layer_stack_.info[i].right_frame_roi.size()) {
-      left_frame_roi_[i] = disp_layer_stack_.info[i].left_frame_roi.at(0);
-      right_frame_roi_[i] = disp_layer_stack_.info[i].right_frame_roi.at(0);
+    if (disp_layer_stack_.info.at(core_id).left_frame_roi.size() &&
+      disp_layer_stack_.info.at(core_id).right_frame_roi.size()) {
+      left_frame_roi_[i] = disp_layer_stack_.info.at(core_id).left_frame_roi.at(0);
+      right_frame_roi_[i] = disp_layer_stack_.info.at(core_id).right_frame_roi.at(0);
     }
   }
 }
@@ -1553,8 +1561,9 @@ std::string DisplayBuiltIn::Dump() {
      << current_color_mode_.gamma << " intent " << current_color_mode_.intent << " Dynamice_range"
      << (curr_dynamic_range == kSdrType ? " SDR" : " HDR");
 
-  for (uint32_t j = 0; j < disp_layer_stack_.info.size(); j++) {
-    uint32_t num_hw_layers = UINT32(disp_layer_stack_.info[j].hw_layers.size());
+  for (int j = 0; j < core_count_; j++) {
+    uint32_t core_id = hw_resource_info_[j].core_id;
+    uint32_t num_hw_layers = UINT32(disp_layer_stack_.info.at(core_id).hw_layers.size());
 
     if (num_hw_layers == 0) {
       os << "\nNo hardware layers programmed";
@@ -1562,12 +1571,12 @@ std::string DisplayBuiltIn::Dump() {
     }
 
     os << "\n\n Table for DPU - " << j << "\n";
-    LayerBuffer *out_buffer = disp_layer_stack_.info[j].output_buffer;
+    LayerBuffer *out_buffer = disp_layer_stack_.info.at(core_id).output_buffer;
     if (out_buffer) {
       os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
          << " format: " << GetFormatString(out_buffer->format);
     }
-    HWLayersInfo &layer_info = disp_layer_stack_.info[j];
+    HWLayersInfo &layer_info = disp_layer_stack_.info.at(core_id);
     for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
       LayerRect &l_roi = layer_info.left_frame_roi.at(i);
       LayerRect &r_roi = layer_info.right_frame_roi.at(i);
@@ -1598,11 +1607,11 @@ std::string DisplayBuiltIn::Dump() {
     os << newline;
 
     for (uint32_t i = 0; i < num_hw_layers; i++) {
-      uint32_t layer_index = disp_layer_stack_.info[j].index.at(i);
+      uint32_t layer_index = disp_layer_stack_.info.at(core_id).index.at(i);
       // hw-layer from hw layers info
-      Layer &hw_layer = disp_layer_stack_.info[j].hw_layers.at(i);
+      Layer &hw_layer = disp_layer_stack_.info.at(core_id).hw_layers.at(i);
       LayerBuffer *input_buffer = &hw_layer.input_buffer;
-      HWLayerConfig &layer_config = disp_layer_stack_.info[j].config[i];
+      HWLayerConfig &layer_config = disp_layer_stack_.info.at(core_id).config[i];
       HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
 
       const char *comp_type = GetName(hw_layer.composition);
@@ -1715,55 +1724,8 @@ std::vector<int32_t> DppsInfo::display_id_ = {};
 
 void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
   std::lock_guard<std::mutex> guard(lock_);
-  int error = 0;
 
-  if (!intf) {
-    DLOGE("Invalid intf is null");
-    return;
-  }
-
-  DppsDisplayInfo info_payload = {};
-  DisplayError ret = intf->DppsProcessOps(kDppsGetDisplayInfo, &info_payload, sizeof(info_payload));
-  if (ret != kErrorNone) {
-    DLOGE("Get display information failed, ret %d", ret);
-    return;
-  }
-
-  if (std::find(display_id_.begin(), display_id_.end(), info_payload.display_id)
-    != display_id_.end()) {
-    return;
-  }
-  DLOGI("Ready to register display id %d ", info_payload.display_id);
-
-  if (!dpps_intf_) {
-    if (!dpps_impl_lib_.Open(kDppsLib_)) {
-      DLOGW("Failed to load Dpps lib %s", kDppsLib_);
-      goto exit;
-    }
-
-    if (!dpps_impl_lib_.Sym("GetDppsInterface", reinterpret_cast<void **>(&GetDppsInterface))) {
-      DLOGE("GetDppsInterface not found!, err %s", dlerror());
-      goto exit;
-    }
-
-    dpps_intf_ = GetDppsInterface();
-    if (!dpps_intf_) {
-      DLOGE("Failed to get Dpps Interface!");
-      goto exit;
-    }
-  }
-  error = dpps_intf_->Init(intf, panel_name);
-  if (error) {
-    DLOGE("DPPS Interface init failure with err %d", error);
-    goto exit;
-  }
-
-  display_id_.push_back(info_payload.display_id);
-  DLOGI("Register display id %d successfully", info_payload.display_id);
-  return;
-
-exit:
-  Deinit();
+  // TBD: anorak does not support visibility, power saving features
   dpps_intf_ = new DppsDummyImpl();
 }
 
@@ -1942,36 +1904,37 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
     return false;
   }
 
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    disp_layer_stack_.info[i].left_frame_roi.clear();
-    disp_layer_stack_.info[i].right_frame_roi.clear();
-    disp_layer_stack_.info[i].dest_scale_info_map.clear();
+  for (auto& info : disp_layer_stack_.info) {
+    info.second.left_frame_roi.clear();
+    info.second.right_frame_roi.clear();
+    info.second.dest_scale_info_map.clear();
   }
   comp_manager_->GenerateROI(display_comp_ctx_, &disp_layer_stack_);
 
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
-    if (!disp_layer_stack_.info[i].left_frame_roi.size() ||
-        !disp_layer_stack_.info[i].right_frame_roi.size()) {
+  for (int i = 0; i < core_count_; i++) {
+    uint32_t core_id = hw_resource_info_[i].core_id;
+    if (!disp_layer_stack_.info.at(core_id).left_frame_roi.size() ||
+        !disp_layer_stack_.info.at(core_id).right_frame_roi.size()) {
       return false;
     }
 
     // Compare the cached and calculated Frame ROIs.
     bool same_roi = IsCongruent(left_frame_roi_[i],
-                                disp_layer_stack_.info[i].left_frame_roi.at(0)) &&
+                                disp_layer_stack_.info.at(core_id).left_frame_roi.at(0)) &&
                     IsCongruent(right_frame_roi_[i],
-                                disp_layer_stack_.info[i].right_frame_roi.at(0));
+                                disp_layer_stack_.info.at(core_id).right_frame_roi.at(0));
 
     if (!same_roi) {
       return same_roi;
     }
   }
 
-  for (int i = 0; i < disp_layer_stack_.info.size(); i++) {
+  for (auto& info : disp_layer_stack_.info) {
     // Update Surface Damage rectangle(s) in HW layers.
-    uint32_t hw_layer_count = UINT32(disp_layer_stack_.info[i].hw_layers.size());
+    uint32_t hw_layer_count = UINT32(info.second.hw_layers.size());
     for (uint32_t j = 0; j < hw_layer_count; j++) {
-      Layer &hw_layer = disp_layer_stack_.info[i].hw_layers.at(j);
-      Layer *sdm_layer = layer_stack->layers.at(disp_layer_stack_.info[i].index.at(j));
+      Layer &hw_layer = info.second.hw_layers.at(j);
+      Layer *sdm_layer = layer_stack->layers.at(info.second.index.at(j));
       if (hw_layer.dirty_regions.size() != sdm_layer->dirty_regions.size()) {
         return false;
       }
@@ -2170,8 +2133,8 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
   if (error != kErrorNone) {
     return error;
   }
-  for (int i = 0; i < cached_qos_data_.size(); i++) {
-    default_clock_hz_[i] = cached_qos_data_[i].clock_hz;
+  for (auto& qos_data : cached_qos_data_) {
+    default_clock_hz_.at(qos_data.first) = qos_data.second.clock_hz;
   }
 
   // Disable Partial Update for one frame as PU not supported during modeset.
@@ -2260,14 +2223,9 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   bool hdr_supported = true;
   bool has_concurrent_writeback = true;
 
-  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
-  for (int i = 0; i < core_id_map.size(); i++) {
-    if (!core_id_map[i]) {
-      continue;
-    }
-
+  for (auto info_intf : hw_info_intf_) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    hw_info_intf_[i]->GetHWResourceInfo(&hw_resource_info);
+    info_intf->GetHWResourceInfo(&hw_resource_info);
     hdr_supported &= hw_resource_info.has_hdr;
     has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;
   }
@@ -2788,7 +2746,7 @@ uint32_t DisplayBuiltIn::SanitizeRefreshRate(uint32_t req_refresh_rate, uint32_t
 DisplayError DisplayBuiltIn::PerformCacConfig(CacConfig config, bool enable) {
   ClientLock lock(disp_mutex_);
 
-  for (auto res_info : hw_resource_info_) {
+  for (auto& res_info : hw_resource_info_) {
     if (res_info.cac_version != kCacVersion2) {
       return kErrorNotSupported;
     }
