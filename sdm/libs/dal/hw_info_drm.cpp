@@ -213,7 +213,7 @@ void HWInfoDRM::Deinit() {
     if (drm_lib_loader) {
       DRMMaster *drm_master = {};
       int dev_fd = -1;
-      DRMMaster::GetInstance(&drm_master);
+      DRMMaster::GetInstance(&drm_master, core_id_);
       drm_master->GetHandle(&dev_fd);
       drm_lib_loader->FuncDestroyDRMManager()(dev_fd);
     }
