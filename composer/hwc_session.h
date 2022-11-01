@@ -55,11 +55,11 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.21/IDisplayConfig.h>
+#include <vendor/display/config/1.16/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
-#include <vendor/qti/hardware/display/composer/2.0/IQtiComposerClient.h>
+#include <vendor/qti/hardware/display/composer/2.1/IQtiComposerClient.h>
 
 #include <core/core_interface.h>
 #include <utils/locker.h>
@@ -88,7 +88,7 @@
 namespace sdm {
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_21::IDisplayConfig;
+using vendor::display::config::V1_16::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -101,7 +101,7 @@ using android::hardware::hidl_handle;
 using ::android::hardware::hidl_vec;
 using ::android::sp;
 
-using vendor::qti::hardware::display::composer::V2_0::IQtiComposerClient;
+using vendor::qti::hardware::display::composer::V2_1::IQtiComposerClient;
 
 int32_t GetDataspaceFromColorMode(ColorMode mode);
 
@@ -455,8 +455,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<void> getHDRCapabilities(IDisplayConfig::DisplayType dpy,
                                   getHDRCapabilities_cb _hidl_cb) override;
   Return<int32_t> setCameraLaunchStatus(uint32_t on) override;
-  Return<int32_t> tunnellingInit() override;
   Return<int32_t> allowIdleFallback() override;
+  //TODO: Port vendor.display.config.1.21 related changes and enable tunneling APIs in hwc
+#if 0
+  Return<int32_t> tunnellingInit() override;
   Return<void> getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
                               getFSCRGBOrder_cb _hidl_cb) override;
   Return<int32_t> enableCAC(uint32_t disp_id, bool enable,
@@ -471,6 +473,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
                                                                   override;
   Return<int32_t> destroyTunnelledLayer() override;
   Return<int32_t> tunnellingDeinit() override;
+#endif
   Return<void> displayBWTransactionPending(displayBWTransactionPending_cb _hidl_cb) override;
   Return<int32_t> IdlePowerCollapse(bool enable, bool synchronous);
 
@@ -622,7 +625,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   static int null_display_mode_;
   hwc2_layer_t tunneled_layer_ = -1;
   int tunneled_layer_rf_ = -1; // tunneled layer's release fence
-  IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
+//  IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
 };
 }  // namespace sdm
 

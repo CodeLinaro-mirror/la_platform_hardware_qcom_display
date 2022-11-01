@@ -517,6 +517,8 @@ Return<void> HWCSession::getHDRCapabilities(IDisplayConfig::DisplayType dpy,
   return Void();
 }
 
+//TODO: Port vendor.display.config.1.21 related changes and enable tunneling APIs in hwc
+#if 0
 Return<int32_t> HWCSession::tunnellingInit() {
   char property[PROPERTY_VALUE_MAX] = {0};
   property_get(ENABLE_TUNNELLING, property, "0");
@@ -831,6 +833,7 @@ Return<int32_t> HWCSession::tunnellingDeinit() {
   tunneling_map_buffer_release_fence_.clear();
   return 0;
 }
+#endif
 
 Return<int32_t> HWCSession::allowIdleFallback() {
   return 0;

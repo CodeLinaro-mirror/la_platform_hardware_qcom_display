@@ -33,6 +33,7 @@ cc_library_shared {
         "display_virtual.cpp",
         "comp_manager.cpp",
         "strategy.cpp",
+        "fps_manager.cpp",
         "resource_default.cpp",
         "color_manager.cpp",
         "hw_events_interface.cpp",
