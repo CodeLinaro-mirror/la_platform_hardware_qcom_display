@@ -106,4 +106,5 @@ subdirs = [
     "sde-drm",
     "sdm/libs/utils",
     "sdm/libs/core",
+    "dp_cec",
 ]
