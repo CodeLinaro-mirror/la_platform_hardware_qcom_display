@@ -174,7 +174,12 @@ int DRMEncoderManager::Reserve(const std::set<uint32_t> &possible_encoders, DRMD
         encoder->second->GetType(&encoder_type);
         token->hw_port = GetDisplayTypeCode(encoder_type) | encoder_index;
         // read card name to extract the core_id from it
-        std::string device_name = drmGetPrimaryDeviceNameFromFd(fd_);
+        char *name = drmGetPrimaryDeviceNameFromFd(fd_);
+        if (name == NULL) {
+          return ret;
+        }
+
+        std::string device_name(name);
         // append core_id to the hw_port to differentiate individual displays in dual dpu usecase
         uint8_t core_id_mask = static_cast<uint8_t> (std::atoi(&device_name.back()) == 0 ?
                                                      (1 << 4) : (1 << 5));

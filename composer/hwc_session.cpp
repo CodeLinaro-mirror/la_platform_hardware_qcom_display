@@ -390,6 +390,10 @@ void HWCSession::InitSupportedDisplaySlots() {
   Debug::Get()->GetProperty(CORE_ID_MASK, &core_id_mask);
   DLOGI("core_id_mask: %d", core_id_mask);
   std::bitset<8> core_ids(core_id_mask);
+  if (!core_id_mask) {
+    DLOGI("No core id is specified");
+    return;
+  }
 
   DisplayError error = CoreInterface::CreateCore(&buffer_allocator_, nullptr,
                                                  &socket_handler_, ipc_intf_,
