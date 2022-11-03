@@ -74,6 +74,12 @@ ifeq ($(TARGET_BOARD_PLATFORM),parrot)
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_vtdr6130_amoled_qsync_video_mode_dsi_visionox_panel_with_DSC_parrot.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_vtdr6130_amoled_qsync_video_mode_dsi_visionox_panel_with_DSC.json
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),anorak)
+    #QDCM calibration JSON file for sy103 amoled video mode single dsi with DSC panel.
+    #TBD: derived from qdcm_calib_data_r66451_amoled_video_mode_dsi_visionox_panel_with_DSC.json
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json
+endif
+
 #Smomo config xml file
 PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_COPY_OUT_VENDOR)/etc/smomo_setting.xml
 
