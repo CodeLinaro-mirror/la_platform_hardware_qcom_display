@@ -79,6 +79,7 @@
 #define IDLE_TIME_PROP                       DISPLAY_PROP("idle_time")
 #define IDLE_TIME_INACTIVE_PROP              DISPLAY_PROP("idle_time_inactive")
 #define DISABLE_ROTATOR_DOWNSCALE_PROP       DISPLAY_PROP("disable_rotator_downscale")
+#define ENABLE_TUNNELLING                    DISPLAY_PROP("enable_tunnelling")
 // Enables rotator for UI
 #define ENABLE_ROTATOR_UI_PROP               DISPLAY_PROP("enable_rotator_ui")
 #define DISABLE_DECIMATION_PROP              DISPLAY_PROP("disable_decimation")
@@ -164,6 +165,16 @@
  *   3: (0x1 | 0x2) Android logger + File logger
  */
 #define LOG_SINK_PROP                        DISPLAY_PROP("set_log_sink")
+/* Property DISPLAY_REBOOT_STRATEGY:
+ * Display framework reboot strategy to keep the SF and HWC in sync.
+ *   0: Default behaviour (Reboot framework on first DSI-HDMI connection)
+ *   1: DSI always, reboot everytime DSI-HDMI connected
+ *   2: Any Once, reboot framework once on any display connection (DSI-HDMI, DP)
+ *   3: No framework reboot
+ */
+#define DISPLAY_REBOOT_STRATEGY         DISPLAY_PROP("display_reboot_strategy")
+
+#define DISABLE_CONT_SPLASH_HANDOFF         DISPLAY_PROP("disable_cont_splash_handoff")
 
 // Add all vendor.display properties above
 

@@ -25,6 +25,38 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #define __STDC_FORMAT_MACROS
@@ -455,6 +487,9 @@ DisplayError HWDeviceDRM::Init() {
   DRMMaster::GetInstance(&drm_master);
   drm_master->GetHandle(&dev_fd_);
   DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
+
+  Debug::GetProperty(DISABLE_CONT_SPLASH_HANDOFF, &disable_cont_splash_handoff_);
+  DLOGI("Disable continuous splash handoff = %d", disable_cont_splash_handoff_);
 
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {
@@ -1098,6 +1133,7 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
   uint32_t index = current_mode_index_;
   drmModeModeInfo current_mode = connector_info_.modes[index].mode;
   uint64_t current_bit_clk = connector_info_.modes[index].bit_clk_rate;
+  DRMTopology topology = connector_info_.modes[index].topology;
 
   solid_fills_.clear();
   bool resource_update = hw_layers->updates_mask.test(kUpdateResources);
@@ -1159,7 +1195,18 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
       if (pipe_info->valid && fb_id) {
         uint32_t pipe_id = pipe_info->pipe_id;
-
+        if (topology == DRMTopology::SINGLE_LM || topology == DRMTopology::DUAL_LM_MERGE ||
+            update_config) {
+          if (hw_scale_) {
+            SDEScaler scaler_output = {};
+            hw_scale_->SetScaler(pipe_info->scale_data, &scaler_output);
+            // TODO(user): Remove qseed3 and add version check, then send appropriate scaler object
+            if (hw_resource_.has_qseed3) {
+              drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
+                                        reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
+            }
+          }
+        }
         if (update_config) {
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ALPHA, pipe_id, layer.plane_alpha);
 
@@ -1227,16 +1274,6 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           uint32_t config = 0;
           SetSrcConfig(layer.input_buffer, hw_rotator_session->mode, &config);
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SRC_CONFIG, pipe_id, config);;
-
-          if (hw_scale_) {
-            SDEScaler scaler_output = {};
-            hw_scale_->SetScaler(pipe_info->scale_data, &scaler_output);
-            // TODO(user): Remove qseed3 and add version check, then send appropriate scaler object
-            if (hw_resource_.has_qseed3) {
-              drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
-                                        reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
-            }
-          }
 
           DRMCscType csc_type = DRMCscType::kCscTypeMax;
           SelectCscType(layer.input_buffer, &csc_type);
@@ -1488,6 +1525,14 @@ DisplayError HWDeviceDRM::DefaultCommit(HWLayers *hw_layers) {
 
 DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
+  if (first_cycle_ && IsPrimaryDisplay() && !disable_cont_splash_handoff_) {
+    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
+    int ret = NullCommit(true /* synchronous */, false /* retain_planes */);
+    if (ret) {
+      DLOGE("Failed with error: %d", ret);
+      return kErrorHardware;
+    }
+  }
   SetupAtomic(hw_layers, false /* validate */);
 
   if (hw_layers->elapse_timestamp > 0) {

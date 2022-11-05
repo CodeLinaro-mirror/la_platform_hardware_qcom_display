@@ -249,6 +249,7 @@ class HWDeviceDRM : public HWInterface {
   uint32_t dest_scaler_blocks_used_ = 0;  // Dest scaler blocks in use by this HWDeviceDRM instance.
   // Destination scaler blocks in use by all HWDeviceDRM instances.
   static std::atomic<uint32_t> hw_dest_scaler_blocks_used_;
+  int disable_cont_splash_handoff_ = 0;
 
  private:
   std::string interface_str_ = "DSI";
