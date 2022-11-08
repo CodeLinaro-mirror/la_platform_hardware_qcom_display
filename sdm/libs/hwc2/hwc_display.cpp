@@ -538,7 +538,7 @@ void HWCDisplay::BuildLayerStack() {
       layer->flags.solid_fill = true;
     }
     // Force GPU composition deliberately for tunnelling.
-    if (tunnelling_enable_ && !hwc_layer->IsTunneled()) {
+    if (tunnelling_enable_ && has_tunneled_layer_ && !hwc_layer->IsTunneled()) {
       layer->flags.skip = true;
     }
 
