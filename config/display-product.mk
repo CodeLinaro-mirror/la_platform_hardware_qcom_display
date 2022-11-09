@@ -9,6 +9,7 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.composer-service \
     vendor.qti.hardware.display.composer-service.rc \
     vendor.qti.hardware.display.composer-service.xml \
+    libcomposertestservice \
     libsdmcore \
     libsdmutils \
     libqdutils \
