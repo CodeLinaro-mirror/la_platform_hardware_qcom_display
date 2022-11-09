@@ -49,6 +49,14 @@ AC_ARG_ENABLE([sdmhaldrm],
 
 AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
 
+AC_ARG_ENABLE([hdr],
+     AC_HELP_STRING([--enable-hdr],
+        [enable hdr, build display-hal-linux with hdr]),
+        [enable_hdr="${enableval}"],
+        enable_hdr=no)
+
+AM_CONDITIONAL([ENABLE_HDR], [test "x${enable_hdr}" = "xyes"])
+
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
@@ -63,6 +71,7 @@ AC_PROG_MAKE_SET
 AC_CONFIG_FILES([ \
         Makefile \
         libdebug/Makefile \
+        libqservice/Makefile \
         libdebug/libdisplaydebug.pc \
         libdrmutils/Makefile \
         libdrmutils/libdrmutils.pc \
