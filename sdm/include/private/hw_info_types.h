@@ -1023,15 +1023,20 @@ class DisplayId {
  public:
   DisplayId() { }
 
-  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_(conn_id) {
-    core_id_bitset_ = std::bitset<32>((1 << core_id));
-    display_id_ = ((core_id_bitset_.to_ulong()) << 16) | (conn_id_ & 0xFFFF);
+  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_data_(conn_id) {
+    core_id_bitset_ = std::bitset<8>((1 << core_id));
+    // Currently supported only for core 0 and 1.
+    /* bits 1-8 --> core_id bitset
+            9-20 --> connector 1
+            21-32 --> connector 0 */
+    display_id_ = ((core_id_bitset_.to_ulong()) << 24) |
+                  ((conn_id_data_ << ((core_id == 1) ? 12 : 0) & 0xFFFFFF));
   }
 
   explicit DisplayId(uint32_t display_id) : display_id_(display_id) {
-    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> 16);
-    core_id_bitset_ = std::bitset<32>(core_id);
-    conn_id_ = (display_id_) < 0 ? 0 : ((display_id_) & 0xFFFF);
+    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> 24);
+    core_id_bitset_ = std::bitset<8>(core_id);
+    conn_id_data_ = (display_id_) < 0 ? 0 : ((display_id_) & 0xFFFFFF);
   }
 
   inline uint32_t GetDisplayId() {
@@ -1043,23 +1048,49 @@ class DisplayId {
   }
 
   static uint32_t GetCoreIdMap(uint32_t display_id) {
-    return (display_id) < 0 ? 0 : ((display_id) >> 16);
+    return (display_id) < 0 ? 0 : ((display_id) >> 24);
   }
 
-  inline uint32_t GetConnId() {
-    return conn_id_;
+  inline uint32_t GetConnId(uint32_t core_id) {
+    if (conn_id_data_ == -1) {
+      return conn_id_data_;
+    }
+    uint32_t conn_id_mask = (0xFFF << (core_id * 12));
+    return ((conn_id_data_ & conn_id_mask) >> (core_id * 12));
   }
 
-  static uint32_t GetConnId(uint32_t display_id) {
-    return (display_id) < 0 ? 0 : ((display_id) & 0xFFFF);;
+  static uint32_t GetConnId(uint32_t display_id, uint32_t core_id) {
+    uint32_t conn_id_data = (display_id) < 0 ? 0 : ((display_id) & 0xFFFFFF);
+    uint32_t conn_id_mask = (0xFFF << (core_id * 12));
+    return ((conn_id_data & conn_id_mask)>> (core_id * 12));
+  }
+
+  inline uint32_t GetBaseCoreId() {
+    uint32_t pos = 0;
+    uint32_t coreid_map = core_id_bitset_.to_ulong();
+    while (coreid_map && !(coreid_map & 1)) {
+      coreid_map = coreid_map >> 1;
+      pos++;
+    }
+    return pos;
+  }
+
+  static uint32_t GetBaseCoreId(uint32_t display_id) {
+    uint32_t coreid_map = (display_id) < 0 ? 0 : ((display_id) >> 24);
+    uint32_t pos = 0;
+    while (coreid_map && !(coreid_map & 1)) {
+      coreid_map = coreid_map >> 1;
+      pos++;
+    }
+    return pos;
   }
 
   ~DisplayId() {}
 
  private:
   int32_t display_id_ = -1;
-  std::bitset<32> core_id_bitset_ = 0;
-  uint32_t conn_id_ = -1;
+  std::bitset<8> core_id_bitset_ = 0;
+  int32_t conn_id_data_ = -1;
 };
 
 typedef std::map<uint32_t, std::map<uint32_t, uint8_t>> MultiDpuDemuraMap;

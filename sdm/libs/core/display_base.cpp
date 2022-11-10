@@ -242,8 +242,7 @@ DisplayError DisplayBase::Init() {
     if (!color_mgr_factory) {
       DLOGW("failed to create color manager factory");
     } else {
-      DLOGV("Creating color_mgr_ for display_id=%d, conn_id=%d",
-              display_id_info_.GetDisplayId(), display_id_info_.GetConnId());
+      DLOGV("Creating color_mgr_ for display_id=%d", display_id_info_.GetDisplayId());
       color_mgr_ = color_mgr_factory->CreateColorManagerIntf(display_type_,
                                                               dpu_core_mux_,
                                                               device_ctx_,
@@ -3248,7 +3247,8 @@ DisplayError DisplayBase::GetConnectorId(int32_t *conn_id) {
     return kErrorParameters;
   }
 
-  *conn_id = display_id_info_.GetConnId();
+  uint32_t base_core_id = display_id_info_.GetBaseCoreId();
+  *conn_id = display_id_info_.GetConnId(base_core_id);
 
   return kErrorNone;
 }
