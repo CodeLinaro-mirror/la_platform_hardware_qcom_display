@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DISPLAY_BUILTIN_H__
 #define __DISPLAY_BUILTIN_H__
 
@@ -181,6 +187,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   uint32_t SanitizeRefreshRate(uint32_t req_refresh_rate, uint32_t max_refresh_rate,
                                uint32_t min_refresh_rate);
   DisplayError PerformCacConfig(CacConfig config, bool enable) override;
+  bool IsCacV2Supported() override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;

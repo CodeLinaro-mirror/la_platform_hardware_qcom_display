@@ -63,6 +63,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <cutils/properties.h>
 #include <sync/sync.h>
 #include <utils/constants.h>
@@ -1606,6 +1612,12 @@ HWC2::Error HWCDisplayBuiltIn::SetDimmingMinBl(int min_bl) {
   }
 
   return HWC2::Error::None;
+}
+
+bool HWCDisplayBuiltIn::IsCacV2Supported() {
+  uint32_t cac_v2_supported = 0;
+  display_intf_->IsSupportedOnDisplay(kCacV2, &cac_v2_supported);
+  return cac_v2_supported ? true : false;
 }
 
 HWC2::Error HWCDisplayBuiltIn::PerformCacConfig(CacConfig config, bool enable) {
