@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -55,7 +55,7 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.15/IDisplayConfig.h>
+#include <vendor/display/config/1.21/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
@@ -87,7 +87,7 @@
 
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_15::IDisplayConfig;
+using vendor::display::config::V1_21::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -460,8 +460,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<void> getHDRCapabilities(IDisplayConfig::DisplayType dpy,
                                   getHDRCapabilities_cb _hidl_cb) override;
   Return<int32_t> setCameraLaunchStatus(uint32_t on) override;
-  //TODO: Port vendor.display.config.1.21 related changes and enable tunneling APIs in hwc
-#if 0
   Return<int32_t> tunnellingInit() override;
   Return<int32_t> allowIdleFallback() override;
   Return<void> getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
@@ -478,7 +476,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
                                                                   override;
   Return<int32_t> destroyTunnelledLayer() override;
   Return<int32_t> tunnellingDeinit() override;
-#endif
   Return<void> displayBWTransactionPending(displayBWTransactionPending_cb _hidl_cb) override;
   Return<int32_t> IdlePowerCollapse(bool enable, bool synchronous);
 
@@ -630,7 +627,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   static int null_display_mode_;
   hwc2_layer_t tunneled_layer_ = -1;
   int tunneled_layer_rf_ = -1; // tunneled layer's release fence
-//  IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
+  IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
+  int tunneled_display_id_ = -1;
 };
 }  // namespace sdm
 
