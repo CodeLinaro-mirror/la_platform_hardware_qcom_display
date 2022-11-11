@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -791,9 +791,8 @@ void BufferManager::RegisterHandleLocked(const private_handle_t *hnd, int ion_ha
   auto buffer = std::make_shared<Buffer>(hnd, ion_handle, ion_handle_meta);
 
   if (hnd->base_metadata) {
-    auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
 #ifdef METADATA_V2
-    buffer->reserved_size = metadata->reservedSize;
+    buffer->reserved_size = hnd->reserved_size;
     if (buffer->reserved_size > 0) {
       buffer->reserved_region_ptr =
           reinterpret_cast<void *>(hnd->base_metadata + sizeof(MetaData_t));
