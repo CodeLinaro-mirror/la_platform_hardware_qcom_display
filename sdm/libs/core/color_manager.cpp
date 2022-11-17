@@ -41,6 +41,7 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <map>
 
 #include "color_manager.h"
 
@@ -209,6 +210,7 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
 
   if (color_manager_proxy) {
     color_manager_proxy->hw_res_info_ = hw_res_info;
+    color_manager_proxy->core_id_ = color_manager_proxy->getCoreId();
     // 1. need query post-processing feature version from HWInterface.
     error = color_manager_proxy->dpu_core_mux_->GetPPFeaturesVersion(&versions);
     PPHWAttributes &hw_attr = color_manager_proxy->pp_hw_attributes_;
@@ -369,30 +371,30 @@ bool ColorManagerProxy::NeedsPartialUpdateDisable() {
     pp_features_.IsSwAssetDirty());
 }
 
-void ColorManagerProxy::getCoreId(uint32_t &core_id) {
+uint32_t ColorManagerProxy::getCoreId() {
   uint16_t core_id_bit_map;
   int i = 0;
 
   core_id_bit_map = DisplayId::GetCoreIdMap(display_id_);
   if (core_id_bit_map <= 0) {
     DLOGE("Invalid core id = %d", core_id_bit_map);
-    core_id = -1;
-    return;
+    return -1;
   }
 
-  // return the MSB set to get the core ID
-  while (!(core_id_bit_map & (1 << i))) {
-    i++;
+  // return set bit
+  for (i = 0; i < CORE_ID_SIZE_IN_BITS; i++) {
+    if (core_id_bit_map & BIT(i)) {
+      return i;
+    }
   }
 
-  core_id = i;
+  return -1;
 }
 
 DisplayError ColorManagerProxy::Commit() {
   Locker &locker(pp_features_.GetLocker());
   SCOPE_LOCK(locker);
 
-  uint32_t core_id = 0;
   DisplayError ret = kErrorNone;
   bool is_dirty = pp_features_.IsDirty();
   if (feature_intf_) {
@@ -400,15 +402,9 @@ DisplayError ColorManagerProxy::Commit() {
   }
 
   if (is_dirty) {
-    getCoreId(core_id);
-    if (core_id < 0) {
-      DLOGE("invalid core_id = %d", core_id);
-      return kErrorNotSupported;
-    }
-
     // pass core to set PP features on sepcific core
-    DLOGV("Setting PPFeatures for core_id=%d", core_id);
-    ret = dpu_core_mux_->SetPPFeatures(&pp_features_, core_id);
+    DLOGV("Setting PPFeatures for core_id=%d", core_id_);
+    ret = dpu_core_mux_->SetPPFeatures(&pp_features_, core_id_);
   }
 
   return ret;
@@ -1276,9 +1272,11 @@ void DPUColorManager::Deinit() {
 }
 
 int DPUColorManager::CreatePhysicalDisplayIds(DisplayId display_id_info) {
-  int ret = 0, conn_id = 0, core_id = 0;
+  int ret = 0, core_id = 0;
+  std::map<uint8_t, uint32_t> conn_id_map;
 
   core_id = display_id_info.GetCoreIdMap();
+  conn_id_map = display_id_info.GetConnIdMap();
 
   if (!core_id) {
     DLOGE("No dpu is present core_id = %d", core_id);
@@ -1286,17 +1284,11 @@ int DPUColorManager::CreatePhysicalDisplayIds(DisplayId display_id_info) {
   }
 
   // Create physical display ID for each physical display
-  // display_id_0 = (core_id & 0x1) << 16) | (conn_id & 0xFFFF)
   for (int i = 0; core_id >> i; i++) {
     uint32_t disp_id = 0;
-    if (core_id & (1 << i)) {
-      conn_id = display_id_info.GetConnId(i);
-      uint32_t core_index  = 0;
-      while (!((core_id & (1 << i)) & (1 << core_index))) {
-        core_index++;
-      }
-      disp_id = DisplayId(core_index, conn_id).GetDisplayId();
-      DLOGV("Creating local color display id for display=%d, id=%d", i, disp_id);
+    if (core_id & BIT(i)) {
+      disp_id = DisplayId(i, conn_id_map).GetDisplayId();
+      DLOGV("Creating physical display id for core=%d, id=0x%x", i, disp_id);
       display_id_list_.push_back(disp_id);
     }
   }
