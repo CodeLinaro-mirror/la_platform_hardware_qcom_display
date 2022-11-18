@@ -393,8 +393,7 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
     // initialise the device on connect
     ctx->node.is_connected = connected;
     if (connected) {
-        //TODO: Need to call cec_init_device for the correct hardware interface
-        cec_init_device(ctx, 0);
+        cec_init_device(ctx, ctx->node.node_num);
     } else {
         cec_close_device(ctx);
     }
@@ -621,6 +620,7 @@ static int cec_init_context(cec_context_t *ctx, int hardware_intf)
     ctx->port_info[0].cec_supported = 1;
     //XXX: Enable ARC if supported
     ctx->port_info[0].arc_supported = 0;
+    ctx->node.node_num = hardware_intf;
     cec_get_physical_address((hdmi_cec_device *) ctx,
             &ctx->port_info[0].physical_address);
 

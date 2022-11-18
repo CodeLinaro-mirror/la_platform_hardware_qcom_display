@@ -525,7 +525,7 @@ Return<int32_t> HWCSession::tunnellingInit() {
      return EINVAL;
   }
 
-  tunnelling_enabled_ = true;
+  tunneling_enabled_ = true;
   return 0;
 }
 
@@ -550,65 +550,71 @@ Return<int32_t> HWCSession::setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_v
 }
 
 Return<int32_t> HWCSession::createTunnelledLayer(const IDisplayConfig::LayerInfo& layer) {
-  if (tunnelling_enabled_ == false) {
+  if (tunneling_enabled_ == false) {
     DLOGE("Tunneling not enabled\n");
     return EINVAL;
   }
+
+  tunneled_layer_params_ = layer;
+  return 0;
+}
+
+int32_t HWCSession::CreateTunneledLayerInternal() {
   int32_t error = -EINVAL;
-  error = CreateLayer(HWC_DISPLAY_PRIMARY, &tunnelled_layer_);
+  error = CreateLayer(HWC_DISPLAY_PRIMARY, &tunneled_layer_);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("CreateLayer failed! Exiting createTunnelledLayer.\n");
     return error;
   }
-  SetLayerIsTunneled(HWC_DISPLAY_PRIMARY, tunnelled_layer_, true);
-  error = SetLayerZOrder(HWC_DISPLAY_PRIMARY,tunnelled_layer_, layer.z_order);
+  SetLayerIsTunneled(HWC_DISPLAY_PRIMARY, tunneled_layer_, true);
+  error = SetLayerZOrder(HWC_DISPLAY_PRIMARY,tunneled_layer_, tunneled_layer_params_.z_order);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerZOrder failed! Exiting createTunnelledLayer.\n");
     return error;
   }
 
   hwc_frect_t rect;
-  rect.left = layer.src_rect.left;
-  rect.top = layer.src_rect.top;
-  rect.right = layer.src_rect.right;
-  rect.bottom = layer.src_rect.bottom;
-  error = SetLayerSourceCrop(HWC_DISPLAY_PRIMARY, tunnelled_layer_, rect);
+  rect.left = tunneled_layer_params_.src_rect.left;
+  rect.top = tunneled_layer_params_.src_rect.top;
+  rect.right = tunneled_layer_params_.src_rect.right;
+  rect.bottom = tunneled_layer_params_.src_rect.bottom;
+  error = SetLayerSourceCrop(HWC_DISPLAY_PRIMARY, tunneled_layer_, rect);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerSourceCrop failed! Exiting createTunnelledLayer.\n");
     return error;
   }
 
-  error = SetLayerTransform(HWC_DISPLAY_PRIMARY, tunnelled_layer_,
-                            (int32_t)layer.layer_transform );
+  error = SetLayerTransform(HWC_DISPLAY_PRIMARY, tunneled_layer_,
+                            (int32_t)tunneled_layer_params_.layer_transform );
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerTransform failed! Exiting createTunnelledLayer.\n");
     return error;
   }
 
   hwc_rect_t dst_rect;
-  dst_rect.left = layer.dst_rect.left;
-  dst_rect.top = layer.dst_rect.top;
-  dst_rect.right = layer.dst_rect.right;
-  dst_rect.bottom = layer.dst_rect.bottom;
-  error = SetLayerDisplayFrame(HWC_DISPLAY_PRIMARY, tunnelled_layer_, dst_rect);
+  dst_rect.left = tunneled_layer_params_.dst_rect.left;
+  dst_rect.top = tunneled_layer_params_.dst_rect.top;
+  dst_rect.right = tunneled_layer_params_.dst_rect.right;
+  dst_rect.bottom = tunneled_layer_params_.dst_rect.bottom;
+  error = SetLayerDisplayFrame(HWC_DISPLAY_PRIMARY, tunneled_layer_, dst_rect);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerDisplayFrame failed! Exiting createTunnelledLayer.\n");
     return error;
   }
 
-  error = SetLayerPlaneAlpha(HWC_DISPLAY_PRIMARY, tunnelled_layer_, (float)layer.plane_alpha);
+  error = SetLayerPlaneAlpha(HWC_DISPLAY_PRIMARY, tunneled_layer_, (float)tunneled_layer_params_.plane_alpha);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerPlaneAlpha failed! Exiting createTunnelledLayer.\n");
     return error;
   }
 
-  error = SetLayerDataspace(HWC_DISPLAY_PRIMARY, tunnelled_layer_, layer.dataspace);
+  error = SetLayerDataspace(HWC_DISPLAY_PRIMARY, tunneled_layer_, tunneled_layer_params_.dataspace);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerDataspace failed! Exiting createTunnelledLayer.\n");
     return error;
   }
 
-  error = SetLayerBlendMode(HWC_DISPLAY_PRIMARY, tunnelled_layer_, (int32_t)layer.blending);
+  error = SetLayerBlendMode(HWC_DISPLAY_PRIMARY, tunneled_layer_, (int32_t)tunneled_layer_params_.blending);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerBlendMode failed! Exiting createTunnelledLayer.\n");
     return error;
@@ -622,7 +628,7 @@ Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
                                                 dequeueTunnelledBuffer_cb _hidl_cb) {
   SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
   native_handle_t* handle = nullptr;
-  if (tunnelling_enabled_ == false) {
+  if (tunneling_enabled_ == false) {
     DLOGE("Tunneling not enabled\n");
     _hidl_cb(-EINVAL, handle);
     return Void();
@@ -639,16 +645,16 @@ Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
   }
 
   uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
-  if (tunnelling_map_buffer_native_handle_.find(buffer_id) !=
-      tunnelling_map_buffer_native_handle_.end()) {
-    native_handle = tunnelling_map_buffer_native_handle_[buffer_id];
+  if (tunneling_map_buffer_native_handle_.find(buffer_id) !=
+      tunneling_map_buffer_native_handle_.end()) {
+    native_handle = tunneling_map_buffer_native_handle_[buffer_id];
   } else {
     native_handle = buffer_allocator_.ImportBuffer(buffer_handle);
     if (native_handle == nullptr) {
       _hidl_cb(-EINVAL, handle);
       return Void();
     }
-    tunnelling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id] = native_handle;
+    tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id] = native_handle;
   }
   private_handle_t *private_handle = (private_handle_t *)native_handle;
   if(private_handle == nullptr) {
@@ -656,13 +662,13 @@ Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
     return Void();;
   }
 
-  if (tunnelling_map_buffer_release_fence_.find(private_handle->id) ==
-      tunnelling_map_buffer_release_fence_.end()) {
+  if (tunneling_map_buffer_release_fence_.find(private_handle->id) ==
+      tunneling_map_buffer_release_fence_.end()) {
     _hidl_cb(-EINVAL, handle);
     return Void();
   }
 
-  int32_t release_fence = tunnelling_map_buffer_release_fence_[private_handle->id];
+  int32_t release_fence = tunneling_map_buffer_release_fence_[private_handle->id];
 
   NATIVE_HANDLE_DECLARE_STORAGE(fenceStorage, 1, 0);
   if (release_fence >= 0) {
@@ -681,22 +687,29 @@ Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
 
 Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
                                                  const hidl_handle& acquire_fence) {
-  if (tunnelling_enabled_ == false) {
+  if (tunneling_enabled_ == false) {
     DLOGW("Tunneling not enabled\n");
     return EINVAL;
   }
 
+  int32_t error = -EINVAL;
+  if(tunneled_layer_ == -1) {
+    error = CreateTunneledLayerInternal();
+    if (error != HWC2_ERROR_NONE) {
+      return EINVAL;
+    }
+  }
+
   DTRACE_SCOPED();
 
-  bool tunnelled_layer_present = false;
-  IsTunnelledLayerPresent(HWC_DISPLAY_PRIMARY, &tunnelled_layer_present);
-  if (tunnelled_layer_present == false || tunnelled_layer_ == -1) {
-    tunnelled_layer_ = -1;
-    DLOGW("No tunnelled layer present! Exiting queueTunnelledBuffer");
+  bool tunneled_layer_present = false;
+  IsTunnelledLayerPresent(HWC_DISPLAY_PRIMARY, &tunneled_layer_present);
+  if (tunneled_layer_present == false || tunneled_layer_ == -1) {
+    tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
     return EINVAL;
   }
 
-  int32_t error = -EINVAL;
   const native_handle_t *native_handle = NULL;
   buffer_handle_t buffer_handle = buffer.getNativeHandle();
   if (!buffer_handle) {
@@ -705,15 +718,15 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
   }
 
   uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
-  if (tunnelling_map_buffer_native_handle_.find(buffer_id) !=
-      tunnelling_map_buffer_native_handle_.end()) {
-    native_handle = tunnelling_map_buffer_native_handle_[buffer_id];
+  if (tunneling_map_buffer_native_handle_.find(buffer_id) !=
+      tunneling_map_buffer_native_handle_.end()) {
+    native_handle = tunneling_map_buffer_native_handle_[buffer_id];
   } else {
     native_handle = buffer_allocator_.ImportBuffer(buffer_handle);
     if (native_handle == nullptr) {
       return EINVAL;
     }
-    tunnelling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id] = native_handle;
+    tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id] = native_handle;
   }
 
   uint32_t types_count = 0;
@@ -728,7 +741,7 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
   }
-  error = SetLayerBuffer(HWC_DISPLAY_PRIMARY, tunnelled_layer_, native_handle, acquire_fence_fd);
+  error = SetLayerBuffer(HWC_DISPLAY_PRIMARY, tunneled_layer_, native_handle, acquire_fence_fd);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerBuffer failed! Exiting queueTunnelledBuffer.\n");
     return error;
@@ -749,43 +762,42 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
     return error;
   }
   close(presentfence);
-  auto hwc_layer = hwc_display->GetHWCLayer(tunnelled_layer_);
+  auto hwc_layer = hwc_display->GetHWCLayer(tunneled_layer_);
   if (hwc_layer == nullptr) {
-    DLOGE("Unable to fetch corresponding hwc_layer for tunnelled layer");
+    DLOGE("Unable to fetch corresponding hwc_layer for tunneled layer");
     return EINVAL;
   }
   int release_fence = hwc_layer->PopBackReleaseFence();
   close(tunneled_layer_rf_);
-  tunnelling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id] = release_fence;
+  tunneling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id] = release_fence;
 
   DLOGV("queueTunnelledBuffer successful.\n");
   return 0;
 }
 
 Return<int32_t> HWCSession::destroyTunnelledLayer()  {
-  if (tunnelling_enabled_ == false) {
+  if (tunneling_enabled_ == false) {
     DLOGE("Tunneling not enabled\n");
     return EINVAL;
   }
   DTRACE_SCOPED();
 
-  bool tunnelled_layer_present = false;
-  IsTunnelledLayerPresent(HWC_DISPLAY_PRIMARY, &tunnelled_layer_present);
-  if (tunnelled_layer_present == false || tunnelled_layer_ == -1) {
-    tunnelled_layer_ = -1;
-    DLOGW("No tunnelled layer present! Exiting destroyTunnelledLayer");
+  bool tunneled_layer_present = false;
+  IsTunnelledLayerPresent(HWC_DISPLAY_PRIMARY, &tunneled_layer_present);
+  if (tunneled_layer_present == false || tunneled_layer_ == -1) {
+    tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting destroyTunnelledLayer");
     return EINVAL;
   }
 
-  SetLayerIsTunneled(HWC_DISPLAY_PRIMARY, tunnelled_layer_, false);
+  SetLayerIsTunneled(HWC_DISPLAY_PRIMARY, tunneled_layer_, false);
 
-  int error = DestroyLayer(HWC_DISPLAY_PRIMARY, tunnelled_layer_);
-    if (error != HWC2_ERROR_NONE) {
-      DLOGE("DestroyLayer failed! Exiting destroyTunnelledLayer.\n");
-      return error;
+  int error = DestroyLayer(HWC_DISPLAY_PRIMARY, tunneled_layer_);
+  if (error != HWC2_ERROR_NONE) {
+      DLOGE("DestroyLayer failed! Tunneled Layer not found\n");
   }
 
-  tunnelled_layer_ = -1;
+  tunneled_layer_ = -1;
 
   uint32_t types_count = 0;
   uint32_t reqs_count = 0;
@@ -807,15 +819,15 @@ Return<int32_t> HWCSession::destroyTunnelledLayer()  {
 }
 
 Return<int32_t> HWCSession::tunnellingDeinit() {
-  tunnelling_enabled_ = false;
-  for (auto i : tunnelling_map_buffer_native_handle_) {
+  tunneling_enabled_ = false;
+  for (auto i : tunneling_map_buffer_native_handle_) {
     native_handle_close(i.second);
   }
-  for (auto i : tunnelling_map_buffer_release_fence_) {
+  for (auto i : tunneling_map_buffer_release_fence_) {
     close(i.second);
   }
-  tunnelling_map_buffer_native_handle_.clear();
-  tunnelling_map_buffer_release_fence_.clear();
+  tunneling_map_buffer_native_handle_.clear();
+  tunneling_map_buffer_release_fence_.clear();
   return 0;
 }
 
