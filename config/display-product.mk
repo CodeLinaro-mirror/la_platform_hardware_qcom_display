@@ -157,7 +157,7 @@ ifeq ($(TARGET_USES_QMAA),true)
 endif
 
 # Enable power async mode
-PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=1
+PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 
 # Soong Namespace
 SOONG_CONFIG_NAMESPACES += qtidisplay
