@@ -1019,20 +1019,39 @@ struct Resolution {
   uint32_t y_pixels;
 };
 
+#define CONN_ID_SIZE 24
+#define CONN_1_SHIFT_BITS 12
+#define CONN_BIT_MASK 0x000FFFFFF
+#define CORE_ID_SIZE_IN_BITS 8
+
 class DisplayId {
  public:
   DisplayId() { }
 
-  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_(conn_id) {
-    core_id_bitset_ = std::bitset<32>((1 << core_id));
-    display_id_ = ((core_id_bitset_.to_ulong()) << 16) | (conn_id_ & 0xFFFF);
+  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_data_(conn_id) {
+    core_id_bitset_ = std::bitset<8>((1 << core_id));
+    // Currently supported only for core 0 and 1.
+    /* bits 1-8 --> core_id bitset
+            9-20 --> connector 1
+            21-32 --> connector 0 */
+    display_id_ = ((core_id_bitset_.to_ulong()) << CONN_ID_SIZE) |
+                  ((conn_id_data_ << ((core_id == 1) ? 12 : 0) & CONN_BIT_MASK));
   }
 
   explicit DisplayId(uint32_t display_id) : display_id_(display_id) {
-    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> 16);
-    core_id_bitset_ = std::bitset<32>(core_id);
-    conn_id_ = (display_id_) < 0 ? 0 : ((display_id_) & 0xFFFF);
+    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> CONN_ID_SIZE);
+    core_id_bitset_ = std::bitset<8>(core_id);
+    conn_id_data_ = (display_id_) < 0 ? 0 : ((display_id_) & CONN_BIT_MASK);
   }
+
+  explicit DisplayId(uint8_t core_id, std::map<uint8_t, uint32_t> conn_id_map) {
+    core_id_bitset_ = std::bitset<8>((1 << core_id));
+    if (conn_id_map.size() == 2) {
+      display_id_ = (((core_id_bitset_.to_ulong()) << CONN_ID_SIZE) |
+                                (conn_id_map[1] << CONN_1_SHIFT_BITS) | (conn_id_map[0]));
+    }
+  }
+
 
   inline uint32_t GetDisplayId() {
     return display_id_;
@@ -1043,23 +1062,60 @@ class DisplayId {
   }
 
   static uint32_t GetCoreIdMap(uint32_t display_id) {
-    return (display_id) < 0 ? 0 : ((display_id) >> 16);
+    return (display_id) < 0 ? 0 : ((display_id) >> CONN_ID_SIZE);
   }
 
-  inline uint32_t GetConnId() {
-    return conn_id_;
+  inline uint32_t GetConnId(uint32_t core_id) {
+    if (conn_id_data_ == -1) {
+      return conn_id_data_;
+    }
+    uint32_t conn_id_mask = (0xFFF << (core_id * 12));
+    return ((conn_id_data_ & conn_id_mask) >> (core_id * 12));
   }
 
-  static uint32_t GetConnId(uint32_t display_id) {
-    return (display_id) < 0 ? 0 : ((display_id) & 0xFFFF);;
+  static uint32_t GetConnId(uint32_t display_id, uint32_t core_id) {
+    uint32_t conn_id_data = (display_id) < 0 ? 0 : ((display_id) & CONN_BIT_MASK);
+    uint32_t conn_id_mask = (0xFFF << (core_id * 12));
+    return ((conn_id_data & conn_id_mask)>> (core_id * 12));
+  }
+
+  inline uint32_t GetBaseCoreId() {
+    uint32_t pos = 0;
+    uint32_t coreid_map = core_id_bitset_.to_ulong();
+    while (coreid_map && !(coreid_map & 1)) {
+      coreid_map = coreid_map >> 1;
+      pos++;
+    }
+    return pos;
+  }
+
+  static uint32_t GetBaseCoreId(uint32_t display_id) {
+    uint32_t coreid_map = (display_id) < 0 ? 0 : ((display_id) >> CONN_ID_SIZE);
+    uint32_t pos = 0;
+    while (coreid_map && !(coreid_map & 1)) {
+      coreid_map = coreid_map >> 1;
+      pos++;
+    }
+    return pos;
+  }
+
+  std::map<uint8_t, uint32_t> GetConnIdMap() {
+    std::map<uint8_t, uint32_t> conn_id_map;
+    uint8_t core_id = core_id_bitset_.to_ulong();
+
+    for (uint8_t i = 0; core_id >> i; i++) {
+      conn_id_map.insert({i, GetConnId(i)});
+    }
+
+    return conn_id_map;
   }
 
   ~DisplayId() {}
 
  private:
   int32_t display_id_ = -1;
-  std::bitset<32> core_id_bitset_ = 0;
-  uint32_t conn_id_ = -1;
+  std::bitset<8> core_id_bitset_ = 0;
+  int32_t conn_id_data_ = -1;
 };
 
 typedef std::map<uint32_t, std::map<uint32_t, uint8_t>> MultiDpuDemuraMap;

@@ -363,6 +363,11 @@ void HWCSession::InitSupportedDisplaySlots() {
   Debug::Get()->GetProperty(CORE_ID_MASK, &core_id_mask);
   DLOGI("core id mask: %d", core_id_mask);
   std::bitset<8> core_ids(core_id_mask);
+  if (!core_id_mask) {
+    DLOGI("No core id is specified");
+    return;
+  }
+
   DisplayError error = CoreInterface::CreateCore(&buffer_allocator_, nullptr,
                                                  &socket_handler_, ipc_intf_,
                                                  &core_intf_, core_ids);
@@ -425,6 +430,7 @@ void HWCSession::InitSupportedDisplaySlots() {
   }
 
   disp_count = UINT32(std::min(max_builtin, HWCCallbacks::kNumBuiltIn));
+  base_id = qdutils::DISPLAY_BUILTIN_2;
   map_info_builtin_.resize(disp_count);
   for (auto &map_info : map_info_builtin_) {
     map_info.client_id = base_id++;

@@ -20,12 +20,12 @@ DPUCoreMux::DPUCoreMux(DisplayId display_id, DisplayType type,
   DisplayError error = kErrorNone;
   for (uint32_t i = 0; i < hw_info_intf.size(); i++) {
     HWInterface *hw = nullptr;
-    error = HWInterface::Create(display_id.GetConnId(), type, hw_info_intf[i],
+    uint32_t core_id = hw_info_intf[i]->GetCoreId();
+    error = HWInterface::Create(display_id.GetConnId(core_id), type, hw_info_intf[i],
                                 buffer_allocator, &hw);
     if (error != kErrorNone) {
       DLOGE("HW interface create failed");
     }
-    uint32_t core_id = hw_info_intf[i]->GetCoreId();
     hw_intf_.insert(std::make_pair(core_id, hw));
     core_ids_.push_back(core_id);
   }
@@ -278,8 +278,8 @@ DisplayError DPUCoreMux::PowerOff(bool teardown, SyncPoints *sync_points) {
   DisplayError error = kErrorNone;
 
 
-  for (auto hw_intf : hw_intf_) {
-    error = hw_intf.second->PowerOff(teardown, &sync_points_val);
+  for (uint32_t i : op_sync_sequence_) {
+    error = hw_intf_.at(core_ids_[i])->PowerOff(teardown, &sync_points_val);
     if (error != kErrorNone && error != kErrorDeferred) {
       return error;
     }
@@ -806,7 +806,18 @@ DisplayError DPUCoreMux::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
 
 DisplayError DPUCoreMux::GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                       uint8_t *out_data) {
-  return hw_intf_.at(core_ids_[0])->GetDisplayIdentificationData(out_port, out_data_size, out_data);
+  uint8_t out_port_temp = 0;
+  *out_port = 0;
+  for (auto hw_intf : hw_intf_) {
+    DisplayError error = hw_intf.second->GetDisplayIdentificationData(&out_port_temp,
+                                                                      out_data_size,
+                                                                      out_data);
+    if (error != kErrorNone) {
+      return error;
+    }
+    *out_port = *out_port | out_port_temp;
+  }
+  return kErrorNone;
 }
 
 DisplayError DPUCoreMux::SetFrameTrigger(FrameTriggerMode mode) {

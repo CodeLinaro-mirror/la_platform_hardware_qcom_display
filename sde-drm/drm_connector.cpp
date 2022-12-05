@@ -435,7 +435,8 @@ int DRMConnectorManager::Reserve(DRMDisplayType disp_type, DRMDisplayToken *toke
     if (conn.second->GetStatus() == DRMStatus::FREE) {
       uint32_t conn_type;
       conn.second->GetType(&conn_type);
-      if ((disp_type == DRMDisplayType::PERIPHERAL && conn_type == DRM_MODE_CONNECTOR_DSI) ||
+      if ((disp_type == DRMDisplayType::PERIPHERAL &&
+           (conn_type == DRM_MODE_CONNECTOR_DSI || conn_type == DRM_MODE_CONNECTOR_eDP)) ||
           (disp_type == DRMDisplayType::VIRTUAL && conn_type == DRM_MODE_CONNECTOR_VIRTUAL) ||
           (disp_type == DRMDisplayType::TV && IsTVConnector(conn_type))) {
         if (conn.second->IsConnected()) {

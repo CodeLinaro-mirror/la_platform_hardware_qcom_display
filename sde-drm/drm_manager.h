@@ -27,6 +27,11 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_MANAGER_H__
 #define __DRM_MANAGER_H__
 
@@ -73,6 +78,8 @@ class DRMManager : public DRMManagerInterface {
   virtual void GetInitialDemuraInfo(std::vector<uint32_t> *initial_demura_planes);
   virtual void MarkPanelFeatureForNullCommit(const DRMDisplayToken &token,
                                              const DRMPanelFeatureID &id);
+
+  virtual int GetPossibleEncoders(uint32_t connector_id, std::set<uint32_t> *possible_encoders);
 
   DRMPlaneManager *GetPlaneMgr();
   DRMConnectorManager *GetConnectorMgr();

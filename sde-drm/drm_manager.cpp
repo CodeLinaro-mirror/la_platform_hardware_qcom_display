@@ -27,6 +27,14 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
+ */
+
 #include <drm_logger.h>
 
 #include <string.h>
@@ -89,9 +97,12 @@ DRMManager *DRMManager::GetInstance(int fd) {
 
 void DRMManager::Destroy(int fd) {
   lock_guard<mutex> lock(s_lock);
-  if (s_drm_instance[fd]) {
+
+  auto iter = s_drm_instance.Find(fd);
+  if (iter != s_drm_instance.End()) {
     delete s_drm_instance[fd];
     s_drm_instance[fd] = nullptr;
+    s_drm_instance.Erase(fd);
   }
 }
 
@@ -502,5 +513,10 @@ void DRMManager::GetInitialDemuraInfo(std::vector<uint32_t> *initial_demura_plan
     // Safe to assume pipe to crtc to Demura associations are functionally correct
     plane_mgr_->GetPlaneIdsFromDescriptions(frl, initial_demura_planes);
   }
+}
+
+int DRMManager::GetPossibleEncoders(uint32_t connector_id, std::set<uint32_t> *possible_encoders) {
+  int ret = conn_mgr_->GetPossibleEncoders(connector_id, possible_encoders);
+  return ret;
 }
 }  // namespace sde_drm

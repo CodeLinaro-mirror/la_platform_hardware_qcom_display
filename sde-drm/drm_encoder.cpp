@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <drm.h>
@@ -161,10 +168,22 @@ int DRMEncoderManager::Reserve(const std::set<uint32_t> &possible_encoders, DRMD
         // Bit 7   --> Display type 0: Pluggable 1: BuiltIn X:Virtual.
         // Bit 6   --> Pluggable: 0 for TMDS encoder, 1 for DPMST encoder.
         //             Builtin Or Virtual: X
-        // Bit 5-0 --> Encoder index.
+        // Bit 5-4 --> Core id
+        // Bit 3-0 --> Encoder index.
         uint32_t encoder_type;
         encoder->second->GetType(&encoder_type);
         token->hw_port = GetDisplayTypeCode(encoder_type) | encoder_index;
+        // read card name to extract the core_id from it
+        char *name = drmGetPrimaryDeviceNameFromFd(fd_);
+        if (name == NULL) {
+          return ret;
+        }
+
+        std::string device_name(name);
+        // append core_id to the hw_port to differentiate individual displays in dual dpu usecase
+        uint8_t core_id_mask = static_cast<uint8_t> (std::atoi(&device_name.back()) == 0 ?
+                                                     (1 << 4) : (1 << 5));
+        token->hw_port = token->hw_port | core_id_mask;
         ret = 0;
         break;
       }

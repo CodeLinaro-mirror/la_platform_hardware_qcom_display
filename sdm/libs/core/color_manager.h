@@ -52,6 +52,8 @@
 #include "hw_interface.h"
 #include "dpu_core_mux.h"
 
+#define BIT(x) (1 << x)
+
 namespace sdm {
 
 using snapdragoncolor::ColorMode;
@@ -233,7 +235,7 @@ class ColorManagerProxy : public ColorManagerIntf {
   void DumpColorMetaData(const ColorMetaData &color_metadata);
   bool HasNativeModeSupport();
   DisplayError ApplySwAssets();
-  void getCoreId(uint32_t &core_id);
+  uint32_t getCoreId();
 
   uint32_t display_id_;
   DisplayType device_type_;
@@ -250,6 +252,7 @@ class ColorManagerProxy : public ColorManagerIntf {
   snapdragoncolor::ScPostBlendInterface *stc_intf_ = NULL;
   snapdragoncolor::ColorMode curr_mode_;
   bool needs_update_ = false;
+  uint32_t core_id_;
 };
 
 class ColorFeatureCheckingImpl : public FeatureInterface {
