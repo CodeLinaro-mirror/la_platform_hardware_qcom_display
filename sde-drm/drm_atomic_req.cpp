@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -160,7 +160,8 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL:
     case DRMOps::CONNECTOR_SET_FRAME_TRIGGER:
     case DRMOps::CONNECTOR_SET_COLORSPACE:
-    case DRMOps::CONNECTOR_SET_SKEW_VSYNC: {
+    case DRMOps::CONNECTOR_SET_SKEW_VSYNC:
+    case DRMOps::CONNECTOR_SET_WB_CAC: {
       drm_mgr_->GetConnectorMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
     } break;
     case DRMOps::DPPS_CACHE_FEATURE: {

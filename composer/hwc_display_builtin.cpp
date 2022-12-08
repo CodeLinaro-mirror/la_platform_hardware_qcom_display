@@ -228,8 +228,13 @@ int HWCDisplayBuiltIn::Init() {
   GetDisplayAttributesForConfig(INT(config_index), &attr);
   active_refresh_rate_ = attr.fps;
 
-  if (pthread_create(&wb_kickoff_thread_, NULL, &HWCDisplayBuiltIn::WBKickOffThread, this)) {
-    DLOGI("Failed to start %s, error = %s", "WB kickoff thread", strerror(errno));
+  int enable_kernel_wb_cac = 0;
+  HWCDebugHandler::Get()->GetProperty(ENABLE_KERNEL_WB_CAC, &enable_kernel_wb_cac);
+  enable_kernel_wb_cac_ = (enable_kernel_wb_cac == 1);
+  if (!enable_kernel_wb_cac_) {
+    if (pthread_create(&wb_kickoff_thread_, NULL, &HWCDisplayBuiltIn::WBKickOffThread, this)) {
+      DLOGI("Failed to start %s, error = %s", "WB kickoff thread", strerror(errno));
+    }
   }
 
   DLOGI("active_refresh_rate: %d", active_refresh_rate_);
@@ -2189,8 +2194,10 @@ void HWCDisplayBuiltIn::UpdateFramerateForCAC(uint32_t fps) {
           type_, fps, error);
     return;
   }
-  // Re-constitue WB CAC cache for the new fps.
-  wb_display->CacCommitDone(IsCacCommitDone());
+  // Re-constitue WB DPU CAC cache for the new fps.
+  if (!enable_kernel_wb_cac_) {
+    wb_display->CacCommitDone(IsCacCommitDone());
+  }
   return;
 }
 
@@ -2248,6 +2255,9 @@ void *HWCDisplayBuiltIn::PerformWBKickOff() {
 void HWCDisplayBuiltIn::CacCommitDone(bool cac_commit_done) {
   DLOGI("Setting CAC Commit done = %s.", cac_commit_done ? "true" : "false");
   cac_commit_done_ = cac_commit_done;
+  if (enable_kernel_wb_cac_) {
+    return;
+  }
   if (IsWBCacInUse()) {
     HWCSession *hwc_session = HWCSession::GetInstance();
     HWCDisplayVirtualDPU *wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>

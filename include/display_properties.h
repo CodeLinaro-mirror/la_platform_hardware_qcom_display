@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -164,6 +164,8 @@
 #define ENABLE_WB_CAC                        DISPLAY_PROP("enable_wb_cac")
 // Helps dedicate DMA Pipes for Secondary displays, used during DPU CAC
 #define DEDICATE_DMA_PIPE_FOR_SEC            DISPLAY_PROP("dedicate_dma_pipe_for_sec")
+// Enables WB CAC commits to be handled in driver
+#define ENABLE_KERNEL_WB_CAC                 DISPLAY_PROP("enable_kernel_wb_cac")
 
 
 // Add all vendor.display properties above
