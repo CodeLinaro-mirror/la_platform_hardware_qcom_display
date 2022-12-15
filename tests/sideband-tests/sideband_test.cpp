@@ -98,6 +98,7 @@ protected:
 
         transaction = {};
         sp<Surface> surface = mSurfaceControl->getSurface();
+        ASSERT_TRUE(surface != nullptr);
         ANativeWindow_Buffer surfaceBuffer;
         surface->lock(&surfaceBuffer, NULL);
         size_t buf_size = surfaceBuffer.stride * surfaceBuffer.height *
@@ -112,9 +113,10 @@ protected:
 
         transaction = {};
         sp<ANativeWindow> window(surface);
-        ANativeWindowBuffer *anw;
+        ANativeWindowBuffer *anw = nullptr;
         native_window_api_connect(window.get(), NATIVE_WINDOW_API_CPU);
         native_window_dequeue_buffer_and_wait(window.get(), &anw);
+        ASSERT_TRUE(anw != nullptr);
         sp<NativeHandle> stream = android::NativeHandle::create(
                                 const_cast<native_handle*>(anw->handle), false);
         surface->setSidebandStream(stream);
