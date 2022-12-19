@@ -808,11 +808,9 @@ Return<int32_t> HWCSession::setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_v
 }
 
 int32_t HWCSession::TunnelingInitInternal() {
-  char property[PROPERTY_VALUE_MAX] = {0};
-  property_get(ENABLE_TUNNELLING, property, "0");
-  if (!(strncmp(property, "0", PROPERTY_VALUE_MAX))) {
-     DLOGE("Tunnlling property not set. Exiting tunnellingInit!");
-     return -EINVAL;
+  if (tunneling_mode_ == kTunnelingDisabled) {
+    DLOGE("Tunneling property not set. Exiting!");
+    return -EINVAL;
   }
 
   tunneling_enabled_ = true;
@@ -820,13 +818,93 @@ int32_t HWCSession::TunnelingInitInternal() {
 }
 
 Return<int32_t> HWCSession::tunnellingInit() {
-  // Disabling, since not required for Sideband Tunneling.
-  // TunnelingInitInternal();
+  // Disabled for Sideband Tunneling
+  if (tunneling_mode_ == kTunnelingDisplayConfigOnly) {
+    return TunnelingInitInternal();
+  }
+  return 0;
+}
+
+int32_t HWCSession::CreateTunneledLayerInternal() {
+  int32_t error = -EINVAL;
+  hwc2_device_t *device = static_cast<hwc2_device_t *>(this);
+  error = CreateLayer(device, HWC_DISPLAY_PRIMARY, &tunneled_layer_);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("CreateLayer failed! Exiting createTunnelledLayer.");
+    return error;
+  }
+  SetLayerIsTunneled(device, HWC_DISPLAY_PRIMARY, tunneled_layer_, true);
+  error = SetLayerZOrder(device, HWC_DISPLAY_PRIMARY,tunneled_layer_,
+                        tunneled_layer_params_.z_order);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerZOrder failed! Exiting createTunnelledLayer.");
+    return error;
+  }
+
+  hwc_frect_t rect;
+  rect.left = tunneled_layer_params_.src_rect.left;
+  rect.top = tunneled_layer_params_.src_rect.top;
+  rect.right = tunneled_layer_params_.src_rect.right;
+  rect.bottom = tunneled_layer_params_.src_rect.bottom;
+  error = SetLayerSourceCrop(device, HWC_DISPLAY_PRIMARY,
+                            tunneled_layer_, rect);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerSourceCrop failed! Exiting createTunnelledLayer.");
+    return error;
+  }
+
+  error = SetLayerTransform(device, HWC_DISPLAY_PRIMARY, tunneled_layer_,
+                            (int32_t) tunneled_layer_params_.layer_transform);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerTransform failed! Exiting createTunnelledLayer.");
+    return error;
+  }
+
+  hwc_rect_t dst_rect;
+  dst_rect.left = tunneled_layer_params_.dst_rect.left;
+  dst_rect.top = tunneled_layer_params_.dst_rect.top;
+  dst_rect.right = tunneled_layer_params_.dst_rect.right;
+  dst_rect.bottom = tunneled_layer_params_.dst_rect.bottom;
+  error = SetLayerDisplayFrame(device, HWC_DISPLAY_PRIMARY, tunneled_layer_, dst_rect);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerDisplayFrame failed! Exiting createTunnelledLayer.");
+    return error;
+  }
+
+  error = SetLayerPlaneAlpha(device, HWC_DISPLAY_PRIMARY, tunneled_layer_,
+                            (float) tunneled_layer_params_.plane_alpha);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerPlaneAlpha failed! Exiting createTunnelledLayer.");
+    return error;
+  }
+
+  error = SetLayerDataspace(device, HWC_DISPLAY_PRIMARY, tunneled_layer_,
+                            tunneled_layer_params_.dataspace);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerDataspace failed! Exiting createTunnelledLayer.");
+    return error;
+  }
+
+  error = SetLayerBlendMode(device, HWC_DISPLAY_PRIMARY, tunneled_layer_,
+                            (int32_t) tunneled_layer_params_.blending);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerBlendMode failed! Exiting createTunnelledLayer.");
+    return error;
+  }
   return 0;
 }
 
 Return<int32_t> HWCSession::createTunnelledLayer(const IDisplayConfig::LayerInfo& layer) {
-  // Disabling, since not required for Sideband Tunneling.
+  if (tunneling_mode_ == kTunnelingDisabled || tunneling_enabled_ == false) {
+    DLOGE("Tunneling not enabled\n");
+    return -EINVAL;
+  }
+
+  // Disabled for Sideband Tunneling
+  if (tunneling_mode_ == kTunnelingDisplayConfigOnly) {
+    tunneled_layer_params_ = layer;
+  }
+
   return 0;
 }
 
@@ -900,8 +978,12 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
 
   int32_t error = -EINVAL;
   if(tunneled_layer_ == -1) {
-    error = GetTunneledLayer(static_cast<hwc2_device_t *>(this),
-                             HWC_DISPLAY_PRIMARY, &tunneled_layer_);
+    if (tunneling_mode_ == kTunnelingDisplayConfigOnly /* Regular Tunneling */) {
+      error = CreateTunneledLayerInternal();
+    } else if (tunneling_mode_ == kTunnelingSideband /* Sideband Tunneling */) {
+      error = GetTunneledLayer(static_cast<hwc2_device_t *>(this),
+                              HWC_DISPLAY_PRIMARY, &tunneled_layer_);
+    }
     if (error != HWC2_ERROR_NONE) {
       return -EINVAL;
     }
@@ -957,7 +1039,8 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
   }
 
   if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
-    error = ValidateDisplay(static_cast<hwc2_device_t *>(this), HWC_DISPLAY_PRIMARY, &types_count, &reqs_count);
+    error = ValidateDisplay(static_cast<hwc2_device_t *>(this), HWC_DISPLAY_PRIMARY,
+                            &types_count, &reqs_count);
     if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
       DLOGE("ValidateDisplay failed! Exiting queueTunnelledBuffer.");
       return error;
@@ -986,7 +1069,52 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
 }
 
 Return<int32_t> HWCSession::destroyTunnelledLayer()  {
-  // Disabling, since not required for Sideband Tunneling.
+  // Disabled for Sideband Tunneling
+  if (tunneling_mode_ == kTunnelingDisplayConfigOnly) {
+    if (tunneling_enabled_ == false) {
+      DLOGE("Tunneling not enabled");
+      return -EINVAL;
+    }
+    DTRACE_SCOPED();
+
+    bool tunneled_layer_present = false;
+    IsTunnelledLayerPresent(static_cast<hwc2_device_t *>(this), HWC_DISPLAY_PRIMARY,
+                            &tunneled_layer_present);
+    if (tunneled_layer_present == false || tunneled_layer_ == -1) {
+      tunneled_layer_ = -1;
+      DLOGW("No tunneled layer present! Exiting destroyTunnelledLayer");
+      return -EINVAL;
+    }
+
+    SetLayerIsTunneled(static_cast<hwc2_device_t *>(this),
+                      HWC_DISPLAY_PRIMARY, tunneled_layer_, false);
+
+    int error = DestroyLayer(static_cast<hwc2_device_t *>(this), HWC_DISPLAY_PRIMARY,
+                            tunneled_layer_);
+    if (error != HWC2_ERROR_NONE) {
+      DLOGE("DestroyLayer failed, tunneled layer not found!");
+    }
+
+    tunneled_layer_ = -1;
+
+    uint32_t types_count = 0;
+    uint32_t reqs_count = 0;
+
+    error = ValidateDisplay(static_cast<hwc2_device_t *>(this), HWC_DISPLAY_PRIMARY,
+                            &types_count, &reqs_count);
+
+    if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
+      DLOGE("ValidateDisplay failed! Exiting destroyTunnelledLayer.");
+      return error;
+    }
+
+    int presentfence = 0;
+    error = PresentDisplay(static_cast<hwc2_device_t *>(this), HWC_DISPLAY_PRIMARY, &presentfence);
+    if (error != HWC2_ERROR_NONE) {
+      DLOGE("PresentDisplay failed! Exiting destroyTunnelledLayer.");
+      return error;
+    }
+  }
   return 0;
 }
 
@@ -1005,8 +1133,10 @@ int32_t HWCSession::TunnelingDeinitInternal() {
 }
 
 Return<int32_t> HWCSession::tunnellingDeinit() {
-  // Disabling, since not required for Sideband Tunneling.
-  // TunnelingDeinitInternal();
+  // Disabled for Sideband Tunneling
+  if (tunneling_mode_ == kTunnelingDisplayConfigOnly) {
+    TunnelingDeinitInternal();
+  }
   return 0;
 }
 #endif // DISPLAY_CONFIG_1_21

@@ -202,6 +202,15 @@ int HWCSession::Init() {
     return status;
   }
 
+  int value = 0;
+  if (Debug::Get()->GetProperty(ENABLE_TUNNELLING, &value) != kErrorNone) {
+    DLOGE("Failed to get tunnelling property.");
+    return -EINVAL;
+  } else {
+    tunneling_mode_ =
+        (value < kTunnelingDisabled || value >= kTunnelingMax) ? kTunnelingDisabled : value;
+  }
+
   is_composer_up_ = true;
 
   return 0;
@@ -380,6 +389,12 @@ int HWCSession::Close(hw_device_t *device) {
 
 void HWCSession::GetCapabilities(struct hwc2_device *device, uint32_t *outCount,
                                  int32_t *outCapabilities) {
+  if (!device) {
+    return;
+  }
+
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+
   if (!outCount) {
     return;
   }
@@ -392,11 +407,7 @@ void HWCSession::GetCapabilities(struct hwc2_device *device, uint32_t *outCount,
   }
   count += (disable_skip_validate ? 0 : 1);
 
-  value = 0;
-  bool enable_sideband_tunneling = false;
-  if (Debug::Get()->GetProperty(ENABLE_TUNNELLING, &value) == kErrorNone) {
-    enable_sideband_tunneling = (value == 1);
-  }
+  bool enable_sideband_tunneling = (hwc_session->tunneling_mode_ == kTunnelingSideband);
   count += (enable_sideband_tunneling ? 1 : 0);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {

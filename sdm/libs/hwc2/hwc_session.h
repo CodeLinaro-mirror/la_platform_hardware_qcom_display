@@ -147,6 +147,14 @@ class HWCUEvent {
 
 class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qClient::BnQClient {
  public:
+
+  enum TunnelingMode {
+    kTunnelingDisabled,
+    kTunnelingDisplayConfigOnly,
+    kTunnelingSideband,
+    kTunnelingMax
+  };
+
   struct HWCModuleMethods : public hw_module_methods_t {
     HWCModuleMethods() { hw_module_methods_t::open = HWCSession::Open; }
   };
@@ -328,6 +336,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
 
   // Tunneling internal methods
   int32_t TunnelingInitInternal();
+  int32_t CreateTunneledLayerInternal();
   int32_t TunnelingDeinitInternal();
 
   // service methods
@@ -507,6 +516,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
 
   // Layer Tunnelling
   bool tunneling_enabled_ = false;
+  uint32_t tunneling_mode_ = kTunnelingDisabled;
   hwc2_layer_t tunneled_layer_ = -1;
   std::map <uint64_t, int32_t> tunneling_map_buffer_release_fence_; // stores mapping between
                                                                      // buffer id and release fence

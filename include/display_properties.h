@@ -145,6 +145,13 @@
 #define ENABLE_DROP_REFRESH                  DISPLAY_PROP("enable_drop_refresh")
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
 #define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
+
+/*
+ * Enable Tunnelling Property:
+ * - 0: Disable
+ * - 1: Enable tunneling with IDisplayConfig only
+ * - 2: Enable tunneling with Sideband Stream approach
+*/
 #define ENABLE_TUNNELLING                    DISPLAY_PROP("enable_tunnelling")
 
 #endif  // __DISPLAY_PROPERTIES_H__
