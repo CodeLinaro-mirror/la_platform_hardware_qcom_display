@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1249,6 +1249,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       if (metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)]) {
 #endif
         Dataspace dataspace;
+        memset(&dataspace,0,sizeof(dataspace));
         colorMetadataToDataspace(metadata->color, &dataspace);
         android::gralloc4::encodeDataspace(dataspace, out);
 #ifdef METADATA_V2
