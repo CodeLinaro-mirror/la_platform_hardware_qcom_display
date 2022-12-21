@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -132,8 +132,7 @@ BufferDescriptor TunnellingHelper::CreateDescriptor(
   return descriptor;
 }
 
-void memset24(void *p_dst, uint32_t value, int count)
-{
+void memset24(void *p_dst, uint32_t value, int count) {
   uint8_t *ptr = (uint8_t *)p_dst,*end_ptr;
   uint8_t x, y, z;
 
@@ -149,20 +148,20 @@ void memset24(void *p_dst, uint32_t value, int count)
   }
 }
 
-void sigint_handler(int signum)
-{
+void sigint_handler(int signum) {
   signal(SIGINT, SIG_IGN);
   stop = 1;
   return;
 }
 
-int send_buffers() {
+int send_buffers(uint32_t inWidth, uint32_t inHeight, int format,
+                 uint32_t duration, uint32_t num_buffers) {
   int err = 0;
   IMapper::BufferDescriptorInfo info = {
-    .width = 500,
-    .height = 500,
+    .width = inWidth > 0 ? inWidth : 500,
+    .height = inHeight > 0 ? inHeight : 500,
     .layerCount = 1,
-    .format = static_cast<PixelFormat>(HAL_PIXEL_FORMAT_RGB_888),
+    .format = static_cast<PixelFormat>(format),
     .usage = static_cast<uint64_t>(BufferUsage::CPU_WRITE_MASK),
   };
   std::unique_ptr<TunnellingHelper> gralloc_;
@@ -203,7 +202,11 @@ int send_buffers() {
 
   signal(SIGINT, sigint_handler);
 
-  while(!stop) {
+  int frames_elapsed = 0;
+  uint32_t time_elapsed = 0;
+  int usec_delay = (float) (1.0 / (float) kFps) * 1000000.0;
+
+  while(!stop && time_elapsed <= duration) {
     for(int i = 0; i < kNumBuffers; i++) {
       auto hnd = (private_handle_t *) handles[i];
       int release_fence_fd = gralloc_->handle_release_fence_map_[hnd];
@@ -228,9 +231,14 @@ int send_buffers() {
         break;
       }
 
-      usleep(kNumMsec);
+      usleep(usec_delay);
+
+      // Logic to make the loop time bound
+      frames_elapsed++;
+      frames_elapsed %= kFps;
+      if (frames_elapsed == 0 && duration > 0) time_elapsed++;
+
       int32_t release_fence = -1;
-      ALOGI("Before dequeue buffer\n");
       auto error_dequeue = mDisplayConfig->dequeueTunnelledBuffer(hnd, [&](const auto& tmpError,
          const auto& tmpHandle) {
          err = tmpError;

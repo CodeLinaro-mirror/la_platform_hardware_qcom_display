@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -59,6 +59,7 @@ using android::hardware::graphics::mapper::V2_0::YCbCrLayout;
 using std::vector;
 
 static const int kNumMsec = 16660;
+static const int kFps = 60;
 static const int kNumBuffers = 30;
 
 // Wraps shared gralloc functions
@@ -85,4 +86,5 @@ private:
 
 void memset24(void *p_dst, uint32_t value, int count);
 void sigint_handler(int signum);
-int send_buffers();
+int send_buffers(uint32_t width, uint32_t height, int format,
+                 uint32_t duration, uint32_t num_buffers);
