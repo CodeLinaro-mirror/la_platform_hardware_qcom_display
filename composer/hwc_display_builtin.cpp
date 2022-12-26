@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -2100,7 +2100,6 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
   HWCSession *hwc_session = HWCSession::GetInstance();
   HWCDisplayVirtualDPU *wb_display = nullptr;
   if (hwc_session->wb_display_) {
-    InitCacResources(attr.x_pixels, attr.y_pixels);
     wb_display = reinterpret_cast<HWCDisplayVirtualDPU *>
       (hwc_session->GetDisplay(hwc_session->wb_display_));
 
@@ -2161,6 +2160,7 @@ int32_t HWCDisplayBuiltIn::SetCAC(bool enable, float red, float green, float blu
     DisplayConfigVariableInfo attr = {};
     GetDisplayAttributesForConfig(INT(config_index), &attr);
     if (is_wb_cac_in_use) {
+      InitCacResources(attr.x_pixels, attr.y_pixels);
       display_intf_->SetLinePtrState(true, attr.y_pixels/2);
     }
   }
