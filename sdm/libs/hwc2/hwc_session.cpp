@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -203,12 +203,11 @@ int HWCSession::Init() {
   }
 
   int value = 0;
-  if (Debug::Get()->GetProperty(ENABLE_TUNNELLING, &value) != kErrorNone) {
-    DLOGE("Failed to get tunnelling property.");
-    return -EINVAL;
-  } else {
+  if (Debug::Get()->GetProperty(ENABLE_TUNNELLING, &value) == kErrorNone) {
     tunneling_mode_ =
         (value < kTunnelingDisabled || value >= kTunnelingMax) ? kTunnelingDisabled : value;
+    DLOGI("Tunneling %s, mode = %d",
+          tunneling_mode_ == kTunnelingDisabled ? "disabled" : "enabled", tunneling_mode_);
   }
 
   is_composer_up_ = true;
