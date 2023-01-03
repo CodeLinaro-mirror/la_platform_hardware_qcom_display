@@ -32,9 +32,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <gui/SurfaceComposerClient.h>
+#include <gui/Surface.h>
 #include "sideband_test.h"
 
 using namespace android;
+using Transaction = SurfaceComposerClient::Transaction;
 using android::sp;
 using vendor::display::config::V1_21::IDisplayConfig;
 
@@ -154,6 +157,50 @@ void sigint_handler(int signum) {
   return;
 }
 
+void fillSurfaceRGBA8(const sp<SurfaceControl>& sc, uint8_t r, uint8_t g, uint8_t b,
+                             bool unlock = true) {
+    int usec_delay = (float) (1.0 / (float) kFps) * 1000000.0;
+    ANativeWindow_Buffer outBuffer;
+    sp<Surface> s = sc->getSurface();
+    s->lock(&outBuffer, nullptr);
+    uint8_t* img = reinterpret_cast<uint8_t*>(outBuffer.bits);
+    for (int y = 0; y < outBuffer.height; y++) {
+        for (int x = 0; x < outBuffer.width; x++) {
+            uint8_t* pixel = img + (4 * (y * outBuffer.stride + x));
+            pixel[0] = r;
+            pixel[1] = g;
+            pixel[2] = b;
+            pixel[3] = 255;
+        }
+    }
+    if (unlock) {
+        s->unlockAndPost();
+    }
+}
+
+void render_buffer(sp<SurfaceControl> &layer, uint32_t duration) {
+    SurfaceComposerClient::Transaction t={};
+    uint32_t time_elapsed = 0;
+    while(time_elapsed <= duration) {
+      for(int i = 0; i < kNumBuffers; i++) {
+        if (i < kNumBuffers/3) {
+          fillSurfaceRGBA8(layer, 200, 200, 200);
+          t.show(layer).apply(true);
+        }
+        else if (i < (2 * (kNumBuffers/3))) {
+          fillSurfaceRGBA8(layer, 50, 50, 50);
+          t.show(layer).apply(true);
+        }
+        else {
+          fillSurfaceRGBA8(layer, 100, 100, 100);
+          t.show(layer).apply(true);
+        }
+        t.setPosition(layer,500,500).apply();
+      }
+      time_elapsed++;
+    }
+}
+
 int send_buffers(uint32_t inWidth, uint32_t inHeight, int format,
                  uint32_t duration, uint32_t num_buffers) {
   int err = 0;
@@ -161,7 +208,7 @@ int send_buffers(uint32_t inWidth, uint32_t inHeight, int format,
     .width = inWidth > 0 ? inWidth : 500,
     .height = inHeight > 0 ? inHeight : 500,
     .layerCount = 1,
-    .format = static_cast<PixelFormat>(format),
+    .format = static_cast<android::hardware::graphics::common::V1_0::PixelFormat>(format),
     .usage = static_cast<uint64_t>(BufferUsage::CPU_WRITE_MASK),
   };
   std::unique_ptr<TunnellingHelper> gralloc_;

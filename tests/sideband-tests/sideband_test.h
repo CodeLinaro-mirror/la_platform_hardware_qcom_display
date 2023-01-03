@@ -86,5 +86,6 @@ private:
 
 void memset24(void *p_dst, uint32_t value, int count);
 void sigint_handler(int signum);
+void render_buffer(sp<SurfaceControl> &layer,uint32_t duration);
 int send_buffers(uint32_t width, uint32_t height, int format,
                  uint32_t duration, uint32_t num_buffers);

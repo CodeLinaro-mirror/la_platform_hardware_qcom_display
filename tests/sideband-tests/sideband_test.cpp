@@ -45,7 +45,6 @@
 namespace android {
 
 using Transaction = SurfaceComposerClient::Transaction;
-using ui::ColorMode;
 
 namespace {
 const String8 SURFACE_NAME("Sideband Test Surface");
@@ -124,6 +123,12 @@ protected:
                       uint32_t duration=0, uint32_t num_buffers=0) {
         send_buffers(width, height, format, duration, num_buffers);
     }
+    sp<SurfaceControl> create_Surface(String8 surface_name, uint32_t width,
+                                      uint32_t height, int format) {
+        auto layer = mComposerClient->createSurface(surface_name, width, height,
+                                                    format,0);
+        return layer;
+    }
 };
 
 TEST_F(SidebandStreamTest, QueueSidebandStreamBufferTest) {
@@ -131,6 +136,28 @@ TEST_F(SidebandStreamTest, QueueSidebandStreamBufferTest) {
     uint32_t height = 720;
     setupSidebandSurface(width, height);
     printf("Surface Sideband Stream setup successfully, now queueing buffers...\n");
+    queueBuffers(width, height,
+                 PIXEL_FORMAT_RGB_888,
+                 10 /* duration */,
+                 6 /* num_buffers */);
+}
+
+TEST_F(SidebandStreamTest, OverlapSurface) {
+    uint32_t width = 1280;
+    uint32_t height = 720;
+    int mLayerZBase=0;
+    uint32_t mDisplayLayerStack=0;
+    uint32_t width_new = 500;
+    uint32_t height_new = 500;
+    String8 surface_name("OverlapSurface");
+    int format=PIXEL_FORMAT_RGBA_8888;
+    SurfaceComposerClient::Transaction t={};
+    sp<SurfaceControl> layer;
+    layer = create_Surface(surface_name, width_new, height_new, format);
+    t.setLayerStack(layer, mDisplayLayerStack).setLayer(layer, mLayerZBase)
+                                              .setPosition(layer, 500, 500).apply();
+    render_buffer(layer, 10);
+    setupSidebandSurface(width, height);
     queueBuffers(width, height,
                  PIXEL_FORMAT_RGB_888,
                  10 /* duration */,
