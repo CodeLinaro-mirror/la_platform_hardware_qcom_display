@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -738,6 +738,14 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
     return EINVAL;
   }
 
+  HWCDisplay *hwc_display = hwc_display_[tunneled_display_id_];
+  if (tunneled_layer_ == -1) {
+    tunneled_layer_ = hwc_display->GetHWCTunnelledLayer();
+    if (tunneled_layer_ != -1) {
+      SetLayerIsTunneled(tunneled_display_id_, tunneled_layer_, true);
+    }
+  }
+
   int32_t error = -EINVAL;
   if(tunneled_layer_ == -1) {
     error = CreateTunneledLayerInternal();
@@ -777,7 +785,6 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
 
   uint32_t types_count = 0;
   uint32_t reqs_count = 0;
-  HWCDisplay *hwc_display = hwc_display_[tunneled_display_id_];
   const native_handle_t* native_fence_handle = acquire_fence.getNativeHandle();
   int acquire_fence_fd = -1;
   // if native_fence_handle is NULL, acquire fence fd is considered -1

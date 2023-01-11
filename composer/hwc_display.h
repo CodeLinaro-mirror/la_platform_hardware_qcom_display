@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -280,6 +280,7 @@ class HWCDisplay : public DisplayEventHandler {
   void BuildLayerStack(void);
   void BuildSolidFillStack(void);
   HWCLayer *GetHWCLayer(hwc2_layer_t layer_id);
+  hwc2_layer_t GetHWCTunnelledLayer();
   void ResetValidation() { validated_ = false; }
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   bool CanSkipValidate();
@@ -547,6 +548,7 @@ class HWCDisplay : public DisplayEventHandler {
   uint64_t elapse_timestamp_ = 0;
   int async_power_mode_ = 0;
   int tunnelling_enable_ = 0;
+  hwc2_layer_t tunnelled_layer_ = -1;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {
