@@ -55,7 +55,7 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.16/IDisplayConfig.h>
+#include <vendor/display/config/1.15/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
@@ -87,7 +87,7 @@
 
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_16::IDisplayConfig;
+using vendor::display::config::V1_15::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -460,10 +460,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<void> getHDRCapabilities(IDisplayConfig::DisplayType dpy,
                                   getHDRCapabilities_cb _hidl_cb) override;
   Return<int32_t> setCameraLaunchStatus(uint32_t on) override;
-  Return<int32_t> allowIdleFallback() override;
   //TODO: Port vendor.display.config.1.21 related changes and enable tunneling APIs in hwc
 #if 0
   Return<int32_t> tunnellingInit() override;
+  Return<int32_t> allowIdleFallback() override;
   Return<void> getFSCRGBOrder(IDisplayConfig::DisplayType dpy,
                               getFSCRGBOrder_cb _hidl_cb) override;
   Return<int32_t> enableCAC(uint32_t disp_id, bool enable,

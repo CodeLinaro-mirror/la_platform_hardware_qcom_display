@@ -833,11 +833,11 @@ Return<int32_t> HWCSession::tunnellingDeinit() {
   tunneling_map_buffer_release_fence_.clear();
   return 0;
 }
-#endif
 
 Return<int32_t> HWCSession::allowIdleFallback() {
   return 0;
 }
+#endif
 
 Return<int32_t> HWCSession::setCameraLaunchStatus(uint32_t on) {
   if (null_display_mode_) {

@@ -77,8 +77,6 @@ cc_binary {
         "vendor.display.config@1.13",
         "vendor.display.config@1.14",
         "vendor.display.config@1.15",
-        "vendor.display.config@1.16",
-        "vendor.display.config@2.0",
     ],
     srcs: composer_srcs,
 
