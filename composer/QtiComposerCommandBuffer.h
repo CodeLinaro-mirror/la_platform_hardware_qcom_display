@@ -34,7 +34,7 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V2_1 {
+namespace V3_0 {
 
 using ::android::hardware::graphics::common::V1_0::ColorTransform;
 using ::android::hardware::graphics::common::V1_0::Dataspace;
@@ -854,7 +854,7 @@ class CommandReaderBase {
   hidl_vec<hidl_handle> mDataHandles;
 };
 
-}  // namespace V2_1
+}  // namespace V3_0
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware
