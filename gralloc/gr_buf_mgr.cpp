@@ -16,6 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #define DEBUG 0
 
@@ -367,7 +371,6 @@ static Error getFormatLayout(private_handle_t *handle, std::vector<PlaneLayout> 
 BufferManager::BufferManager() : next_id_(0) {
   handles_map_.clear();
   allocator_ = new Allocator();
-  allocator_->Init();
 }
 
 BufferManager *BufferManager::GetInstance() {
