@@ -783,6 +783,13 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
       return error;
     }
   }
+  IsTunnelledLayerPresent(tunneled_display_id_, &tunneled_layer_present);
+  if (tunneled_layer_present == false || tunneled_layer_ == -1) {
+    tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return EINVAL;
+  }
+
 
   int presentfence = 0;
   error = PresentDisplay(tunneled_display_id_, &presentfence);
