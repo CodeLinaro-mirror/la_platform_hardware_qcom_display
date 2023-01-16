@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include "QtiGralloc.h"
@@ -227,6 +231,10 @@ MetadataType getMetadataType(uint32_t in) {
       return MetadataType_VideoHistogramStats;
     case QTI_VIDEO_TS_INFO:
       return MetadataType_VideoTimestampInfo;
+#ifdef QTI_EARLYNOTIFY_LINECOUNT
+    case QTI_EARLYNOTIFY_LINECOUNT:
+      return MetadataType_VideoEarlyNotifyLineCount;
+#endif
     case QTI_FD:
       return MetadataType_FD;
     case QTI_PRIVATE_FLAGS:
@@ -327,6 +335,13 @@ Error get(void *buffer, uint32_t type, void *param) {
     case QTI_VIDEO_TS_INFO:
       err = decodeVideoTimestampInfo(bytestream, reinterpret_cast<VideoTimestampInfo *>(param));
       break;
+#ifdef QTI_EARLYNOTIFY_LINECOUNT
+    case QTI_EARLYNOTIFY_LINECOUNT:
+      err = static_cast<Error>(
+          android::gralloc4::decodeInt32(qtigralloc::MetadataType_VideoEarlyNotifyLineCount,
+                                         bytestream, reinterpret_cast<int32_t *>(param)));
+      break;
+#endif
     case QTI_FD:
       err = static_cast<Error>(android::gralloc4::decodeInt32(
           qtigralloc::MetadataType_FD, bytestream, reinterpret_cast<int32_t *>(param)));
@@ -446,6 +461,13 @@ Error set(void *buffer, uint32_t type, void *param) {
     case QTI_VIDEO_TS_INFO:
       err = encodeVideoTimestampInfo(*reinterpret_cast<VideoTimestampInfo *>(param), &bytestream);
       break;
+#ifdef QTI_EARLYNOTIFY_LINECOUNT
+    case QTI_EARLYNOTIFY_LINECOUNT:
+      err = static_cast<Error>(
+          android::gralloc4::encodeInt32(qtigralloc::MetadataType_VideoEarlyNotifyLineCount,
+                                         *reinterpret_cast<int32_t *>(param), &bytestream));
+      break;
+#endif
     default:
       param = nullptr;
       return Error::UNSUPPORTED;
