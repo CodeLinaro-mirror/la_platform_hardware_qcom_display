@@ -350,6 +350,8 @@ HWC2::Error HWCLayer::SetLayerCompositionType(HWC2::Composition type) {
       break;
     case HWC2::Composition::Cursor:
       break;
+    case HWC2::Composition::Sideband:
+      break;
     case HWC2::Composition::Invalid:
       return HWC2::Error::BadParameter;
     default:
@@ -437,6 +439,12 @@ HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
     layer_->plane_alpha = plane_alpha;
   }
 
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCLayer::SetLayerSidebandStream(const native_handle_t *stream) {
+  DLOGD("Setting sideband tunneling on layer (id = %d, z = %d).", GetId(), GetZ());
+  DLOGI("Layer Tunneling status: %d", IsTunneled());
   return HWC2::Error::None;
 }
 

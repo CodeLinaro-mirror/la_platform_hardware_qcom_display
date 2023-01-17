@@ -1,6 +1,6 @@
 ifneq ($(TARGET_DISABLE_DISPLAY),true)
 sdm-libs := sdm/libs
-display-hals := include libdebug $(sdm-libs)/utils $(sdm-libs)/core
+display-hals := include libdebug $(sdm-libs)/utils $(sdm-libs)/core tests
 
 ifneq ($(TARGET_IS_HEADLESS), true)
     display-hals += libcopybit liblight libmemtrack dp_cec \

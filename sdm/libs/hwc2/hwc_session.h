@@ -15,12 +15,48 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #ifndef __HWC_SESSION_H__
 #define __HWC_SESSION_H__
 
-#ifdef DISPLAY_CONFIG_1_9
+#ifdef DISPLAY_CONFIG_1_21
+#include <vendor/display/config/1.21/IDisplayConfig.h>
+#elif DISPLAY_CONFIG_1_9
 #include <vendor/display/config/1.9/IDisplayConfig.h>
 #elif DISPLAY_CONFIG_1_8
 #include <vendor/display/config/1.8/IDisplayConfig.h>
@@ -58,7 +94,11 @@
 
 namespace sdm {
 
-#ifdef DISPLAY_CONFIG_1_9
+#ifdef DISPLAY_CONFIG_1_21
+using vendor::display::config::V1_21::IDisplayConfig;
+using vendor::display::config::V1_10::IDisplayCWBCallback;
+using vendor::display::config::V1_15::IDisplayQsyncCallback;
+#elif DISPLAY_CONFIG_1_9
 using vendor::display::config::V1_9::IDisplayConfig;
 #elif DISPLAY_CONFIG_1_8
 using vendor::display::config::V1_8::IDisplayConfig;
@@ -77,6 +117,8 @@ using vendor::display::config::V1_0::IDisplayConfig;
 #endif
 using ::android::hardware::Return;
 using ::android::hardware::hidl_string;
+using ::android::hardware::hidl_handle;
+using ::android::sp;
 
 // Create a singleton uevent listener thread valid for life of hardware composer process.
 // This thread blocks on uevents poll inside uevent library implementation. This poll exits
@@ -105,6 +147,14 @@ class HWCUEvent {
 
 class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qClient::BnQClient {
  public:
+
+  enum TunnelingMode {
+    kTunnelingDisabled,
+    kTunnelingDisplayConfigOnly,
+    kTunnelingSideband,
+    kTunnelingMax
+  };
+
   struct HWCModuleMethods : public hw_module_methods_t {
     HWCModuleMethods() { hw_module_methods_t::open = HWCSession::Open; }
   };
@@ -169,6 +219,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   static int32_t AcceptDisplayChanges(hwc2_device_t *device, hwc2_display_t display);
   static int32_t CreateLayer(hwc2_device_t *device, hwc2_display_t display,
                              hwc2_layer_t *out_layer_id);
+  static int32_t GetTunneledLayer(hwc2_device_t *device, hwc2_display_t display,
+                                  hwc2_layer_t *out_layer_id);
   static int32_t CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, uint32_t height,
                                       int32_t *format, hwc2_display_t *out_display_id);
   static int32_t DestroyLayer(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer);
@@ -179,6 +231,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   static int32_t RegisterCallback(hwc2_device_t *device, int32_t descriptor,
                                   hwc2_callback_data_t callback_data,
                                   hwc2_function_pointer_t pointer);
+  static int32_t SetLayerIsTunneled(hwc2_device_t *device, hwc2_display_t display,
+                                    hwc2_layer_t layer, bool tunneled);
+  static int32_t IsTunnelledLayerPresent(hwc2_device_t *device, hwc2_display_t display,
+                                         bool *tunneled_layer_present);
   static int32_t SetOutputBuffer(hwc2_device_t *device, hwc2_display_t display,
                                  buffer_handle_t buffer, int32_t releaseFence);
   static int32_t SetPowerMode(hwc2_device_t *device, hwc2_display_t display, int32_t int_mode);
@@ -206,6 +262,24 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
                                  int32_t int_enabled);
   static int32_t GetDozeSupport(hwc2_device_t *device, hwc2_display_t display,
                                 int32_t *out_support);
+  static int32_t SetLayerBuffer(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+                                buffer_handle_t buffer, int32_t acquire_fence);
+  static int32_t SetLayerBlendMode(hwc2_device_t *device, hwc2_display_t display,
+                                   hwc2_layer_t layer, int32_t int_mode);
+  static int32_t SetLayerDisplayFrame(hwc2_device_t *device, hwc2_display_t display,
+                                      hwc2_layer_t layer, hwc_rect_t frame);
+  static int32_t SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display,
+                                    hwc2_layer_t layer, float alpha);
+  static int32_t SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display,
+                                    hwc2_layer_t layer, hwc_frect_t crop);
+  static int32_t SetLayerTransform(hwc2_device_t *device, hwc2_display_t display,
+                                   hwc2_layer_t layer, int32_t int_transform);
+  static int32_t SetLayerZOrder(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+                                uint32_t z);
+  static int32_t SetLayerDataspace(hwc2_device_t *device, hwc2_display_t display,
+                                   hwc2_layer_t layer, int32_t dataspace);
+  static int32_t SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display,
+                                        hwc2_layer_t layer, const native_handle_t *stream);
 
   static Locker locker_[HWCCallbacks::kNumDisplays];
 
@@ -259,6 +333,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t SetDynamicDSIClock(int64_t disp_id, uint32_t bitrate);
   int32_t IsWbUbwcSupported(int *value);
   bool HasHDRSupport(HWCDisplay *hwc_display);
+
+  // Tunneling internal methods
+  int32_t TunnelingInitInternal();
+  int32_t CreateTunneledLayerInternal();
+  int32_t TunnelingDeinitInternal();
 
   // service methods
   void StartServices();
@@ -332,6 +411,37 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<bool> isBuiltInDisplay(uint32_t disp_id) override;
 #endif
 
+#ifdef DISPLAY_CONFIG_1_21
+  Return<int32_t> setCWBOutputBuffer(const sp<IDisplayCWBCallback>& callback, uint32_t disp_id,
+                                     const Rect& rect, bool post_processed,
+                                     const hidl_handle& buffer) override;
+  Return<void> getSupportedDSIBitClks(uint32_t disp_id,
+                                      getSupportedDSIBitClks_cb _hidl_cb) override;
+  Return<uint64_t> getDSIClk(uint32_t disp_id) override;
+  Return<int32_t> setDSIClk(uint32_t disp_id, uint64_t bit_clk) override;
+  Return<int32_t> setQsyncMode(uint32_t disp_id, QsyncMode mode) override;
+  Return<bool> isSmartPanelConfig(uint32_t disp_id, uint32_t config_id) override;
+  Return<bool> isAsyncVDSCreationSupported() override;
+  Return<int32_t> createVirtualDisplay(uint32_t width, uint32_t height, int32_t format) override;
+  Return<bool> isRotatorSupportedFormat(int32_t format, bool ubwc) override;
+  Return<int32_t> registerQsyncCallback(const sp<IDisplayQsyncCallback>& callback) override;
+  Return<int32_t> allowIdleFallback() override;
+  Return<void> getFSCRGBOrder(DisplayType dpy, getFSCRGBOrder_cb _hidl_cb) override;
+  Return<int32_t> enableCAC(uint32_t disp_id, bool enable, float red, float green,
+                            float blue) override;
+  Return<int32_t> setCacEyeConfig(uint32_t disp_id, const CacEyeConfig& left,
+                                  const CacEyeConfig& right) override;
+  Return<int32_t> setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val) override;
+  Return<int32_t> tunnellingInit() override;
+  Return<int32_t> createTunnelledLayer(const IDisplayConfig::LayerInfo& layer) override;
+  Return<void> dequeueTunnelledBuffer(const hidl_handle& buffer, dequeueTunnelledBuffer_cb _hidl_cb)
+                                                                override;
+  Return<int32_t> queueTunnelledBuffer(const hidl_handle& buffer, const hidl_handle& fence)
+                                                                override;
+  Return<int32_t> destroyTunnelledLayer() override;
+  Return<int32_t> tunnellingDeinit() override;
+#endif
+
   // QClient methods
   virtual android::status_t notifyCallback(uint32_t command, const android::Parcel *input_parcel,
                                            android::Parcel *output_parcel);
@@ -403,6 +513,17 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int hpd_bpp_ = 0;
   int hpd_pattern_ = 0;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
+
+  // Layer Tunnelling
+  bool tunneling_enabled_ = false;
+  uint32_t tunneling_mode_ = kTunnelingDisabled;
+  hwc2_layer_t tunneled_layer_ = -1;
+  std::map <uint64_t, int32_t> tunneling_map_buffer_release_fence_; // stores mapping between
+                                                                     // buffer id and release fence
+  // stores mapping between buffer id and native handle
+  std::map <uint64_t, const native_handle_t *> tunneling_map_buffer_native_handle_;
+  int tunneled_layer_rf_ = -1; // tunneled layer's release fence
+  IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
 };
 
 }  // namespace sdm

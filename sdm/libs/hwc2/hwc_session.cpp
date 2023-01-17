@@ -15,6 +15,40 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <core/buffer_allocator.h>
@@ -166,6 +200,14 @@ int HWCSession::Init() {
   if (status) {
     Deinit();
     return status;
+  }
+
+  int value = 0;
+  if (Debug::Get()->GetProperty(ENABLE_TUNNELLING, &value) == kErrorNone) {
+    tunneling_mode_ =
+        (value < kTunnelingDisabled || value >= kTunnelingMax) ? kTunnelingDisabled : value;
+    DLOGI("Tunneling %s, mode = %d",
+          tunneling_mode_ == kTunnelingDisabled ? "disabled" : "enabled", tunneling_mode_);
   }
 
   is_composer_up_ = true;
@@ -346,21 +388,36 @@ int HWCSession::Close(hw_device_t *device) {
 
 void HWCSession::GetCapabilities(struct hwc2_device *device, uint32_t *outCount,
                                  int32_t *outCapabilities) {
-  if (!outCount) {
+  if (!device) {
     return;
   }
 
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+
+  if (!outCount) {
+    return;
+  }
+  uint32_t count = 1;
   int value = 0;
+
   bool disable_skip_validate = false;
   if (Debug::Get()->GetProperty(DISABLE_SKIP_VALIDATE_PROP, &value) == kErrorNone) {
     disable_skip_validate = (value == 1);
   }
-  uint32_t count = 1 + (disable_skip_validate ? 0 : 1);
+  count += (disable_skip_validate ? 0 : 1);
+
+  bool enable_sideband_tunneling = (hwc_session->tunneling_mode_ == kTunnelingSideband);
+  count += (enable_sideband_tunneling ? 1 : 0);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
-    outCapabilities[0] = HWC2_CAPABILITY_SKIP_CLIENT_COLOR_TRANSFORM;
+    int idx = 0;
+    outCapabilities[idx++] = HWC2_CAPABILITY_SKIP_CLIENT_COLOR_TRANSFORM;
     if (!disable_skip_validate) {
-      outCapabilities[1] = HWC2_CAPABILITY_SKIP_VALIDATE;
+      outCapabilities[idx++] = HWC2_CAPABILITY_SKIP_VALIDATE;
+    }
+    if (enable_sideband_tunneling) {
+      DLOGI("Tunneling Capability Set.");
+      outCapabilities[idx++] = HWC2_CAPABILITY_SIDEBAND_STREAM;
     }
   }
   *outCount = count;
@@ -388,6 +445,15 @@ int32_t HWCSession::CreateLayer(hwc2_device_t *device, hwc2_display_t display,
   return CallDisplayFunction(device, display, &HWCDisplay::CreateLayer, out_layer_id);
 }
 
+int32_t HWCSession::GetTunneledLayer(hwc2_device_t *device, hwc2_display_t display,
+                                hwc2_layer_t *out_layer_id) {
+  if (!out_layer_id) {
+    return  HWC2_ERROR_BAD_PARAMETER;
+  }
+
+  return CallDisplayFunction(device, display, &HWCDisplay::GetTunneledLayer, out_layer_id);
+}
+
 int32_t HWCSession::CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, uint32_t height,
                                          int32_t *format, hwc2_display_t *out_display_id) {
   // TODO(user): Handle concurrency with HDMI
@@ -413,6 +479,15 @@ int32_t HWCSession::CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, 
 
 int32_t HWCSession::DestroyLayer(hwc2_device_t *device, hwc2_display_t display,
                                  hwc2_layer_t layer) {
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+  bool tunneled_layer_present = false;
+  IsTunnelledLayerPresent(device, display, &tunneled_layer_present);
+  if (tunneled_layer_present == true && hwc_session->tunneled_layer_ == layer) {
+    DLOGI("Tunneled layer is getting destroyed, exiting tunneled mode!");
+    SetLayerIsTunneled(device, display,
+                       (hwc2_layer_t) hwc_session->tunneled_layer_, false);
+    hwc_session->TunnelingDeinitInternal();
+  }
   return CallDisplayFunction(device, display, &HWCDisplay::DestroyLayer, layer);
 }
 
@@ -768,7 +843,7 @@ static int32_t SetCursorPosition(hwc2_device_t *device, hwc2_display_t display, 
   return status;
 }
 
-static int32_t SetLayerBlendMode(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+int32_t HWCSession::SetLayerBlendMode(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
                                  int32_t int_mode) {
   if (int_mode < HWC2_BLEND_MODE_INVALID || int_mode > HWC2_BLEND_MODE_COVERAGE) {
     return HWC2_ERROR_BAD_PARAMETER;
@@ -777,8 +852,9 @@ static int32_t SetLayerBlendMode(hwc2_device_t *device, hwc2_display_t display, 
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerBlendMode, mode);
 }
 
-static int32_t SetLayerBuffer(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                              buffer_handle_t buffer, int32_t acquire_fence) {
+int32_t HWCSession::SetLayerBuffer(hwc2_device_t *device, hwc2_display_t display,
+                                   hwc2_layer_t layer, buffer_handle_t buffer,
+                                   int32_t acquire_fence) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerBuffer, buffer,
                                        acquire_fence);
 }
@@ -795,26 +871,49 @@ static int32_t SetLayerCompositionType(hwc2_device_t *device, hwc2_display_t dis
                                        type);
 }
 
-static int32_t SetLayerDataspace(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                 int32_t dataspace) {
+int32_t HWCSession::SetLayerDataspace(hwc2_device_t *device, hwc2_display_t display,
+                                      hwc2_layer_t layer, int32_t dataspace) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerDataspace,
                                        dataspace);
 }
 
-static int32_t SetLayerDisplayFrame(hwc2_device_t *device, hwc2_display_t display,
-                                    hwc2_layer_t layer, hwc_rect_t frame) {
+int32_t HWCSession::SetLayerDisplayFrame(hwc2_device_t *device, hwc2_display_t display,
+                                         hwc2_layer_t layer, hwc_rect_t frame) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerDisplayFrame,
                                        frame);
 }
 
-static int32_t SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                  float alpha) {
+int32_t HWCSession::SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display,
+                                       hwc2_layer_t layer, float alpha) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerPlaneAlpha,
                                        alpha);
 }
 
-static int32_t SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                  hwc_frect_t crop) {
+int32_t HWCSession::SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display,
+                                           hwc2_layer_t layer, const native_handle_t *stream) {
+  bool tunneled_layer_present = false;
+  if (IsTunnelledLayerPresent(device, display, &tunneled_layer_present) !=
+                                                  INT32(HWC2::Error::None)) {
+    return HWC2_ERROR_BAD_PARAMETER;
+  }
+  if (tunneled_layer_present) {
+    DLOGD("Tunneling already established. Tunneled layer already present.");
+    return HWC2_ERROR_NONE;
+  }
+
+  if (SetLayerIsTunneled(device, display, layer, stream != nullptr) != INT32(HWC2::Error::None)) {
+    return HWC2_ERROR_BAD_PARAMETER;
+  } else {
+    auto *hwc_session = static_cast<HWCSession *>(device);
+    hwc_session->TunnelingInitInternal();
+  }
+
+  return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerSidebandStream,
+                                       stream);
+}
+
+int32_t HWCSession::SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display,
+                                       hwc2_layer_t layer, hwc_frect_t crop) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerSourceCrop, crop);
 }
 
@@ -824,8 +923,8 @@ static int32_t SetLayerSurfaceDamage(hwc2_device_t *device, hwc2_display_t displ
                                        damage);
 }
 
-static int32_t SetLayerTransform(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                                 int32_t int_transform) {
+int32_t HWCSession::SetLayerTransform(hwc2_device_t *device, hwc2_display_t display,
+                                      hwc2_layer_t layer, int32_t int_transform) {
   auto transform = static_cast<HWC2::Transform>(int_transform);
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerTransform,
                                        transform);
@@ -837,9 +936,20 @@ static int32_t SetLayerVisibleRegion(hwc2_device_t *device, hwc2_display_t displ
                                        visible);
 }
 
-static int32_t SetLayerZOrder(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
-                              uint32_t z) {
+int32_t HWCSession::SetLayerZOrder(hwc2_device_t *device, hwc2_display_t display,
+                                   hwc2_layer_t layer, uint32_t z) {
   return HWCSession::CallDisplayFunction(device, display, &HWCDisplay::SetLayerZOrder, layer, z);
+}
+
+int32_t HWCSession::SetLayerIsTunneled(hwc2_device_t *device, hwc2_display_t display,
+                                       hwc2_layer_t layer, bool tunneled) {
+  return CallDisplayFunction(device, display, &HWCDisplay::SetLayerIsTunneled, layer, tunneled);
+}
+
+int32_t HWCSession::IsTunnelledLayerPresent(hwc2_device_t *device, hwc2_display_t display,
+                                            bool *tunnelled_layer_present) {
+  return CallDisplayFunction(device, display, &HWCDisplay::IsTunnelledLayerPresent,
+                             tunnelled_layer_present);
 }
 
 int32_t HWCSession::SetOutputBuffer(hwc2_device_t *device, hwc2_display_t display,
@@ -1041,8 +1151,8 @@ hwc2_function_pointer_t HWCSession::GetFunction(struct hwc2_device *device,
       return AsFP<HWC2_PFN_SET_LAYER_DISPLAY_FRAME>(SetLayerDisplayFrame);
     case HWC2::FunctionDescriptor::SetLayerPlaneAlpha:
       return AsFP<HWC2_PFN_SET_LAYER_PLANE_ALPHA>(SetLayerPlaneAlpha);
-    // Sideband stream is not supported
-    // case HWC2::FunctionDescriptor::SetLayerSidebandStream:
+    case HWC2::FunctionDescriptor::SetLayerSidebandStream:
+      return AsFP<HWC2_PFN_SET_LAYER_SIDEBAND_STREAM>(SetLayerSidebandStream);
     case HWC2::FunctionDescriptor::SetLayerSourceCrop:
       return AsFP<HWC2_PFN_SET_LAYER_SOURCE_CROP>(SetLayerSourceCrop);
     case HWC2::FunctionDescriptor::SetLayerSurfaceDamage:
