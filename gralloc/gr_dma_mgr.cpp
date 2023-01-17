@@ -273,12 +273,12 @@ bool DmaManager::CSFEnabled() {
   return false;
 }
 
-void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_heap_name,
+void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, bool use_uncached, std::string *dma_heap_name,
                              std::vector<std::string> *dma_vm_names, unsigned int *alloc_type,
                              unsigned int * /* dmaflags */, unsigned int *alloc_size) {
   // Query Camera Security Framework in order to allocate from legacy/non-legacy heap
   GetCSFVersion();
-  std::string heap_name = "qcom,system";
+  std::string heap_name = use_uncached ? "qcom,system-uncached" : "qcom,system";
   unsigned int type = 0;
   if (usage & GRALLOC_USAGE_PROTECTED) {
     if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {

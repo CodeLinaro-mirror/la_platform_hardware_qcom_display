@@ -234,9 +234,10 @@ int DmaLegacyManager::SecureMemPerms(AllocData *data) {
   return ret;
 }
 
-void DmaLegacyManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *ion_heap_name,
-                                   std::vector<std::string> *vm_names, unsigned int *alloc_type,
-                                   unsigned int *ion_flags, unsigned int *alloc_size) {
+void DmaLegacyManager::GetHeapInfo(uint64_t usage, bool sensor_flag, bool use_uncached,
+                                   std::string *ion_heap_name, std::vector<std::string> *vm_names,
+                                   unsigned int *alloc_type, unsigned int *ion_flags,
+                                   unsigned int *alloc_size) {
   std::string heap_name = "qcom,system";
   unsigned int type = 0;
   uint32_t flags = 0;

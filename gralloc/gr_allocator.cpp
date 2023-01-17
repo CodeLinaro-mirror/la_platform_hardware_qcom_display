@@ -83,9 +83,9 @@ int Allocator::AllocateMem(AllocData *alloc_data, uint64_t usage, int format) {
 
   // After this point we should have the right heap set, there is no fallback
 
-  alloc_intf->GetHeapInfo(usage, use_system_heap_for_sensors_, &alloc_data->heap_name,
-                          &alloc_data->vm_names, &alloc_data->alloc_type, &alloc_data->flags,
-                          &alloc_data->size);
+  alloc_intf->GetHeapInfo(usage, use_system_heap_for_sensors_, alloc_data->uncached,
+                          &alloc_data->heap_name, &alloc_data->vm_names, &alloc_data->alloc_type,
+                          &alloc_data->flags, &alloc_data->size);
 
   ret = alloc_intf->AllocBuffer(alloc_data);
   if (ret >= 0) {
@@ -180,7 +180,7 @@ bool Allocator::CheckForBufferSharing(uint32_t num_descriptors,
   for (uint32_t i = 0; i < num_descriptors; i++) {
     // Check Cached vs non-cached and all the flags
     cur_uncached = UseUncached(descriptors[i]->GetFormat(), descriptors[i]->GetUsage());
-    alloc_intf->GetHeapInfo(descriptors[i]->GetUsage(), use_system_heap_for_sensors_,
+    alloc_intf->GetHeapInfo(descriptors[i]->GetUsage(), use_system_heap_for_sensors_, cur_uncached,
                             &cur_heap_name, &cur_vm_names, &cur_alloc_type, &cur_flags, &cur_size);
 
     if (i > 0 &&
