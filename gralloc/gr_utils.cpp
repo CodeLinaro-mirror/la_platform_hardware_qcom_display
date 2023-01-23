@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1477,6 +1477,9 @@ int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
   }
 
   AdrenoMemInfo *adreno_mem_info = AdrenoMemInfo::GetInstance();
+  if (!adreno_mem_info->AdrenoSizeAPIAvaliable()) {
+    return -ENOTSUP;
+  }
   graphics_metadata->size = adreno_mem_info->AdrenoGetMetadataBlobSize();
   uint64_t adreno_usage = info.usage;
   // If gralloc disables UBWC based on any of the checks,
