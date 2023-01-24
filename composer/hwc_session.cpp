@@ -1435,6 +1435,11 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
     return error;
   }
 
+  core_intf_->ReserveDisplay(kVirtual);
+  // Trigger Refresh.
+  callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
+  // Ideally we need to wait on all connected displays.
+  WaitForCommitDoneAsync(HWC_DISPLAY_PRIMARY, kClientVirtualDisplay);
   // Lock confined to this scope
   int status = -EINVAL;
   for (auto &map_info : map_info_virtual_) {
@@ -4022,23 +4027,26 @@ int32_t HWCSession::SetActiveConfigWithConstraints(
 
 int HWCSession::WaitForCommitDoneAsync(hwc2_display_t display, int client_id) {
   std::chrono::milliseconds span(5000);
-  if (commit_done_future_[display].valid()) {
-    std::future_status status = commit_done_future_[display].wait_for(std::chrono::milliseconds(0));
+  auto &future = client_id == kClientVirtualDisplay ? wfd_refresh_future_ : commit_done_future_[display];
+  if (future.valid()) {
+    if (client_id == kClientVirtualDisplay) {
+      return 0;	
+    }
+    std::future_status status = future.wait_for(std::chrono::milliseconds(0));
     if (status != std::future_status::ready) {
       // Previous task is stuck. Bail out early.
       return -ETIMEDOUT;
     }
   }
 
-  commit_done_future_[display] =
-      std::async([](HWCSession* session, hwc2_display_t display, int client_id) {
-                      return session->WaitForCommitDone(display, client_id);
-                    }, this, display, client_id);
-  if (commit_done_future_[display].wait_for(span) == std::future_status::timeout) {
+  future = std::async([](HWCSession* session, hwc2_display_t display, int client_id) {
+                         return session->WaitForCommitDone(display, client_id);
+                         }, this, display, client_id);
+  if (future.wait_for(span) == std::future_status::timeout) {
     DLOGW("WaitForCommitDoneAsync timed out");
     return -ETIMEDOUT;
   }
-  return commit_done_future_[display].get();
+  return future.get();
 }
 
 int HWCSession::WaitForCommitDone(hwc2_display_t display, int client_id) {
@@ -4129,11 +4137,9 @@ android::status_t HWCSession::TUITransitionPrepare(int disp_id) {
   for (auto &info : map_info) {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[info.client_id]);
     if (hwc_display_[info.client_id]) {
-      if (info.client_id == target_display) {
-        continue;
-      }
-      if (hwc_display_[info.client_id]->HandleSecureEvent(kTUITransitionPrepare,
-                                                          &needs_refresh) != kErrorNone) {
+      if (hwc_display_[info.client_id]->HandleSecureEvent(kTUITransitionPrepare, &needs_refresh,
+                                                           info.client_id == target_display) !=
+                                                           kErrorNone) {
         return -EINVAL;
       }
     }
@@ -4184,8 +4190,8 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[target_display]);
     if (hwc_display_[target_display]) {
-      if (hwc_display_[target_display]->HandleSecureEvent(kTUITransitionStart,
-                                                          &needs_refresh) != kErrorNone) {
+      if (hwc_display_[target_display]->HandleSecureEvent(kTUITransitionStart, &needs_refresh,
+                                                          false) != kErrorNone) {
         return -EINVAL;
       }
       uint32_t config = 0;
@@ -4250,8 +4256,8 @@ android::status_t HWCSession::TUITransitionEnd(int disp_id) {
     hwc_display_[target_display]->SetIdleTimeoutMs(idle_time_active_ms_, idle_time_inactive_ms_);
     hwc_display_[target_display]->SetQSyncMode(hwc_display_qsync_[target_display]);
     if (hwc_display_[target_display]) {
-      if (hwc_display_[target_display]->HandleSecureEvent(kTUITransitionEnd,
-                                                          &needs_refresh) != kErrorNone) {
+      if (hwc_display_[target_display]->HandleSecureEvent(kTUITransitionEnd, &needs_refresh,
+                                                          false) != kErrorNone) {
         return -EINVAL;
       }
     } else {
@@ -4310,14 +4316,12 @@ android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
     {
       SEQUENCE_WAIT_SCOPE_LOCK(locker_[info.client_id]);
       if (hwc_display_[info.client_id]) {
-        if (info.client_id == target_display) {
-          continue;
-        }
         if (info.disp_type == kPluggable && pending_hotplug_event_ == kHotPlugEvent) {
           continue;
         }
-        if (hwc_display_[info.client_id]->HandleSecureEvent(kTUITransitionUnPrepare,
-                                                            &needs_refresh) != kErrorNone) {
+        if (hwc_display_[info.client_id]->HandleSecureEvent(kTUITransitionUnPrepare, &needs_refresh,
+                                                            info.client_id == target_display) !=
+                                                            kErrorNone) {
           return -EINVAL;
         }
       }
