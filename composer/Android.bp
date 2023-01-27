@@ -50,6 +50,7 @@ cc_binary {
         "libGLESv3",
         "vendor.qti.hardware.display.composer@3.0",
         "vendor.qti.hardware.display.composer@3.1",
+        "vendor.qti.hardware.display.composer@3.2",
         "android.hardware.graphics.composer@2.1",
         "android.hardware.graphics.composer@2.2",
         "android.hardware.graphics.composer@2.3",

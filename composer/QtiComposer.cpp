@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <vector>
 #include "QtiComposer.h"
 
@@ -35,7 +41,7 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V3_1 {
+namespace V3_2 {
 namespace implementation {
 
 QtiComposerClient* QtiComposerClient::qti_composerclient_instance_ = nullptr;
@@ -150,6 +156,17 @@ Return<void> QtiComposer::createClient_3_1(createClient_3_1_cb _hidl_cb) {
   return Void();
 }
 
+// Methods from ::android::hardware::graphics::composer::V3_1::IComposer follow.
+Return<void> QtiComposer::createClient_3_2(createClient_3_2_cb _hidl_cb) {
+  sp<QtiComposerClient> composer_client = QtiComposerClient::CreateQtiComposerClientInstance();
+  if (!composer_client) {
+    _hidl_cb(composer_V2_1::Error::NO_RESOURCES, nullptr);
+    return Void();
+  }
+  _hidl_cb(composer_V2_1::Error::NONE, composer_client);
+  return Void();
+}
+
 QtiComposer *QtiComposer::initialize() {
   auto error = HWCSession::GetInstance()->Init();
   if (error) {
@@ -169,7 +186,7 @@ IQtiComposer* HIDL_FETCH_IQtiComposer(const char* /* name */) {
 }
 
 }  // namespace implementation
-}  // namespace V3_1
+}  // namespace V3_2
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware

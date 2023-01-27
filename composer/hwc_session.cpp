@@ -1234,7 +1234,12 @@ int32_t HWCSession::SetLayerType(hwc2_display_t display, hwc2_layer_t layer,
 
 int32_t HWCSession::SetLayerFlag(hwc2_display_t display, hwc2_layer_t layer,
                                  IQtiComposerClient::LayerFlag flag) {
-   return CallLayerFunction(display, layer, &HWCLayer::SetLayerFlag, flag);
+  return CallLayerFunction(display, layer, &HWCLayer::SetLayerFlag, flag);
+}
+
+int32_t HWCSession::SetSingleBufferMode(hwc2_display_t display, hwc2_layer_t layer,
+                                        uint32_t mode) {
+  return CallLayerFunction(display, layer, &HWCLayer::SetSingleBufferMode, mode);
 }
 
 int32_t HWCSession::SetLayerColorTransform(hwc2_display_t display, hwc2_layer_t layer,

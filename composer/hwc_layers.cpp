@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "hwc_layers.h"
 #include <qd_utils.h>
 #include <utils/debug.h>
@@ -659,6 +665,13 @@ HWC2::Error HWCLayer::SetLayerType(IQtiComposerClient::LayerType type) {
 
 HWC2::Error HWCLayer::SetLayerFlag(IQtiComposerClient::LayerFlag flag) {
   compatible_ = (flag == IQtiComposerClient::LayerFlag::COMPATIBLE);
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCLayer::SetSingleBufferMode(uint32_t mode) {
+  DLOGV("mode = %d", mode);
+  single_buffer_ = (mode != 0);
 
   return HWC2::Error::None;
 }
