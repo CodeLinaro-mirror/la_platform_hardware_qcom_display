@@ -58,6 +58,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <stdio.h>
 #include <malloc.h>
 #include <utils/constants.h>
@@ -3888,6 +3894,9 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
       break;
     case kDedicatedCwb:
       error = dpu_core_mux_->GetFeatureSupportStatus(kHasDedicatedCwb, supported);
+      break;
+    case kCacV2:
+      *supported = IsCacV2Supported();
       break;
     default:
       DLOGW("Feature:%d is not present for display %d:%d", feature, display_id_, display_type_);

@@ -26,6 +26,13 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #pragma once
 
 #include <aidl/vendor/qti/hardware/display/config/BnDisplayConfig.h>
@@ -124,6 +131,10 @@ class DisplayConfigAIDL : public BnDisplayConfig {
     ScopedAStatus notifyDisplayIdleState(const std::vector<int32_t>& displayIds) {
       return ScopedAStatus::ok();
     }
+    ScopedAStatus isCacV2Supported(int dispId, bool* supported);
+    ScopedAStatus configureCacV2(int32_t dispId, const CacV2Config& config, bool enable);
+    ScopedAStatus configureCacV2PerEye(int32_t dispId, const CacV2Config& leftConfig,
+                                       const CacV2Config& rightConfig, bool enable);
 
   private:
     sdm::HWCSession *hwc_session_;

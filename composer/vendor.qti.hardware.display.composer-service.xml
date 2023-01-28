@@ -61,6 +61,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
+<!--
+ Changes from Qualcomm Innovation Center are provided under the following license:
+
+ Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ SPDX-License-Identifier: BSD-3-Clause-Clear
+-->
+
 <manifest version="1.0" type="device">
     <hal format="hidl">
         <name>vendor.qti.hardware.display.composer</name>
@@ -109,7 +116,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </hal>
     <hal format="aidl">
         <name>vendor.qti.hardware.display.config</name>
-        <version>5</version>
+        <version>6</version>
         <fqname>IDisplayConfig/default</fqname>
     </hal>
 </manifest>

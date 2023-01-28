@@ -53,6 +53,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HWC_DISPLAY_H__
 #define __HWC_DISPLAY_H__
 
@@ -504,6 +510,9 @@ class HWCDisplay : public DisplayEventHandler {
   }
   virtual HWC2::Error PerformCacConfig(CacConfig config, bool enable) {
     return HWC2::Error::Unsupported;
+  }
+  virtual bool IsCacV2Supported() {
+    return false;
   }
   virtual HWC2::Error GetClientTargetProperty(ClientTargetProperty *out_client_target_property);
   virtual void GetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo> *variable_config_map,

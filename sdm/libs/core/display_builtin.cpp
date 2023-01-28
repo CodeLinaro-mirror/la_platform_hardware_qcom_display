@@ -58,6 +58,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/rect.h>
@@ -2746,13 +2752,21 @@ uint32_t DisplayBuiltIn::SanitizeRefreshRate(uint32_t req_refresh_rate, uint32_t
   return refresh_rate;
 }
 
+bool DisplayBuiltIn::IsCacV2Supported() {
+  for (auto& res_info : hw_resource_info_) {
+    if (res_info.cac_version != kCacVersion2) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 DisplayError DisplayBuiltIn::PerformCacConfig(CacConfig config, bool enable) {
   ClientLock lock(disp_mutex_);
 
-  for (auto& res_info : hw_resource_info_) {
-    if (res_info.cac_version != kCacVersion2) {
-      return kErrorNotSupported;
-    }
+  if (!IsCacV2Supported()) {
+    return kErrorNotSupported;
   }
 
   DLOGV_IF(kTagDisplay, "CAC enable: %d Config:: k0r: %f k1r: %f k0b: %f k1b: %f pixel_pitch: %f"
