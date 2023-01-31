@@ -25,6 +25,40 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <core/buffer_allocator.h>
@@ -704,5 +738,100 @@ Return<bool> HWCSession::isBuiltInDisplay(uint32_t disp_id) {
   return false;
 }
 #endif  // DISPLAY_CONFIG_1_9
+
+#ifdef DISPLAY_CONFIG_1_21
+Return<int32_t> HWCSession::setCWBOutputBuffer(const sp<IDisplayCWBCallback>& callback,
+                                    uint32_t disp_id, const IDisplayConfig::Rect& rect,
+                                    bool post_processed, const hidl_handle& buffer) {
+  return 0;
+}
+
+Return<void> HWCSession::getSupportedDSIBitClks(uint32_t disp_id,
+                 IDisplayConfig::getSupportedDSIBitClks_cb _hidl_cb) {
+  return Void();
+}
+
+Return<uint64_t> HWCSession::getDSIClk(uint32_t disp_id) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::setDSIClk(uint32_t disp_id, uint64_t bit_clk) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::setQsyncMode(uint32_t disp_id, IDisplayConfig::QsyncMode mode) {
+  return 0;
+}
+
+Return<bool> HWCSession::isSmartPanelConfig(uint32_t disp_id, uint32_t config_id) {
+  return false;
+}
+
+Return<bool> HWCSession::isAsyncVDSCreationSupported() {
+  return false;
+}
+
+Return<int32_t> HWCSession::createVirtualDisplay(uint32_t width, uint32_t height, int32_t format) {
+  return 0;
+}
+
+Return<bool> HWCSession::isRotatorSupportedFormat(int32_t format, bool ubwc) {
+  return false;
+}
+
+Return<int32_t> HWCSession::registerQsyncCallback(const sp<IDisplayQsyncCallback>& callback) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::allowIdleFallback() {
+  return 0;
+}
+
+Return<void> HWCSession::getFSCRGBOrder(DisplayType dpy,
+                                        IDisplayConfig::getFSCRGBOrder_cb _hidl_cb) {
+  return Void();
+}
+
+Return<int32_t> HWCSession::enableCAC(uint32_t disp_id, bool enable, float red, float green,
+                                      float blue) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::setCacEyeConfig(uint32_t disp_id,
+                  const IDisplayConfig::CacEyeConfig& left,
+                  const IDisplayConfig::CacEyeConfig& right) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::tunnellingInit() {
+  return 0;
+}
+
+Return<int32_t> HWCSession::createTunnelledLayer(const IDisplayConfig::LayerInfo& layer) {
+  return 0;
+}
+
+Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
+                                                dequeueTunnelledBuffer_cb _hidl_cb) {
+  return Void();
+}
+
+Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
+                                                 const hidl_handle& acquire_fence) {
+  return 0;
+}
+
+Return<int32_t> HWCSession::destroyTunnelledLayer()  {
+  return 0;
+}
+
+Return<int32_t> HWCSession::tunnellingDeinit() {
+  return 0;
+}
+#endif // DISPLAY_CONFIG_1_21
 
 }  // namespace sdm

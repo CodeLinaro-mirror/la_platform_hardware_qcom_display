@@ -24,7 +24,19 @@ PRODUCT_PACKAGES += \
     vendor.display.config@1.6.vendor \
     vendor.display.config@1.7.vendor \
     vendor.display.config@1.8.vendor \
-    vendor.display.config@1.9.vendor
+    vendor.display.config@1.9.vendor \
+    vendor.display.config@1.10.vendor \
+    vendor.display.config@1.11.vendor \
+    vendor.display.config@1.12.vendor \
+    vendor.display.config@1.13.vendor \
+    vendor.display.config@1.14.vendor \
+    vendor.display.config@1.15.vendor \
+    vendor.display.config@1.16.vendor \
+    vendor.display.config@1.17.vendor \
+    vendor.display.config@1.18.vendor \
+    vendor.display.config@1.19.vendor \
+    vendor.display.config@1.20.vendor \
+    vendor.display.config@1.21.vendor
 
 
 #Qdcm calibration xml file for 2k panel
