@@ -55,7 +55,7 @@
 #define __HWC_SESSION_H__
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-#include <vendor/display/config/1.21/IDisplayConfig.h>
+#include <vendor/display/config/1.22/IDisplayConfig.h>
 #else
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #endif
@@ -88,7 +88,7 @@
 namespace sdm {
 
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-using vendor::display::config::V1_21::IDisplayConfig;
+using vendor::display::config::V1_22::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
@@ -465,6 +465,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
                                   const IDisplayConfig::CacEyeConfig& right) override;
   Return<int32_t> setSkewVsync(uint32_t disp_id, uint32_t skew_vsync_val) override;
   Return<int32_t> createTunnelledLayer(const IDisplayConfig::LayerInfo& layer) override;
+  Return<int32_t> createTunnelledLayerforDisplay(uint32_t disp_id,
+                                                 const IDisplayConfig::LayerInfo& layer) override;
   Return<void> dequeueTunnelledBuffer(const hidl_handle& buffer, dequeueTunnelledBuffer_cb _hidl_cb)
                                                                  override;
   Return<int32_t> queueTunnelledBuffer(const hidl_handle& buffer, const hidl_handle& fence)
@@ -623,6 +625,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   hwc2_layer_t tunneled_layer_ = -1;
   int tunneled_layer_rf_ = -1; // tunneled layer's release fence
   IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
+  int tunneled_display_id_ = -1;
 };
 }  // namespace sdm
 
