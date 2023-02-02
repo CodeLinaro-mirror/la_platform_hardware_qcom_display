@@ -30,7 +30,7 @@
 
 # Changes from Qualcomm Innovation Center are provided under the following license:
 #
-# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted (subject to the limitations in the
@@ -125,7 +125,7 @@ case "$target" in
     ;;
     "parrot")
     case "$soc_hwid" in
-        537)
+        537 | 583 | 613)
         # Set property for Parrot
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 2
@@ -182,6 +182,9 @@ case "$target" in
         setprop vendor.display.secure_preview_buffer_format 420_sp
         setprop vendor.gralloc.secure_preview_buffer_format 420_sp
         setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.enable_rotator_concurrency 1
+        setprop vendor.display.disable_offline_rotator 0
+        setprop vendor.display.disable_rotator_ubwc 1
         ;;
     esac
     ;;
