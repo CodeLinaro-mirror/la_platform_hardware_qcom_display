@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -4211,6 +4211,9 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
 
     err = comp_manager_->SetDetailEnhancerData(display_comp_ctx_, de_data);
     if (err != kErrorNone) {
+      if (color_mgr_) {
+        color_mgr_->SetDETuningCFGpending(false);
+      }
       DLOGW("SetDetailEnhancerConfig failed. err = %d", err);
       return err;
     }
