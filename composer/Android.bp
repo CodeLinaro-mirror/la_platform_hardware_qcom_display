@@ -13,7 +13,6 @@ cc_binary {
         "display_headers",
         "qti_kernel_headers",
         "qti_display_kernel_headers",
-        "libThermal_headers",
     ],
 
     cflags: [
@@ -60,7 +59,6 @@ cc_binary {
         "android.hardware.graphics.allocator@3.0",
         "libdisplayconfig.qti",
         "libdrm",
-        "libthermalclient",
         "vendor.display.config@1.0",
         "vendor.display.config@1.1",
         "vendor.display.config@1.2",
