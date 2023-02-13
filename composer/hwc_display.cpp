@@ -1477,11 +1477,10 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     // Set SDM composition to HWC2 type in HWCLayer
     hwc_layer->SetComposition(composition);
     HWC2::Composition device_composition  = hwc_layer->GetDeviceSelectedCompositionType();
-    if (hwc_layer->IsTunneled() && (composition != kCompositionSDE)) {
-      if (DestroyLayer(hwc_layer->GetId()) != HWC2::Error::None) {
-        DLOGW("DestroyLayer failed for layer = %lu!", hwc_layer->GetId());
-      }
-      continue;
+    if (hwc_layer->IsTunneled() && has_tunneled_layer_ && (composition != kCompositionSDE)) {
+      tunnelled_layer_ = -1;
+      has_tunneled_layer_ = false;
+      return HWC2::Error::BadLayer;
     }
 
     if (device_composition == HWC2::Composition::Client) {
