@@ -82,13 +82,16 @@ ResourceDefault::ResourceDefault(const vector<HWResourceInfo> &hw_res_info)
 DisplayError ResourceDefault::Init() {
   DisplayError error = kErrorNone;
 
+  num_pipe_.resize(hw_res_info_.size());
+  src_pipes_.resize(hw_res_info_.size());
+
   for (uint32_t j = 0; j < hw_res_info_.size(); j++) {
     uint32_t *num_pipe = &num_pipe_.at(j);
     HWResourceInfo *hw_res_info = &hw_res_info_.at(j);
     vector<SourcePipe> *src_pipes = &src_pipes_.at(j);
     *num_pipe = hw_res_info->num_vig_pipe + hw_res_info->num_rgb_pipe + hw_res_info->num_dma_pipe;
 
-    if (*num_pipe) {
+    if (!*num_pipe) {
       DLOGE("Number of H/W pipes is Zero!");
       return kErrorParameters;
     }
@@ -248,21 +251,6 @@ DisplayError ResourceDefault::SetDrawMethod(Handle display_ctx,
   return kErrorNone;
 }
 
-void ResourceDefault::CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
-                                       LayerRect *in_rect, LayerRect *out_rect) {
-  float right = (in_rect->right > (dpu_offset +  mixer_width) ?
-                 dpu_offset + mixer_width : in_rect->right);
-  *out_rect = {in_rect->left - dpu_offset, in_rect->top, right - dpu_offset, in_rect->bottom};
-  in_rect->left = right;
-}
-
-void ResourceDefault::CalculateSrcRect(float split_ratio, float src_width,
-                                       LayerRect *in_rect, LayerRect *out_rect) {
-  float dpu_width = split_ratio * src_width;
-  *out_rect = {in_rect->left, in_rect->top, in_rect->left + dpu_width, in_rect->bottom};
-  in_rect->left = out_rect->right;
-}
-
 DisplayError ResourceDefault::Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack,
                                       LayerFeedback *feedback) {
   DisplayResourceContext *display_resource_ctx =
@@ -270,19 +258,6 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, DispLayerStack *disp_l
 
   HWBlockType hw_block_type = display_resource_ctx->hw_block_type;
   DisplayError error = kErrorNone;
-  LayerRect src_rect = disp_layer_stack->info[0].hw_layers[0].src_rect;
-  LayerRect dst_rect = disp_layer_stack->info[0].hw_layers[0].dst_rect;
-  float src_width = src_rect.right - src_rect.left;
-  float dst_width = dst_rect.right - dst_rect.left;
-  uint32_t dpu_offset = 0;  // mixer start inedx for any DPU
-  for (int j = 0; j < disp_layer_stack->info.size(); j++) {
-    struct HWLayersInfo layer_info = disp_layer_stack->info[j];
-    Layer *hw_layer = &disp_layer_stack->info[j].hw_layers.at(0);
-    CalculateDstRect(dpu_offset, device_ctx_[j].mixer_attributes.width,
-                     &dst_rect, &hw_layer->dst_rect);
-    float split_ratio = ((hw_layer->dst_rect.right - hw_layer->dst_rect.left) / dst_width);
-    CalculateSrcRect(split_ratio, src_width, &hw_layer->src_rect, &src_rect);
-  }
 
   for (int j = 0; j < disp_layer_stack->info.size(); j++) {
     const struct HWLayersInfo &layer_info = disp_layer_stack->info[j];
@@ -350,7 +325,7 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, DispLayerStack *disp_l
         left_pipe->pipe_id = src_pipes->at(left_index).mdss_pipe_id;
       }
       DLOGV_IF(kTagResources, "1 pipe acquired for FB layer, left_pipe = %x", left_pipe->pipe_id);
-      return kErrorNone;
+      continue;
     }
 
     need_scale = IsScalingNeeded(right_pipe);

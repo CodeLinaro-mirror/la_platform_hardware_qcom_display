@@ -158,26 +158,45 @@ DisplayError Strategy::GetNextStrategy() {
   // When mixer resolution and panel resolutions are same (1600x2560) and FB resolution is
   // 1080x1920 FB_Target destination coordinates(mapped to FB resolution 1080x1920) need to
   // be mapped to destination coordinates of mixer resolution(1600x2560).
-  for (auto& info : disp_layer_stack_->info) {
-    Layer *gpu_target_layer =
-        layer_stack->layers.at(disp_layer_stack_->stack_info.gpu_target_index);
-    float layer_mixer_width = FLOAT(info_ctx_.mixer_attributes.width);
-    float layer_mixer_height = FLOAT(info_ctx_.mixer_attributes.height);
-    float fb_width = FLOAT(info_ctx_.fb_config.x_pixels);
-    float fb_height = FLOAT(info_ctx_.fb_config.y_pixels);
-    LayerRect src_domain = (LayerRect){0.0f, 0.0f, fb_width, fb_height};
-    LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
+  Layer *gpu_target_layer =
+                         layer_stack->layers.at(disp_layer_stack_->stack_info.gpu_target_index);
+  Layer gpu_layer = *gpu_target_layer;
 
+  float layer_mixer_width = FLOAT(info_ctx_.mixer_attributes.width);
+  float layer_mixer_height = FLOAT(info_ctx_.mixer_attributes.height);
+  float fb_width = FLOAT(info_ctx_.fb_config.x_pixels);
+  float fb_height = FLOAT(info_ctx_.fb_config.y_pixels);
+  LayerRect src_domain = (LayerRect){0.0f, 0.0f, fb_width, fb_height};
+  LayerRect dst_domain = (LayerRect){0.0f, 0.0f, layer_mixer_width, layer_mixer_height};
+
+  gpu_layer.transform.flip_horizontal ^= info_ctx_.hw_panel_info.panel_orientation.flip_horizontal;
+  gpu_layer.transform.flip_vertical ^= info_ctx_.hw_panel_info.panel_orientation.flip_vertical;
+  // Flip rect to match transform.
+  TransformHV(src_domain, gpu_layer.dst_rect, gpu_layer.transform, &gpu_layer.dst_rect);
+  // Scale to mixer resolution.
+  MapRect(src_domain, dst_domain, gpu_layer.dst_rect, &gpu_layer.dst_rect);
+
+  LayerRect src_rect = gpu_layer.src_rect;
+  LayerRect dst_rect = gpu_layer.dst_rect;
+
+  for (auto& info : disp_layer_stack_->info) {
     Layer layer = *gpu_target_layer;
+
+    float dpu_lm_width = FLOAT(device_ctx_[info.first].mixer_attributes.width);
+    uint32_t dpu_offset = info.first * dpu_lm_width;  // mixer start inedx for any DPU
+
+    CalculateDstRect(dpu_offset, dpu_lm_width, dst_rect, &layer.dst_rect);
+
+    float dpu_dst_width = layer.dst_rect.right - layer.dst_rect.left;
+    int final_transform = ComputeTransform(layer.transform);
+    float split_ratio = (dpu_dst_width / (dst_rect.right - dst_rect.left));
+
+    CalculateSrcRect(layer, split_ratio, final_transform, &src_rect, &layer.src_rect);
+    info.second.hw_layers.push_back(layer);
+
     info.second.index.push_back(disp_layer_stack_->stack_info.gpu_target_index);
     info.second.roi_index.push_back(0);
-    layer.transform.flip_horizontal ^= info_ctx_.hw_panel_info.panel_orientation.flip_horizontal;
-    layer.transform.flip_vertical ^= info_ctx_.hw_panel_info.panel_orientation.flip_vertical;
-    // Flip rect to match transform.
-    TransformHV(src_domain, layer.dst_rect, layer.transform, &layer.dst_rect);
-    // Scale to mixer resolution.
-    MapRect(src_domain, dst_domain, layer.dst_rect, &layer.dst_rect);
-    info.second.hw_layers.push_back(layer);
+    info.second.common_info = &disp_layer_stack_->stack_info.common_info;
   }
 
   return kErrorNone;
@@ -308,6 +327,48 @@ void Strategy::SetDisplayLayerStack(DispLayerStack *disp_layer_stack) {
   disp_layer_stack_ = disp_layer_stack;
   if (strategy_intf_) {
     strategy_intf_->SetDisplayLayerStack(disp_layer_stack);
+  }
+}
+
+void Strategy::CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
+                                LayerRect in_rect, LayerRect *out_rect) {
+  float left = (in_rect.left > dpu_offset ? in_rect.left : dpu_offset);
+  float right = (in_rect.right > (dpu_offset +  mixer_width) ? dpu_offset + mixer_width :
+                 in_rect.right);
+  *out_rect = {left - dpu_offset, in_rect.top, right - dpu_offset, in_rect.bottom};
+}
+
+void Strategy::CalculateSrcRect(const Layer &layer, float split_factor, int transform,
+                                LayerRect *in_rect, LayerRect *out_rect) {
+  float start_index = 0;
+  switch (transform) {
+    // src_rect for i DPU is present at width-i position,
+    case kTransformFlipHorizontal:
+    case kTransform180:
+      start_index = in_rect->right;
+      SplitFromRight(split_factor, layer, start_index, out_rect);
+      in_rect->right = out_rect->left;
+      break;
+
+    case kTransform90:
+      start_index = in_rect->bottom;
+      SplitFromBottom(split_factor, layer, start_index, out_rect);
+      in_rect->bottom = out_rect->top;
+      break;
+
+    case kTransform270:
+      start_index = in_rect->top;
+      SplitFromTop(split_factor, layer, start_index, out_rect);
+      in_rect->top = out_rect->bottom;
+      break;
+
+    case kTransformFlipVertical:
+    case kTransformNone:
+    default:
+      start_index = in_rect->left;
+      SplitFromLeft(split_factor, layer, start_index, out_rect);
+      in_rect->left = out_rect->right;
+      break;
   }
 }
 

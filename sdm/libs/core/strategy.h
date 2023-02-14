@@ -70,6 +70,10 @@ class Strategy {
 
  private:
   void GenerateROI();
+  void CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
+                        LayerRect in_rect, LayerRect *out_rect);
+  void CalculateSrcRect(const Layer &layer, float split_factor, int transform,
+                        LayerRect *in_rect, LayerRect *out_rect);
 
   ExtensionInterface *extension_intf_ = NULL;
   StrategyInterface *strategy_intf_ = NULL;
