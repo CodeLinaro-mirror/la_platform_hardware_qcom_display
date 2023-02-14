@@ -24,7 +24,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -175,10 +175,6 @@ class ResourceDefault : public ResourceInterface {
   void ResourceStateLog(void);
   DisplayError CalculateDecimation(float downscale, uint8_t *decimation);
   DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
-  void CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
-                                LayerRect *in_rect, LayerRect *out_rect);
-  void CalculateSrcRect(float split_ratio, float src_width,
-                                LayerRect *in_rect, LayerRect *out_rect);
   DisplayClientContext client_ctx_;
   DisplayDeviceContext device_ctx_;
   vector<HWResourceInfo> hw_res_info_;

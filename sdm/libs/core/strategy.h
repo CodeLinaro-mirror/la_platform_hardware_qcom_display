@@ -24,7 +24,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -64,6 +64,10 @@ class Strategy {
 
  private:
   void GenerateROI();
+  void CalculateDstRect(uint32_t dpu_offset, uint32_t mixer_width,
+                        LayerRect in_rect, LayerRect *out_rect);
+  void CalculateSrcRect(const Layer &layer, float split_factor, int transform,
+                        LayerRect *in_rect, LayerRect *out_rect);
 
   ExtensionInterface *extension_intf_ = NULL;
   StrategyInterface *strategy_intf_ = NULL;
