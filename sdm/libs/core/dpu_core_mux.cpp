@@ -42,7 +42,17 @@ DisplayError DPUCoreMux::Destroy() {
 }
 
 DisplayError DPUCoreMux::GetDisplayId(int32_t *display_id) {
-  return hw_intf_.at(core_ids_[0])->GetDisplayId(display_id);
+  *display_id = 0;
+  DisplayError error = kErrorNone;
+  for (auto hw_intf : hw_intf_) {
+    int32_t disp_id;
+    error = hw_intf.second->GetDisplayId(&disp_id);
+    if (error != kErrorNone) {
+      return error;
+    }
+    *display_id = *display_id | DisplayId(hw_intf.first, disp_id).GetDisplayId();
+  }
+  return error;
 }
 
 DisplayError DPUCoreMux::GetActiveConfig(uint32_t *active_config) {

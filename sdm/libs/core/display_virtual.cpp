@@ -72,8 +72,21 @@ DisplayError DisplayVirtual::Init() {
 
   if (-1 == display_id_info_.GetDisplayId()) {
     dpu_core_mux_->GetDisplayId(&display_id_);
-    display_id_info_ = DisplayId(primary_core_id_, display_id_);
-    display_id_ = display_id_info_.GetDisplayId();
+    display_id_info_ = DisplayId(display_id_);
+  }
+
+  core_id_ = display_id_info_.GetCoreIdMap();
+  std::bitset<32> core_id_bitset = std::bitset<32>(core_id_);
+  core_count_ = core_id_bitset.count();
+
+  for (int i = 0; i < core_id_.size(); i++) {
+    if (!core_id_[i]) {
+      continue;
+    }
+    default_clock_hz_.insert(std::pair<uint32_t, uint32_t>(i, 0));
+    cached_framebuffer_.insert(std::pair<uint32_t, LayerBuffer>(i, {}));
+    cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(i, {}));
+    disp_layer_stack_->info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
   }
 
   for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {

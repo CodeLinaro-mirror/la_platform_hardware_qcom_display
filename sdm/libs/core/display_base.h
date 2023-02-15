@@ -418,6 +418,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   uint32_t hw_recovery_threshold_ = 1;
   std::map<uint32_t, HWQosData> cached_qos_data_;
   std::map<uint32_t, uint32_t> default_clock_hz_;
+  std::map<uint32_t, LayerBuffer> cached_framebuffer_ = {};
   bool drop_hw_vsync_ = false;
   uint32_t current_refresh_rate_ = 0;
   bool drop_skewed_vsync_ = false;
@@ -507,7 +508,6 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   uint32_t retire_fence_offset_ = 0;
   std::mutex power_mutex_;
   std::condition_variable cv_;
-  std::map<uint32_t, LayerBuffer> cached_framebuffer_ = {};
   Layer noise_layer_ = {};
   DisplayError ConfigureCwbForIdleFallback(LayerStack *layer_stack);
   bool cwb_fence_wait_ = false;

@@ -74,8 +74,10 @@ DisplayError DisplayPluggable::Init() {
 
   if (-1 == display_id_info_.GetDisplayId()) {
     dpu_core_mux_->GetDisplayId(&display_id_);
-    display_id_info_ = DisplayId(primary_core_id_, display_id_);
-    display_id_ = display_id_info_.GetDisplayId();
+    display_id_info_ = DisplayId(display_id_);
+    core_id_ = display_id_info_.GetCoreIdMap();
+    std::bitset<32> core_id_bitset = std::bitset<32>(core_id_);
+    core_count_ = core_id_bitset.count();
   }
 
   uint32_t active_mode_index = 0;
