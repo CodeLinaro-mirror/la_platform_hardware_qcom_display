@@ -79,7 +79,8 @@ AC_CONFIG_FILES([ \
         sdm/libs/utils/libsdmutils.pc \
         sdm/libs/core/Makefile \
         sdm/libs/core/libsdmcore.pc \
-        sde-drm/Makefile
+        sde-drm/Makefile \
+        gpu_tonemapper/Makefile
         ])
 AC_SUBST([CFLAGS])
 AC_SUBST([CC])
