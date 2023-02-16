@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __QTICOMPOSERHANDLEIMPORTER_H__
 #define __QTICOMPOSERHANDLEIMPORTER_H__
 
@@ -31,7 +37,7 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V3_1 {
+namespace V3_2 {
 
 #define MAX_INO_VALS 100
 
@@ -62,7 +68,7 @@ class ComposerHandleImporter {
   sp<IMapper> mMapper;
 };
 
-}  // namespace V3_1
+}  // namespace V3_2
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware

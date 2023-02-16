@@ -26,6 +26,13 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include "DisplayConfigAIDL.h"
 
 using sdm::Locker;
@@ -982,6 +989,83 @@ ScopedAStatus DisplayConfigAIDL::unRegisterCallback(int64_t client_handle) {
   ret = hwc_session_->UnregisterCallbackClient(client_handle);
 
   return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+}
+
+ScopedAStatus DisplayConfigAIDL::isCacV2Supported(int dispId, bool* supported) {
+  if (dispId < 0 || dispId >= sdm::HWCCallbacks::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  SCOPE_LOCK(hwc_session_->locker_[dispId]);
+  if (!hwc_session_->hwc_display_[dispId]) {
+    ALOGW("%s: Display %d is not connected.", __FUNCTION__, dispId);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  *supported = hwc_session_->hwc_display_[dispId]->IsCacV2Supported();
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::configureCacV2(int32_t dispId, const CacV2Config& config,
+                                                bool enable) {
+  if (dispId < 0 || dispId >= sdm::HWCCallbacks::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[dispId]);
+  sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[dispId];
+  if (!hwc_display) {
+    ALOGW("%s: Invalid display:%d", __FUNCTION__, dispId);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  sdm::CacConfig cac_config = {};
+  cac_config.k0r = config.k0r;
+  cac_config.k1r = config.k1r;
+  cac_config.k0b = config.k0b;
+  cac_config.k1b = config.k1b;
+  cac_config.pixel_pitch = config.pixel_pitch;
+  cac_config.normalization = config.normalization;
+
+  if (hwc_display->PerformCacConfig(cac_config, enable) != HWC2::Error::None) {
+    ALOGE("Failed to configure CAC = %d", enable);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::configureCacV2PerEye(int32_t dispId, const CacV2Config& leftConfig,
+                                                      const CacV2Config& rightConfig, bool enable) {
+  if (dispId < 0 || dispId >= sdm::HWCCallbacks::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[dispId]);
+  sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[dispId];
+  if (!hwc_display) {
+    ALOGW("%s: Invalid display:%d", __FUNCTION__, dispId);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  // TODO(user): add support for CAC configuration per eye
+  sdm::CacConfig cac_config = {};
+  cac_config.k0r = leftConfig.k0r;
+  cac_config.k1r = leftConfig.k1r;
+  cac_config.k0b = leftConfig.k0b;
+  cac_config.k1b = leftConfig.k1b;
+  cac_config.pixel_pitch = leftConfig.pixel_pitch;
+  cac_config.normalization = leftConfig.normalization;
+
+  if (hwc_display->PerformCacConfig(cac_config, enable) != HWC2::Error::None) {
+    ALOGE("Failed to configure CAC = %d", enable);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
 }
 
 } // namespace config

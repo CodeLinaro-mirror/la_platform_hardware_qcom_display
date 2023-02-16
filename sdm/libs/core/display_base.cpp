@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -56,6 +56,12 @@
 * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <stdio.h>
@@ -3889,6 +3895,9 @@ DisplayError DisplayBase::IsSupportedOnDisplay(const SupportedDisplayFeature fea
     case kDedicatedCwb:
       error = dpu_core_mux_->GetFeatureSupportStatus(kHasDedicatedCwb, supported);
       break;
+    case kCacV2:
+      *supported = IsCacV2Supported();
+      break;
     default:
       DLOGW("Feature:%d is not present for display %d:%d", feature, display_id_, display_type_);
       error = kErrorParameters;
@@ -4211,6 +4220,9 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
 
     err = comp_manager_->SetDetailEnhancerData(display_comp_ctx_, de_data);
     if (err != kErrorNone) {
+      if (color_mgr_) {
+        color_mgr_->SetDETuningCFGpending(false);
+      }
       DLOGW("SetDetailEnhancerConfig failed. err = %d", err);
       return err;
     }

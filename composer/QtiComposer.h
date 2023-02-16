@@ -27,6 +27,11 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #ifndef __QTICOMPOSER_H__
 #define __QTICOMPOSER_H__
@@ -36,7 +41,7 @@
 // TODO(user): recheck on this header inclusion
 #include <hardware/hwcomposer2.h>
 #include <log/log.h>
-#include <vendor/qti/hardware/display/composer/3.1/IQtiComposer.h>
+#include <vendor/qti/hardware/display/composer/3.2/IQtiComposer.h>
 #include <unordered_set>
 #include "DisplayConfigAIDL.h"
 
@@ -45,10 +50,10 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V3_1 {
+namespace V3_2 {
 namespace implementation {
 
-using ::vendor::qti::hardware::display::composer::V3_1::IQtiComposer;
+using ::vendor::qti::hardware::display::composer::V3_2::IQtiComposer;
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 
 class QtiComposer : public IQtiComposer {
@@ -69,6 +74,9 @@ class QtiComposer : public IQtiComposer {
   // Methods from ::android::hardware::graphics::composer::V3_1::IComposer follow.
   Return<void> createClient_3_1(createClient_3_1_cb _hidl_cb) override;
 
+  // Methods from ::android::hardware::graphics::composer::V3_2::IComposer follow.
+  Return<void> createClient_3_2(createClient_3_2_cb _hidl_cb) override;
+
   // Methods from ::android::hidl::base::V1_0::IBase follow.
 
   static QtiComposer *initialize();
@@ -81,7 +89,7 @@ class QtiComposer : public IQtiComposer {
 extern "C" IQtiComposer* HIDL_FETCH_IQtiComposer(const char* name);
 
 }  // namespace implementation
-}  // namespace V3_1
+}  // namespace V3_2
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware

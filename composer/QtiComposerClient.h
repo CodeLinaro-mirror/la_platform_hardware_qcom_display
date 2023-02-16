@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __QTICOMPOSERCLIENT_H__
 #define __QTICOMPOSERCLIENT_H__
 
@@ -25,7 +31,7 @@
 #define QTI_LOGW(format, ...) \
   ALOGW("%s:" format, __FUNCTION__, ##__VA_ARGS__)
 
-#include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
+#include <vendor/qti/hardware/display/composer/3.2/IQtiComposerClient.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
 #include <log/log.h>
@@ -42,7 +48,7 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V3_1 {
+namespace V3_2 {
 namespace implementation {
 
 namespace common_V1_0 = ::android::hardware::graphics::common::V1_0;
@@ -317,7 +323,7 @@ class QtiComposerClient : public IQtiComposerClient {
     bool parseSetLayerZOrder(uint16_t length);
     bool parseSetLayerType(uint16_t length);
     bool parseSetLayerFlag(uint16_t length);
-
+    bool parseSingleBufferMode(uint16_t length);
     // Commands from ::android::hardware::graphics::composer::V2_2::IComposerClient follow.
     bool parseSetLayerPerFrameMetadata(uint16_t length);
     bool parseSetLayerFloatColor(uint16_t length);
@@ -378,7 +384,7 @@ class QtiComposerClient : public IQtiComposerClient {
 extern "C" IQtiComposerClient* HIDL_FETCH_IQtiComposerClient(const char* name);
 
 }  // namespace implementation
-}  // namespace V3_1
+}  // namespace V3_2
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware

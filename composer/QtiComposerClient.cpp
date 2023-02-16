@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <vector>
 #include <string>
 
@@ -27,7 +33,7 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer {
-namespace V3_1 {
+namespace V3_2 {
 namespace implementation {
 
 ComposerHandleImporter mHandleImporter;
@@ -1317,6 +1323,9 @@ Error QtiComposerClient::CommandReader::parse() {
       case IQtiComposerClient::Command::SET_LAYER_FLAG_3_1:
         parsed = parseSetLayerFlag(length);
         break;
+      case IQtiComposerClient::Command::SET_SINGLE_BUFFER_MODE_3_2:
+        parsed = parseSingleBufferMode(length);
+        break;
       default:
         parsed = parseCommonCmd(static_cast<IComposerClient::Command>(qticommand), length);
         break;
@@ -1891,6 +1900,19 @@ bool QtiComposerClient::CommandReader::parseSetLayerFlag(uint16_t length) {
   return true;
 }
 
+bool QtiComposerClient::CommandReader::parseSingleBufferMode(uint16_t length) {
+  if (length != CommandWriter::kSetLayerSinlgeBufferLength) {
+    return false;
+  }
+
+  auto err = mClient.hwc_session_->SetSingleBufferMode(mDisplay, mLayer, read());
+  if (static_cast<Error>(err) != Error::NONE) {
+    mWriter.setError(getCommandLoc(), static_cast<Error>(err));
+  }
+
+  return true;
+}
+
 bool QtiComposerClient::CommandReader::parseSetLayerPerFrameMetadata(uint16_t length) {
   // (key, value) pairs
   if (length % 2 != 0) {
@@ -2159,7 +2181,7 @@ IQtiComposerClient* HIDL_FETCH_IQtiComposerClient(const char* /* name */) {
 }
 
 }  // namespace implementation
-}  // namespace V3_0
+}  // namespace V3_2
 }  // namespace composer
 }  // namespace display
 }  // namespace hardware
