@@ -38,13 +38,13 @@ libsdmcore_la_SOURCES = $(c_sources)
 libsdmcore_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"SDM\"
 libsdmcore_la_CPPFLAGS = $(AM_CPPFLAGS) -DPP_DRM_ENABLE
 libsdmcore_la_CPPFLAGS = $(AM_CPPFLAGS)
-libsdmcore_la_CPPFLAGS += -I../../include
-libsdmcore_la_CPPFLAGS += -I../../../libdebug
-libsdmcore_la_CPPFLAGS += -I../../../include
-libsdmcore_la_CPPFLAGS += -I../../../libdrmutils
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../include
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../libdebug
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../include
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../libdrmutils
 libsdmcore_la_CPPFLAGS +=  @LIBDRM_CFLAGS@
 libsdmcore_la_LIBADD = ../utils/libsdmutils.la
-libsdmcore_la_LDFLAGS = -shared -avoid-version
+libsdmcore_la_LDFLAGS = -shared -avoid-version @LIBUTILS_LIBS@ @LIBCUTILS_LIBS@ @LIBLOG_LIBS@
 
 
 pkgconfigdir = $(libdir)/pkgconfig
