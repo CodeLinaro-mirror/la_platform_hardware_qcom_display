@@ -24,6 +24,12 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <cutils/properties.h>
 #include <errno.h>
 #include <math.h>
@@ -1138,7 +1144,7 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
       *out_value = INT32(variable_config.y_dpi * 1000.0f);
       break;
     case HwcAttribute::CONFIG_GROUP:
-      *out_value = GetDisplayConfigGroup(variable_config);
+      *out_value = GetDisplayConfigGroup(config);
       break;
     default:
       DLOGW("Spurious attribute type = %s", composer_V3::toString(attribute).c_str());
@@ -2785,11 +2791,10 @@ void HWCDisplay::UpdateActiveConfig() {
   pending_config_ = false;
 }
 
-int32_t HWCDisplay::GetDisplayConfigGroup(DisplayConfigGroupInfo variable_config) {
-  for (auto &config : variable_config_map_) {
-    DisplayConfigGroupInfo const &group_info = config.second;
-    if (group_info == variable_config) {
-      return INT32(config.first);
+int32_t HWCDisplay::GetDisplayConfigGroup(hwc2_config_t config) {
+  for (auto &group_config : variable_config_map_) {
+    if (IsSameGroup(config, group_config.first)) {
+      return INT32(group_config.first);
     }
   }
 
@@ -3004,10 +3009,16 @@ bool HWCDisplay::IsSameGroup(Config config_id1, Config config_id2) {
     return false;
   }
 
+  if (variable_config1 == variable_config2) {
+    return true;
+  }
+
   const DisplayConfigGroupInfo &config_group1 = variable_config1->second;
   const DisplayConfigGroupInfo &config_group2 = variable_config2->second;
 
-  return (config_group1 == config_group2);
+  return ((config_group1 == config_group2) &&
+          (config_group1.allowed_mode_switch & (1 << (INT32(config_id2)))) &&
+          (config_group2.allowed_mode_switch & (1 << (INT32(config_id1)))));
 }
 
 bool HWCDisplay::AllowSeamless(Config config) {

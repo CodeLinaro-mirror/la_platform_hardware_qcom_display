@@ -69,6 +69,12 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #define __STDC_FORMAT_MACROS
 
 #include <ctype.h>
@@ -927,6 +933,7 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
   SetTopologySplit(display_attributes_[index].topology,
                    &display_attributes_[index].topology_num_split);
   display_attributes_[index].is_device_split = (display_attributes_[index].topology_num_split > 1);
+  display_attributes_[index].allowed_mode_switch = connector_info_.modes[index].allowed_mode_switch;
 
   DLOGI(
       "Display %d-%d attributes[%d]: WxH: %dx%d, DPI: %fx%f, FPS: %d, LM_SPLIT: %d, V_BACK_PORCH:"
