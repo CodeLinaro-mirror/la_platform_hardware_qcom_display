@@ -11,7 +11,7 @@ LOCAL_CFLAGS                  := -fno-operator-names -Wno-unused-parameter -DLOG
                                  $(common_flags)
 LOCAL_SHARED_LIBRARIES        := libdl libdisplaydebug libsdmutils
 
-ifneq (,$(filter Tiramisu 13, $(PLATFORM_VERSION)))
+ifneq (,$(filter Tiramisu 13 U 14 UpsideDownCake, $(PLATFORM_VERSION)))
 LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
 LOCAL_CFLAGS                  += -D__ANDROID_T__
 endif
@@ -45,7 +45,7 @@ LOCAL_SRC_FILES               := core_interface.cpp \
                                  hw_info_interface.cpp \
                                  hw_interface.cpp
 
-ifeq (,$(filter Tiramisu 13, $(PLATFORM_VERSION)))
+ifeq (,$(filter Tiramisu 13 U 14 UpsideDownCake, $(PLATFORM_VERSION)))
 LOCAL_HW_INTF_PATH_1          := fb
 LOCAL_SRC_FILES               += $(LOCAL_HW_INTF_PATH_1)/hw_info.cpp \
                                  $(LOCAL_HW_INTF_PATH_1)/hw_device.cpp \
