@@ -213,6 +213,7 @@ int HWCSession::Init() {
   HWCDebugHandler::Get()->GetProperty(DISABLE_HOTPLUG_BWCHECK, &disable_hotplug_bwcheck_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_MASK_LAYER_HINT, &disable_mask_layer_hint_);
   HWCDebugHandler::Get()->GetProperty(ENABLE_WB_CAC, &enable_wb_cac_);
+  HWCDebugHandler::Get()->GetProperty(ENABLE_KERNEL_WB_CAC, &enable_kernel_wb_cac_);
 
   if (!null_display_mode_) {
     g_hwc_uevent_.Register(this);
@@ -1017,7 +1018,15 @@ int32_t HWCSession::SetLayerBlendMode(hwc2_display_t display, hwc2_layer_t layer
 
 int32_t HWCSession::SetLayerBuffer(hwc2_display_t display, hwc2_layer_t layer,
                                    buffer_handle_t buffer, int32_t acquire_fence) {
-  return CallLayerFunction(display, layer, &HWCLayer::SetLayerBuffer, buffer, acquire_fence);
+  auto status = INT32(HWC2::Error::None);
+  status = CallLayerFunction(display, layer, &HWCLayer::SetLayerBuffer, buffer, acquire_fence);
+  if ((status == INT32(HWC2::Error::None)) && enable_kernel_wb_cac_) {
+    auto hwc_layer = hwc_display_[display]->GetHWCLayer(layer);
+    if (hwc_layer != nullptr && hwc_layer->BufferLatched()) {
+      hwc_display_[display]->CacCommitDone(false);
+    }
+  }
+  return status;
 }
 
 int32_t HWCSession::SetLayerColor(hwc2_display_t display, hwc2_layer_t layer, hwc_color_t color) {
