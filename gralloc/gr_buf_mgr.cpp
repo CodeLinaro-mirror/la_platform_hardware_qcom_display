@@ -1248,6 +1248,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       if (metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)]) {
 #endif
         Dataspace dataspace;
+        memset(&dataspace,0,sizeof(dataspace));
         colorMetadataToDataspace(metadata->color, &dataspace);
         android::gralloc4::encodeDataspace(dataspace, out);
 #ifdef METADATA_V2
