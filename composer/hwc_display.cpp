@@ -1478,7 +1478,6 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     hwc_layer->SetComposition(composition);
     HWC2::Composition device_composition  = hwc_layer->GetDeviceSelectedCompositionType();
     if (hwc_layer->IsTunneled() && has_tunneled_layer_ && (composition != kCompositionSDE)) {
-      tunnelled_layer_ = -1;
       has_tunneled_layer_ = false;
       return HWC2::Error::BadLayer;
     }

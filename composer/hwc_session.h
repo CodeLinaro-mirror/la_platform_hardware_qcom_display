@@ -624,7 +624,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   hwc2_layer_t tunneled_layer_ = -1;
   int tunneled_layer_rf_ = -1; // tunneled layer's release fence
   IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
-  int tunneled_display_id_ = -1;
+  int tunneled_display_id_ = HWC_DISPLAY_PRIMARY;
 };
 }  // namespace sdm
 
