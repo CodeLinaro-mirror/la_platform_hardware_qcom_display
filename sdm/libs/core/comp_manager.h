@@ -58,6 +58,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __COMP_MANAGER_H__
 #define __COMP_MANAGER_H__
 
@@ -124,7 +130,8 @@ class CompManager {
   DisplayError CheckEnforceSplit(Handle comp_handle, uint32_t new_refresh_rate);
   DppsControlInterface* GetDppsControlIntf();
   bool CheckResourceState(Handle display_ctx, bool *res_exhausted, HWDisplayAttributes attr);
-  DisplayError GetConcurrencyFps(Handle display_ctx, DisplayConcurrencyType type, float *fps);
+  DisplayError GetConcurrencyFps(Handle display_ctx, DisplayConcurrencyType type,
+                                 uint32_t display_id, float *fps);
   bool IsRotatorSupportedFormat(LayerBufferFormat format);
   DisplayError SetDrawMethod(Handle display_ctx, const DisplayDrawMethod &draw_method);
   DisplayError FreeDemuraFetchResources(const uint32_t &display_id);

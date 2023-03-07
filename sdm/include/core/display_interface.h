@@ -282,6 +282,7 @@ enum DisplayConcurrencyType {
 
 /*! @brief This structure defines all input parameters for ResourceConstraints. */
 struct ResourceConstraintsIn {
+  uint32_t display_id = 0;
   DisplayConcurrencyType concurrency_type = DisplayConcurrencyType::kConcurrencyMax;
 };
 
