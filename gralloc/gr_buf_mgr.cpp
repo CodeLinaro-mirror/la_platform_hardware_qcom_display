@@ -283,43 +283,283 @@ static Error colorMetadataToDataspace(ColorMetaData color_metadata, Dataspace *d
   return Error::NONE;
 }
 
-static void grallocToStandardPlaneLayoutComponentType(
-    uint32_t in, std::vector<PlaneLayoutComponent> *components) {
+static void getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &comp) {
+  switch (format) {
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_8888):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBX_8888):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGB_888):
+      comp.sizeInBits = 8;
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.offsetInBits = 8;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.offsetInBits = 16;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.offsetInBits = 24;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGB_565):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = 5;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.offsetInBits = 5;
+        comp.sizeInBits = 6;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.offsetInBits = 11;
+        comp.sizeInBits = 5;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGR_565):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.offsetInBits = 11;
+        comp.sizeInBits = 5;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.offsetInBits = 5;
+        comp.sizeInBits = 6;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = 5;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRA_8888):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRX_8888):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGR_888):
+      comp.sizeInBits = 8;
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.offsetInBits = 16;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.offsetInBits = 8;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.offsetInBits = 24;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_5551):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.sizeInBits = 5;
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.sizeInBits = 5;
+        comp.offsetInBits = 5;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.sizeInBits = 5;
+        comp.offsetInBits = 10;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.sizeInBits = 1;
+        comp.offsetInBits = 15;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_4444):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.sizeInBits = 4;
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.sizeInBits = 4;
+        comp.offsetInBits = 4;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.sizeInBits = 4;
+        comp.offsetInBits = 8;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.sizeInBits = 4;
+        comp.offsetInBits = 12;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_R_8):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RG_88):
+      comp.sizeInBits = 8;
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.offsetInBits = 8;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_1010102):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBX_1010102):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 10;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 20;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.sizeInBits = 2;
+        comp.offsetInBits = 30;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_ARGB_2101010):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_XRGB_2101010):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 2;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 12;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 22;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.sizeInBits = 2;
+        comp.offsetInBits = 0;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRA_1010102):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRX_1010102):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 20;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 10;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.sizeInBits = 2;
+        comp.offsetInBits = 30;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_ABGR_2101010):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_XBGR_2101010):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 22;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 12;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.sizeInBits = 10;
+        comp.offsetInBits = 2;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.sizeInBits = 2;
+        comp.offsetInBits = 0;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_FP16):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
+        comp.sizeInBits = 16;
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+        comp.sizeInBits = 16;
+        comp.offsetInBits = 16;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
+        comp.sizeInBits = 16;
+        comp.offsetInBits = 32;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
+        comp.sizeInBits = 16;
+        comp.offsetInBits = 48;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_SP):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_422_SP):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_NV12_ENCODEABLE):
+      comp.sizeInBits = 8;
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 8;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_420_SP):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_422_SP):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_NV21_ZSL):
+      comp.sizeInBits = 8;
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 0;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
+        comp.offsetInBits = 8;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_Y16):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = 16;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YV12):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = 8;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_Y8):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = 8;
+      }
+      break;
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = 10;
+      }
+      break;
+    default:
+      ALOGE("Offset and size in bits unknown for format %d", format);
+      break;
+  }
+}
+
+static void grallocToStandardPlaneLayoutComponentType(uint32_t in,
+                                                      std::vector<PlaneLayoutComponent> *components,
+                                                      int32_t format) {
   PlaneLayoutComponent comp;
-  comp.offsetInBits = 0;
-  comp.sizeInBits = 8;
+  comp.offsetInBits = -1;
+  comp.sizeInBits = -1;
+
   if (in & PLANE_COMPONENT_Y) {
     comp.type = android::gralloc4::PlaneLayoutComponentType_Y;
+    getComponentSizeAndOffset(format, comp);
     components->push_back(comp);
   }
 
   if (in & PLANE_COMPONENT_Cb) {
     comp.type = android::gralloc4::PlaneLayoutComponentType_CB;
+    getComponentSizeAndOffset(format, comp);
     components->push_back(comp);
   }
 
   if (in & PLANE_COMPONENT_Cr) {
     comp.type = android::gralloc4::PlaneLayoutComponentType_CR;
+    getComponentSizeAndOffset(format, comp);
     components->push_back(comp);
   }
 
   if (in & PLANE_COMPONENT_R) {
     comp.type = android::gralloc4::PlaneLayoutComponentType_R;
+    getComponentSizeAndOffset(format, comp);
     components->push_back(comp);
   }
 
   if (in & PLANE_COMPONENT_G) {
     comp.type = android::gralloc4::PlaneLayoutComponentType_G;
+    getComponentSizeAndOffset(format, comp);
     components->push_back(comp);
   }
 
   if (in & PLANE_COMPONENT_B) {
     comp.type = android::gralloc4::PlaneLayoutComponentType_B;
+    getComponentSizeAndOffset(format, comp);
     components->push_back(comp);
   }
 
   if (in & PLANE_COMPONENT_A) {
     comp.type = android::gralloc4::PlaneLayoutComponentType_A;
+    getComponentSizeAndOffset(format, comp);
     components->push_back(comp);
   }
 
@@ -353,7 +593,8 @@ static Error getFormatLayout(private_handle_t *handle, std::vector<PlaneLayout> 
   plane_info.resize(plane_count);
   for (int i = 0; i < plane_count; i++) {
     std::vector<PlaneLayoutComponent> components;
-    grallocToStandardPlaneLayoutComponentType(plane_layout[i].component, &plane_info[i].components);
+    grallocToStandardPlaneLayoutComponentType(plane_layout[i].component, &plane_info[i].components,
+                                              handle->format);
     plane_info[i].horizontalSubsampling =
         static_cast<int64_t>(pow(2, plane_layout[i].h_subsampling));
     plane_info[i].verticalSubsampling = static_cast<int64_t>(pow(2, plane_layout[i].v_subsampling));
@@ -891,48 +1132,58 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       android::gralloc4::encodeBlendMode((BlendMode)metadata->blendMode, out);
       break;
     case (int64_t)StandardMetadataType::SMPTE2086: {
-      Smpte2086 mastering_display_values;
-      mastering_display_values.primaryRed = {
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[0][0]) /
-              50000.0f,
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[0][1]) /
-              50000.0f};
-      mastering_display_values.primaryGreen = {
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[1][0]) /
-              50000.0f,
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[1][1]) /
-              50000.0f};
-      mastering_display_values.primaryBlue = {
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[2][0]) /
-              50000.0f,
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[2][1]) /
-              50000.0f};
-      mastering_display_values.whitePoint = {
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.whitePoint[0]) /
-              50000.0f,
-          static_cast<float>(metadata->color.masteringDisplayInfo.primaries.whitePoint[1]) /
-              50000.0f};
-      mastering_display_values.maxLuminance =
-          static_cast<float>(metadata->color.masteringDisplayInfo.maxDisplayLuminance);
-      mastering_display_values.minLuminance =
-          static_cast<float>(metadata->color.masteringDisplayInfo.minDisplayLuminance) / 10000.0f;
-      android::gralloc4::encodeSmpte2086(mastering_display_values, out);
+      if (metadata->color.masteringDisplayInfo.colorVolumeSEIEnabled) {
+        Smpte2086 mastering_display_values;
+        mastering_display_values.primaryRed = {
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[0][0]) /
+                50000.0f,
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[0][1]) /
+                50000.0f};
+        mastering_display_values.primaryGreen = {
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[1][0]) /
+                50000.0f,
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[1][1]) /
+                50000.0f};
+        mastering_display_values.primaryBlue = {
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[2][0]) /
+                50000.0f,
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[2][1]) /
+                50000.0f};
+        mastering_display_values.whitePoint = {
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.whitePoint[0]) /
+                50000.0f,
+            static_cast<float>(metadata->color.masteringDisplayInfo.primaries.whitePoint[1]) /
+                50000.0f};
+        mastering_display_values.maxLuminance =
+            static_cast<float>(metadata->color.masteringDisplayInfo.maxDisplayLuminance);
+        mastering_display_values.minLuminance =
+            static_cast<float>(metadata->color.masteringDisplayInfo.minDisplayLuminance) / 10000.0f;
+        android::gralloc4::encodeSmpte2086(mastering_display_values, out);
+      } else {
+        android::gralloc4::encodeSmpte2086(std::nullopt, out);
+      }
       break;
     }
     case (int64_t)StandardMetadataType::CTA861_3: {
-      Cta861_3 content_light_level;
-      content_light_level.maxContentLightLevel =
-          static_cast<float>(metadata->color.contentLightLevel.maxContentLightLevel);
-      content_light_level.maxFrameAverageLightLevel =
-          static_cast<float>(metadata->color.contentLightLevel.minPicAverageLightLevel) / 10000.0f;
-      android::gralloc4::encodeCta861_3(content_light_level, out);
+      if (metadata->color.contentLightLevel.lightLevelSEIEnabled) {
+        Cta861_3 content_light_level;
+        content_light_level.maxContentLightLevel =
+            static_cast<float>(metadata->color.contentLightLevel.maxContentLightLevel);
+        content_light_level.maxFrameAverageLightLevel =
+            static_cast<float>(metadata->color.contentLightLevel.minPicAverageLightLevel) /
+            10000.0f;
+        android::gralloc4::encodeCta861_3(content_light_level, out);
+      } else {
+        android::gralloc4::encodeCta861_3(std::nullopt, out);
+      }
       break;
     }
     case (int64_t)StandardMetadataType::SMPTE2094_40: {
       std::vector<uint8_t> dynamic_metadata_payload;
-      if (metadata->color.dynamicMetaDataValid) {
+      if (metadata->color.dynamicMetaDataValid &&
+          metadata->color.dynamicMetaDataLen <= HDR_DYNAMIC_META_DATA_SZ) {
         dynamic_metadata_payload.resize(metadata->color.dynamicMetaDataLen);
-        memcpy(&dynamic_metadata_payload, &metadata->color.dynamicMetaDataPayload,
+        memcpy(dynamic_metadata_payload.data(), &metadata->color.dynamicMetaDataPayload,
                metadata->color.dynamicMetaDataLen);
         android::gralloc4::encodeSmpte2094_40(dynamic_metadata_payload, out);
       } else {
@@ -996,6 +1247,14 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
     case QTI_PRIVATE_FLAGS:
       android::gralloc4::encodeInt32(qtigralloc::MetadataType_PrivateFlags, handle->flags, out);
       break;
+    case QTI_ALIGNED_WIDTH_IN_PIXELS:
+      android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedWidthInPixels, handle->width,
+                                      out);
+      break;
+    case QTI_ALIGNED_HEIGHT_IN_PIXELS:
+      android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedHeightInPixels,
+                                      handle->height, out);
+      break;
     default:
       error = Error::UNSUPPORTED;
   }
@@ -1016,6 +1275,10 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
   int err = validateAndMap(handle);
   if (err != 0)
     return Error::BAD_BUFFER;
+
+  if (in.size() == 0) {
+    return Error::UNSUPPORTED;
+  }
 
   auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata);
 
@@ -1039,6 +1302,8 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     case (int64_t)StandardMetadataType::COMPRESSION:
     case QTI_FD:
     case QTI_PRIVATE_FLAGS:
+    case QTI_ALIGNED_WIDTH_IN_PIXELS:
+    case QTI_ALIGNED_HEIGHT_IN_PIXELS:
       return Error::UNSUPPORTED;
     case (int64_t)StandardMetadataType::DATASPACE:
       Dataspace dataspace;
@@ -1054,6 +1319,8 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       std::optional<Smpte2086> mastering_display_values;
       android::gralloc4::decodeSmpte2086(in, &mastering_display_values);
       if (mastering_display_values != std::nullopt) {
+        metadata->color.masteringDisplayInfo.colorVolumeSEIEnabled = true;
+
         metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[0][0] =
             static_cast<uint32_t>(mastering_display_values->primaryRed.x * 50000.0f);
         metadata->color.masteringDisplayInfo.primaries.rgbPrimaries[0][1] =
@@ -1078,6 +1345,8 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
             static_cast<uint32_t>(mastering_display_values->maxLuminance);
         metadata->color.masteringDisplayInfo.minDisplayLuminance =
             static_cast<uint32_t>(mastering_display_values->minLuminance * 10000.0f);
+      } else {
+        metadata->color.masteringDisplayInfo.colorVolumeSEIEnabled = false;
       }
       break;
     }
@@ -1085,10 +1354,13 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       std::optional<Cta861_3> content_light_level;
       android::gralloc4::decodeCta861_3(in, &content_light_level);
       if (content_light_level != std::nullopt) {
+        metadata->color.contentLightLevel.lightLevelSEIEnabled = true;
         metadata->color.contentLightLevel.maxContentLightLevel =
             static_cast<uint32_t>(content_light_level->maxContentLightLevel);
         metadata->color.contentLightLevel.minPicAverageLightLevel =
             static_cast<uint32_t>(content_light_level->maxFrameAverageLightLevel * 10000.0f);
+      } else {
+        metadata->color.contentLightLevel.lightLevelSEIEnabled = false;
       }
       break;
     }
@@ -1096,9 +1368,16 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       std::optional<std::vector<uint8_t>> dynamic_metadata_payload;
       android::gralloc4::decodeSmpte2094_40(in, &dynamic_metadata_payload);
       if (dynamic_metadata_payload != std::nullopt) {
-        metadata->color.dynamicMetaDataLen = dynamic_metadata_payload->size();
-        memcpy(&metadata->color.dynamicMetaDataPayload, &dynamic_metadata_payload,
-               metadata->color.dynamicMetaDataLen);
+        if (dynamic_metadata_payload->size() <= HDR_DYNAMIC_META_DATA_SZ &&
+            dynamic_metadata_payload->size() > 0) {
+          metadata->color.dynamicMetaDataLen = dynamic_metadata_payload->size();
+          memcpy(&metadata->color.dynamicMetaDataPayload, &dynamic_metadata_payload,
+                 metadata->color.dynamicMetaDataLen);
+          metadata->color.dynamicMetaDataValid = true;
+        }
+      } else {
+        // Reset metadata by passing in std::nullopt
+        metadata->color.dynamicMetaDataValid = false;
       }
       break;
     }
