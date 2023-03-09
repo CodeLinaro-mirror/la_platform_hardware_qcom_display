@@ -9,12 +9,20 @@ AC_PREREQ(2.61)
 # Initialize the display package version 1.0.0
 AC_INIT([display],1.0.0)
 # Does not strictly follow GNU Coding standards
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([foreign subdir-objects])
 # Disables auto rebuilding of configure, Makefile.ins
 AM_MAINTAINER_MODE
 # defines some macros variable to be included by source
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
+
+# Check for programs
+AM_PROG_AR
+
+PKG_CHECK_MODULES([LIBDRM], [libdrm])
+AC_SUBST([LIBDRM_CFLAGS])
+AC_SUBST([LIBDRM_LIBS])
+
 AC_SUBST([COMMON_CFLAGS], [-Wall -Werror -Wno-sign-conversion -Wconversion -DDEBUG_CALC_FPS])
 AC_SUBST([AM_CPPFLAGS], [--std=c++11])
 
@@ -52,17 +60,23 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
-AC_SUBST([CFLAGS])
-AC_SUBST([CC])
 AC_CONFIG_FILES([ \
         Makefile \
         libqservice/Makefile \
         libdebug/Makefile \
+        libdebug/libdisplaydebug.pc \
         libdrmutils/Makefile \
-        sde-drm/Makefile \
+        libdrmutils/libdrmutils.pc \
         sdm/libs/utils/Makefile \
-        sdm/libs/dal/Makefile \
+        sdm/libs/utils/libsdmutils.pc \
         sdm/libs/core/Makefile \
-        libqdutils/Makefile
+        sdm/libs/core/libsdmcore.pc \
+        sdm/libs/dal/Makefile \
+        sdm/libs/dal/libsdmdal.pc \
+        libqdutils/Makefile \
+        sde-drm/Makefile
         ])
+AC_SUBST([CFLAGS])
+AC_SUBST([CC])
+AC_SUBST([LIBS])
 AC_OUTPUT
