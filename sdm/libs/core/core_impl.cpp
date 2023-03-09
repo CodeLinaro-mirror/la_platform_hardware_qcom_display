@@ -66,8 +66,10 @@ void __llvm_profile_try_write_file(void);
 namespace sdm {
 
 CoreImpl::CoreImpl(BufferAllocator *buffer_allocator,
-                   SocketHandler *socket_handler, std::shared_ptr<IPCIntf> ipc_intf)
-  : buffer_allocator_(buffer_allocator), socket_handler_(socket_handler), ipc_intf_(ipc_intf) {
+                   SocketHandler *socket_handler, std::shared_ptr<IPCIntf> ipc_intf,
+                   std::bitset<8> core_ids)
+  : buffer_allocator_(buffer_allocator), socket_handler_(socket_handler), ipc_intf_(ipc_intf),
+    core_ids_(core_ids) {
 }
 
 DisplayError CoreImpl::Init() {
@@ -108,7 +110,7 @@ DisplayError CoreImpl::Init() {
     return kErrorNone;
   }
 
-  error = HWInfoInterface::Create(&hw_info_intf_);
+  error = HWInfoInterface::Create(&hw_info_intf_, core_ids_);
   if (error != kErrorNone) {
     DisplayError err = HandleNullDisplay();
 
@@ -138,7 +140,7 @@ DisplayError CoreImpl::Init() {
   enable_null_display_ = !comp_mgr_.IsDisplayHWAvailable();
   if (enable_null_display_) {
     if (hw_info_intf_[0]) {
-      HWInfoInterface::Destroy(hw_info_intf_[0]);
+      HWInfoInterface::Destroy(hw_info_intf_);
     }
     hw_info_intf_[0] = new HWInfoDefault();
     return kErrorNone;
@@ -169,9 +171,7 @@ DisplayError CoreImpl::Init() {
   return kErrorNone;
 
 CleanupOnError:
-  for (auto hw_info : hw_info_intf_) {
-    HWInfoInterface::Destroy(hw_info);
-  }
+  HWInfoInterface::Destroy(hw_info_intf_);
   hw_info_intf_.clear();
   hw_resource_.clear();
 
@@ -217,13 +217,13 @@ DisplayError CoreImpl::Deinit() {
     }
   }
 
-  for (auto hw_info : hw_info_intf_) {
-    if (enable_null_display_) {
+  if (enable_null_display_) {
+    for (auto hw_info : hw_info_intf_) {
       delete static_cast<HWInfoDefault *>(hw_info);
       hw_info = nullptr;
-    } else {
-      HWInfoInterface::Destroy(hw_info);
     }
+  } else {
+    HWInfoInterface::Destroy(hw_info_intf_);
   }
   hw_info_intf_.clear();
 #ifdef TRUSTED_VM

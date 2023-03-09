@@ -4474,7 +4474,7 @@ bool DisplayBase::HandleCwbTeardown() {
 uint32_t DisplayBase::GetAvailableMixerCount() {
   uint32_t max_count = UINT32_MAX;
   for (auto info_intf : hw_info_intf_) {
-    max_count = std::fmin(max_count, info_intf->GetMaxMixerCount());
+    max_count = std::min(max_count, info_intf->GetMaxMixerCount());
   }
   uint32_t cur_count = comp_manager_->GetMixerCount();
 

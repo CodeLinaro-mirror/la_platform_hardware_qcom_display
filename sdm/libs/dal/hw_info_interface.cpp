@@ -49,9 +49,13 @@ namespace sdm {
 int32_t HWInfoInterface::ref_count_ = 0;
 std::vector<HWInfoInterface*> HWInfoInterface::intf_(kMaxCore, nullptr);
 
-DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
+DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs,
+                                     std::bitset<8> core_ids) {
   DisplayError error = kErrorNone;
-  for (uint32_t i = 0; i < kMaxCore; i++) {
+  for (uint32_t i = 0; i < core_ids.size(); i++) {
+    if (!core_ids.test(i)) {
+      continue;
+    }
 
 #ifndef TARGET_HEADLESS
     if (ref_count_ > 0 && intf_[i]) {
@@ -76,6 +80,7 @@ DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
       }
       return intfs->size() ? kErrorNone : error;
     }
+
 #ifndef TARGET_HEADLESS
     intfs->push_back(hw_info);
     intf_[i] = (hw_info);
@@ -87,14 +92,14 @@ DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
   return error;
 }
 
-DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {
+DisplayError HWInfoInterface::Destroy(std::vector<HWInfoInterface*> &intfs) {
   ref_count_ = ref_count_ - 1 >= 0 ? --ref_count_ : 0;
   DLOGV("refcount: %d", ref_count_);
-
-  if (!ref_count_ && intf) {
-    delete intf;
+  if (!ref_count_) {
+    for (auto &hw_info : intfs) {
+      delete hw_info;
+    }
   }
-
   intf_.clear();
   return kErrorNone;
 }

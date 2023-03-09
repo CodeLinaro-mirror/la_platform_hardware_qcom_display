@@ -87,7 +87,7 @@ class CoreImpl : public CoreInterface {
   // This class implements display core interface revision 1.0.
   static const uint16_t kRevision = SET_REVISION(1, 0);
   CoreImpl(BufferAllocator *buffer_allocator, SocketHandler *socket_handler,
-           std::shared_ptr<IPCIntf> ipc_intf);
+           std::shared_ptr<IPCIntf> ipc_intf, std::bitset<8> core_ids);
   virtual ~CoreImpl() { }
 
   // This method returns the interface revision for the current display core object.
@@ -143,6 +143,7 @@ class CoreImpl : public CoreInterface {
   char *raw_mapped_buffer_ = nullptr;
   std::vector<uint32_t> demura_display_ids_;
   bool enable_null_display_ = false;
+  std::bitset<8> core_ids_ = std::bitset<8>(0xFF);
 };
 
 }  // namespace sdm

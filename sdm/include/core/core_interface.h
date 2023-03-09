@@ -164,6 +164,7 @@ class CoreInterface {
                                  SocketHandler *socket_handler,
                                  std::shared_ptr<IPCIntf> ipc_intf,
                                  CoreInterface **interface,
+                                 std::bitset<8> core_ids = std::bitset<8>(0xFF),
                                  uint32_t version = SDM_VERSION_TAG);
 
   /*! @brief Method to release handle to display core interface.

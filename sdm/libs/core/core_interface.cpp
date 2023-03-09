@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/locker.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -55,7 +61,9 @@ DisplayError CoreInterface::CreateCore(BufferAllocator *buffer_allocator,
                                        BufferSyncHandler *buffer_sync_handler,
                                        SocketHandler *socket_handler,
                                        std::shared_ptr<IPCIntf> ipc_intf,
-                                       CoreInterface **interface, uint32_t client_version) {
+                                       CoreInterface **interface,
+                                       std::bitset<8> core_ids,
+                                       uint32_t client_version) {
   SCOPE_LOCK(g_core.locker);
 
   if (!buffer_allocator || !interface) {
@@ -79,7 +87,7 @@ DisplayError CoreInterface::CreateCore(BufferAllocator *buffer_allocator,
 
   // Create appropriate CoreImpl object based on client version.
   if (GET_REVISION(client_version) == CoreImpl::kRevision) {
-    core_impl = new CoreImpl(buffer_allocator, socket_handler, ipc_intf);
+    core_impl = new CoreImpl(buffer_allocator, socket_handler, ipc_intf, core_ids);
   } else {
     return kErrorNotSupported;
   }
