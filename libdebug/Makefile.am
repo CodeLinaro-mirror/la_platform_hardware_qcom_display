@@ -12,3 +12,6 @@ libdisplaydebug_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"SDM\"
 libdisplaydebug_la_CPPFLAGS = $(AM_CPPFLAGS)
 libdisplaydebug_la_LIBADD = -ldl
 libdisplaydebug_la_LDFLAGS = -shared -avoid-version
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libdisplaydebug.pc

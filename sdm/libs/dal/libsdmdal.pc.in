@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libsdmdal
+Description: SDM dal
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lsdmdal
+Cflags: -I${includedir} -I${includedir}/sdm/
