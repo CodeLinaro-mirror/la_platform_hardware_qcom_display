@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -45,7 +45,6 @@
 namespace android {
 
 using Transaction = SurfaceComposerClient::Transaction;
-using ui::ColorMode;
 
 namespace {
 const String8 SURFACE_NAME("Sideband Test Surface");
@@ -77,6 +76,7 @@ protected:
     }
 
     void setupSidebandSurface(int width=500, int height=500,
+                              int format=PIXEL_FORMAT_RGB_888,
                               int z=INT_MAX-3, bool fullscreen=false) {
         mDisplay = SurfaceComposerClient::getInternalDisplayToken();
         ASSERT_FALSE(mDisplay == nullptr);
@@ -88,7 +88,7 @@ protected:
 
         mSurfaceControl =
                 mComposerClient->createSurface(SURFACE_NAME, surfaceWidth, surfaceHeight,
-                                               PIXEL_FORMAT_RGB_888, 0);
+                                               format, 0);
         ASSERT_TRUE(mSurfaceControl != nullptr);
         ASSERT_TRUE(mSurfaceControl->isValid());
 
@@ -96,7 +96,6 @@ protected:
         ASSERT_EQ(NO_ERROR,
                   transaction.setLayer(mSurfaceControl, z).apply());
 
-        transaction = {};
         sp<Surface> surface = mSurfaceControl->getSurface();
         ASSERT_TRUE(surface != nullptr);
         ANativeWindow_Buffer surfaceBuffer;
@@ -105,13 +104,9 @@ protected:
                           bytesPerPixel(surfaceBuffer.format);
         printf("width: %d, height: %d, stride: %d, format: %d\n", surfaceBuffer.width,
                 surfaceBuffer.height, surfaceBuffer.stride, surfaceBuffer.format);
-        ASSERT_EQ(NO_ERROR, transaction.apply());
 
-        transaction = {};
         memset(surfaceBuffer.bits, 0x00, buf_size);
-        ASSERT_EQ(NO_ERROR, transaction.apply());
 
-        transaction = {};
         sp<ANativeWindow> window(surface);
         ANativeWindowBuffer *anw = nullptr;
         native_window_api_connect(window.get(), NATIVE_WINDOW_API_CPU);
@@ -120,20 +115,53 @@ protected:
         sp<NativeHandle> stream = android::NativeHandle::create(
                                 const_cast<native_handle*>(anw->handle), false);
         surface->setSidebandStream(stream);
-        ASSERT_EQ(NO_ERROR, transaction.apply());
-
         surface->unlockAndPost();
     }
 
-    void queueBuffers() {
-        send_buffers();
+    void queueBuffers(uint32_t width=0, uint32_t height=0,
+                      int format=PIXEL_FORMAT_RGB_888,
+                      uint32_t duration=0, uint32_t num_buffers=0) {
+        send_buffers(width, height, format, duration, num_buffers);
+    }
+    sp<SurfaceControl> create_Surface(String8 surface_name, uint32_t width,
+                                      uint32_t height, int format) {
+        auto layer = mComposerClient->createSurface(surface_name, width, height,
+                                                    format,0);
+        return layer;
     }
 };
 
 TEST_F(SidebandStreamTest, QueueSidebandStreamBufferTest) {
-    setupSidebandSurface();
+    uint32_t width = 1280;
+    uint32_t height = 720;
+    setupSidebandSurface(width, height);
     printf("Surface Sideband Stream setup successfully, now queueing buffers...\n");
-    queueBuffers();
+    queueBuffers(width, height,
+                 PIXEL_FORMAT_RGB_888,
+                 10 /* duration */,
+                 6 /* num_buffers */);
+}
+
+TEST_F(SidebandStreamTest, OverlapSurface) {
+    uint32_t width = 1280;
+    uint32_t height = 720;
+    int mLayerZBase=0;
+    uint32_t mDisplayLayerStack=0;
+    uint32_t width_new = 500;
+    uint32_t height_new = 500;
+    String8 surface_name("OverlapSurface");
+    int format=PIXEL_FORMAT_RGBA_8888;
+    SurfaceComposerClient::Transaction t={};
+    sp<SurfaceControl> layer;
+    layer = create_Surface(surface_name, width_new, height_new, format);
+    t.setLayerStack(layer, mDisplayLayerStack).setLayer(layer, mLayerZBase)
+                                              .setPosition(layer, 500, 500).apply();
+    render_buffer(layer, 10);
+    setupSidebandSurface(width, height);
+    queueBuffers(width, height,
+                 PIXEL_FORMAT_RGB_888,
+                 10 /* duration */,
+                 6 /* num_buffers */);
 }
 
 } // namespace android
