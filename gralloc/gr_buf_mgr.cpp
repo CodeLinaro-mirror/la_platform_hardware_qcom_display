@@ -17,9 +17,40 @@
  * limitations under the License.
  */
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear */
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 
 #define DEBUG 0
 
@@ -303,6 +334,103 @@ static Error colorMetadataToDataspace(ColorMetaData color_metadata, Dataspace *d
   *dataspace = (Dataspace)((uint32_t)primaries | (uint32_t)transfer | (uint32_t)range);
   return Error::NONE;
 }
+
+#ifdef QTI_COLORSPACE
+static Error getColorSpaceFromMetaData(ColorMetaData color_metadata, uint32_t *color_space) {
+  Error err = Error::NONE;
+  switch (color_metadata.colorPrimaries) {
+    case ColorPrimaries_BT709_5:
+      *color_space = HAL_CSC_ITU_R_709;
+      break;
+    case ColorPrimaries_BT601_6_525:
+    case ColorPrimaries_BT601_6_625:
+      *color_space = ((color_metadata.range) ? HAL_CSC_ITU_R_601_FR : HAL_CSC_ITU_R_601);
+      break;
+    case ColorPrimaries_BT2020:
+      *color_space = (color_metadata.range) ? HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
+      break;
+    default:
+      err = Error::UNSUPPORTED;
+      *color_space = 0;
+      ALOGW("Unknown Color primary = %d", color_metadata.colorPrimaries);
+      break;
+  }
+  return err;
+}
+#endif
+
+#ifdef QTI_YUV_PLANE_INFO
+static Error getYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]) {
+  Error err = Error::NONE;
+  int ret = 0;
+  uint32_t width = UINT(hnd->width);
+  uint32_t height = UINT(hnd->height);
+  int format = hnd->format;
+  uint64_t usage = hnd->usage;
+  int32_t interlaced = 0;
+  int plane_count = 0;
+  int unaligned_width = INT(hnd->unaligned_width);
+  int unaligned_height = INT(hnd->unaligned_height);
+  BufferInfo info(unaligned_width, unaligned_height, format, usage);
+
+  auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
+
+  memset(ycbcr->reserved, 0, sizeof(ycbcr->reserved));
+
+  // Check metadata  if UBWC buffer has been rendered in linear format
+  if (metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_LINEAR_FORMAT)])
+    format = metadata->linearFormat;
+
+  // Check metadata if geometry has been updated
+  if (metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(
+          (int64_t)StandardMetadataType::CROP)])
+    BufferInfo info(metadata->crop.right, metadata->crop.bottom, format, usage);
+
+  if (GetAlignedWidthAndHeight(info, &width, &height)) {
+    err = Error::BAD_VALUE;
+    return err;
+  }
+
+  // Check metadata for interlaced content
+  if (metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_PP_PARAM_INTERLACED)])
+    interlaced = 1 << 0;
+
+  PlaneLayoutInfo plane_info[8] = {};
+  // Get the chroma offsets from the handle width/height. We take advantage
+  // of the fact the width _is_ the stride
+  ret = GetYUVPlaneInfo(info, format, width, height, interlaced, &plane_count, plane_info);
+  if (ret == 0) {
+    if (interlaced && format == HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC) {
+      CopyPlaneLayoutInfotoAndroidYcbcr(hnd->base, plane_count, &plane_info[0], &ycbcr[0]);
+      unsigned int uv_stride = 0, uv_height = 0, uv_size = 0;
+      unsigned int alignment = 4096;
+      uint64_t field_base;
+      height = (height + 1) >> 1;
+#ifndef QMAA
+      uv_stride = MMM_COLOR_FMT_UV_STRIDE(MMM_COLOR_FMT_NV12_UBWC, INT(width));
+      uv_height = MMM_COLOR_FMT_UV_SCANLINES(MMM_COLOR_FMT_NV12_UBWC, INT(height));
+#endif
+      uv_size = ALIGN((uv_stride * uv_height), alignment);
+      field_base = hnd->base + plane_info[1].offset + uv_size;
+      memset(ycbcr[1].reserved, 0, sizeof(ycbcr[1].reserved));
+      CopyPlaneLayoutInfotoAndroidYcbcr(field_base, plane_count, &plane_info[4], &ycbcr[1]);
+    } else {
+      CopyPlaneLayoutInfotoAndroidYcbcr(hnd->base, plane_count, plane_info, ycbcr);
+      switch (format) {
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+        case HAL_PIXEL_FORMAT_YCrCb_422_SP:
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
+        case HAL_PIXEL_FORMAT_NV21_ZSL:
+          std::swap(ycbcr->cb, ycbcr->cr);
+      }
+    }
+  } else {
+    err = Error::BAD_VALUE;
+  }
+  return err;
+}
+#endif
 
 static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &comp) {
   switch (format) {
@@ -693,6 +821,35 @@ static Error getFormatLayout(private_handle_t *handle, std::vector<PlaneLayout> 
   }
   *out = plane_info;
   return Error::NONE;
+}
+
+int BufferManager::GetCustomDimensions(private_handle_t *hnd, int *stride, int *height) {
+  auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
+  hidl_vec<uint8_t> crop;
+  int32_t interlaced = 0;
+  *stride = hnd->width;
+  *height = hnd->height;
+  if (metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(
+          (int64_t)StandardMetadataType::CROP)]) {
+    *stride = metadata->crop.right;
+    *height = metadata->crop.bottom;
+  } else if (metadata
+                 ->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_PP_PARAM_INTERLACED)]) {
+    interlaced = metadata->interlaced;
+    if (interlaced && IsUBwcFormat(hnd->format)) {
+      uint32_t alignedw = 0, alignedh = 0;
+      BufferInfo info(hnd->width, ((hnd->height + 1) >> 1), hnd->format);
+      int err = GetAlignedWidthAndHeight(info, &alignedw, &alignedh);
+      if (err) {
+        *stride = 0;
+        *height = 0;
+        return err;
+      }
+      *stride = static_cast<int>(alignedw);
+      *height = static_cast<int>(alignedh * 2);
+    }
+  }
+  return 0;
 }
 
 BufferManager::BufferManager() : next_id_(0) {
@@ -1391,6 +1548,102 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       qtigralloc::encodeMetadataState(metadata->isVendorMetadataSet, out);
       break;
 #endif
+#ifdef QTI_BUFFER_TYPE
+    case QTI_BUFFER_TYPE:
+      android::gralloc4::encodeUint32(qtigralloc::MetadataType_BufferType, handle->buffer_type,
+                                      out);
+      break;
+#endif
+#ifdef QTI_VIDEO_TS_INFO
+    case QTI_VIDEO_TS_INFO:
+      qtigralloc::encodeVideoTimestampInfo(metadata->videoTsInfo, out);
+      break;
+#endif
+#ifdef QTI_CUSTOM_DIMENSIONS_STRIDE
+    case QTI_CUSTOM_DIMENSIONS_STRIDE: {
+      int32_t stride;
+      int32_t height;
+      if (GetCustomDimensions(handle, &stride, &height) == 0) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_CustomDimensionsStride, stride,
+                                        out);
+        break;
+      } else {
+        error = Error::BAD_VALUE;
+        break;
+      }
+    }
+#endif
+#ifdef QTI_CUSTOM_DIMENSIONS_HEIGHT
+    case QTI_CUSTOM_DIMENSIONS_HEIGHT: {
+      int32_t stride = handle->width;
+      int32_t height = handle->height;
+      if (GetCustomDimensions(handle, &stride, &height) == 0) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_CustomDimensionsHeight, height,
+                                        out);
+        break;
+      } else {
+        error = Error::BAD_VALUE;
+        break;
+      }
+    }
+#endif
+#ifdef QTI_RGB_DATA_ADDRESS
+    case QTI_RGB_DATA_ADDRESS: {
+      void *rgb_data = nullptr;
+      if (GetRgbDataAddress(handle, &rgb_data) == 0) {
+        uint64_t addr_ptr = reinterpret_cast<std::uintptr_t>(rgb_data);
+        android::gralloc4::encodeUint64(qtigralloc::MetadataType_RgbDataAddress, addr_ptr, out);
+        break;
+      } else {
+        error = Error::BAD_BUFFER;
+        break;
+      }
+    }
+#endif
+#ifdef QTI_COLORSPACE
+    case QTI_COLORSPACE: {
+      uint32_t colorspace;
+      error = getColorSpaceFromMetaData(metadata->color, &colorspace);
+      if (error == Error::NONE) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_ColorSpace, colorspace, out);
+        break;
+      } else {
+        error = Error::BAD_BUFFER;
+        break;
+      }
+    }
+#endif
+#ifdef QTI_YUV_PLANE_INFO
+    case QTI_YUV_PLANE_INFO: {
+      qti_ycbcr layout[2];
+      android_ycbcr yuv_plane_info[2];
+      error = getYUVPlaneInfo(handle, yuv_plane_info);
+      if (error == Error::NONE) {
+        for (int i = 0; i < 2; i++) {
+          layout[i].y = yuv_plane_info[i].y;
+          layout[i].cr = yuv_plane_info[i].cr;
+          layout[i].cb = yuv_plane_info[i].cb;
+          layout[i].yStride = static_cast<uint32_t>(yuv_plane_info[i].ystride);
+          layout[i].cStride = static_cast<uint32_t>(yuv_plane_info[i].cstride);
+          layout[i].chromaStep = static_cast<uint32_t>(yuv_plane_info[i].chroma_step);
+        }
+
+        uint64_t yOffset = (reinterpret_cast<uint64_t>(layout[0].y) - handle->base);
+        uint64_t crOffset = (reinterpret_cast<uint64_t>(layout[0].cr) - handle->base);
+        uint64_t cbOffset = (reinterpret_cast<uint64_t>(layout[0].cb) - handle->base);
+        ALOGD_IF(DEBUG, " layout: y: %" PRIu64 " , cr: %" PRIu64 " , cb: %" PRIu64
+              " , yStride: %d, cStride: %d, chromaStep: %d ",
+              yOffset, crOffset, cbOffset, layout[0].yStride, layout[0].cStride,
+              layout[0].chromaStep);
+
+        qtigralloc::encodeYUVPlaneInfoMetadata(layout, out);
+        break;
+      } else {
+        error = Error::BAD_BUFFER;
+        break;
+      }
+    }
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -1449,7 +1702,19 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     case QTI_PRIVATE_FLAGS:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
     case QTI_ALIGNED_HEIGHT_IN_PIXELS:
+#ifdef QTI_CUSTOM_DIMENSIONS_STRIDE
+    case QTI_CUSTOM_DIMENSIONS_STRIDE:
+#endif
+#ifdef QTI_CUSTOM_DIMENSIONS_HEIGHT
+    case QTI_CUSTOM_DIMENSIONS_HEIGHT:
+#endif
+#ifdef QTI_RGB_DATA_ADDRESS
+    case QTI_RGB_DATA_ADDRESS:
+#endif
+#ifdef QTI_COLORSPACE
+    case QTI_COLORSPACE:
       return Error::UNSUPPORTED;
+#endif
     case (int64_t)StandardMetadataType::DATASPACE:
       Dataspace dataspace;
       android::gralloc4::decodeDataspace(in, &dataspace);
