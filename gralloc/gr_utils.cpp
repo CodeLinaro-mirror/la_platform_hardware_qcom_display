@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifdef __ANDROID_T__
 #include <display/media/mmm_color_fmt.h>
 #include <display/drm/sde_drm.h>
@@ -1905,7 +1911,7 @@ void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
       *drm_format = DRM_FORMAT_BGR888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
-      *drm_format = DRM_FORMAT_BGR565;
+      *drm_format = DRM_FORMAT_RGB565;
       break;
     case HAL_PIXEL_FORMAT_BGR_565:
       *drm_format = DRM_FORMAT_BGR565;
