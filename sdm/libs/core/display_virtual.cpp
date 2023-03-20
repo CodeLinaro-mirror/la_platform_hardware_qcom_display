@@ -24,7 +24,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022 - 2023 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -109,7 +109,7 @@ DisplayError DisplayVirtual::Deinit() {
   float fps = 0;
   if (async_vds_creation_ && !disable_mitigated_fps_) {
     comp_manager_->GetConcurrencyFps(display_comp_ctx_,
-                                     DisplayConcurrencyType::kConcurrencyWfd, &fps);
+                                     DisplayConcurrencyType::kConcurrencyWfd, display_id_, &fps);
     if (fps != 0.0) {
       event_handler_->NotifyFpsMitigation(fps, DisplayConcurrencyType::kConcurrencyWfd, false);
     }
@@ -211,7 +211,7 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
   if (async_vds_creation_ && !disable_mitigated_fps_) {
     float fps = 0;
     comp_manager_->GetConcurrencyFps(display_comp_ctx_,
-                                     DisplayConcurrencyType::kConcurrencyWfd, &fps);
+                                     DisplayConcurrencyType::kConcurrencyWfd, display_id_, &fps);
     if (fps != 0.0) {
       event_handler_->NotifyFpsMitigation(fps, DisplayConcurrencyType::kConcurrencyWfd, true);
     }

@@ -58,6 +58,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <core/buffer_allocator.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -799,18 +805,15 @@ bool CompManager::CheckResourceState(Handle display_ctx, bool *res_exhausted,
 }
 
 DisplayError CompManager::GetConcurrencyFps(Handle display_ctx, DisplayConcurrencyType type,
-                                            float *fps) {
+                                            uint32_t display_id, float *fps) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
-
-  DisplayCompositionContext *display_comp_ctx =
-                  reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   ResourceConstraintsIn res_constraints_in;
   res_constraints_in.concurrency_type = type;
+  res_constraints_in.display_id = display_id;
   ResourceConstraintsOut res_constraints_out;
 
   auto error = resource_intf_->Perform(ResourceInterface::kCmdGetResourceConstraints,
-                                       display_comp_ctx->display_resource_ctx,
                                        &res_constraints_in, &res_constraints_out);
   *fps = res_constraints_out.fps;
   return error;
