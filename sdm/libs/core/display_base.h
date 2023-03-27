@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
 *    * Redistributions of source code must retain the above copyright notice, this list of
@@ -58,6 +56,7 @@
 
 #include "comp_manager.h"
 #include "color_manager.h"
+#include "dpu_core_mux.h"
 
 #define GET_PANEL_FEATURE_FACTORY "GetPanelFeatureFactoryIntf"
 #define GET_DEMURATN_FACTORY "GetDemuraTnCoreUvmFactoryIntf"
@@ -343,7 +342,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   void CheckMMRMState();
   DisplayError SetVSyncStateLocked(bool enable);
   virtual DisplayError SetUpCommit(LayerStack *layer_stack);
-  DisplayError PerformCommit(HWLayersInfo *hw_layers_info);
+  DisplayError PerformCommit(std::vector<HWLayersInfo> &hw_layers_info);
   virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
   bool IsPrimaryDisplayLocked();
   virtual DisplayError CommitLocked(LayerStack *layer_stack);
@@ -365,6 +364,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   DisplayType display_type_;
   DisplayEventHandler *event_handler_ = NULL;
   HWDeviceType hw_device_type_;
+  DPUCoreMux *dpu_core_mux_ = NULL;
   HWInterface *hw_intf_ = NULL;
   HWPanelInfo hw_panel_info_;
   std::vector<HWResourceInfo> hw_resource_info_;
@@ -471,7 +471,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   DisplayError GetNoisePluginParams(LayerStack *layer_stack);
   DisplayError InsertNoiseLayer(LayerStack *layer_stack);
   void WaitForCompletion(SyncPoints *sync_points);
-  DisplayError PerformHwCommit(HWLayersInfo *hw_layers_info);
+  DisplayError PerformHwCommit(std::vector<HWLayersInfo> &hw_layers_info);
   void CacheRetireFence();
   void CacheFrameBuffer();
   void CacheDisplayComposition();

@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
 *    * Redistributions of source code must retain the above copyright notice, this list of
@@ -27,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -83,6 +81,9 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
   void MMRMEvent(uint32_t clk) override;
   void HandlePowerEvent() override;
   void HandleVmReleaseEvent() override;
+  void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) override;
+  bool IsPrimaryDisplay() override;
+  DisplayError GetPanelBrightnessBasePath(std::string *base_path) override;
 
   void UpdateColorModes();
   void InitializeColorModesFromColorspace();

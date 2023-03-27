@@ -77,23 +77,25 @@ static uint64_t GetTimeInMs(struct timespec ts) {
 DisplayError DisplayBuiltIn::Init() {
   ClientLock lock(disp_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_info_.GetConnId(), kBuiltIn,
-                                           hw_info_intf_[primary_core_id_],
-                                           buffer_allocator_, &hw_intf_);
+  DisplayError error = kErrorNone;
+
+  dpu_core_mux_ = new DPUCoreMux(display_id_info_, kBuiltIn, hw_info_intf_, buffer_allocator_);
   if (error != kErrorNone) {
     DLOGE("Failed to create hardware interface on. Error = %d", error);
     return error;
   }
 
-  if (-1 == display_id_) {
-    hw_intf_->GetDisplayId(&display_id_);
+  dpu_core_mux_->GetHWInterface(&hw_intf_);
+
+  if (-1 == display_id_info_.GetDisplayId()) {
+    dpu_core_mux_->GetDisplayId(&display_id_);
     display_id_info_ = DisplayId(primary_core_id_, display_id_);
     display_id_ = display_id_info_.GetDisplayId();
   }
 
   error = DisplayBase::Init();
   if (error != kErrorNone) {
-    HWInterface::Destroy(hw_intf_);
+    dpu_core_mux_->Destroy();
     return error;
   }
 
@@ -102,7 +104,7 @@ DisplayError DisplayBuiltIn::Init() {
   }
 
   if (hw_panel_info_.mode == kModeCommand && Debug::IsVideoModeEnabled()) {
-    error = hw_intf_->SetDisplayMode(kModeVideo);
+    error = dpu_core_mux_->SetDisplayMode(kModeVideo);
     if (error != kErrorNone) {
       DLOGW("Retaining current display mode. Current = %d, Requested = %d", hw_panel_info_.mode,
             kModeVideo);
@@ -126,11 +128,11 @@ DisplayError DisplayBuiltIn::Init() {
   event_list_.push_back(HWEvent::POWER_EVENT);
   avr_prop_disabled_ = Debug::IsAVRDisabled();
 
-  error = HWEventsInterface::Create(display_id_, kBuiltIn, this, event_list_, hw_intf_,
+  error = HWEventsInterface::Create(display_id_info_, kBuiltIn, this, event_list_,
                                     &hw_events_intf_);
   if (error != kErrorNone) {
     DisplayBase::Deinit();
-    HWInterface::Destroy(hw_intf_);
+    dpu_core_mux_->Destroy();
     DLOGE("Failed to create hardware events interface on. Error = %d", error);
   }
 
@@ -160,7 +162,7 @@ DisplayError DisplayBuiltIn::Init() {
     if ((error = SetupSPR()) != kErrorNone) {
       DLOGE("SPR Failed to initialize. Error = %d", error);
       DisplayBase::Deinit();
-      HWInterface::Destroy(hw_intf_);
+      dpu_core_mux_->Destroy();
       HWEventsInterface::Destroy(hw_events_intf_);
       return error;
     }
@@ -382,7 +384,7 @@ void DisplayBuiltIn::UpdateQsyncMode() {
 
   // Get qsync min fps for the current mode
   uint32_t qsync_mode_min_fps = 0;
-  hw_intf_->GetQsyncFps(&qsync_mode_min_fps);
+  dpu_core_mux_->GetQsyncFps(&qsync_mode_min_fps);
   QSyncMode mode = kQSyncModeNone;
   if (!qsync_mode_min_fps) {
     // Set qsync mode to 0 when the current mode doesn't support it.
@@ -520,7 +522,7 @@ DisplayError DisplayBuiltIn::SetupDemura() {
   DemuraInputConfig input_cfg;
   input_cfg.secure_session = false;  // TODO(user): Integrate with secure solution
   std::string brightness_base;
-  hw_intf_->GetPanelBrightnessBasePath(&brightness_base);
+  dpu_core_mux_->GetPanelBrightnessBasePath(&brightness_base);
   input_cfg.brightness_path = brightness_base+"brightness";
 
   std::vector<FetchResourceList> frlv;
@@ -680,14 +682,14 @@ void DisplayBuiltIn::PreCommit(LayerStack *layer_stack) {
     bool enable = (app_layer_count == 1) && layer_stack->flags.single_buffered_layer_present;
     bool need_refresh = layer_stack->flags.single_buffered_layer_present && (app_layer_count > 1);
 
-    hw_intf_->SetAutoRefresh(enable);
+    dpu_core_mux_->SetAutoRefresh(enable);
     if (need_refresh) {
       event_handler_->Refresh();
     }
   }
 
   if (trigger_mode_debug_ != kFrameTriggerMax) {
-    DisplayError error = hw_intf_->SetFrameTrigger(trigger_mode_debug_);
+    DisplayError error = dpu_core_mux_->SetFrameTrigger(trigger_mode_debug_);
     if (error != kErrorNone) {
       DLOGE("Failed to set frame trigger mode %d, err %d", (int)trigger_mode_debug_, error);
     } else {
@@ -1017,7 +1019,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
   clock_gettime(CLOCK_MONOTONIC, &idle_timer_start_);
   int idle_time_ms = disp_layer_stack_->stack_info.common_info.set_idle_time_ms;
   if (idle_time_ms >= 0) {
-    hw_intf_->SetIdleTimeoutMs(UINT32(idle_time_ms));
+    dpu_core_mux_->SetIdleTimeoutMs(UINT32(idle_time_ms));
     idle_time_ms_ = idle_time_ms;
   }
 
@@ -1084,7 +1086,7 @@ void DisplayBuiltIn::HandleQsyncPostCommit() {
   QsyncEventData event_data;
   event_data.enabled = qsync_enabled;
   event_data.refresh_rate = display_attributes_.fps;
-  hw_intf_->GetQsyncFps(&event_data.qsync_refresh_rate);
+  dpu_core_mux_->GetQsyncFps(&event_data.qsync_refresh_rate);
   event_handler_->HandleQsyncState(event_data);
 
   qsync_enabled_ = qsync_enabled;
@@ -1192,7 +1194,7 @@ DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
       return kErrorNone;
     }
 
-    error = hw_intf_->SetDisplayMode(hw_display_mode);
+    error = dpu_core_mux_->SetDisplayMode(hw_display_mode);
     if (error != kErrorNone) {
       DLOGW("Retaining current display mode on display %d-%d. Current = %d, Requested = %d",
             display_id_, display_type_, hw_panel_info_.mode, hw_display_mode);
@@ -1248,7 +1250,7 @@ DisplayError DisplayBuiltIn::SetPanelBrightness(float brightness) {
     level_remainder = t - level;
   }
 
-  DisplayError err = hw_intf_->SetPanelBrightness(level);
+  DisplayError err = dpu_core_mux_->SetPanelBrightness(level);
   if (err == kErrorNone) {
     level_remainder_ = level_remainder;
     pending_brightness_ = false;
@@ -1344,7 +1346,7 @@ DisplayError DisplayBuiltIn::SetRefreshRate(uint32_t refresh_rate, bool final_ra
   }
 
   if (current_refresh_rate_ != refresh_rate) {
-    DisplayError error = hw_intf_->SetRefreshRate(refresh_rate);
+    DisplayError error = dpu_core_mux_->SetRefreshRate(refresh_rate);
     if (error != kErrorNone) {
       // Attempt to update refresh rate can fail if rf interfenence is detected.
       // Just drop min fps settting for now.
@@ -1442,7 +1444,7 @@ void DisplayBuiltIn::IdleTimeout() {
 
 void DisplayBuiltIn::PingPongTimeout() {
   ClientLock lock(disp_mutex_);
-  hw_intf_->DumpDebugData();
+  dpu_core_mux_->DumpDebugData();
 }
 
 void DisplayBuiltIn::IdlePowerCollapse() {
@@ -1514,7 +1516,7 @@ DisplayError DisplayBuiltIn::GetPanelBrightness(float *brightness) {
 
   DisplayError err = kErrorNone;
   int level = 0;
-  if ((err = hw_intf_->GetPanelBrightness(&level)) != kErrorNone) {
+  if ((err = dpu_core_mux_->GetPanelBrightness(&level)) != kErrorNone) {
     return err;
   }
   return GetPanelBrightnessFromLevel(level, brightness);
@@ -1625,7 +1627,7 @@ DisplayError DisplayBuiltIn::DppsProcessOps(enum DppsOps op, void *payload, size
         error = kErrorParameters;
         break;
       }
-      error = hw_intf_->GetDppsFeatureInfo(payload, size);
+      error = dpu_core_mux_->GetDppsFeatureInfo(payload, size);
       break;
     case kDppsScreenRefresh:
       event_handler_->Refresh();
@@ -1678,7 +1680,7 @@ DisplayError DisplayBuiltIn::DppsProcessOps(enum DppsOps op, void *payload, size
       info->display_type = display_type_;
       info->fps = enable_dpps_dyn_fps_ ? display_attributes_.fps : 0;
 
-      error = hw_intf_->GetPanelBrightnessBasePath(&(info->brightness_base_path));
+      error = dpu_core_mux_->GetPanelBrightnessBasePath(&(info->brightness_base_path));
       if (error != kErrorNone) {
         DLOGE("Failed to get brightness base path %d", error);
       }
@@ -1705,7 +1707,7 @@ DisplayError DisplayBuiltIn::SetDisplayDppsAdROI(void *payload) {
   ClientLock lock(disp_mutex_);
   DisplayError err = kErrorNone;
 
-  err = hw_intf_->SetDisplayDppsAdROI(payload);
+  err = dpu_core_mux_->SetDisplayDppsAdROI(payload);
   if (err != kErrorNone)
     DLOGE("Failed to set ad roi config, err %d", err);
 
@@ -1746,7 +1748,7 @@ DisplayError DisplayBuiltIn::SetStcColorMode(const snapdragoncolor::ColorMode &c
     DLOGE("SetBlendSpace failed, ret = %d on display %d-%d", ret, display_id_, display_type_);
   }
 
-  ret = hw_intf_->SetBlendSpace(blend_space);
+  ret = dpu_core_mux_->SetBlendSpace(blend_space);
   if (ret != kErrorNone) {
     DLOGE("Failed to pass blend space, ret = %d on display %d-%d", ret, display_id_,
           display_type_);
@@ -1797,9 +1799,9 @@ std::string DisplayBuiltIn::Dump() {
   std::ostringstream os;
   char capabilities[16];
 
-  hw_intf_->GetNumDisplayAttributes(&num_modes);
-  hw_intf_->GetActiveConfig(&active_index);
-  hw_intf_->GetDisplayAttributes(active_index, &attrib);
+  dpu_core_mux_->GetNumDisplayAttributes(&num_modes);
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  dpu_core_mux_->GetDisplayAttributes(active_index, &attrib);
 
   os << "device type:" << display_type_;
   os << " DrawMethod: " << draw_method_;
@@ -2144,7 +2146,7 @@ DisplayError DisplayBuiltIn::ControlIdlePowerCollapse(bool enable, bool synchron
     return kErrorNotSupported;
   }
   validated_ = false;
-  return hw_intf_->ControlIdlePowerCollapse(enable, synchronous);
+  return dpu_core_mux_->ControlIdlePowerCollapse(enable, synchronous);
 }
 
 DisplayError DisplayBuiltIn::GetSupportedDSIClock(std::vector<uint64_t> *bitclk_rates) {
@@ -2197,7 +2199,7 @@ DisplayError DisplayBuiltIn::SetDynamicDSIClock(uint64_t bit_clk_rate) {
   validated_ = false;
   avoid_qsync_mode_change_ = true;
   DLOGV("Setting new dynamic bit clk value: %" PRIu64, bit_clk_rate);
-  return hw_intf_->SetDynamicDSIClock(bit_clk_rate);
+  return dpu_core_mux_->SetDynamicDSIClock(bit_clk_rate);
 }
 
 DisplayError DisplayBuiltIn::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
@@ -2206,7 +2208,7 @@ DisplayError DisplayBuiltIn::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
     return kErrorNotSupported;
   }
 
-  return hw_intf_->GetDynamicDSIClock(bit_clk_rate);
+  return dpu_core_mux_->GetDynamicDSIClock(bit_clk_rate);
 }
 
 DisplayError DisplayBuiltIn::GetRefreshRate(uint32_t *refresh_rate) {
@@ -2217,7 +2219,7 @@ DisplayError DisplayBuiltIn::GetRefreshRate(uint32_t *refresh_rate) {
 DisplayError DisplayBuiltIn::SetBLScale(uint32_t level) {
   ClientLock lock(disp_mutex_);
 
-  DisplayError err = hw_intf_->SetBLScale(level);
+  DisplayError err = dpu_core_mux_->SetBLScale(level);
   if (err) {
     DLOGE("Failed to set backlight scale to level %d", level);
   } else {
@@ -2492,22 +2494,22 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
 
   DTRACE_SCOPED();
 
-  error = hw_intf_->GetActiveConfig(&active_index);
+  error = dpu_core_mux_->GetActiveConfig(&active_index);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetDisplayAttributes(active_index, &display_attributes);
+  error = dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes);
+  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
-  error = hw_intf_->GetHWPanelInfo(&hw_panel_info);
+  error = dpu_core_mux_->GetHWPanelInfo(&hw_panel_info);
   if (error != kErrorNone) {
     return error;
   }
@@ -2666,7 +2668,7 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
 void DisplayBuiltIn::SendBacklight() {
   DisplayError err = kErrorNone;
   int level = 0;
-  if ((err = hw_intf_->GetPanelBrightness(&level)) != kErrorNone) {
+  if ((err = dpu_core_mux_->GetPanelBrightness(&level)) != kErrorNone) {
     return;
   }
   HandleBacklightEvent(level);
@@ -2682,7 +2684,7 @@ void DisplayBuiltIn::SendDisplayConfigs() {
       DLOGW("failed to create the payload. Error:%d", ret);
       return;
     }
-    DisplayError error = hw_intf_->GetActiveConfig(&active_index);
+    DisplayError error = dpu_core_mux_->GetActiveConfig(&active_index);
     if (error != kErrorNone) {
       return;
     }
@@ -2766,7 +2768,7 @@ int DisplayBuiltIn::SetDemuraIntfStatus(bool enable, int current_idx) {
 }
 
 DisplayError DisplayBuiltIn::SetDppsFeatureLocked(void *payload, size_t size) {
-  return hw_intf_->SetDppsFeature(payload, size);
+  return dpu_core_mux_->SetDppsFeature(payload, size);
 }
 
 void DisplayBuiltIn::HandlePowerEvent() {
@@ -2780,7 +2782,7 @@ void DisplayBuiltIn::HandleVmReleaseEvent() {
 
 DisplayError DisplayBuiltIn::GetQsyncFps(uint32_t *qsync_fps) {
   ClientLock lock(disp_mutex_);
-  return hw_intf_->GetQsyncFps(qsync_fps);
+  return dpu_core_mux_->GetQsyncFps(qsync_fps);
 }
 
 DisplayError DisplayBuiltIn::SetAlternateDisplayConfig(uint32_t *alt_config) {
@@ -2788,7 +2790,7 @@ DisplayError DisplayBuiltIn::SetAlternateDisplayConfig(uint32_t *alt_config) {
   if (!alt_config) {
     return kErrorResources;
   }
-  DisplayError error = hw_intf_->SetAlternateDisplayConfig(alt_config);
+  DisplayError error = dpu_core_mux_->SetAlternateDisplayConfig(alt_config);
 
   if (error == kErrorNone) {
     ReconfigureDisplay();
@@ -3081,7 +3083,7 @@ DisplayError DisplayBuiltIn::ChangeFps() {
   }
 
   if (current_refresh_rate_ != refresh_rate) {
-    DisplayError error = hw_intf_->SetRefreshRate(refresh_rate);
+    DisplayError error = dpu_core_mux_->SetRefreshRate(refresh_rate);
     if (error != kErrorNone) {
       // Attempt to update refresh rate can fail if rf interference settings is detected.
       // Just drop min fps settting for now.
@@ -3276,6 +3278,18 @@ DisplayError DisplayBuiltIn::SetDemuraConfig(int demura_idx) {
   DisablePartialUpdateOneFrame();
 
   return kErrorNone;
+}
+
+void DisplayBuiltIn::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) {
+  dpu_core_mux_->GetDRMDisplayToken(token);
+}
+
+bool DisplayBuiltIn::IsPrimaryDisplay() {
+  return dpu_core_mux_->IsPrimaryDisplay();
+}
+
+DisplayError DisplayBuiltIn::GetPanelBrightnessBasePath(std::string *base_path) {
+  return dpu_core_mux_->GetPanelBrightnessBasePath(base_path);
 }
 
 }  // namespace sdm

@@ -63,15 +63,15 @@ DisplayError DisplayVirtual::Init() {
     return error;
   }
 
-  error = HWInterface::Create(display_id_info_.GetConnId(), kVirtual,
-                                           hw_info_intf_[primary_core_id_],
-                                           buffer_allocator_, &hw_intf_);
+  dpu_core_mux_ = new DPUCoreMux(display_id_info_, kVirtual, hw_info_intf_, buffer_allocator_);
   if (error != kErrorNone) {
     return error;
   }
 
-  if (-1 == display_id_) {
-    hw_intf_->GetDisplayId(&display_id_);
+  dpu_core_mux_->GetHWInterface(&hw_intf_);
+
+  if (-1 == display_id_info_.GetDisplayId()) {
+    dpu_core_mux_->GetDisplayId(&display_id_);
     display_id_info_ = DisplayId(primary_core_id_, display_id_);
     display_id_ = display_id_info_.GetDisplayId();
   }
@@ -148,15 +148,15 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
     return kErrorNone;
   }
 
-  error = hw_intf_->SetDisplayAttributes(display_attributes);
+  error = dpu_core_mux_->SetDisplayAttributes(display_attributes);
   if (error != kErrorNone) {
     return error;
   }
 
   uint32_t active_index = 0;
-  hw_intf_->GetActiveConfig(&active_index);
-  hw_intf_->GetDisplayAttributes(active_index, &display_attributes);
-  hw_intf_->GetHWPanelInfo(&hw_panel_info);
+  dpu_core_mux_->GetActiveConfig(&active_index);
+  dpu_core_mux_->GetDisplayAttributes(active_index, &display_attributes);
+  dpu_core_mux_->GetHWPanelInfo(&hw_panel_info);
 
   if (set_max_lum_ != -1.0 || set_min_lum_ != -1.0) {
     hw_panel_info.peak_luminance = set_max_lum_;
@@ -165,7 +165,7 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
           display_type_, hw_panel_info.peak_luminance, hw_panel_info.blackness_level);
   }
 
-  error = hw_intf_->GetMixerAttributes(&mixer_attributes);
+  error = dpu_core_mux_->GetMixerAttributes(&mixer_attributes);
   if (error != kErrorNone) {
     return error;
   }

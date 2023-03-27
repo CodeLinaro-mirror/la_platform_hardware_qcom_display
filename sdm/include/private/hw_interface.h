@@ -23,45 +23,9 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *    * Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *
- *    * Redistributions in binary form must reproduce the above
- *      copyright notice, this list of conditions and the following
- *      disclaimer in the documentation and/or other materials provided
- *      with the distribution.
- *
- *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -74,6 +38,7 @@
 #include <private/color_interface.h>
 #include <private/panel_feature_property_intf.h>
 #include <utils/constants.h>
+#include <drm_interface.h>
 #include <string>
 
 #include "hw_info_interface.h"
@@ -94,6 +59,15 @@ struct HWScanInfo {
 
   HWScanInfo() : pt_scan_support(kScanNotSupported), it_scan_support(kScanNotSupported),
                  cea_scan_support(kScanNotSupported) { }
+  bool operator != (const HWScanInfo& hw_scan_info) {
+    return pt_scan_support != hw_scan_info.pt_scan_support ||
+           it_scan_support != hw_scan_info.it_scan_support ||
+           cea_scan_support != hw_scan_info.cea_scan_support;
+  }
+
+  bool operator == (const HWScanInfo& hw_scan_info) {
+    return !(operator !=(hw_scan_info));
+  }
 };
 
 enum HWFeature {
@@ -118,6 +92,9 @@ class HWEventHandler {
   virtual void MMRMEvent(uint32_t clk) = 0;
   virtual void HandlePowerEvent() = 0;
   virtual void HandleVmReleaseEvent() = 0;
+  virtual void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) = 0;
+  virtual bool IsPrimaryDisplay() = 0;
+  virtual DisplayError GetPanelBrightnessBasePath(std::string *base_path) = 0;
 
  protected:
   virtual ~HWEventHandler() { }
@@ -195,7 +172,8 @@ class HWInterface {
   virtual DisplayError CancelDeferredPowerMode() = 0;
   virtual void HandleCwbTeardown(bool sync_teardown) = 0;
   virtual void SetDestScalarData(const DestScaleInfoMap dest_scale_info_map) = 0;
-
+  virtual void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const = 0;
+  virtual bool IsPrimaryDisplay() const = 0;
  protected:
   virtual ~HWInterface() { }
 };

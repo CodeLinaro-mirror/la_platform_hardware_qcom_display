@@ -215,6 +215,9 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   void HandleBacklightEvent(float brightness_level) override;
   void HandlePowerEvent() override;
   void HandleVmReleaseEvent() override;
+  void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) override;
+  bool IsPrimaryDisplay() override;
+  DisplayError GetPanelBrightnessBasePath(std::string *base_path) override;
 
   // Implement the DppsPropIntf
   DisplayError DppsProcessOps(enum DppsOps op, void *payload, size_t size) override;

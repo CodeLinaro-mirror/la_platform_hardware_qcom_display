@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/utils.h>
 #include <private/hw_events_interface.h>
 
@@ -40,15 +46,15 @@
 
 namespace sdm {
 
-DisplayError HWEventsInterface::Create(int display_id, DisplayType display_type,
+DisplayError HWEventsInterface::Create(DisplayId display_id, DisplayType display_type,
                                        HWEventHandler *event_handler,
                                        const std::vector<HWEvent> &event_list,
-                                       const HWInterface *hw_intf, HWEventsInterface **intf) {
+                                       HWEventsInterface **intf) {
   DisplayError error = kErrorNone;
 #ifndef TARGET_HEADLESS
   HWEventsInterface *hw_events = new HWEventsDRM();
 
-  error = hw_events->Init(display_id, display_type, event_handler, event_list, hw_intf);
+  error = hw_events->Init(display_id, display_type, event_handler, event_list);
   if (error != kErrorNone) {
     delete hw_events;
   } else {

@@ -29,38 +29,8 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <drm_master.h>
@@ -114,6 +84,23 @@ namespace sdm {
 
 using drm_utils::DRMMaster;
 
+void HWEventsDRM::HandleDRMOpen(int& fd) {
+  for (int i = 0; i < core_id_map_.size(); i++) {
+    if (!core_id_map_[i]) {
+      continue;
+    }
+
+    if (i == 0) {
+      fd = drmOpen("msm_drm", nullptr);
+      return;
+    }
+
+    snprintf(path_, sizeof(path_), "/dev/dri/card%d", i);
+    fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+    break;
+  }
+}
+
 DisplayError HWEventsDRM::InitializePollFd() {
   for (uint32_t i = 0; i < event_data_list_.size(); i++) {
     char data[kMaxStringLength]{};
@@ -133,7 +120,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
           }
           master->GetHandle(&poll_fds_[i].fd);
         } else {
-          poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+          HandleDRMOpen(poll_fds_[i].fd);
         }
         vsync_index_ = i;
       } break;
@@ -146,7 +133,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         Sys::pread_(poll_fds_[i].fd, data, kMaxStringLength, 0);
       } break;
       case HWEvent::IDLE_POWER_COLLAPSE: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -155,7 +142,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         idle_pc_index_ = i;
       } break;
       case HWEvent::PANEL_DEAD: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -164,7 +151,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         panel_dead_index_ = i;
       } break;
       case HWEvent::HW_RECOVERY: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -173,7 +160,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         hw_recovery_index_ = i;
       } break;
       case HWEvent::HISTOGRAM: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -194,7 +181,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         DLOGI("%s backlight_event_index_ %d", brightness_node_.c_str(), backlight_event_index_);
       } break;
       case HWEvent::MMRM: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -203,7 +190,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         mmrm_index_ = i;
       } break;
       case HWEvent::POWER_EVENT: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -212,7 +199,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         power_event_index_ = i;
       } break;
       case HWEvent::VM_RELEASE_EVENT: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -292,26 +279,27 @@ void HWEventsDRM::PopulateHWEventData(const vector<HWEvent> &event_list) {
   InitializePollFd();
 }
 
-DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
-                               HWEventHandler *event_handler, const vector<HWEvent> &event_list,
-                               const HWInterface *hw_intf) {
+DisplayError HWEventsDRM::Init(DisplayId display_id, DisplayType display_type,
+                               HWEventHandler *event_handler, const vector<HWEvent> &event_list) {
   if (!event_handler)
     return kErrorParameters;
 
-  static_cast<const HWDeviceDRM *>(hw_intf)->GetDRMDisplayToken(&token_);
-  is_primary_ = static_cast<const HWDeviceDRM *>(hw_intf)->IsPrimaryDisplay();
+  core_id_map_ = display_id.GetCoreIdMap();
+  event_handler->GetDRMDisplayToken(&token_);
+  is_primary_ = event_handler->IsPrimaryDisplay();
   std::string backlight_path;
-  static_cast<const HWDeviceDRM *>(hw_intf)->GetPanelBrightnessBasePath(&backlight_path);
+  event_handler->GetPanelBrightnessBasePath(&backlight_path);
   brightness_node_ = backlight_path + "brightness";
 
-  DLOGI("Setup event handler for display %d-%d, CRTC %d, Connector %d", display_id, display_type,
-        token_.crtc_id, token_.conn_id);
+  DLOGI("Setup event handler for display %d-%d, CRTC %d, Connector %d", display_id.GetDisplayId(),
+        display_type, token_.crtc_id, token_.conn_id);
 
   event_handler_ = event_handler;
   poll_fds_.resize(event_list.size());
 
   DLOGI("poll_fd size %d", (int)poll_fds_.size());
-  event_thread_name_ += " - " + std::to_string(display_id) + "-" + std::to_string(display_type);
+  event_thread_name_ += " - " + std::to_string(display_id.GetDisplayId()) + "-" +
+                        std::to_string(display_type);
 
   PopulateHWEventData(event_list);
 
