@@ -42,7 +42,7 @@ typedef UtilsFactoryIntf* (*GetUtilsFactory)();
 
 class UtilsFactoryIntf {
  public:
-  virtual void CreateSDMPropUtils(const HWResourceInfo& hw_res_info) = 0;
+  virtual void CreateSDMPropUtils(const vector<HWResourceInfo> &hw_res_info) = 0;
   virtual ~UtilsFactoryIntf() {}
 };
 
