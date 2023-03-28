@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -121,6 +121,7 @@ static int uevent_init(int *uevent_fd);
 */
 static bool get_hpd_state_from_node()
 {
+   return true;
    int ret = -1, fd = -1;
    char buf[2];
    ALOGI("%s", __func__);
@@ -150,6 +151,7 @@ static bool get_hpd_state_from_node()
 static int cec_add_logical_address(const struct hdmi_cec_device* dev,
         cec_logical_address_t addr)
 {
+    return 0;
     int err = 0;
 
     if (addr <  CEC_ADDR_TV || addr > CEC_ADDR_BROADCAST) {
@@ -235,6 +237,7 @@ static int cec_add_logical_address(const struct hdmi_cec_device* dev,
 
 static void cec_clear_logical_address(const struct hdmi_cec_device* dev)
 {
+    return;
     cec_context_t* ctx = (cec_context_t*)(dev);
 
     if (ctx->node.is_connected & !(ctx->node.caps & CEC_CAP_LOG_ADDRS)) {
@@ -258,6 +261,7 @@ static void cec_clear_logical_address(const struct hdmi_cec_device* dev)
 static int cec_get_physical_address(const struct hdmi_cec_device* dev,
         uint16_t* addr)
 {
+    return 0;
     int err;
     cec_context_t* ctx = (cec_context_t*)(dev);
 
@@ -280,6 +284,7 @@ static int cec_get_physical_address(const struct hdmi_cec_device* dev,
 static int cec_send_message(const struct hdmi_cec_device* dev,
         const cec_message_t* msg)
 {
+    return HDMI_RESULT_SUCCESS;
     ATRACE_CALL();
 
     // TODO: Need to find replacement for the following check
@@ -361,6 +366,7 @@ static int cec_send_message(const struct hdmi_cec_device* dev,
 
 void cec_receive_message(cec_context_t *ctx, struct cec_msg *msg, ssize_t len)
 {
+    return;
     if(!ctx->system_control)
         return;
 
@@ -381,6 +387,7 @@ void cec_receive_message(cec_context_t *ctx, struct cec_msg *msg, ssize_t len)
 
 void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
 {
+    return;
     //Ignore unplug events when system control is disabled
     if(!ctx->system_control && connected == 0)
         return;
@@ -414,6 +421,7 @@ void cec_hdmi_hotplug(cec_context_t *ctx, int connected)
 static void cec_register_event_callback(const struct hdmi_cec_device* dev,
             event_callback_t callback, void* arg)
 {
+    return;
     ALOGD_IF(DEBUG, "%s: Registering callback", __FUNCTION__);
     cec_context_t* ctx = (cec_context_t*)(dev);
     ctx->callback.callback_func = callback;
@@ -422,6 +430,7 @@ static void cec_register_event_callback(const struct hdmi_cec_device* dev,
 
 static void cec_get_version(const struct hdmi_cec_device* dev, int* version)
 {
+    return;
     cec_context_t* ctx = (cec_context_t*)(dev);
     *version = ctx->version;
     ALOGD_IF(DEBUG, "%s: version: %d", __FUNCTION__, *version);
@@ -430,6 +439,7 @@ static void cec_get_version(const struct hdmi_cec_device* dev, int* version)
 static void cec_get_vendor_id(const struct hdmi_cec_device* dev,
         uint32_t* vendor_id)
 {
+    return;
     cec_context_t* ctx = (cec_context_t*)(dev);
     *vendor_id = ctx->vendor_id;
     ALOGD_IF(DEBUG, "%s: vendor id: %u", __FUNCTION__, *vendor_id);
@@ -438,6 +448,7 @@ static void cec_get_vendor_id(const struct hdmi_cec_device* dev,
 static void cec_get_port_info(const struct hdmi_cec_device* dev,
             struct hdmi_port_info* list[], int* total)
 {
+    return;
     ALOGD_IF(DEBUG, "%s: Get port info", __FUNCTION__);
     cec_context_t* ctx = (cec_context_t*)(dev);
     *total = NUM_HDMI_PORTS;
@@ -447,6 +458,7 @@ static void cec_get_port_info(const struct hdmi_cec_device* dev,
 static void cec_set_option(const struct hdmi_cec_device* dev, int flag,
         int value)
 {
+    return;
     cec_context_t* ctx = (cec_context_t*)(dev);
     switch (flag) {
         case HDMI_OPTION_WAKEUP:
@@ -468,6 +480,7 @@ static void cec_set_option(const struct hdmi_cec_device* dev, int flag,
 static void cec_set_audio_return_channel(const struct hdmi_cec_device* dev,
         int port, int flag)
 {
+    return;
     cec_context_t* ctx = (cec_context_t*)(dev);
     ctx->arc_enabled = flag ? true : false;
     ALOGD_IF(DEBUG, "%s: ARC flag: %d port: %d", __FUNCTION__, flag, port);
@@ -475,6 +488,7 @@ static void cec_set_audio_return_channel(const struct hdmi_cec_device* dev,
 
 static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id)
 {
+    return 0;
     cec_context_t* ctx = (cec_context_t*)(dev);
 
     ALOGE("%s: is_connected=%d, port_id=%d", __FUNCTION__, ctx->node.is_connected, port_id);
@@ -483,6 +497,7 @@ static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id)
 
 static int cec_device_close(struct hw_device_t *dev)
 {
+    return 0;
     ALOGD_IF(DEBUG, "%s: Close CEC HAL ", __FUNCTION__);
     if (!dev) {
         ALOGE("%s: NULL device pointer", __FUNCTION__);
@@ -497,12 +512,14 @@ static int cec_device_close(struct hw_device_t *dev)
 // TODO: Fix implementation
 static int cec_enable(cec_context_t *ctx, int enable)
 {
+    return 0;
     ctx->enabled = enable;
     return 0;
 }
 
 static int cec_close_device(cec_context_t *ctx)
 {
+    return 0;
     int ret = 0;
 
     if (ctx->node.fd > 0) {
@@ -520,6 +537,7 @@ static int cec_close_device(cec_context_t *ctx)
 
 static int cec_init_device(cec_context_t *ctx, int hardware_intf)
 {
+    return 0;
     int err = -EINVAL;
     char value[PROPERTY_VALUE_MAX] = {0};
     int num = hardware_intf;
@@ -589,6 +607,7 @@ static int cec_init_device(cec_context_t *ctx, int hardware_intf)
 
 static int cec_init_context(cec_context_t *ctx, int hardware_intf)
 {
+    return 0;
     int err = -EINVAL;
 
     ALOGD_IF(DEBUG, "%s: Initializing context", __FUNCTION__);
@@ -634,6 +653,7 @@ static int cec_init_context(cec_context_t *ctx, int hardware_intf)
 
 static void cec_close_context(cec_context_t* ctx __unused)
 {
+    return;
     ALOGD("%s: Closing context", __FUNCTION__);
 
     uint64_t exit_value = 1;
@@ -654,6 +674,7 @@ static int cec_device_open(const struct hw_module_t* module,
         const char* name,
         struct hw_device_t** device)
 {
+    return 0;
     ALOGD_IF(DEBUG, "%s: name: %s", __FUNCTION__, name);
     int status = -EINVAL;
     char buf[4];
@@ -713,6 +734,7 @@ static int cec_device_open(const struct hw_module_t* module,
 }
 
 void event_monitor(cec_context_t* ctx) {
+    return;
     ALOGD("%s IN", __FUNCTION__);
     int err = -EINVAL;
 
@@ -741,6 +763,7 @@ void event_monitor(cec_context_t* ctx) {
 }
 
 static int populate_event_data(cec_context_t* ctx, std::vector<eventData> *event_data_list) {
+    return 0;
     int err = -EINVAL;
     ctx->poll_fds.resize(ctx->node_list.size());
 
@@ -761,6 +784,7 @@ static int populate_event_data(cec_context_t* ctx, std::vector<eventData> *event
 }
 
 static int set_event_params(cec_context_t* ctx, uint32_t node_event, eventData *event_data) {
+    return 0;
     pollfd poll_fd = {-EINVAL, 0, 0};
 
     if (!strncmp(event_data->event_name, "cec_msg_event", strlen("cec_msg_event"))) {
@@ -789,6 +813,7 @@ static int set_event_params(cec_context_t* ctx, uint32_t node_event, eventData *
 }
 
 static void handle_cec_msg_event(cec_context_t* ctx, uint32_t node_event) {
+    return;
     if (ctx->poll_fds[node_event].revents & POLLIN) {
         ALOGD_IF(DEBUG, "Handling CEC message %s", __FUNCTION__);
         struct cec_msg msg = {};
@@ -812,6 +837,7 @@ static void handle_cec_msg_event(cec_context_t* ctx, uint32_t node_event) {
 }
 
 static void handle_exit_event(cec_context_t* ctx, uint32_t node_event) {
+    return;
     ALOGD_IF(DEBUG, "Enter %s", __FUNCTION__);
 
     if (ctx->poll_fds[node_event].revents & POLLIN) {
@@ -822,6 +848,7 @@ static void handle_exit_event(cec_context_t* ctx, uint32_t node_event) {
 }
 
 static void handle_hotplug_event(cec_context_t* ctx, uint32_t node_event) {
+    return;
     char uevent_data[PAGE_SIZE];
     int count = 0;
 
@@ -851,6 +878,7 @@ static void handle_hotplug_event(cec_context_t* ctx, uint32_t node_event) {
 }
 
 static const char *get_event_value(const char *uevent_data, int length, const char *event_info) {
+    return NULL;
     const char *iterator_str = uevent_data;
     const char *pstr = NULL;
     while (((iterator_str - uevent_data) <= length) && (*iterator_str)) {
@@ -870,6 +898,7 @@ static const char *get_event_value(const char *uevent_data, int length, const ch
 
 /* Returns 0 on failure, 1 on success */
 static int uevent_init(int *uevent_fd) {
+    return 0;
     struct sockaddr_nl addr;
     int sz = 64*1024;
     int s;
@@ -895,6 +924,7 @@ static int uevent_init(int *uevent_fd) {
 }
 
 static void cec_monitor_deinit(cec_context_t* ctx) {
+    return;
     for (uint32_t event = 0; event < ctx->poll_fds.size(); event++) {
         close(ctx->poll_fds[event].fd);
         ctx->poll_fds[event].fd = -1;
