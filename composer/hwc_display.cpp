@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -52,6 +52,11 @@
 * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+/*
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <cutils/properties.h>
 #include <utils/ProcessCallStack.h>
@@ -3057,10 +3062,6 @@ HWC2::Error HWCDisplay::SubmitDisplayConfig(hwc2_config_t config) {
 
   hwc2_config_t current_config = 0;
   GetActiveConfig(&current_config);
-  if (current_config == config) {
-    SetActiveConfigIndex(config);
-    return HWC2::Error::None;
-  }
 
   DisplayError error = display_intf_->SetActiveConfig(config);
   if (error == kErrorDeferred) {
@@ -3129,7 +3130,7 @@ DisplayError HWCDisplay::ValidateTUITransition (SecureEvent secure_event) {
       }
       break;
     case kTUITransitionStart:
-      if (secure_event_ != kSecureEventMax) {
+      if (secure_event_ != kTUITransitionPrepare) {
         DLOGE("Invalid TUI transition from %d to %d", secure_event_, secure_event);
         return kErrorParameters;
       }
@@ -3147,8 +3148,14 @@ DisplayError HWCDisplay::ValidateTUITransition (SecureEvent secure_event) {
   return kErrorNone;
 }
 
-DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh) {
+DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh,
+                                           bool update_event_only) {
   if (secure_event == secure_event_) {
+    return kErrorNone;
+  }
+
+  if (update_event_only) {
+    secure_event_ = (secure_event == kTUITransitionUnPrepare) ? kSecureEventMax : secure_event;
     return kErrorNone;
   }
 
@@ -3385,7 +3392,7 @@ HWC2::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   }
 
   if (secure_event_ != kSecureEventMax) {
-    DLOGE("CWB is not supported as TUI transition is in progress");
+    DLOGW("CWB is not supported as TUI transition is in progress");
     return HWC2::Error::Unsupported;
   }
 
@@ -3595,4 +3602,8 @@ void HWCDisplay::MarkClientActive(bool is_client_up) {
   is_client_up_ = is_client_up;
 }
 
-}  // namespace sdm
+void HWCDisplay::Abort() {
+  display_intf_->Abort();
+}
+
+} //namespace sdm
