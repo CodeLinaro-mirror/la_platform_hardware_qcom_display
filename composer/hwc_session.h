@@ -623,6 +623,7 @@ class HWCSession : public HWCUEvent,
   int WaitForVmRelease(Display display, int timeout_ms);
   void GetVirtualDisplayList();
   bool IsHWDisplayConnected(Display client_id);
+  void AddGpuBasedVirtualDisplay(const HWDisplaysInfo* const hw_displays_info);
 
   CoreInterface *core_intf_ = nullptr;
   HWCDisplay *hwc_display_[HWCCallbacks::kNumDisplays] = {nullptr};

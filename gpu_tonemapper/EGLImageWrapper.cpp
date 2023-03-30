@@ -133,7 +133,7 @@ static EGLImageBuffer *L_wrap(const private_handle_t *src)
   CropRectangle_t crop;
   if (gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
                                 (int64_t)StandardMetadataType::CROP,
-                                &crop) != gralloc::Error::NONE) {
+                                &crop) == gralloc::Error::NONE) {
     unaligned_width = crop.right;
     unaligned_height = crop.bottom;
     uint32_t aligned_height = 0;
