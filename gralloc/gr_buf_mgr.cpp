@@ -75,7 +75,6 @@
 #include "gr_utils.h"
 #include "qdMetaData.h"
 #include "qd_utils.h"
-#include <aidl/android/hardware/graphics/common/PixelFormat.h>
 
 namespace gralloc {
 
@@ -88,6 +87,7 @@ using aidl::android::hardware::graphics::common::Rect;
 using aidl::android::hardware::graphics::common::Smpte2086;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using aidl::android::hardware::graphics::common::XyColor;
+using ::android::hardware::graphics::common::V1_2::PixelFormat;
 
 static BufferInfo GetBufferInfo(const BufferDescriptor &descriptor) {
   return BufferInfo(descriptor.GetWidth(), descriptor.GetHeight(), descriptor.GetFormat(),
@@ -518,19 +518,12 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
       }
       break;
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_R_8):
-    case static_cast<int32_t>(aidl::android::hardware::graphics::common::PixelFormat::R_8):
-      comp.sizeInBits = 8;
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.offsetInBits = 0;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_RG_88):
       comp.sizeInBits = 8;
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
         comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value &&
+                 format != HAL_PIXEL_FORMAT_R_8) {
         comp.offsetInBits = 8;
       } else {
         return Error::BAD_VALUE;
@@ -1389,8 +1382,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
     case (int64_t)StandardMetadataType::PIXEL_FORMAT_REQUESTED:
       // TODO(tbalacha): need to return IMPLEMENTATION_DEFINED,
       // which wouldn't be known from private_handle_t
-      android::gralloc4::encodePixelFormatRequested((::android::hardware::graphics::common::V1_2::
-                                                    PixelFormat)handle->format, out);
+      android::gralloc4::encodePixelFormatRequested((PixelFormat)handle->format, out);
       break;
     case (int64_t)StandardMetadataType::PIXEL_FORMAT_FOURCC: {
       uint32_t drm_format = 0;

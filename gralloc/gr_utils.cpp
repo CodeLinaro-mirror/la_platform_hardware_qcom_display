@@ -61,7 +61,6 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <aidl/android/hardware/graphics/common/PixelFormat.h>
 #ifndef QMAA
 #include <display/media/mmm_color_fmt.h>
 #ifdef KERNEL_5_4
@@ -134,7 +133,6 @@ bool IsUncompressedRGBFormat(int format) {
     case HAL_PIXEL_FORMAT_RGBA_5551:
     case HAL_PIXEL_FORMAT_RGBA_4444:
     case HAL_PIXEL_FORMAT_R_8:
-    case static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_8):
     case HAL_PIXEL_FORMAT_RG_88:
     case HAL_PIXEL_FORMAT_BGRX_8888:
     case HAL_PIXEL_FORMAT_RGBA_1010102:
@@ -248,10 +246,6 @@ uint32_t GetBppForUncompressedRGB(int format) {
     case HAL_PIXEL_FORMAT_RGBA_5551:
     case HAL_PIXEL_FORMAT_RGBA_4444:
       bpp = 2;
-      break;
-    case HAL_PIXEL_FORMAT_R_8:
-    case static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_8):
-      bpp = 1;
       break;
     default:
       ALOGE("Error : %s New format request = 0x%x", __FUNCTION__, format);

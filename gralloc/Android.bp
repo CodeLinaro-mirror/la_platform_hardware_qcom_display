@@ -21,7 +21,6 @@ cc_library_shared {
         "android.hardware.graphics.mapper@2.1",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.graphics.mapper@4.0",
-        "android.hardware.graphics.common-V3-ndk",
     ],
     cflags: [
         "-DLOG_TAG=\"qdgralloc\"",
