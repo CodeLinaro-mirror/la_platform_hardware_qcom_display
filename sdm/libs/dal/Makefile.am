@@ -32,5 +32,10 @@ libsdmdal_la_CC = @CC@
 libsdmdal_la_SOURCES = $(c_sources)
 libsdmdal_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"SDM\"
 libsdmdal_la_CPPFLAGS = $(AM_CPPFLAGS) -DPP_DRM_ENABLE
+libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../include
+libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../../libdebug
+libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../../include
+libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../../libdrmutils
+libsdmdal_la_CPPFLAGS += -I${includedir}/libdrm
 libsdmdal_la_LIBADD = ../utils/libsdmutils.la ../../../sde-drm/libsdedrm.la -ldl -ldisplaydebug
-libsdmdal_la_LDFLAGS = -shared -avoid-version
+libsdmdal_la_LDFLAGS = -shared -avoid-version @LIBUTILS_LIBS@ @LIBCUTILS_LIBS@ @LIBLOG_LIBS@

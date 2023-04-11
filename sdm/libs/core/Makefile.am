@@ -27,10 +27,25 @@ utils_h_sources = $(HEADER_PATH)/utils/*.h
 utils_includedir = $(includedir)/sdm/utils
 utils_include_HEADERS = $(utils_h_sources)
 
+inc_h_sources = $(HEADER_PATH)/../../include/*.h
+
+inc_includedir = $(includedir)
+inc_include_HEADERS = $(inc_h_sources)
+
 lib_LTLIBRARIES = libsdmcore.la
 libsdmcore_la_CC = @CC@
 libsdmcore_la_SOURCES = $(c_sources)
 libsdmcore_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"SDM\"
 libsdmcore_la_CPPFLAGS = $(AM_CPPFLAGS) -DPP_DRM_ENABLE
-libsdmcore_la_LIBADD = ../utils/libsdmutils.la ../dal/libsdmdal.la -ldl -ldisplaydebug
-libsdmcore_la_LDFLAGS = -shared -avoid-version
+libsdmcore_la_CPPFLAGS = $(AM_CPPFLAGS)
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../include
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../libdebug
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../include
+libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../libdrmutils
+libsdmcore_la_CPPFLAGS +=  @LIBDRM_CFLAGS@
+libsdmcore_la_LIBADD = ../utils/libsdmutils.la
+libsdmcore_la_LDFLAGS = -shared -avoid-version @LIBUTILS_LIBS@ @LIBCUTILS_LIBS@ @LIBLOG_LIBS@
+
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libsdmcore.pc

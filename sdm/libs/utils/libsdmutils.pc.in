@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libsdmutils
+Description: SDM utils
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lsdmutils
+Cflags: -I${includedir} -I${includedir}/sdm/
