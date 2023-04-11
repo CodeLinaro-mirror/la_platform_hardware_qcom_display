@@ -27,7 +27,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -138,10 +138,14 @@ class ResourceDefault : public ResourceInterface {
   virtual bool HandleCwbTeardown(Handle display_ctx) {
     return false;
   }
+  virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id) { return kErrorResources; }
+  virtual DisplayError AllocateVirtualDisplayId(int32_t *vdisp_id) { return kErrorResources; }
+  virtual DisplayError DeallocateVirtualDisplayId(int32_t vdisp_id) { return kErrorResources; }
   virtual void HandleSkipValidate(Handle display_ctx);
   virtual std::string Dump();
   virtual uint32_t GetMixerCount();
-  virtual void HandleTUITransition(bool tui_active);
+  virtual DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
+  virtual void HandleTUITransition(Handle display_ctx, bool tui_active);
 
  private:
   enum PipeOwner {

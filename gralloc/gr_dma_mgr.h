@@ -33,6 +33,9 @@
 #define __GR_DMA_MGR_H__
 
 #include <BufferAllocator/BufferAllocator.h>
+#ifdef TARGET_USES_SMMU_PROXY
+#include <linux/qti-smmu-proxy.h>
+#endif
 #include <vmmem.h>
 #include <string>
 #include <vector>
@@ -74,6 +77,8 @@ class DmaManager : public AllocInterface {
   DmaManager() {}
   int UnmapBuffer(void *base, unsigned int size, unsigned int offset);
   void GetVMPermission(BufferPermission perm, std::bitset<kVmPermissionMax> *vm_perm);
+  void GetCSFVersion();
+  bool CSFEnabled();  // Check if CSF version is 2.5 or up
   void InitMemUtils();
   void DeinitMemUtils();
   void Deinit();
@@ -82,6 +87,11 @@ class DmaManager : public AllocInterface {
   BufferAllocator buffer_allocator_;
   static DmaManager *dma_manager_;
   bool enable_logs_;
+  std::string smmu_proxy_node_ = "/dev/qti-smmu-proxy";
+#ifdef TARGET_USES_SMMU_PROXY
+  struct csf_version csf_version_;
+#endif
+  bool csf_initialized_ = false;
   MemBuf *mem_buf_ = nullptr;
   void *mem_utils_lib_ = {};
   CreateMemBufInterface CreateMemBuf_ = nullptr;

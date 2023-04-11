@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -47,6 +47,8 @@
 #include "hwc_debugger.h"
 
 #define __CLASS__ "HWCSession"
+
+typedef ::aidl::vendor::qti::hardware::display::config::DisplayType AIDLDisplayType;
 
 namespace sdm {
 
@@ -78,6 +80,27 @@ int MapDisplayType(DispType dpy) {
   }
 
   return -EINVAL;
+}
+
+AIDLDisplayType MapDisplayId(int disp_id) {
+  switch (disp_id) {
+    case qdutils::DISPLAY_PRIMARY:
+      return AIDLDisplayType::PRIMARY;
+
+    case qdutils::DISPLAY_EXTERNAL:
+      return AIDLDisplayType::EXTERNAL;
+
+    case qdutils::DISPLAY_VIRTUAL:
+      return AIDLDisplayType::VIRTUAL;
+
+    case qdutils::DISPLAY_BUILTIN_2:
+      return AIDLDisplayType::BUILTIN2;
+
+    default:
+      break;
+  }
+
+  return AIDLDisplayType::INVALID;
 }
 
 bool WaitForResourceNeeded(PowerMode prev_mode, PowerMode new_mode) {
@@ -685,7 +708,7 @@ int32_t HWCSession::getDisplayMaxBrightness(uint32_t display, uint32_t *max_brig
 
 int HWCSession::SetCameraSmoothInfo(CameraSmoothOp op, int32_t fps) {
   std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
-  for (auto const & [ id, callback ] : callback_clients_) {
+  for (auto const &[id, callback] : callback_clients_) {
     if (callback) {
       callback->notifyCameraSmoothInfo(op, fps);
     }
@@ -696,12 +719,31 @@ int HWCSession::SetCameraSmoothInfo(CameraSmoothOp op, int32_t fps) {
 
 int HWCSession::NotifyResolutionChange(int32_t disp_id, Attributes &attr) {
   std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
-  for (auto const & [ id, callback ] : callback_clients_) {
+  for (auto const &[id, callback] : callback_clients_) {
     if (callback) {
       callback->notifyResolutionChange(disp_id, attr);
     }
   }
 
+  return 0;
+}
+
+int HWCSession::NotifyTUIEventDone(int disp_id, TUIEventType event_type) {
+  int ret = 0;
+  {
+    std::chrono::milliseconds span(2000);
+    std::lock_guard<std::mutex> guard(tui_handler_lock_);
+    ret = (tui_event_handler_future_.wait_for(span) == std::future_status::timeout)
+              ? -ETIMEDOUT
+              : tui_event_handler_future_.get();
+  }
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  AIDLDisplayType disp_type = MapDisplayId(disp_id);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyTUIEventDone(ret, disp_type, event_type);
+    }
+  }
   return 0;
 }
 
@@ -896,6 +938,10 @@ int HWCSession::DisplayConfigImpl::IsWCGSupported(uint32_t disp_id, bool *suppor
 }
 
 int HWCSession::DisplayConfigImpl::SetLayerAsMask(uint32_t disp_id, uint64_t layer_id) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   HWCDisplay *hwc_display = hwc_session_->hwc_display_[disp_id];
   if (!hwc_display) {
@@ -910,6 +956,11 @@ int HWCSession::DisplayConfigImpl::SetLayerAsMask(uint32_t disp_id, uint64_t lay
 
   auto hwc_layer = hwc_display->GetHWCLayer(layer_id);
   if (hwc_layer == nullptr) {
+    return -EINVAL;
+  }
+  // Mask layer flag for A8 will be set in BuildLayerStack
+  if (!hwc_session_->disable_get_screen_decorator_support_) {
+    DLOGV_IF(kTagDisplay, "Full Screen A8 Decoration mask layer enabled!");
     return -EINVAL;
   }
 
@@ -1007,6 +1058,10 @@ int HWCSession::DisplayConfigImpl::IsBuiltInDisplay(uint32_t disp_id, bool *is_b
 
 int HWCSession::DisplayConfigImpl::GetSupportedDSIBitClks(uint32_t disp_id,
                                                           std::vector<uint64_t> *bit_clks) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -EINVAL;
@@ -1017,6 +1072,10 @@ int HWCSession::DisplayConfigImpl::GetSupportedDSIBitClks(uint32_t disp_id,
 }
 
 int HWCSession::DisplayConfigImpl::GetDSIClk(uint32_t disp_id, uint64_t *bit_clk) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -EINVAL;
@@ -1028,6 +1087,10 @@ int HWCSession::DisplayConfigImpl::GetDSIClk(uint32_t disp_id, uint64_t *bit_clk
 }
 
 int HWCSession::DisplayConfigImpl::SetDSIClk(uint32_t disp_id, uint64_t bit_clk) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -1;
@@ -1052,11 +1115,6 @@ int HWCSession::DisplayConfigImpl::SetCWBOutputBuffer(uint32_t disp_id,
 
   if (!hwc_session_) {
     DLOGE("HWC Session is not established!");
-    return -1;
-  }
-
-  auto err = hwc_session_->CheckWbAvailability();
-  if (err != HWC3::Error::None) {
     return -1;
   }
 
@@ -1300,6 +1358,10 @@ bool HWCSession::CWB::IsCwbActiveOnDisplay(Display disp_type) {
 }
 
 int HWCSession::DisplayConfigImpl::SetQsyncMode(uint32_t disp_id, DisplayConfig::QsyncMode mode) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     return -1;
@@ -1328,6 +1390,10 @@ int HWCSession::DisplayConfigImpl::SetQsyncMode(uint32_t disp_id, DisplayConfig:
 
 int HWCSession::DisplayConfigImpl::IsSmartPanelConfig(uint32_t disp_id, uint32_t config_id,
                                                       bool *is_smart) {
+  if (disp_id < 0 || disp_id >= HWCCallbacks::kNumDisplays) {
+    DLOGE("Not valid display");
+    return -EINVAL;
+  }
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     DLOGE("Display %d is not created yet.", disp_id);
@@ -1533,7 +1599,8 @@ int HWCSession::DisplayConfigImpl::AllowIdleFallback() {
   if (hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]) {
     DLOGI("enable idle time active_ms:%d inactive_ms:%d", active_ms, inactive_ms);
     hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(active_ms, inactive_ms);
-    hwc_session_->is_idle_time_up_ = true;
+    hwc_session_->is_client_up_ = true;
+    hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]->MarkClientActive(true);
     hwc_session_->idle_time_inactive_ms_ = inactive_ms;
     hwc_session_->idle_time_active_ms_ = active_ms;
     return 0;

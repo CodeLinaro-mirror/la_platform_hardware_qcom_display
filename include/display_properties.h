@@ -30,13 +30,14 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __DISPLAY_PROPERTIES_H__
 #define __DISPLAY_PROPERTIES_H__
 
+// clang-format off
 #define DISP_PROP_PREFIX                     "vendor.display."
 #define GRALLOC_PROP_PREFIX                  "vendor.gralloc."
 #define PERSIST_DISP_PROP_PREFIX             "persist.vendor.display."
@@ -139,6 +140,9 @@
 // RC
 #define ENABLE_ROUNDED_CORNER                DISPLAY_PROP("enable_rounded_corner")
 #define DISABLE_ROUNDED_CORNER_THREAD        DISPLAY_PROP("disable_rounded_corner_thread")
+// Disable A8 format Screen Decorator support
+#define DISABLE_GET_SCREEN_DECORATOR_SUPPORT DISPLAY_PROP("disable_get_screen_decorator_support")
+
 // SPR
 #define ENABLE_SPR                           DISPLAY_PROP("enable_spr")
 #define ENABLE_SPR_BYPASS                    DISPLAY_PROP("enable_spr_bypass")
@@ -162,6 +166,8 @@
 #define ANTI_AGING_RECALIB_TIMER             DISPLAY_PROP("demura_recalib_timer")
 #define ANTI_AGING_RECORD_TIMER              DISPLAY_PROP("demura_record_timer")
 #define ANTI_AGING_IDLE_TIMER                DISPLAY_PROP("demura_idle_timer")
+#define ANTI_AGING_MEMORY_SIZE               DISPLAY_PROP("demura_memory_size")
+#define ANTI_AGING_RECALIB_TIMER_DIVIDER     DISPLAY_PROP("demura_recalib_timer_divider")
 
 // PERF hint properties
 #define ENABLE_PERF_HINT_LARGE_COMP_CYCLE    DISPLAY_PROP("enable_perf_hint_large_comp_cycle")
@@ -181,11 +187,15 @@
 #define ENABLE_VERBOSE_LOG                   DISPLAY_PROP("enable_verbose_log")
 // HDR10 GPU Target
 #define ENABLE_HDR10_GPU_TARGET              DISPLAY_PROP("enable_hdr10_gpu_target")
+#define MAX_SCALE_FACTOR_FOR_HDR_CLIENT      DISPLAY_PROP("max_scale_factor_for_hdr_client")
 // Client target bit depth
 #define CLIENT_TARGET_BIT_DEPTH              DISPLAY_PROP("client_target_bit_depth")
 
 // Enable IWE
 #define ENABLE_INLINE_WRITEBACK              DISPLAY_PROP("enable_inline_writeback")
+
+// Configuration to reserve the writeback blocks for specific usage like CWB, IWE or WFD
+#define RESERVED_WRITEBACK_CONFIG            DISPLAY_PROP("reserved_writeback_config")
 
 // Add all vendor.display properties above
 
@@ -209,6 +219,7 @@
 #define ENABLE_WINDOW_RECT_MASK              DISPLAY_PROP("enable_window_rect_mask")
 #define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
+#define DISABLE_IDLE_FPS_SWITCH              DISPLAY_PROP("disable_idle_fps_switch")
 #define DISABLE_IDLE_SCALING_LAYERS          DISPLAY_PROP("disable_idle_scaling_layers")
 #define DISABLE_LLCC_DURING_AOD              DISPLAY_PROP("disable_llcc_during_aod")
 #define DISABLE_CWB_IDLE_FALLBACK            DISPLAY_PROP("disable_cwb_idle_fallback")
@@ -217,4 +228,5 @@
 
 // Add all other.properties above
 // End of property
+// clang-format on
 #endif  // __DISPLAY_PROPERTIES_H__

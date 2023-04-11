@@ -20,40 +20,11 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <cutils/properties.h>
 #include <errno.h>
@@ -1373,6 +1344,11 @@ HWC2::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
   dump_frame_index_ = 0;
   dump_input_layers_ = ((bit_mask_layer_type & (1 << INPUT_LAYER_DUMP)) != 0);
 
+  if (dump_input_layers_) {
+    dump_input_frame_count_ = count;
+    dump_input_frame_index_ = 0;
+  }
+
   if (tone_mapper_) {
     tone_mapper_->SetFrameDumpConfig(count);
   }
@@ -1387,10 +1363,17 @@ HWC2::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
   bool dump_output_to_file = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
   DLOGI("Requested o/p dump enable = %d", dump_output_to_file);
 
-  if (!count || (dump_output_to_file && (output_buffer_info_.alloc_buffer_info.fd >= 0))) {
-    DLOGW("FrameDump Not enabled Framecount = %d dump_output_to_file = %d o/p fd = %d", count,
-          dump_output_to_file, output_buffer_info_.alloc_buffer_info.fd);
+  if (!count) {
+    DLOGW("No frame will dump as requested output frame count = 0.");
     return HWC2::Error::None;
+  } else {
+    // If buffer is being freed, wait using lock synchronization before checking buffer.
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
+    if (dump_output_to_file && (output_buffer_info_.alloc_buffer_info.fd >= 0)) {
+      DLOGW("FrameDump Not enabled Framecount = %d dump_output_to_file = %d o/p fd = %d", count,
+            dump_output_to_file, output_buffer_info_.alloc_buffer_info.fd);
+      return HWC2::Error::None;
+    }
   }
 
   SetFrameDumpConfig(count, bit_mask_layer_type, format);
@@ -1416,28 +1399,34 @@ HWC2::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
   output_buffer_info_.buffer_config.buffer_count = 1;
   if (buffer_allocator_->AllocateBuffer(&output_buffer_info_) != 0) {
     DLOGE("Buffer allocation failed");
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
     output_buffer_info_ = {};
     return HWC2::Error::NoResources;
   }
+  DLOGI("Output Frame dumping buffer is allocated!");
 
   void *buffer = mmap(NULL, output_buffer_info_.alloc_buffer_info.size, PROT_READ | PROT_WRITE,
                       MAP_SHARED, output_buffer_info_.alloc_buffer_info.fd, 0);
 
   if (buffer == MAP_FAILED) {
     DLOGE("mmap failed with err %d", errno);
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
     buffer_allocator_->FreeBuffer(&output_buffer_info_);
     output_buffer_info_ = {};
     dump_frame_count_ = 0;
+    DLOGI("Output Frame dumping buffer is freed!");
     return HWC2::Error::NoResources;
   }
 
   const native_handle_t *handle = static_cast<native_handle_t *>(output_buffer_info_.private_data);
   HWC2::Error err = SetReadbackBuffer(handle, nullptr, cwb_config, kCWBClientFrameDump);
   if (err != HWC2::Error::None) {
-    munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size);
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
+    munmap(buffer, output_buffer_info_.alloc_buffer_info.size);
     buffer_allocator_->FreeBuffer(&output_buffer_info_);
     output_buffer_info_ = {};
     dump_frame_count_ = 0;
+    DLOGI("Output Frame dumping buffer is freed!");
     return err;
   }
   dump_output_to_file_ = dump_output_to_file;
@@ -1904,12 +1893,6 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence
   flush_ = false;
   skip_commit_ = false;
 
-  if (display_pause_pending_) {
-    DLOGI("Pause display %d-%d", sdm_id_, type_);
-    display_paused_ = true;
-    display_pause_pending_ = false;
-  }
-
   layer_stack_.flags.geometry_changed = false;
   geometry_changes_ = GeometryChanges::kNone;
   flush_ = false;
@@ -1985,11 +1968,11 @@ void HWCDisplay::DumpInputBuffers() {
   char dir_path[PATH_MAX];
   int  status;
 
-  if (!dump_frame_count_ || flush_ || !dump_input_layers_) {
+  if (!dump_input_frame_count_ || flush_ || !dump_input_layers_) {
     return;
   }
 
-  DLOGI("dump_frame_count %d dump_input_layers %d", dump_frame_count_, dump_input_layers_);
+  DLOGI("dump_frame_count %d dump_input_layers %d", dump_input_frame_count_, dump_input_layers_);
   snprintf(dir_path, sizeof(dir_path), "%s/frame_dump_disp_id_%02u_%s", HWCDebugHandler::DumpDir(),
            UINT32(id_), GetDisplayString());
 
@@ -2042,15 +2025,14 @@ void HWCDisplay::DumpInputBuffers() {
     size_t result = 0;
 
     uint32_t width = 0, height = 0, alloc_size = 0;
-    int32_t format = 0;
 
     buffer_allocator_->GetWidth((void *)handle, width);
     buffer_allocator_->GetHeight((void *)handle, height);
-    buffer_allocator_->GetFormat((void *)handle, format);
     buffer_allocator_->GetAllocationSize((void *)handle, alloc_size);
 
-    snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_format%d_frame%d.raw",
-             dir_path, i, width, height, format, dump_frame_index_);
+    snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_%s_frame%d.raw",
+             dir_path, i, width, height, GetFormatString(layer->input_buffer.format),
+             dump_input_frame_index_);
 
     if (base_ptr != nullptr) {
       FILE *fp = fopen(dump_file_name, "w+");
@@ -2074,6 +2056,8 @@ void HWCDisplay::DumpInputBuffers() {
       break;
     }
   }
+  dump_input_frame_count_--;
+  dump_input_frame_index_++;
 }
 
 void HWCDisplay::DumpOutputBuffer(const BufferInfo &buffer_info, void *base,
@@ -2269,6 +2253,10 @@ void HWCDisplay::GetRealPanelResolution(uint32_t *x_pixels, uint32_t *y_pixels) 
 int HWCDisplay::SetDisplayStatus(DisplayStatus display_status) {
   int status = 0;
 
+  if (secure_event_ != kSecureEventMax) {
+    DLOGW("SetDisplayStatus is not supported when TUI transition in progress");
+    return -ENOTSUP;
+  }
   switch (display_status) {
     case kDisplayStatusResume:
       display_paused_ = false;
@@ -2373,6 +2361,10 @@ void HWCDisplay::ApplyScanAdjustment(hwc_rect_t *display_frame) {
 }
 
 int HWCDisplay::ToggleScreenUpdates(bool enable) {
+  if (secure_event_ != kSecureEventMax) {
+    DLOGW("Toggle screen updates is not supported when TUI transition in progress");
+    return -ENOTSUP;
+  }
   display_paused_ = enable ? false : true;
   callbacks_->Refresh(id_);
   return 0;
@@ -3090,7 +3082,7 @@ DisplayError HWCDisplay::ValidateTUITransition (SecureEvent secure_event) {
       }
       break;
     case kTUITransitionStart:
-      if (secure_event_ != kSecureEventMax) {
+      if (secure_event_ != kTUITransitionPrepare) {
         DLOGE("Invalid TUI transition from %d to %d", secure_event_, secure_event);
         return kErrorParameters;
       }
@@ -3108,8 +3100,14 @@ DisplayError HWCDisplay::ValidateTUITransition (SecureEvent secure_event) {
   return kErrorNone;
 }
 
-DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh) {
+DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh,
+                                           bool update_event_only) {
   if (secure_event == secure_event_) {
+    return kErrorNone;
+  }
+
+  if (update_event_only) {
+    secure_event_ = secure_event;
     return kErrorNone;
   }
 
@@ -3173,18 +3171,19 @@ int HWCDisplay::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels
   return 0;
 }
 
-DisplayError HWCDisplay::TeardownConcurrentWriteback(bool *needs_refresh) {
-  if (!needs_refresh) {
-    return kErrorParameters;
+DisplayError HWCDisplay::TeardownConcurrentWriteback() {
+  if (!display_intf_->HandleCwbTeardown()) {
+    return kErrorNotSupported;
   }
 
   bool pending_cwb_request = false;
   {
-  std::unique_lock<std::mutex> lock(cwb_mutex_);
-  pending_cwb_request = !!cwb_buffer_map_.size();
+    std::unique_lock<std::mutex> lock(cwb_mutex_);
+    pending_cwb_request = !!cwb_buffer_map_.size();
   }
 
   if (!pending_cwb_request) {
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
     dump_frame_count_ = 0;
     dump_frame_index_ = 0;
     dump_output_to_file_ = false;
@@ -3201,13 +3200,10 @@ DisplayError HWCDisplay::TeardownConcurrentWriteback(bool *needs_refresh) {
     output_buffer_base_ = nullptr;
     frame_capture_buffer_queued_ = false;
     frame_capture_status_ = 0;
-    *needs_refresh = false;
-    return kErrorNone;
-  } else {
-    *needs_refresh = true;
-    display_intf_->HandleCwbTeardown();
-    return kErrorNone;
+    DLOGI("Output Frame dumping buffer is freed!");
   }
+
+  return kErrorNone;
 }
 
 void HWCDisplay::MMRMEvent(bool restricted) {
@@ -3279,7 +3275,7 @@ HWC2::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   }
 
   if (secure_event_ != kSecureEventMax) {
-    DLOGE("CWB is not supported as TUI transition is in progress");
+    DLOGW("CWB is not supported as TUI transition is in progress");
     return HWC2::Error::Unsupported;
   }
 
@@ -3363,12 +3359,17 @@ HWC2::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   DisplayError error = kErrorNone;
   error = display_intf_->CaptureCwb(output_buffer, config);
   if (error) {
-    DLOGE("CaptureCwb failed");
     if (error == kErrorParameters) {
+      DLOGE("Invalid input parameter detected (display %d-%d)!", sdm_id_, type_);
       return HWC2::Error::BadParameter;
+    } else if (error == kErrorShutDown) {
+      DLOGW("Display %d-%d is not registered for readback!", sdm_id_, type_);
+    } else if (error == kErrorResources) {
+      DLOGW("Writeback block might busy or not available for display %d-%d!", sdm_id_, type_);
     } else {
-      return HWC2::Error::Unsupported;
+      DLOGW("Readback feature is not supported for display %d-%d!", sdm_id_, type_);
     }
+    return HWC2::Error::Unsupported;
   }
 
   {
@@ -3592,7 +3593,7 @@ void HWCDisplay::HandleFrameDump() {
                                         kCWBClientFrameDump);
     if (err != HWC2::Error::None) {
       stop_frame_dump = true;
-      DLOGE("Unexpectedly stopped dumping of remaining %d frames for frame indices %d onwards!",
+      DLOGW("Unexpectedly stopped dumping of remaining %d frames for frame indices %d onwards!",
             dump_frame_count_, dump_frame_index_);
     } else {
       dump_frame_count_--;
@@ -3601,6 +3602,7 @@ void HWCDisplay::HandleFrameDump() {
   }
 
   if (stop_frame_dump) {
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
     dump_output_to_file_ = false;
     // Unmap and Free buffer
     if (munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
@@ -3616,6 +3618,7 @@ void HWCDisplay::HandleFrameDump() {
     output_buffer_cwb_config_ = {};
     dump_frame_count_ = 0;
     dump_frame_index_ = 0;
+    DLOGI("Output Frame dumping buffer is freed!");
   }
 }
 

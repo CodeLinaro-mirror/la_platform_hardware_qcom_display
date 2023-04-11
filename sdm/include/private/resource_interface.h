@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -138,10 +138,14 @@ class ResourceInterface {
   virtual bool ToneMapQueryRequested(Handle display_ctx) = 0;
   virtual DisplayError PreCommit(Handle display_ctx) = 0;
   virtual bool HandleCwbTeardown(Handle display_ctx) = 0;
+  virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id) = 0;
+  virtual DisplayError AllocateVirtualDisplayId(int32_t *vdisp_id) = 0;
+  virtual DisplayError DeallocateVirtualDisplayId(int32_t vdisp_id) = 0;
   virtual void HandleSkipValidate(Handle display_ctx) = 0;
   virtual std::string Dump() = 0;
   virtual uint32_t GetMixerCount() = 0;
-  virtual void HandleTUITransition(bool tui_active) = 0;
+  virtual DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space) = 0;
+  virtual void HandleTUITransition(Handle display_ctx, bool tui_active) = 0;
 };
 
 }  // namespace sdm

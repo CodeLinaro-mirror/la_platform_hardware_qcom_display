@@ -108,7 +108,7 @@ class ComposerServiceWriter {
       presentFenceCommand.display = display;
       mCommandsResults.emplace_back(std::move(presentFenceCommand));
     } else {
-      ALOGW("%s: Invalid present fence %d", __FUNCTION__, presentFence.get());
+      ALOGV("%s: Invalid present fence %d", __FUNCTION__, presentFence.get());
     }
   }
 
@@ -123,7 +123,7 @@ class ComposerServiceWriter {
         layer.fence = std::move(releaseFences[i]);
         releaseFencesCommand.layers.emplace_back(std::move(layer));
       } else {
-        ALOGW("%s: Invalid release fence %d", __FUNCTION__, releaseFences[i].get());
+        ALOGV("%s: Invalid release fence %d", __FUNCTION__, releaseFences[i].get());
       }
     }
     mCommandsResults.emplace_back(std::move(releaseFencesCommand));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -237,9 +237,41 @@ int DmaManager::SecureMemPerms(AllocData *data) {
   return ret;
 }
 
+void DmaManager::GetCSFVersion() {
+  if (csf_initialized_) {
+    return;
+  }
+#ifdef TARGET_USES_SMMU_PROXY
+  int fd = open(smmu_proxy_node_.c_str(), O_RDONLY);
+  if (fd < 0) {
+    ALOGW("Failed to open smmu proxy node = %s, error = %s", smmu_proxy_node_.c_str(),
+          strerror(errno));
+    return;
+  }
+  if (ioctl(fd, QTI_SMMU_PROXY_GET_VERSION_IOCTL, &csf_version_)) {
+    ALOGW("%s: QTI_SMMU_PROXY_GET_VERSION_IOCTL failed with error - %s", __FUNCTION__,
+          strerror(errno));
+    return;
+  }
+  csf_initialized_ = true;
+#endif
+  return;
+}
+
+bool DmaManager::CSFEnabled() {
+#ifdef TARGET_USES_SMMU_PROXY
+  if ((csf_version_.max_ver == 5 && csf_version_.arch_ver == 2) || csf_version_.arch_ver > 2) {
+    return true;
+  }
+#endif
+  return false;
+}
+
 void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_heap_name,
                              std::vector<std::string> *dma_vm_names, unsigned int *alloc_type,
                              unsigned int * /* dmaflags */, unsigned int *alloc_size) {
+  // Query Camera Security Framework in order to allocate from legacy/non-legacy heap
+  GetCSFVersion();
   std::string heap_name = "qcom,system";
   unsigned int type = 0;
   if (usage & GRALLOC_USAGE_PROTECTED) {
@@ -252,19 +284,28 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_
       if (property_get(SECURE_PREVIEW_ONLY_PROP, property, NULL) > 0) {
         secure_preview_only = atoi(property);
       }
-      heap_name = "qcom,display";
+      // CSF 2.5 version and up
+      if (CSFEnabled()) {
+        heap_name = "qcom,system";
+        *alloc_size = ALIGN(*alloc_size, SIZE_2MB);
+      } else {
+        heap_name = "qcom,display";
+      }
       if (usage & GRALLOC_USAGE_PRIVATE_CDSP) {
         dma_vm_names->push_back("qcom,cp_cdsp");
       }
-      if (usage & BufferUsage::COMPOSER_OVERLAY) {
-        if (secure_preview_only) {
-          dma_vm_names->push_back("qcom,cp_camera_preview");
+      // Below CSF 2.5
+      if (!CSFEnabled()) {
+        if ((usage & BufferUsage::COMPOSER_OVERLAY)) {
+          if (secure_preview_only) {
+            dma_vm_names->push_back("qcom,cp_camera_preview");
+          } else {
+            dma_vm_names->push_back("qcom,cp_camera");
+            dma_vm_names->push_back("qcom,cp_camera_preview");
+          }
         } else {
           dma_vm_names->push_back("qcom,cp_camera");
-          dma_vm_names->push_back("qcom,cp_camera_preview");
         }
-      } else {
-        dma_vm_names->push_back("qcom,cp_camera");
       }
     } else if (usage & GRALLOC_USAGE_PRIVATE_CDSP) {
       heap_name = "qcom,secure-cdsp";
@@ -276,7 +317,7 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_
 
   if (usage & GRALLOC_USAGE_PRIVATE_TRUSTED_VM) {
     // Allocate buffer from system heap and align the size to 2MB for all trusted UI use cases
-    heap_name = "qcom,display";
+    heap_name = "qcom,system";
     *alloc_size = ALIGN(*alloc_size, SIZE_2MB);
   }
 

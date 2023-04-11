@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -97,6 +97,7 @@ class HWCDebugHandler : public DebugHandler {
   static void DebugDisplay(bool enable, int verbose_level);
   static int  GetIdleTimeoutMs();
   static void DebugIWE(bool enable, int verbose_level);
+  static void DebugWbUsage(bool enable, int verbose_level);
 
   virtual void Error(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
   virtual void Warning(const char *fmt, ...) __attribute__((format(printf, 2, 3)));

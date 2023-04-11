@@ -16,7 +16,6 @@ cc_library_shared {
         "-Wno-unused-parameter",
         "-DLOG_TAG=\"SDM\"",
     ],
-    clang: true,
     header_libs: ["display_headers"],
 
     shared_libs: [
@@ -25,8 +24,7 @@ cc_library_shared {
         "libdl",
         "libutils",
         "libdisplaydebug",
-        "vendor.qti.hardware.display.demura@2.0",
-        "libhidlbase",
+        "vendor.qti.hardware.display.demura-V1-ndk",
     ],
 
     srcs: ["file_finder_oem_extension.cpp"],
@@ -35,7 +33,7 @@ cc_library_shared {
 }
 
 //
-// demura hidl
+// demura aidl
 //
 
 cc_binary {
@@ -52,7 +50,6 @@ cc_binary {
         "-Wno-unused-parameter",
         "-DLOG_TAG=\"SDM\"",
     ],
-    clang: true,
 
     header_libs: ["display_headers"],
 
@@ -64,11 +61,11 @@ cc_binary {
         "libdl",
         "libutils",
         "libbinder",
-        "libhidlbase",
+        "libbinder_ndk",
         "libfilefinder",
         "libdisplaydebug",
         "libsdmutils",
-        "vendor.qti.hardware.display.demura@2.0",
+        "vendor.qti.hardware.display.demura-V1-ndk",
     ],
 
     srcs: [

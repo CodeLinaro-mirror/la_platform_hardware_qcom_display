@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -44,6 +44,7 @@
 #include "hwc_common.h"
 
 using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
+using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace sdm {
 
@@ -94,6 +95,7 @@ class HWCLayer {
   HWC3::Error SetLayerType(LayerType type);
   HWC3::Error SetLayerFlag(LayerFlag flag);
   HWC3::Error SetLayerColorTransform(const float *matrix);
+  HWC3::Error SetLayerBrightness(float brightness);
   void SetComposition(const LayerComposition &sdm_composition);
   Composition GetClientRequestedCompositionType() { return client_requested_; }
   Composition GetOrigClientRequestedCompositionType() { return client_requested_orig_; }

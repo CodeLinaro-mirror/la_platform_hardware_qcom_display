@@ -98,6 +98,7 @@ HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
       int error = buffer_allocator_->MapBuffer(output_handle, nullptr, &base_ptr);
       if (error != 0) {
         DLOGE("Failed to map output buffer, error = %d", error);
+        dump_frame_index_ = dump_frame_count_ = 0;
         return HWC3::Error::BadParameter;
       }
       uint32_t width, height, alloc_size = 0;
@@ -111,8 +112,12 @@ HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
       buffer_info.buffer_config.width = width;
       buffer_info.buffer_config.height = height;
       buffer_info.buffer_config.format = HWCLayer::GetSDMFormat(format, flags);
+      buffer_info.alloc_buffer_info.aligned_width = width;
+      buffer_info.alloc_buffer_info.aligned_height = height;
       buffer_info.alloc_buffer_info.size = alloc_size;
       DumpOutputBuffer(buffer_info, base_ptr, layer_stack_.retire_fence);
+      dump_frame_count_--;
+      dump_frame_index_++;
 
       int release_fence = -1;
       error = buffer_allocator_->UnmapBuffer(output_handle, &release_fence);
@@ -120,6 +125,12 @@ HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
         DLOGE("Failed to unmap buffer, error = %d", error);
         return HWC3::Error::BadParameter;
       }
+    } else {
+      DLOGW(
+          "Output buffer handle is detected as null."
+          "%d output frames are not dumped with index %d onwards for display %d-%d.",
+          dump_frame_count_, dump_frame_index_, sdm_id_, type_);
+      dump_frame_index_ = dump_frame_count_ = 0;
     }
   }
 

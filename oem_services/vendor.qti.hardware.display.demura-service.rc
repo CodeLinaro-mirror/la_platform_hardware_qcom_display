@@ -1,5 +1,5 @@
 service vendor.qti.hardware.display.demura /vendor/bin/hw/vendor.qti.hardware.display.demura-service
-    interface vendor.qti.hardware.display.demura@2.0::IDemuraFileFinder default
+    interface aidl vendor.qti.hardware.display.demura.IDemuraFileFinder/default
     class hal
     oneshot
     disabled

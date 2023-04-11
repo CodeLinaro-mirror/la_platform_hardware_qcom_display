@@ -1,7 +1,7 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -25,40 +25,40 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <core/buffer_allocator.h>
 #include <utils/constants.h>
@@ -761,6 +761,8 @@ DisplayError CompManager::SetBlendSpace(Handle display_ctx, const PrimariesTrans
 
   display_comp_ctx->strategy->SetBlendSpace(blend_space);
 
+  resource_intf_->SetBlendSpace(display_comp_ctx->display_resource_ctx, blend_space);
+
   return kErrorNone;
 }
 
@@ -777,16 +779,28 @@ void CompManager::HandleSecureEvent(Handle display_ctx, SecureEvent secure_event
                             display_comp_ctx->display_resource_ctx);
   }
   if (secure_event == kTUITransitionStart) {
-    resource_intf_->HandleTUITransition(true);
+    resource_intf_->HandleTUITransition(display_comp_ctx->display_resource_ctx, true);
   }
   if (secure_event == kTUITransitionEnd) {
     resource_intf_->Perform(ResourceInterface::kCmdResetLUT,
                             display_comp_ctx->display_resource_ctx);
-    resource_intf_->HandleTUITransition(false);
+    resource_intf_->HandleTUITransition(display_comp_ctx->display_resource_ctx, false);
     safe_mode_ = false;
   }
   safe_mode_ = (secure_event == kTUITransitionStart) ? true : safe_mode_;
   secure_event_ = secure_event;
+}
+
+void CompManager::PostHandleSecureEvent(Handle display_ctx, SecureEvent secure_event) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  DisplayCompositionContext *display_comp_ctx =
+      reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+
+  if (secure_event == kSecureDisplayEnd) {
+    resource_intf_->HandleTUITransition(display_comp_ctx->display_resource_ctx, false);
+    secure_event_ = kSecureEventMax;
+  }
 }
 
 void CompManager::UpdateStrategyConstraints(bool is_primary, bool disabled) {
@@ -1006,19 +1020,42 @@ void CompManager::TriggerRefresh(int32_t display_id) {
   callback_map_[display_id]->Refresh();
 }
 
-bool CompManager::HandleCwbTeardown(Handle display_ctx) {
-  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+void CompManager::TriggerCwbTeardown(int32_t display_id, bool sync_teardown) {
+  callback_map_[display_id]->OnCwbTeardown(sync_teardown);
+}
 
+bool CompManager::HandleCwbTeardown(Handle display_ctx) {
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   return resource_intf_->HandleCwbTeardown(display_comp_ctx->display_resource_ctx);
 }
 
+DisplayError CompManager::RequestVirtualDisplayId(int32_t *vdisp_id) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+  return resource_intf_->RequestVirtualDisplayId(vdisp_id);
+}
+
+DisplayError CompManager::AllocateVirtualDisplayId(int32_t *vdisp_id) {
+  return resource_intf_->AllocateVirtualDisplayId(vdisp_id);
+}
+
+DisplayError CompManager::DeallocateVirtualDisplayId(int32_t vdisp_id) {
+  return resource_intf_->DeallocateVirtualDisplayId(vdisp_id);
+}
+
 uint32_t CompManager::GetMixerCount() {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
 
   return resource_intf_->GetMixerCount();
+}
+
+void CompManager::SetDisplayLayerStack(Handle display_ctx, DispLayerStack *disp_layer_stack) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  DisplayCompositionContext *disp_comp_ctx =
+      reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+  disp_comp_ctx->strategy->SetDisplayLayerStack(disp_layer_stack);
 }
 
 }  // namespace sdm

@@ -28,40 +28,46 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <core/buffer_allocator.h>
 #include <utils/debug.h>
@@ -76,6 +82,8 @@
 #include "hwc_debugger.h"
 
 #define __CLASS__ "HWCSession"
+
+typedef ::aidl::vendor::qti::hardware::display::config::DisplayType AIDLDisplayType;
 
 namespace sdm {
 
@@ -107,6 +115,27 @@ int MapDisplayType(DispType dpy) {
   }
 
   return -EINVAL;
+}
+
+AIDLDisplayType MapDisplayId(int disp_id) {
+  switch (disp_id) {
+    case qdutils::DISPLAY_PRIMARY:
+      return AIDLDisplayType::PRIMARY;
+
+    case qdutils::DISPLAY_EXTERNAL:
+      return AIDLDisplayType::EXTERNAL;
+
+    case qdutils::DISPLAY_VIRTUAL:
+      return AIDLDisplayType::VIRTUAL;
+
+    case qdutils::DISPLAY_BUILTIN_2:
+      return AIDLDisplayType::BUILTIN2;
+
+    default:
+      break;
+  }
+
+  return AIDLDisplayType::INVALID;
 }
 
 bool WaitForResourceNeeded(HWC2::PowerMode prev_mode, HWC2::PowerMode new_mode) {
@@ -735,6 +764,25 @@ int HWCSession::NotifyResolutionChange(int32_t disp_id, Attributes& attr) {
   return 0;
 }
 
+int HWCSession::NotifyTUIEventDone(int disp_id, TUIEventType event_type) {
+  int ret = 0;
+  {
+    std::chrono::milliseconds span(2000);
+    std::lock_guard<std::mutex> guard(tui_handler_lock_);
+    ret = (tui_event_handler_future_.wait_for(span) == std::future_status::timeout)
+              ? -ETIMEDOUT
+              : tui_event_handler_future_.get();
+  }
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  AIDLDisplayType disp_type = MapDisplayId(disp_id);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyTUIEventDone(ret, disp_type, event_type);
+    }
+  }
+  return 0;
+}
+
 int HWCSession::RegisterCallbackClient(
         const std::shared_ptr<IDisplayConfigCallback>& callback, int64_t *client_handle) {
   std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
@@ -1104,11 +1152,6 @@ int HWCSession::DisplayConfigImpl::SetCWBOutputBuffer(uint32_t disp_id,
     return -1;
   }
 
-  auto err = hwc_session_->CheckWbAvailability();
-  if (err != HWC2::Error::None) {
-    return -1;
-  }
-
   hwc2_display_t disp_type = HWC_DISPLAY_PRIMARY;
   int dpy_index = -1;
   if (disp_id == UINT32(DisplayConfig::DisplayType::kPrimary)) {
@@ -1139,7 +1182,7 @@ int HWCSession::DisplayConfigImpl::SetCWBOutputBuffer(uint32_t disp_id,
   {
     SCOPE_LOCK(hwc_session_->locker_[disp_type]);
     if (!hwc_session_->hwc_display_[dpy_index]) {
-      DLOGE("Display is not created yet with display index = %d and display id = %d!",
+      DLOGW("Display is not created yet with display index = %d and display id = %d!",
             dpy_index, disp_id);
       return -1;
     }
@@ -1501,7 +1544,7 @@ int HWCSession::DisplayConfigImpl::GetDisplayHwId(uint32_t disp_id, uint32_t *di
 int HWCSession::DisplayConfigImpl::SendTUIEvent(DispType dpy,
                                                 DisplayConfig::TUIEventType event_type) {
   int disp_id = MapDisplayType(dpy);
-  switch(event_type) {
+  switch (event_type) {
     case DisplayConfig::TUIEventType::kPrepareTUITransition:
       return hwc_session_->TUITransitionPrepare(disp_id);
     case DisplayConfig::TUIEventType::kStartTUITransition:

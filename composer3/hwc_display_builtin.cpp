@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -193,6 +193,8 @@ int HWCDisplayBuiltIn::Init() {
   DLOGI("enhance_idle_time: %d", enhance_idle_time);
 
   LoadMixedModePerfHintThreshold();
+
+  HWCDisplay::TryDrawMethod(DrawMethod::UNIFIED_DRAW);
 
   return status;
 }
@@ -1570,6 +1572,20 @@ HWC3::Error HWCDisplayBuiltIn::SetDemuraState(int state) {
 
   if (error != kErrorNone) {
     DLOGE("Failed. state = %d, error = %d", state, error);
+    return HWC3::Error::BadDisplay;
+  }
+
+  callbacks_->Refresh(id_);
+
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplayBuiltIn::SetDemuraConfig(int demura_idx) {
+  DLOGV("Display ID: %" PRId64 " config: %d", id_, demura_idx);
+  DisplayError error = display_intf_->SetDemuraConfig(demura_idx);
+
+  if (error != kErrorNone) {
+    DLOGE("Failed. config = %d, error = %d", demura_idx, error);
     return HWC3::Error::BadDisplay;
   }
 

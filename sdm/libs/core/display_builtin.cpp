@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -169,21 +169,7 @@ DisplayError DisplayBuiltIn::Init() {
       return error;
     }
 
-    DisplayError tmp = kErrorNone;
-    if ((tmp = SetupDemura()) != kErrorNone) {
-      // Non-fatal but not expected, log error
-      DLOGE("Demura failed to initialize on display %d-%d, Error = %d", display_id_,
-            display_type_, tmp);
-      comp_manager_->FreeDemuraFetchResources(display_id_);
-      comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
-      if (demura_) {
-        SetDemuraIntfStatus(false);
-      }
-    } else if (demuratn_factory_) {
-      if ((tmp = SetupDemuraTn()) != kErrorNone) {
-        DLOGW("Failed to setup DemuraTn, Error = %d", tmp);
-      }
-    }
+    SetupDemuraT0AndTn();
   } else {
     DLOGW("Skipping Panel Feature Setups!");
   }
@@ -295,7 +281,7 @@ DisplayError DisplayBuiltIn::PrePrepare(LayerStack *layer_stack) {
     }
   }
   error = ChangeFps();
-  lower_fps_ = disp_layer_stack_.info.lower_fps;
+  lower_fps_ = disp_layer_stack_->info.lower_fps;
 
   return kErrorNotValidated;
 }
@@ -334,11 +320,6 @@ DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
   if (error == kErrorNeedsLutRegen && (ForceToneMapUpdate(layer_stack) == kErrorNone)) {
     return kErrorNone;
   }
-
-  DTRACE_BEGIN("Reset DispLayerStack");
-  // Clean display layer stack for reuse.
-  disp_layer_stack_ = DispLayerStack();
-  DTRACE_END();
 
   error = HandleSPR();
   if (error != kErrorNone) {
@@ -379,15 +360,15 @@ void DisplayBuiltIn::CacheFrameROI() {
   right_frame_roi_ = {};
 
   // Cache the Frame ROI.
-  if (disp_layer_stack_.info.left_frame_roi.size() &&
-      disp_layer_stack_.info.right_frame_roi.size()) {
-    left_frame_roi_ = disp_layer_stack_.info.left_frame_roi.at(0);
-    right_frame_roi_ = disp_layer_stack_.info.right_frame_roi.at(0);
+  if (disp_layer_stack_->info.left_frame_roi.size() &&
+      disp_layer_stack_->info.right_frame_roi.size()) {
+    left_frame_roi_ = disp_layer_stack_->info.left_frame_roi.at(0);
+    right_frame_roi_ = disp_layer_stack_->info.right_frame_roi.at(0);
   }
 }
 
 void DisplayBuiltIn::UpdateQsyncMode() {
-  if (!hw_panel_info_.qsync_support) {
+  if (!hw_panel_info_.qsync_support || avoid_qsync_mode_change_) {
     return;
   }
 
@@ -403,11 +384,11 @@ void DisplayBuiltIn::UpdateQsyncMode() {
              display_type_, mode);
   }
 
-  disp_layer_stack_.info.hw_avr_info.update = (mode != active_qsync_mode_) || needs_avr_update_;
-  disp_layer_stack_.info.hw_avr_info.mode = GetAvrMode(mode);
+  disp_layer_stack_->info.hw_avr_info.update = (mode != active_qsync_mode_) || needs_avr_update_;
+  disp_layer_stack_->info.hw_avr_info.mode = GetAvrMode(mode);
 
-  DLOGV_IF(kTagDisplay, "display %d-%d update: %d mode: %d",
-           display_id_, display_type_, disp_layer_stack_.info.hw_avr_info.update, mode);
+  DLOGV_IF(kTagDisplay, "display %d-%d update: %d mode: %d", display_id_, display_type_,
+           disp_layer_stack_->info.hw_avr_info.update, mode);
 
   // Store active mde.
   active_qsync_mode_ = mode;
@@ -507,128 +488,98 @@ DisplayError DisplayBuiltIn::SetupSPR() {
 }
 
 DisplayError DisplayBuiltIn::SetupDemura() {
-  if (!comp_manager_->GetDemuraStatus()) {
-    comp_manager_->FreeDemuraFetchResources(display_id_);
-    comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
-    return kErrorNone;
+  DemuraInputConfig input_cfg;
+  input_cfg.secure_session = false;  // TODO(user): Integrate with secure solution
+  std::string brightness_base;
+  hw_intf_->GetPanelBrightnessBasePath(&brightness_base);
+  input_cfg.brightness_path = brightness_base+"brightness";
+
+  FetchResourceList frl;
+  comp_manager_->GetDemuraFetchResources(display_comp_ctx_, &frl);
+  for (auto &fr : frl) {
+    int i = std::get<1>(fr);  // fetch resource index
+    input_cfg.resources.set(i);
   }
-
-  int value = 0;
-  uint64_t panel_id = 0;
-  int panel_id_w = 0;
-  if (IsPrimaryDisplay()) {
-    Debug::Get()->GetProperty(DEMURA_PRIMARY_PANEL_OVERRIDE_LOW, &panel_id_w);
-    panel_id = static_cast<uint32_t>(panel_id_w);
-    Debug::Get()->GetProperty(DEMURA_PRIMARY_PANEL_OVERRIDE_HIGH, &panel_id_w);
-    panel_id |=  ((static_cast<uint64_t>(panel_id_w)) << 32);
-    DLOGI("panel overide total value %lx\n", panel_id);
-    Debug::Get()->GetProperty(DISABLE_DEMURA_PRIMARY, &value);
-  } else {
-    Debug::Get()->GetProperty(DEMURA_SECONDARY_PANEL_OVERRIDE_LOW, &panel_id_w);
-    panel_id = static_cast<uint32_t>(panel_id_w);
-    Debug::Get()->GetProperty(DEMURA_SECONDARY_PANEL_OVERRIDE_HIGH, &panel_id_w);
-    panel_id |=  ((static_cast<uint64_t>(panel_id_w)) << 32);
-    DLOGI("panel overide total value %lx\n", panel_id);
-    Debug::Get()->GetProperty(DISABLE_DEMURA_SECONDARY, &value);
-  }
-
-  if (value > 0) {
-    comp_manager_->FreeDemuraFetchResources(display_id_);
-    comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
-    return kErrorNone;
-  } else if (value == 0) {
-    DemuraInputConfig input_cfg;
-    input_cfg.secure_session = false;  // TODO(user): Integrate with secure solution
-    std::string brightness_base;
-    hw_intf_->GetPanelBrightnessBasePath(&brightness_base);
-    input_cfg.brightness_path = brightness_base+"brightness";
-
-    FetchResourceList frl;
-    comp_manager_->GetDemuraFetchResources(display_comp_ctx_, &frl);
-    for (auto &fr : frl) {
-      int i = std::get<1>(fr);  // fetch resource index
-      input_cfg.resources.set(i);
-    }
 
 #ifdef TRUSTED_VM
-    int ret = 0;
-    GenericPayload out;
-    IPCImportBufOutParams *buf_out_params = nullptr;
-    if ((ret = out.CreatePayload<IPCImportBufOutParams>(buf_out_params))) {
-      DLOGE("Failed to create output payload error = %d", ret);
-      return kErrorUndefined;
-    }
+  int ret = 0;
+  GenericPayload out;
+  IPCImportBufOutParams *buf_out_params = nullptr;
+  if ((ret = out.CreatePayload<IPCImportBufOutParams>(buf_out_params))) {
+    DLOGE("Failed to create output payload error = %d", ret);
+    return kErrorUndefined;
+  }
 
-    GenericPayload in;
-    IPCImportBufInParams *buf_in_params = nullptr;
-    if ((ret = in.CreatePayload<IPCImportBufInParams>(buf_in_params))) {
-      DLOGE("Failed to create input payload error = %d", ret);
-      return kErrorUndefined;
-    }
-    buf_in_params->req_buf_type = kIpcBufferTypeDemuraHFC;
+  GenericPayload in;
+  IPCImportBufInParams *buf_in_params = nullptr;
+  if ((ret = in.CreatePayload<IPCImportBufInParams>(buf_in_params))) {
+    DLOGE("Failed to create input payload error = %d", ret);
+    return kErrorUndefined;
+  }
+  buf_in_params->req_buf_type = kIpcBufferTypeDemuraHFC;
 
-    if ((ret = ipc_intf_->ProcessOps(kIpcOpsImportBuffers, in, &out))) {
-      DLOGE("Failed to kIpcOpsImportBuffers payload error = %d", ret);
-      return kErrorUndefined;
-    }
-    DLOGI("DemuraHFC buffer fd %d size %d", buf_out_params->buffers[0].fd,
-      buf_out_params->buffers[0].size);
+  if ((ret = ipc_intf_->ProcessOps(kIpcOpsImportBuffers, in, &out))) {
+    DLOGE("Failed to kIpcOpsImportBuffers payload error = %d", ret);
+    return kErrorUndefined;
+  }
+  DLOGI("DemuraHFC buffer fd %d size %d", buf_out_params->buffers[0].fd,
+    buf_out_params->buffers[0].size);
 
-    if (buf_out_params->buffers[0].fd < 0) {
-      DLOGE("HFC buffer import error fd :%d ", buf_out_params->buffers[0].fd);
-      return kErrorUndefined;
-    }
+  if (buf_out_params->buffers[0].fd < 0) {
+    DLOGE("HFC buffer import error fd :%d ", buf_out_params->buffers[0].fd);
+    return kErrorUndefined;
+  }
 
-    input_cfg.secure_hfc_fd = buf_out_params->buffers[0].fd;
-    input_cfg.secure_hfc_size = buf_out_params->buffers[0].size;
-    input_cfg.panel_id = buf_out_params->buffers[0].panel_id;
-    input_cfg.secure_session = true;
-    hfc_buffer_fd_ = buf_out_params->buffers[0].fd;
-    hfc_buffer_size_ = buf_out_params->buffers[0].size;
+  input_cfg.secure_hfc_fd = buf_out_params->buffers[0].fd;
+  input_cfg.secure_hfc_size = buf_out_params->buffers[0].size;
+  input_cfg.panel_id = buf_out_params->buffers[0].panel_id;
+  input_cfg.secure_session = true;
+  hfc_buffer_fd_ = buf_out_params->buffers[0].fd;
+  hfc_buffer_size_ = buf_out_params->buffers[0].size;
 #endif
-    DLOGI("panel id %lx\n", input_cfg.panel_id);
-    input_cfg.panel_id = panel_id;
-    std::unique_ptr<DemuraIntf> demura =
-        pf_factory_->CreateDemuraIntf(input_cfg, prop_intf_, buffer_allocator_, spr_);
-    if (!demura) {
-      DLOGE("Unable to create Demura on Display %d-%d", display_id_, display_type_);
-      return kErrorMemory;
-    }
+  input_cfg.panel_id = panel_id_;
+  DLOGI("panel id %lx\n", input_cfg.panel_id);
+  std::unique_ptr<DemuraIntf> demura =
+      pf_factory_->CreateDemuraIntf(input_cfg, prop_intf_, buffer_allocator_, spr_);
+  if (!demura) {
+    DLOGE("Unable to create Demura on Display %d-%d", display_id_, display_type_);
+    return kErrorMemory;
+  }
 
-    demura_ = std::move(demura);
-    if (demura_->Init() != 0) {
-      DLOGE("Unable to initialize Demura on Display %d-%d", display_id_, display_type_);
-      return kErrorUndefined;
-    }
+  demura_ = std::move(demura);
+  if (demura_->Init() != 0) {
+    DLOGE("Unable to initialize Demura on Display %d-%d", display_id_, display_type_);
+    return kErrorUndefined;
+  }
 
-    if (SetupDemuraLayer() != kErrorNone) {
-      DLOGE("Unable to setup Demura layer on Display %d-%d", display_id_, display_type_);
-      return kErrorUndefined;
-    }
+  if (SetupDemuraLayer() != kErrorNone) {
+    DLOGE("Unable to setup Demura layer on Display %d-%d", display_id_, display_type_);
+    return kErrorUndefined;
+  }
 
-    if (SetDemuraIntfStatus(true)) {
-      return kErrorUndefined;
-    }
+  if (SetDemuraIntfStatus(true)) {
+    return kErrorUndefined;
+  }
 
-    comp_manager_->SetDemuraStatusForDisplay(display_id_, true);
-    demura_intended_ = true;
-    DLOGI("Enabled Demura Core!");
+  demura_current_idx_ = kDemuraDefaultIdx;
+
+  comp_manager_->SetDemuraStatusForDisplay(display_id_, true);
+  demura_intended_ = true;
+  DLOGI("Enabled Demura Core!");
 
 #ifndef TRUSTED_VM
-    GenericPayload pl;
-    uint64_t *panel_id_ptr = nullptr;
-    int rc = 0;
-    if ((rc = pl.CreatePayload<uint64_t>(panel_id_ptr))) {
-      DLOGE("Failed to create payload for Paneld, error = %d", rc);
-    }
-    demura_->GetParameter(kDemuraFeatureParamPanelId, &pl);
-    vm_cb_intf_ = new DisplayIPCVmCallbackImpl(buffer_allocator_, ipc_intf_,
-        *panel_id_ptr, hfc_buffer_width_, hfc_buffer_height_);
-    vm_cb_intf_->Init();
-#endif
-    return kErrorNone;
+  GenericPayload pl;
+  uint64_t *panel_id_ptr = nullptr;
+  int rc = 0;
+  if ((rc = pl.CreatePayload<uint64_t>(panel_id_ptr))) {
+    DLOGE("Failed to create payload for Paneld, error = %d", rc);
   }
-  return kErrorUndefined;
+  demura_->GetParameter(kDemuraFeatureParamPanelId, &pl);
+  vm_cb_intf_ = new DisplayIPCVmCallbackImpl(buffer_allocator_, ipc_intf_,
+      *panel_id_ptr, hfc_buffer_width_, hfc_buffer_height_);
+  vm_cb_intf_->Init();
+#endif
+  return kErrorNone;
 }
 
 DisplayError DisplayBuiltIn::SetupDemuraLayer() {
@@ -689,7 +640,7 @@ DisplayError DisplayBuiltIn::SetupDemuraLayer() {
 }
 
 void DisplayBuiltIn::PreCommit(LayerStack *layer_stack) {
-  uint32_t app_layer_count = disp_layer_stack_.info.app_layer_count;
+  uint32_t app_layer_count = disp_layer_stack_->info.app_layer_count;
 
   // Enabling auto refresh is async and needs to happen before commit ioctl
   if (hw_panel_info_.mode == kModeCommand) {
@@ -726,6 +677,139 @@ void DisplayBuiltIn::PreCommit(LayerStack *layer_stack) {
   if (histogramSetup) {
     SetDppsFeatureLocked(&histogramIRQ, sizeof(histogramIRQ));
   }
+}
+
+DisplayError DisplayBuiltIn::SetupDemuraT0AndTn() {
+  DisplayError error = kErrorNone;
+  int ret = 0, value = 0, panel_id_w = 0;
+  uint64_t panel_id = 0;
+  bool demura_allowed = false, demuratn_allowed = false;
+
+  if (!comp_manager_->GetDemuraStatus()) {
+    comp_manager_->FreeDemuraFetchResources(display_id_);
+    comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
+    return kErrorNone;
+  }
+
+  if (IsPrimaryDisplay()) {
+    Debug::Get()->GetProperty(DEMURA_PRIMARY_PANEL_OVERRIDE_LOW, &panel_id_w);
+    panel_id = static_cast<uint32_t>(panel_id_w);
+    Debug::Get()->GetProperty(DEMURA_PRIMARY_PANEL_OVERRIDE_HIGH, &panel_id_w);
+    panel_id |= ((static_cast<uint64_t>(panel_id_w)) << 32);
+    Debug::Get()->GetProperty(DISABLE_DEMURA_PRIMARY, &value);
+    DLOGI("panel overide total value %lx\n", panel_id);
+  } else {
+    Debug::Get()->GetProperty(DEMURA_SECONDARY_PANEL_OVERRIDE_LOW, &panel_id_w);
+    panel_id = static_cast<uint32_t>(panel_id_w);
+    Debug::Get()->GetProperty(DEMURA_SECONDARY_PANEL_OVERRIDE_HIGH, &panel_id_w);
+    panel_id |= ((static_cast<uint64_t>(panel_id_w)) << 32);
+    Debug::Get()->GetProperty(DISABLE_DEMURA_SECONDARY, &value);
+    DLOGI("panel overide total value %lx\n", panel_id);
+  }
+
+  if (value > 0) {
+    comp_manager_->FreeDemuraFetchResources(display_id_);
+    comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
+    return kErrorNone;
+  } else if (value < 0) {
+    return kErrorUndefined;
+  }
+
+  PanelFeaturePropertyInfo info;
+  if (!panel_id) {
+    info.prop_ptr = reinterpret_cast<uint64_t>(&panel_id);
+    info.prop_id = kPanelFeatureDemuraPanelId;
+    ret = prop_intf_->GetPanelFeature(&info);
+    if (ret) {
+      DLOGE("Failed to get panel id, error = %d", ret);
+      return kErrorUndefined;
+    }
+  }
+  panel_id_ = panel_id;
+  DLOGI("panel_id 0x%lx", panel_id_);
+
+#if defined SDM_UNIT_TESTING || defined TRUSTED_VM
+  demura_allowed = true;
+  demuratn_allowed = true;
+#else
+  if (!feature_license_factory_) {
+    DLOGI("Feature license factory is not available");
+    return kErrorNone;
+  }
+
+  std::shared_ptr<FeatureLicenseIntf> feat_license_intf =
+      feature_license_factory_->CreateFeatureLicenseIntf();
+  if (!feat_license_intf) {
+    feature_license_factory_ = nullptr;
+    DLOGE("Failed to create FeatureLicenseIntf");
+    return kErrorUndefined;
+  }
+  ret = feat_license_intf->Init();
+  if (ret) {
+    DLOGE("Failed to init FeatureLicenseIntf");
+    return kErrorUndefined;
+  }
+
+  GenericPayload demura_pl, aa_pl, out_pl;
+  DemuraValidatePermissionInput *demura_input = nullptr;
+  ret = demura_pl.CreatePayload<DemuraValidatePermissionInput>(demura_input);
+  if (ret) {
+    DLOGE("Failed to create the payload. Error:%d", ret);
+    return kErrorUndefined;
+  }
+
+  bool *allowed = nullptr;
+  ret = out_pl.CreatePayload<bool>(allowed);
+  if (ret) {
+    DLOGE("Failed to create the payload. Error:%d", ret);
+    return kErrorUndefined;
+  }
+
+  demura_input->id = kDemura;
+  demura_input->panel_id = panel_id_;
+  ret = feat_license_intf->ProcessOps(kValidatePermission, demura_pl, &out_pl);
+  if (ret) {
+    DLOGE("Failed to get the license permission for Demura. Error:%d", ret);
+    return kErrorUndefined;
+  }
+  demura_allowed = *allowed;
+
+  AntiAgingValidatePermissionInput *aa_input = nullptr;
+  ret = aa_pl.CreatePayload<AntiAgingValidatePermissionInput>(aa_input);
+  if (ret) {
+    DLOGE("Failed to create the payload. Error:%d", ret);
+    return kErrorUndefined;
+  }
+
+  aa_input->id = kAntiAging;
+  ret = feat_license_intf->ProcessOps(kValidatePermission, aa_pl, &out_pl);
+  if (ret) {
+    DLOGE("Failed to get the license permission for Anti-aging. Error:%d", ret);
+    return kErrorUndefined;
+  }
+  demuratn_allowed = *allowed;
+#endif
+
+  DLOGI("Demura enable allowed %d, Anti-aging enable allowed %d", demura_allowed, demuratn_allowed);
+  if (demura_allowed) {
+    error = SetupDemura();
+    if (error != kErrorNone) {
+      // Non-fatal but not expected, log error
+      DLOGE("Demura failed to initialize on display %d-%d, Error = %d", display_id_, display_type_,
+            error);
+      comp_manager_->FreeDemuraFetchResources(display_id_);
+      comp_manager_->SetDemuraStatusForDisplay(display_id_, false);
+      if (demura_) {
+        SetDemuraIntfStatus(false);
+      }
+    } else if (demuratn_allowed && demuratn_factory_) {
+      error = SetupDemuraTn();
+      if (error != kErrorNone) {
+        DLOGW("Failed to setup DemuraTn, Error = %d", error);
+      }
+    }
+  }
+  return kErrorNone;
 }
 
 DisplayError DisplayBuiltIn::SetupDemuraTn() {
@@ -776,9 +860,9 @@ DisplayError DisplayBuiltIn::EnableDemuraTn(bool enable) {
   *en = enable;
 
   if (enable) {  // make sure init is ready before enabling
-    bool *init_ready = nullptr;
+    DemuraTnCoreState *init_ready = nullptr;
     GenericPayload ready_pl;
-    ret = ready_pl.CreatePayload<bool>(init_ready);
+    ret = ready_pl.CreatePayload<DemuraTnCoreState>(init_ready);
     if (ret) {
       DLOGE("failed to create the payload. Error:%d", ret);
       return kErrorUndefined;
@@ -789,16 +873,25 @@ DisplayError DisplayBuiltIn::EnableDemuraTn(bool enable) {
       DLOGE("GetParameter for InitReady failed ret %d", ret);
       return kErrorUndefined;
     }
-    if (!(*init_ready)) {
+    if (*init_ready == kDemuraTnCoreNotReady) {
       return kErrorNone;
-    }
-
-    ret = demuratn_->SetParameter(kDemuraTnCoreUvmParamEnable, payload);
-    if (ret) {
-      DLOGE("SetParameter for enable failed ret %d", ret);
+    } else if (*init_ready == kDemuraTnCoreError) {
+      DLOGE("DemuraTn init ready state returns error");
+      int rc = demuratn_->Deinit();
+      if (rc)
+        DLOGE("Failed to deinit DemuraTn ret %d", rc);
+      demuratn_factory_ = nullptr;
+      demuratn_.reset();
+      demuratn_ = nullptr;
       return kErrorUndefined;
+    } else if (*init_ready == kDemuraTnCoreReady) {
+      ret = demuratn_->SetParameter(kDemuraTnCoreUvmParamEnable, payload);
+      if (ret) {
+        DLOGE("SetParameter for enable failed ret %d", ret);
+        return kErrorUndefined;
+      }
+      demuratn_enabled_ = true;
     }
-    demuratn_enabled_ = true;
   } else {
     ret = demuratn_->SetParameter(kDemuraTnCoreUvmParamEnable, payload);
     if (ret) {
@@ -868,7 +961,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
   }
 
   clock_gettime(CLOCK_MONOTONIC, &idle_timer_start_);
-  int idle_time_ms = disp_layer_stack_.info.set_idle_time_ms;
+  int idle_time_ms = disp_layer_stack_->info.set_idle_time_ms;
   if (idle_time_ms >= 0) {
     hw_intf_->SetIdleTimeoutMs(UINT32(idle_time_ms));
     idle_time_ms_ = idle_time_ms;
@@ -910,11 +1003,17 @@ void DisplayBuiltIn::HandleQsyncPostCommit() {
   } else if (qsync_mode_ == kQsyncModeOneShotContinuous) {
     // No action needed.
   } else if (qsync_mode_ == kQSyncModeContinuous) {
-    needs_avr_update_ = false;
+      if (!avoid_qsync_mode_change_) {
+        needs_avr_update_ = false;
+      } else if (needs_avr_update_) {
+        validated_ = false;
+        event_handler_->Refresh();
+      }
   } else if (qsync_mode_ == kQSyncModeNone) {
     needs_avr_update_ = false;
   }
 
+  avoid_qsync_mode_change_ = false;
   SetVsyncStatus(true /*Re-enable vsync.*/);
 
   bool notify_idle = enable_qsync_idle_ && (active_qsync_mode_ != kQSyncModeNone) &&
@@ -988,9 +1087,10 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
 
   // Must only happen after NullCommit and get applied in next frame
   if (demura_intended_ && demura_dynamic_enabled_ &&
-      !comp_manager_->GetDemuraStatusForDisplay(display_id_) && (state == kStateOn)) {
+      !comp_manager_->GetDemuraStatusForDisplay(display_id_) &&
+      (state == kStateOn || state == kStateDoze)) {
     comp_manager_->SetDemuraStatusForDisplay(display_id_, true);
-    SetDemuraIntfStatus(true);
+    SetDemuraIntfStatus(true, demura_current_idx_);
   }
 
   return kErrorNone;
@@ -1036,6 +1136,7 @@ DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
       return error;
     }
 
+    avoid_qsync_mode_change_ = true;
     DisplayBase::ReconfigureDisplay();
 
     if (mode == kModeVideo) {
@@ -1216,7 +1317,7 @@ void DisplayBuiltIn::SetVsyncStatus(bool enable) {
 
 void DisplayBuiltIn::IdleTimeout() {
   DTRACE_SCOPED();
-  if (state_ == kStateOff || hw_panel_info_.mode != kModeVideo) {
+  if (state_ == kStateOff) {
     return;
   }
 
@@ -1225,11 +1326,12 @@ void DisplayBuiltIn::IdleTimeout() {
   }
 
   handle_idle_timeout_ = true;
-  event_handler_->Refresh();
   if (!enhance_idle_time_) {
     comp_manager_->ProcessIdleTimeout(display_comp_ctx_);
   }
+
   validated_ = false;
+  event_handler_->Refresh();
 }
 
 void DisplayBuiltIn::PingPongTimeout() {
@@ -1597,9 +1699,9 @@ std::string DisplayBuiltIn::Dump() {
   os << " DrawMethod: " << draw_method_;
   os << "\nstate: " << state_ << " vsync on: " << vsync_enable_
      << " max. mixer stages: " << max_mixer_stages_;
-  if (disp_layer_stack_.info.noise_layer_info.enable) {
-    os << "\nNoise z-orders: [" << disp_layer_stack_.info.noise_layer_info.zpos_noise << "," <<
-        disp_layer_stack_.info.noise_layer_info.zpos_attn << "]";
+  if (disp_layer_stack_->info.noise_layer_info.enable) {
+    os << "\nNoise z-orders: [" << disp_layer_stack_->info.noise_layer_info.zpos_noise << ","
+       << disp_layer_stack_->info.noise_layer_info.zpos_attn << "]";
   }
   os << "\nnum configs: " << num_modes << " active config index: " << active_index;
   os << "\nDisplay Attributes:";
@@ -1654,19 +1756,19 @@ std::string DisplayBuiltIn::Dump() {
      << current_color_mode_.gamma << " intent " << current_color_mode_.intent << " Dynamice_range"
      << (curr_dynamic_range == kSdrType ? " SDR" : " HDR");
 
-  uint32_t num_hw_layers = UINT32(disp_layer_stack_.info.hw_layers.size());
+  uint32_t num_hw_layers = UINT32(disp_layer_stack_->info.hw_layers.size());
 
   if (num_hw_layers == 0) {
     os << "\nNo hardware layers programmed";
     return os.str();
   }
 
-  LayerBuffer *out_buffer = disp_layer_stack_.info.output_buffer;
+  LayerBuffer *out_buffer = disp_layer_stack_->info.output_buffer;
   if (out_buffer) {
     os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
        << " format: " << GetFormatString(out_buffer->format);
   }
-  HWLayersInfo &layer_info = disp_layer_stack_.info;
+  HWLayersInfo &layer_info = disp_layer_stack_->info;
   for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
     LayerRect &l_roi = layer_info.left_frame_roi.at(i);
     LayerRect &r_roi = layer_info.right_frame_roi.at(i);
@@ -1697,11 +1799,11 @@ std::string DisplayBuiltIn::Dump() {
   os << newline;
 
   for (uint32_t i = 0; i < num_hw_layers; i++) {
-    uint32_t layer_index = disp_layer_stack_.info.index.at(i);
+    uint32_t layer_index = disp_layer_stack_->info.index.at(i);
     // hw-layer from hw layers info
-    Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(i);
+    Layer &hw_layer = disp_layer_stack_->info.hw_layers.at(i);
     LayerBuffer *input_buffer = &hw_layer.input_buffer;
-    HWLayerConfig &layer_config = disp_layer_stack_.info.config[i];
+    HWLayerConfig &layer_config = disp_layer_stack_->info.config[i];
     HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
 
     const char *comp_type = GetCompositionName(hw_layer.composition);
@@ -1988,6 +2090,7 @@ DisplayError DisplayBuiltIn::SetDynamicDSIClock(uint64_t bit_clk_rate) {
   }
 
   validated_ = false;
+  avoid_qsync_mode_change_ = true;
   DLOGV("Setting new dynamic bit clk value: %" PRIu64, bit_clk_rate);
   return hw_intf_->SetDynamicDSIClock(bit_clk_rate);
 }
@@ -2035,7 +2138,7 @@ bool DisplayBuiltIn::CanCompareFrameROI(LayerStack *layer_stack) {
   if (!hw_panel_info_.partial_update || (hw_panel_info_.left_roi_count != 1) ||
       layer_stack->flags.geometry_changed || layer_stack->flags.skip_present ||
       (layer_stack->layers.size() !=
-       (disp_layer_stack_.info.app_layer_count + stack_fudge_factor))) {
+       (disp_layer_stack_->info.app_layer_count + stack_fudge_factor))) {
     return false;
   }
 
@@ -2071,30 +2174,30 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
     return false;
   }
 
-  if (disp_layer_stack_.info.iwe_target_index != -1) {
+  if (disp_layer_stack_->info.iwe_target_index != -1) {
     return false;
   }
 
-  disp_layer_stack_.info.left_frame_roi.clear();
-  disp_layer_stack_.info.right_frame_roi.clear();
-  disp_layer_stack_.info.dest_scale_info_map.clear();
-  comp_manager_->GenerateROI(display_comp_ctx_, &disp_layer_stack_);
+  disp_layer_stack_->info.left_frame_roi.clear();
+  disp_layer_stack_->info.right_frame_roi.clear();
+  disp_layer_stack_->info.dest_scale_info_map.clear();
+  comp_manager_->GenerateROI(display_comp_ctx_, disp_layer_stack_);
 
-  if (!disp_layer_stack_.info.left_frame_roi.size() ||
-      !disp_layer_stack_.info.right_frame_roi.size()) {
+  if (!disp_layer_stack_->info.left_frame_roi.size() ||
+      !disp_layer_stack_->info.right_frame_roi.size()) {
     return false;
   }
 
   // Compare the cached and calculated Frame ROIs.
-  bool same_roi = IsCongruent(left_frame_roi_, disp_layer_stack_.info.left_frame_roi.at(0)) &&
-                  IsCongruent(right_frame_roi_, disp_layer_stack_.info.right_frame_roi.at(0));
+  bool same_roi = IsCongruent(left_frame_roi_, disp_layer_stack_->info.left_frame_roi.at(0)) &&
+                  IsCongruent(right_frame_roi_, disp_layer_stack_->info.right_frame_roi.at(0));
 
   if (same_roi) {
     // Update Surface Damage rectangle(s) in HW layers.
-    uint32_t hw_layer_count = UINT32(disp_layer_stack_.info.hw_layers.size());
+    uint32_t hw_layer_count = UINT32(disp_layer_stack_->info.hw_layers.size());
     for (uint32_t j = 0; j < hw_layer_count; j++) {
-      Layer &hw_layer = disp_layer_stack_.info.hw_layers.at(j);
-      Layer *sdm_layer = layer_stack->layers.at(disp_layer_stack_.info.index.at(j));
+      Layer &hw_layer = disp_layer_stack_->info.hw_layers.at(j);
+      Layer *sdm_layer = layer_stack->layers.at(disp_layer_stack_->info.index.at(j));
       if (hw_layer.dirty_regions.size() != sdm_layer->dirty_regions.size()) {
         return false;
       }
@@ -2109,7 +2212,7 @@ bool DisplayBuiltIn::CanSkipDisplayPrepare(LayerStack *layer_stack) {
       size_ff++;
     if (layer_stack->flags.demura_present)
       size_ff++;
-    if (disp_layer_stack_.info.flags.noise_present)
+    if (disp_layer_stack_->info.flags.noise_present)
       size_ff++;
 
     for (uint32_t i = 0; i < (layer_stack->layers.size() - size_ff); i++) {
@@ -2126,7 +2229,7 @@ DisplayError DisplayBuiltIn::HandleDemuraLayer(LayerStack *layer_stack) {
     return kErrorParameters;
   }
   std::vector<Layer *> &layers = layer_stack->layers;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
+  HWLayersInfo &hw_layers_info = disp_layer_stack_->info;
 
   if (comp_manager_->GetDemuraStatus() &&
       comp_manager_->GetDemuraStatusForDisplay(display_id_) &&
@@ -2190,7 +2293,7 @@ DisplayError DisplayBuiltIn::UpdateTransferTime(uint32_t transfer_time) {
 
 DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
   std::vector<Layer *> &layers = layer_stack->layers;
-  HWLayersInfo &hw_layers_info = disp_layer_stack_.info;
+  HWLayersInfo &hw_layers_info = disp_layer_stack_->info;
   hw_layers_info.app_layer_count = 0;
   hw_layers_info.gpu_target_index = -1;
   hw_layers_info.stitch_target_index = -1;
@@ -2198,7 +2301,7 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
   hw_layers_info.noise_layer_index = -1;
   hw_layers_info.cwb_target_index = -1;
 
-  disp_layer_stack_.stack = layer_stack;
+  disp_layer_stack_->stack = layer_stack;
   hw_layers_info.flags = layer_stack->flags;
   hw_layers_info.blend_cs = layer_stack->blend_cs;
   hw_layers_info.wide_color_primaries.clear();
@@ -2212,11 +2315,11 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
       hw_layers_info.gpu_target_index = index;
     } else if (layer->composition == kCompositionStitchTarget) {
       hw_layers_info.stitch_target_index = index;
-      disp_layer_stack_.stack->flags.stitch_present = true;
+      disp_layer_stack_->stack->flags.stitch_present = true;
       hw_layers_info.stitch_present = true;
     } else if (layer->composition == kCompositionDemura) {
       hw_layers_info.demura_target_index = index;
-      disp_layer_stack_.stack->flags.demura_present = true;
+      disp_layer_stack_->stack->flags.demura_present = true;
       hw_layers_info.demura_present = true;
       DLOGD_IF(kTagDisplay, "Display %d-%d shall request Demura in this frame", display_id_,
                display_type_);
@@ -2467,7 +2570,7 @@ void DisplayBuiltIn::SendDisplayConfigs() {
   }
 }
 
-int DisplayBuiltIn::SetDemuraIntfStatus(bool enable) {
+int DisplayBuiltIn::SetDemuraIntfStatus(bool enable, int current_idx) {
   int ret = 0;
   bool *reconfig = nullptr;
   GenericPayload reconfig_pl;
@@ -2497,6 +2600,19 @@ int DisplayBuiltIn::SetDemuraIntfStatus(bool enable) {
     }
   }
 
+  GenericPayload config_pl;
+  uint64_t *config_idx = nullptr;
+  if ((ret = config_pl.CreatePayload<uint64_t>(config_idx))) {
+    DLOGE("Failed to create payload for config_idx, error = %d", ret);
+    return ret;
+  } else {
+    *config_idx = current_idx;
+    if ((ret = demura_->SetParameter(kDemuraFeatureParamConfigIdx, config_pl))) {
+      DLOGE("Failed to set Config Idx, error = %d", ret);
+      return ret;
+    }
+  }
+
   GenericPayload pl;
   bool* enable_ptr = nullptr;
   if ((ret = pl.CreatePayload<bool>(enable_ptr))) {
@@ -2518,7 +2634,7 @@ int DisplayBuiltIn::SetDemuraIntfStatus(bool enable) {
       return ret;
     }
   }
-  DLOGI("Demura is now %s", enable ? "Enabled" : "Disabled");
+  DLOGI("Demura is now %s and current index is %d ", enable ? "Enabled" : "Disabled", current_idx);
   return ret;
 }
 
@@ -2569,7 +2685,7 @@ DisplayError DisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event, bool *n
   if (secure_event == kTUITransitionEnd) {
     // enable demura after TUI transition end
     if (demura_) {
-      SetDemuraIntfStatus(true);
+      SetDemuraIntfStatus(true, demura_current_idx_);
     }
   }
 
@@ -2604,6 +2720,7 @@ DisplayError DisplayBuiltIn::PostHandleSecureEvent(SecureEvent secure_event) {
     if (vm_cb_intf_) {
       vm_cb_intf_->FreeExportBuffer();
     }
+    comp_manager_->PostHandleSecureEvent(display_comp_ctx_, secure_event);
   }
   return kErrorNone;
 }
@@ -2830,9 +2947,9 @@ DisplayError DisplayBuiltIn::ChangeFps() {
     return kErrorParameters;
   }
 
-  bool idle_screen = GetUpdatingAppLayersCount(disp_layer_stack_.stack) == 0;
-  if (!disp_layer_stack_.stack->force_refresh_rate && IdleFallbackLowerFps(idle_screen)
-      && !enable_qsync_idle_) {
+  bool idle_screen = GetUpdatingAppLayersCount(disp_layer_stack_->stack) == 0;
+  if (!disp_layer_stack_->stack->force_refresh_rate && IdleFallbackLowerFps(idle_screen) &&
+      !enable_qsync_idle_) {
     refresh_rate = hw_panel_info_.min_fps;
   }
 
@@ -2841,8 +2958,8 @@ DisplayError DisplayBuiltIn::ChangeFps() {
     if (error != kErrorNone) {
       // Attempt to update refresh rate can fail if rf interference settings is detected.
       // Just drop min fps settting for now.
-      if (disp_layer_stack_.info.lower_fps) {
-        disp_layer_stack_.info.lower_fps = false;
+      if (disp_layer_stack_->info.lower_fps) {
+        disp_layer_stack_->info.lower_fps = false;
       }
       return error;
     }
@@ -2855,7 +2972,7 @@ DisplayError DisplayBuiltIn::ChangeFps() {
 
   // Set safe mode upon success.
   if (enhance_idle_time_ && (refresh_rate == hw_panel_info_.min_fps) &&
-      (disp_layer_stack_.info.lower_fps)) {
+      (disp_layer_stack_->info.lower_fps)) {
     comp_manager_->ProcessIdleTimeout(display_comp_ctx_);
   }
 
@@ -2868,9 +2985,9 @@ DisplayError DisplayBuiltIn::ChangeFps() {
 
 bool DisplayBuiltIn::IdleFallbackLowerFps(bool idle_screen) {
   if (!enhance_idle_time_) {
-    return (disp_layer_stack_.info.lower_fps);
+    return (disp_layer_stack_->info.lower_fps);
   }
-  if (!idle_screen || !disp_layer_stack_.info.lower_fps) {
+  if (!idle_screen || !disp_layer_stack_->info.lower_fps) {
     return false;
   }
 
@@ -2886,8 +3003,8 @@ bool DisplayBuiltIn::IdleFallbackLowerFps(bool idle_screen) {
 uint32_t DisplayBuiltIn::GetUpdatingLayersCount() {
   uint32_t updating_count = 0;
 
-  for (uint i = 0; i < disp_layer_stack_.stack->layers.size(); i++) {
-    auto layer = disp_layer_stack_.stack->layers.at(i);
+  for (uint i = 0; i < disp_layer_stack_->stack->layers.size(); i++) {
+    auto layer = disp_layer_stack_->stack->layers.at(i);
     if (layer->flags.updating) {
       updating_count++;
     }
@@ -2896,7 +3013,7 @@ uint32_t DisplayBuiltIn::GetUpdatingLayersCount() {
 }
 
 uint32_t DisplayBuiltIn::GetOptimalRefreshRate(bool one_updating_layer) {
-  LayerStack *layer_stack = disp_layer_stack_.stack;
+  LayerStack *layer_stack = disp_layer_stack_->stack;
   if (layer_stack->force_refresh_rate) {
     return layer_stack->force_refresh_rate;
   }
@@ -2911,7 +3028,7 @@ uint32_t DisplayBuiltIn::GetOptimalRefreshRate(bool one_updating_layer) {
 }
 
 uint32_t DisplayBuiltIn::CalculateMetaDataRefreshRate() {
-  LayerStack *layer_stack = disp_layer_stack_.stack;
+  LayerStack *layer_stack = disp_layer_stack_->stack;
   uint32_t metadata_refresh_rate = 0;
   if (!layer_stack->flags.use_metadata_refresh_rate) {
     return 0;
@@ -2964,6 +3081,7 @@ DisplayError DisplayBuiltIn::SetDemuraState(int state) {
     }
     comp_manager_->SetDemuraStatusForDisplay(display_id_, true);
     demura_dynamic_enabled_ = true;
+    demura_current_idx_ = kDemuraDefaultIdx;
   } else if (!state && comp_manager_->GetDemuraStatusForDisplay(display_id_)) {
     ret = SetDemuraIntfStatus(false);
     if (ret) {
@@ -2976,6 +3094,56 @@ DisplayError DisplayBuiltIn::SetDemuraState(int state) {
 
   // Disable Partial Update for one frame.
   DisablePartialUpdateOneFrameInternal();
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBuiltIn::SetDemuraConfig(int demura_idx) {
+  int ret = 0;
+  GenericPayload pl;
+  uint64_t *idx = nullptr;
+
+  if (!demura_intended_ || !demura_dynamic_enabled_) {
+    DLOGW("Demura is not enabled");
+    return kErrorNone;
+  }
+
+  DLOGI("Setting the Demura Config, config = %d", demura_idx);
+
+  if (demura_idx < kDemuraDefaultIdx || demura_idx >= kMaxPanelConfigSupported) {
+    DLOGE("Invalid demura config index");
+    return kErrorParameters;
+  }
+
+  if (demura_idx == demura_current_idx_) {
+    return kErrorNone;
+  }
+
+  // Update demura config
+  if ((ret = pl.CreatePayload<uint64_t>(idx))) {
+    DLOGE("Failed to create payload for enable, error = %d", ret);
+    return kErrorUndefined;
+  }
+
+  *idx = demura_idx;
+  if ((ret = demura_->SetParameter(kDemuraFeatureParamConfigIdx, pl))) {
+    DLOGE("Failed to update demura config, error = %d", ret);
+    return kErrorUndefined;
+  }
+
+  if (SetupDemuraLayer() != kErrorNone) {
+    DLOGE("Unable to setup Demura layer on Display %d", display_id_);
+    return kErrorUndefined;
+  }
+
+  if (SetDemuraIntfStatus(true, demura_idx)) {
+    DLOGE("Failed to set Demura Status on Display %d", display_id_);
+    return kErrorUndefined;
+  }
+
+  demura_current_idx_ = demura_idx;
+  DLOGV("Demura config updated to config index %d", demura_idx);
+  event_handler_->Refresh();
 
   return kErrorNone;
 }

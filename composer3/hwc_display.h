@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -29,6 +29,7 @@
 
 #include <QService.h>
 #include <android/hardware/graphics/common/1.2/types.h>
+#include <aidl/android/hardware/graphics/common/BufferUsage.h>
 #include <core/core_interface.h>
 #include <private/color_params.h>
 #include <sys/stat.h>
@@ -212,7 +213,8 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int Perform(uint32_t operation, ...);
   virtual int HandleSecureSession(const std::bitset<kSecureMax> &secure_sessions,
                                   bool *power_on_pending, bool is_active_secure_display);
-  virtual DisplayError HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh);
+  virtual DisplayError HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh,
+                                         bool update_event_only);
   virtual DisplayError PostHandleSecureEvent(SecureEvent secure_event);
   virtual int GetActiveSecureSession(std::bitset<kSecureMax> *secure_sessions) { return 0; };
   virtual DisplayError SetMixerResolution(uint32_t width, uint32_t height);
@@ -230,7 +232,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual CWBReleaseFenceError GetReadbackBufferFenceForClient(CWBClient client,
                                                                shared_ptr<Fence> *release_fence);
   virtual HWC3::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence);
-  virtual DisplayError TeardownConcurrentWriteback(bool *needs_refresh);
+  virtual DisplayError TeardownConcurrentWriteback();
   // Captures frame output in the buffer specified by output_buffer_info. The API is
   // non-blocking and the client is expected to check operation status later on.
   // Returns -1 if the input is invalid.
@@ -371,6 +373,8 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC3::Error GetHdrCapabilities(uint32_t *out_num_types, int32_t *out_types,
                                          float *out_max_luminance, float *out_max_average_luminance,
                                          float *out_min_luminance);
+  virtual HWC3::Error getDisplayDecorationSupport(PixelFormat_V3 *format,
+                                                  AlphaInterpretation *alpha);
   virtual HWC3::Error GetPerFrameMetadataKeys(uint32_t *out_num_keys,
                                               PerFrameMetadataKey *out_keys);
   virtual HWC3::Error SetDisplayAnimating(bool animating) {
@@ -426,12 +430,14 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC3::Error SetDimmingMinBl(int min_bl) { return HWC3::Error::Unsupported; }
   virtual HWC3::Error RetrieveDemuraTnFiles() { return HWC3::Error::Unsupported; }
   virtual HWC3::Error SetDemuraState(int state) { return HWC3::Error::Unsupported; }
+  virtual HWC3::Error SetDemuraConfig(int demura_idx) { return HWC3::Error::Unsupported; }
   virtual HWC3::Error GetClientTargetProperty(ClientTargetProperty *out_client_target_property);
   virtual void GetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo> *variable_config_map,
                              int *active_config_index, uint32_t *num_configs);
   virtual void SetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo> &variable_config_map,
                              int active_config_index, uint32_t num_configs){};
   virtual void Abort();
+  virtual void MarkClientActive(bool is_client_up);
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -558,6 +564,7 @@ class HWCDisplay : public DisplayEventHandler {
   std::deque<TransientRefreshRateInfo> transient_refresh_rate_info_;
   std::mutex transient_refresh_rate_lock_;
   std::mutex active_config_lock_;
+  std::mutex frame_dump_config_lock_;
   int active_config_index_ = -1;
   uint32_t active_refresh_rate_ = 0;
   SecureEvent secure_event_ = kSecureEventMax;
@@ -570,8 +577,10 @@ class HWCDisplay : public DisplayEventHandler {
 
   // Members for N frame dump to file
   bool dump_output_to_file_ = false;
-  uint32_t dump_frame_count_ = 0;
-  uint32_t dump_frame_index_ = 0;
+  uint32_t dump_frame_count_ = 0;        // tracks output frames count which to be dump
+  uint32_t dump_frame_index_ = 0;        // tracks current output frame index which to be dump
+  uint32_t dump_input_frame_count_ = 0;  // tracks input frames count which to be dump
+  uint32_t dump_input_frame_index_ = 0;  // tracks current input frame index which to be dump
   bool dump_input_layers_ = false;
   BufferInfo output_buffer_info_ = {};
   void *output_buffer_base_ = nullptr;  // points to base address of output_buffer_info_
@@ -610,6 +619,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool draw_method_set_ = false;
   bool validate_done_ = false;
   bool client_target_3_1_set_ = false;
+  bool is_client_up_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

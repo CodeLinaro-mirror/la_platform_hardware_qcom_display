@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -74,11 +74,12 @@ namespace composer_V3 = aidl::android::hardware::graphics::composer3;
 using HwcDisplayCapability = composer_V3::DisplayCapability;
 using HwcDisplayConnectionType = composer_V3::DisplayConnectionType;
 using HwcClientTargetProperty = composer_V3::ClientTargetProperty;
+using ::aidl::vendor::qti::hardware::display::config::Attributes;
+using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
+using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfig;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
-using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
-using ::aidl::vendor::qti::hardware::display::config::Attributes;
-using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
+using ::aidl::vendor::qti::hardware::display::config::TUIEventType;
 
 namespace aidl::vendor::qti::hardware::display::config {
 class DisplayConfigAIDL;
@@ -111,6 +112,7 @@ class HWCUEventListener {
 class HWCUEvent {
  public:
   HWCUEvent();
+  void Deinit();
   static void UEventThreadTop(HWCUEvent *hwc_event);
   static void UEventThreadBottom(HWCUEvent *hwc_event);
   void Register(HWCUEventListener *uevent_listener);
@@ -125,6 +127,7 @@ class HWCUEvent {
 
   HWCUEventListener *uevent_listener_ = nullptr;
   bool init_done_ = false;
+  std::thread hot_plug_thread_;
 };
 
 constexpr int32_t kDataspaceSaturationMatrixCount = 16;
@@ -149,6 +152,11 @@ class HWCSession : HWCUEventListener,
     kClientTeardownCWB,
     kClientTrustedUI,
     kClientMax
+  };
+
+  enum CwbConfigFlag {
+    kCwbFlagPuAsCwbROI,
+    kCwbFlagAvoidRefresh,
   };
 
   HWCSession();
@@ -229,6 +237,8 @@ class HWCSession : HWCUEventListener,
   HWC3::Error SetColorModeWithRenderIntent(Display display, int32_t /*ColorMode*/ int_mode,
                                            int32_t /*RenderIntent*/ int_render_intent);
   HWC3::Error SetColorTransform(Display display, const std::vector<float> &matrix);
+  HWC3::Error getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
+                                          AlphaInterpretation *alpha);
   HWC3::Error GetReadbackBufferAttributes(Display display, int32_t *format, int32_t *dataspace);
   HWC3::Error SetReadbackBuffer(Display display, const native_handle_t *buffer,
                                 const shared_ptr<Fence> &acquire_fence);
@@ -282,6 +292,7 @@ class HWCSession : HWCUEventListener,
   HWC3::Error GetClientTargetProperty(Display display,
                                       HwcClientTargetProperty *outClientTargetProperty);
   HWC3::Error SetDemuraState(Display display, int32_t state);
+  HWC3::Error SetDemuraConfig(Display display, int32_t demura_idx);
 
   // Layer functions
   HWC3::Error SetLayerBuffer(Display display, LayerId layer, buffer_handle_t buffer,
@@ -305,6 +316,7 @@ class HWCSession : HWCUEventListener,
   HWC3::Error SetLayerPerFrameMetadataBlobs(Display display, LayerId layer, uint32_t num_elements,
                                             const int32_t *int_keys, const uint32_t *sizes,
                                             const uint8_t *metadata);
+  HWC3::Error SetLayerBrightness(Display display, LayerId layer, float brightness);
   HWC3::Error SetDisplayedContentSamplingEnabled(Display display, bool enabled,
                                                  uint8_t component_mask, uint64_t max_frames);
   HWC3::Error GetDisplayedContentSamplingAttributes(Display display, int32_t *format,
@@ -321,6 +333,7 @@ class HWCSession : HWCUEventListener,
                              int64_t *client_handle);
   int UnregisterCallbackClient(const int64_t client_handle);
   int NotifyResolutionChange(int32_t disp_id, Attributes &attr);
+  int NotifyTUIEventDone(int disp_id, TUIEventType event_type);
 
   virtual int RegisterClientContext(std::shared_ptr<DisplayConfig::ConfigCallback> callback,
                                     DisplayConfig::ConfigInterface **intf);
@@ -595,6 +608,7 @@ class HWCSession : HWCUEventListener,
   android::status_t SetPanelLuminanceAttributes(const android::Parcel *input_parcel);
   android::status_t setColorSamplingEnabled(const android::Parcel *input_parcel);
   android::status_t HandleTUITransition(int disp_id, int event);
+  android::status_t TUIEventHandler(int disp_id, TUIEventType event_type);
   android::status_t GetDisplayPortId(uint32_t display, int *port_id);
   android::status_t UpdateTransferTime(const android::Parcel *input_parcel);
   android::status_t RetrieveDemuraTnFiles(const android::Parcel *input_parcel);
@@ -608,7 +622,6 @@ class HWCSession : HWCUEventListener,
   Display GetActiveBuiltinDisplay();
   void HandlePendingRefresh();
   void NotifyClientStatus(bool connected);
-  int32_t GetVirtualDisplayId(HWDisplayInfo &info);
   android::status_t TUITransitionPrepare(int disp_id);
   android::status_t TUITransitionStart(int disp_id);
   android::status_t TUITransitionEnd(int disp_id);
@@ -623,7 +636,6 @@ class HWCSession : HWCUEventListener,
   void NotifyDisplayAttributes(Display display, Config config);
   int WaitForVmRelease(Display display, int timeout_ms);
   void GetVirtualDisplayList();
-  HWC3::Error CheckWbAvailability();
   bool IsHWDisplayConnected(Display client_id);
 
   CoreInterface *core_intf_ = nullptr;
@@ -685,14 +697,17 @@ class HWCSession : HWCUEventListener,
   bool tui_state_transition_[HWCCallbacks::kNumDisplays] = {};
   std::bitset<HWCCallbacks::kNumDisplays> display_ready_;
   bool secure_session_active_ = false;
-  bool is_idle_time_up_ = false;
+  bool is_client_up_ = false;
   std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
   bool primary_pending_ = true;
   Locker primary_display_lock_;
   std::map<Display, sdm::DisplayType> map_active_displays_;
   vector<HWDisplayInfo> virtual_display_list_ = {};
-  bool tui_start_success_ = false;
-  std::future<int> commit_done_future_;
+  std::map<hwc2_display_t, std::future<int>> commit_done_future_;
+  std::mutex tui_handler_lock_;
+  std::future<int> tui_event_handler_future_;
+  std::future<int> tui_callback_handler_future_;
+  bool disable_get_screen_decorator_support_ = false;
 };
 }  // namespace sdm
 

@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014 - 2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
 *    * Redistributions of source code must retain the above copyright notice, this list of
@@ -22,6 +20,13 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <utils/constants.h>
@@ -51,9 +56,12 @@ DisplayVirtual::DisplayVirtual(int32_t display_id, DisplayEventHandler *event_ha
 DisplayError DisplayVirtual::Init() {
   ClientLock lock(disp_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kVirtual, hw_info_intf_,
-                                           buffer_allocator_, &hw_intf_);
+  DisplayError error = comp_manager_->AllocateVirtualDisplayId(&display_id_);
+  if (error != kErrorNone) {
+    return error;
+  }
 
+  error = HWInterface::Create(display_id_, kVirtual, hw_info_intf_, buffer_allocator_, &hw_intf_);
   if (error != kErrorNone) {
     return error;
   }
@@ -73,6 +81,14 @@ DisplayError DisplayVirtual::Init() {
     DisplayBase::SetMaxMixerStages(max_mixer_stages);
   }
 
+  return error;
+}
+
+DisplayError DisplayVirtual::Deinit() {
+  auto error = DisplayBase::Deinit();
+  if (display_id_ != -1) {
+    comp_manager_->DeallocateVirtualDisplayId(display_id_);
+  }
   return error;
 }
 
@@ -179,9 +195,6 @@ DisplayError DisplayVirtual::Prepare(LayerStack *layer_stack) {
   if (error == kErrorNeedsLutRegen && (ForceToneMapUpdate(layer_stack) == kErrorNone)) {
     return kErrorNone;
   }
-
-  // Clean display layer stack for reuse.
-  disp_layer_stack_ = DispLayerStack();
 
   return DisplayBase::Prepare(layer_stack);
 }

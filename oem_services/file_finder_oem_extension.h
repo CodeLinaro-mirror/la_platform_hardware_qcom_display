@@ -25,12 +25,16 @@
  *WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  *OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  *IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *Changes from Qualcomm Innovation Center are provided under the following license:
+ *Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __FILE_FINDER_OEM_EXTENSION_H__
 #define __FILE_FINDER_OEM_EXTENSION_H__
 
-#include <vendor/qti/hardware/display/demura/2.0/IDemuraFileFinder.h>
+#include <aidl/vendor/qti/hardware/display/demura/BnDemuraFileFinder.h>
 #include <log/log.h>
 #include <inttypes.h>
 #include <sys/stat.h>
@@ -40,7 +44,7 @@
 #include "file_finder_interface.h"
 #include "debug_handler.h"
 
-using ::vendor::qti::hardware::display::demura::V2_0::IDemuraFileFinder;
+using ::aidl::vendor::qti::hardware::display::demura::IDemuraFileFinder;
 using DemuraFilePaths = IDemuraFileFinder::DemuraFilePaths;
 
 namespace sdm {

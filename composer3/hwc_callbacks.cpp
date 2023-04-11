@@ -34,6 +34,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+#include <thread>
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/locker.h>
@@ -64,7 +66,12 @@ HWC3::Error HWCCallbacks::Hotplug(Display display, bool state) {
       return HWC3::Error::None;
     }
   }
-  (*hotplug_)(callback_data_, static_cast<long>(display), INT32(state));
+  // External display hotplug events are handled asynchronously
+  if (display == HWC_DISPLAY_EXTERNAL || display == HWC_DISPLAY_EXTERNAL_2) {
+    std::thread(*hotplug_, callback_data_, static_cast<long>(display), INT32(state)).detach();
+  } else {
+    (*hotplug_)(callback_data_, display, INT32(state));
+  }
   return HWC3::Error::None;
 }
 
@@ -76,7 +83,7 @@ HWC3::Error HWCCallbacks::Refresh(Display display) {
   if (!refresh_) {
     return HWC3::Error::NoResources;
   }
-  (*refresh_)(callback_data_, static_cast<long>(display));
+  std::thread (*refresh_, callback_data_, static_cast<long>(display)).detach();
   pending_refresh_.set(UINT32(display));
   return HWC3::Error::None;
 }

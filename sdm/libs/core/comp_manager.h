@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014 - 2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
 *    * Redistributions of source code must retain the above copyright notice, this list of
@@ -24,41 +22,11 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #ifndef __COMP_MANAGER_H__
 #define __COMP_MANAGER_H__
@@ -84,6 +52,7 @@ class CompManagerEventHandler {
   virtual ~CompManagerEventHandler() {}
   virtual void NotifyCwbDone(int32_t status, const LayerBuffer& buffer) = 0;
   virtual void Refresh() = 0;
+  virtual void OnCwbTeardown(bool sync_teardown) = 0;
 };
 
 class CompManager : public CwbCallback {
@@ -130,6 +99,7 @@ class CompManager : public CwbCallback {
                                  const std::vector<PrimariesTransfer> &colormodes_cs);
   DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
   void HandleSecureEvent(Handle display_ctx, SecureEvent secure_event);
+  void PostHandleSecureEvent(Handle display_ctx, SecureEvent secure_event);
   void SetSafeMode(bool enable);
   bool IsSafeMode();
   void GenerateROI(Handle display_ctx, DispLayerStack *disp_layer_stack);
@@ -158,11 +128,16 @@ class CompManager : public CwbCallback {
   DisplayError PreCommit(Handle display_ctx);
   DisplayError CaptureCwb(Handle display_ctx, const LayerBuffer &buffer, const CwbConfig &config);
   bool HandleCwbTeardown(Handle display_ctx);
+  DisplayError RequestVirtualDisplayId(int32_t *vdisp_id);
+  DisplayError AllocateVirtualDisplayId(int32_t *vdisp_id);
+  DisplayError DeallocateVirtualDisplayId(int32_t vdisp_id);
   virtual void NotifyCwbDone(int32_t display_id, int32_t status, const LayerBuffer& buffer);
   virtual void TriggerRefresh(int32_t display_id);
+  virtual void TriggerCwbTeardown(int32_t display_id, bool sync_teardown);
   std::string Dump();
   uint32_t GetMixerCount();
   uint32_t GetActiveDisplayCount();
+  void SetDisplayLayerStack(Handle display_ctx, DispLayerStack *disp_layer_stack);
 
  private:
   static const int kMaxThermalLevel = 3;

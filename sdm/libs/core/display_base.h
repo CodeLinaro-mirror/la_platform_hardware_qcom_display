@@ -27,7 +27,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -41,6 +41,7 @@
 #include <private/panel_feature_property_intf.h>
 #include <private/panel_feature_factory_intf.h>
 #include <private/demuratn_core_uvm_fact_intf.h>
+#include <private/feature_license_intf.h>
 #include <private/noise_plugin_intf.h>
 #include <private/noise_plugin_dbg.h>
 #include <private/hw_interface.h>
@@ -53,12 +54,14 @@
 #include <condition_variable>  // NOLINT
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include "comp_manager.h"
 #include "color_manager.h"
 
 #define GET_PANEL_FEATURE_FACTORY "GetPanelFeatureFactoryIntf"
 #define GET_DEMURATN_FACTORY "GetDemuraTnCoreUvmFactoryIntf"
+#define GET_FEATURE_LICENSE_FACTORY "GetFeatureLicenseFactoryIntf"
 
 namespace sdm {
 
@@ -70,6 +73,7 @@ using std::lock_guard;
 
 typedef PanelFeatureFactoryIntf* (*GetPanelFeatureFactory)();
 typedef DemuraTnCoreUvmFactoryIntf* (*GetDemuraTnFactory)();
+typedef FeatureLicenseFactoryIntf* (*GetFeatureLicenseFactory)();
 
 class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
  public:
@@ -247,9 +251,12 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   virtual DisplayError UpdateTransferTime(uint32_t transfer_time) { return kErrorNotSupported; }
   virtual void NotifyCwbDone(int32_t status, const LayerBuffer& buffer);
   virtual void Refresh();
+  virtual void OnCwbTeardown(bool sync_teardown);
   virtual bool HandleCwbTeardown();
   virtual uint32_t GetAvailableMixerCount();
   virtual DisplayError SetDemuraState(int state) { return kErrorNotSupported; }
+  virtual DisplayError SetDemuraConfig(int demura_idx) { return kErrorNotSupported; }
+  virtual void ResetDispLayerStack();
 
  protected:
   struct DisplayMutex {
@@ -357,7 +364,11 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   bool active_ = false;
   Handle hw_device_ = 0;
   Handle display_comp_ctx_ = 0;
-  DispLayerStack disp_layer_stack_;
+  DispLayerStack *disp_layer_stack_;
+  static constexpr size_t kDispStackCount = 2;
+  DispLayerStack disp_layer_stacks_[kDispStackCount];
+  std::atomic<bool> clearstack_;
+  uint8_t disp_stack_index_ = 0;
   bool needs_validate_ = true;  // maintains validation state between Prepare/Commit Cycle
   bool vsync_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
@@ -413,6 +424,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   PanelFeatureFactoryIntf *pf_factory_ = nullptr;
   PanelFeaturePropertyIntf *prop_intf_ = nullptr;
   DemuraTnCoreUvmFactoryIntf *demuratn_factory_ = nullptr;
+  FeatureLicenseFactoryIntf *feature_license_factory_ = nullptr;
   bool first_cycle_ = true;
   bool registered_hw_events_ = false;
   bool unified_draw_supported_ = true;  // By default supported, unless disabled by property.
@@ -430,6 +442,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   uint32_t active_refresh_rate_ = 0;
   bool disable_cwb_idle_fallback_ = false;
   bool allow_tonemap_native_ = false;
+  bool avoid_qsync_mode_change_ = false;
 
  private:
   // Max tolerable power-state-change wait-times in milliseconds.
@@ -479,6 +492,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   bool windowed_display_ = false;
   LayerRect window_rect_ = {};
   bool enable_win_rect_mask_ = false;
+  HWDisplayMode default_panel_mode_ = kModeDefault;
 };
 
 }  // namespace sdm

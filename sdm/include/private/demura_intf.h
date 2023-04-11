@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -47,6 +47,9 @@
 
 namespace sdm {
 
+static const uint32_t kMaxPanelConfigSupported = 4;
+static const int kDemuraDefaultIdx = 0;
+
 struct DemuraInputConfig {
   bool secure_session = false;
   std::string brightness_path;
@@ -62,6 +65,7 @@ const std::string kDemuraFeatureParamCorrectionBuffer = "CorrectionBuffer";
 const std::string kDemuraFeatureParamPanelId = "PanelId";
 const std::string kDemuraFeatureParamPendingReconfig = "PendingReconfig";
 const std::string kDemuraFeatureParamSprPattern = "SprPattern";
+const std::string kDemuraFeatureParamConfigIdx = "ConfigIdx";
 
 using DemuraIntf = GenericIntf<const std::string&, const std::string&, GenericPayload>;
 }  // namespace sdm

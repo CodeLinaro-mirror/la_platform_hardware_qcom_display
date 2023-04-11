@@ -1,3 +1,4 @@
+// clang-format off
 /*
 * Copyright (c) 2014, 2016-2021, The Linux Foundation. All rights reserved.
 *
@@ -22,9 +23,10 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
+// clang-format on
 
 /*! @file layer_buffer.h
   @brief File for layer buffer structure.
@@ -86,14 +88,15 @@ enum LayerBufferFormat {
   kFormatABGR2101010,   //!< 10-bits Alpha, Blue, Green, Red interleaved in ABGR order.
   kFormatBGRX1010102,   //!< 10-bits Blue, Green, Red, Padding interleaved in BGRX order. No Alpha.
   kFormatXBGR2101010,   //!< 10-bits Padding, Blue, Green, Red interleaved in XBGR order. No Alpha.
-  kFormatRGBA1010102Ubwc,  //!< UBWC aligned RGBA1010102 format
-  kFormatRGBX1010102Ubwc,  //!< UBWC aligned RGBX1010102 format
-  kFormatRGB101010,     // 10-bits Red, Green, Blue, interleaved in RGB order. No Alpha.
-  kFormatBlob,          // Task-specific data without a standard image structure.
-  kFormatRGBA16161616F,  //!< Floating point 16-bits Red, Green, Blue, Alpha
-                         //!< interleaved in RGBA order.
+  kFormatRGBA1010102Ubwc,    //!< UBWC aligned RGBA1010102 format
+  kFormatRGBX1010102Ubwc,    //!< UBWC aligned RGBX1010102 format
+  kFormatRGB101010,          // 10-bits Red, Green, Blue, interleaved in RGB order. No Alpha.
+  kFormatBlob,               // Task-specific data without a standard image structure.
+  kFormatRGBA16161616F,      //!< Floating point 16-bits Red, Green, Blue, Alpha
+                             //!< interleaved in RGBA order.
   kFormatRGBA16161616FUbwc,  //!< UBWC aligned floating point 16-bits Red, Green, Blue, Alpha
                              //!< interleaved in RGBA order.
+  kFormatA8,                 //!< 8-bits Alpha format.
 
   /* All YUV-Planar formats, Any new format will be added towards end of this group to maintain
      backward compatibility.
@@ -102,9 +105,9 @@ enum LayerBufferFormat {
                                   //!< 2x2 subsampled U-plane: u(0), u(2) ... u(n-1)
                                   //!< 2x2 subsampled V-plane: v(0), v(2) ... v(n-1)
 
-  kFormatYCrCb420Planar,          //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                  //!< 2x2 subsampled V-plane: v(0), v(2) ... v(n-1)
-                                  //!< 2x2 subsampled U-plane: u(0), u(2) ... u(n-1)
+  kFormatYCrCb420Planar,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                          //!< 2x2 subsampled V-plane: v(0), v(2) ... v(n-1)
+                          //!< 2x2 subsampled U-plane: u(0), u(2) ... u(n-1)
 
   kFormatYCrCb420PlanarStride16,  //!< kFormatYCrCb420Planar with stride aligned to 16 bytes
 
@@ -116,53 +119,53 @@ enum LayerBufferFormat {
                                       //!<    u(0), v(0), u(2), v(2) ... u(n-1), v(n-1)
                                       //!< aka NV12.
 
-  kFormatYCrCb420SemiPlanar,          //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                      //!< 2x2 subsampled interleaved VU-plane:
-                                      //!<    v(0), u(0), v(2), u(2) ... v(n-1), u(n-1)
-                                      //!< aka NV21.
+  kFormatYCrCb420SemiPlanar,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                              //!< 2x2 subsampled interleaved VU-plane:
+                              //!<    v(0), u(0), v(2), u(2) ... v(n-1), u(n-1)
+                              //!< aka NV21.
 
-  kFormatYCbCr420SemiPlanarVenus,     //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                      //!< 2x2 subsampled interleaved UV-plane:
-                                      //!<    u(0), v(0), u(2), v(2) ... u(n-1), v(n-1)
+  kFormatYCbCr420SemiPlanarVenus,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                                   //!< 2x2 subsampled interleaved UV-plane:
+                                   //!<    u(0), v(0), u(2), v(2) ... u(n-1), v(n-1)
 
-  kFormatYCbCr422H1V2SemiPlanar,      //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                      //!< vertically subsampled interleaved UV-plane:
-                                      //!<    u(0), v(1), u(2), v(3) ... u(n-1), v(n)
+  kFormatYCbCr422H1V2SemiPlanar,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                                  //!< vertically subsampled interleaved UV-plane:
+                                  //!<    u(0), v(1), u(2), v(3) ... u(n-1), v(n)
 
-  kFormatYCrCb422H1V2SemiPlanar,      //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                      //!< vertically subsampled interleaved VU-plane:
-                                      //!<    v(0), u(1), v(2), u(3) ... v(n-1), u(n)
+  kFormatYCrCb422H1V2SemiPlanar,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                                  //!< vertically subsampled interleaved VU-plane:
+                                  //!<    v(0), u(1), v(2), u(3) ... v(n-1), u(n)
 
-  kFormatYCbCr422H2V1SemiPlanar,      //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                      //!< horizontally subsampled interleaved UV-plane:
-                                      //!<    u(0), v(1), u(2), v(3) ... u(n-1), v(n)
+  kFormatYCbCr422H2V1SemiPlanar,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                                  //!< horizontally subsampled interleaved UV-plane:
+                                  //!<    u(0), v(1), u(2), v(3) ... u(n-1), v(n)
 
-  kFormatYCrCb422H2V1SemiPlanar,      //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                      //!< horizontally subsampled interleaved VU-plane:
-                                      //!<    v(0), u(1), v(2), u(3) ... v(n-1), u(n)
+  kFormatYCrCb422H2V1SemiPlanar,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                                  //!< horizontally subsampled interleaved VU-plane:
+                                  //!<    v(0), u(1), v(2), u(3) ... v(n-1), u(n)
 
-  kFormatYCbCr420SPVenusUbwc,         //!< UBWC aligned YCbCr420SemiPlanarVenus format
+  kFormatYCbCr420SPVenusUbwc,  //!< UBWC aligned YCbCr420SemiPlanarVenus format
 
-  kFormatYCrCb420SemiPlanarVenus,     //!< Y-plane: y(0), y(1), y(2) ... y(n)
-                                      //!< 2x2 subsampled interleaved UV-plane:
-                                      //!<    v(0), u(0), v(2), u(2) ... v(n-1), u(n-1)
+  kFormatYCrCb420SemiPlanarVenus,  //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                                   //!< 2x2 subsampled interleaved UV-plane:
+                                   //!<    v(0), u(0), v(2), u(2) ... v(n-1), u(n-1)
 
-  kFormatYCbCr420P010,                //!< 16 bit Y-plane with 5 MSB bits set to 0:
-                                      //!< y(0), y(1), y(2) ... y(n)
-                                      //!< 2x2 subsampled interleaved 10 bit UV-plane with
-                                      //!< 5 MSB bits set to 0:
-                                      //!<    u(0), v(0), u(2), v(2) ... u(n-1), v(n-1)
-                                      //!< aka P010.
+  kFormatYCbCr420P010,  //!< 16 bit Y-plane with 5 MSB bits set to 0:
+                        //!< y(0), y(1), y(2) ... y(n)
+                        //!< 2x2 subsampled interleaved 10 bit UV-plane with
+                        //!< 5 MSB bits set to 0:
+                        //!<    u(0), v(0), u(2), v(2) ... u(n-1), v(n-1)
+                        //!< aka P010.
 
-  kFormatYCbCr420TP10Ubwc,            //!< UBWC aligned YCbCr420TP10 format.
+  kFormatYCbCr420TP10Ubwc,  //!< UBWC aligned YCbCr420TP10 format.
 
-  kFormatYCbCr420P010Ubwc,            //!< UBWC aligned YCbCr420P010 format.
+  kFormatYCbCr420P010Ubwc,  //!< UBWC aligned YCbCr420P010 format.
 
-  kFormatYCbCr420P010Venus,           //!< Venus aligned YCbCr420P010 format.
-                                      //!
-  kFormatYCbCr420SPVenusTile,         //!< Tiled & uncompressed YCbCr420SemiPlanarVenus format
-  kFormatYCbCr420TP10Tile,            //!< Tiled & uncompressed YCbCr420TP10 format.
-  kFormatYCbCr420P010Tile,            //!< Tiled & uncompressed YCbCr420P010 format.
+  kFormatYCbCr420P010Venus,    //!< Venus aligned YCbCr420P010 format.
+                               //!
+  kFormatYCbCr420SPVenusTile,  //!< Tiled & uncompressed YCbCr420SemiPlanarVenus format
+  kFormatYCbCr420TP10Tile,     //!< Tiled & uncompressed YCbCr420TP10 format.
+  kFormatYCbCr420P010Tile,     //!< Tiled & uncompressed YCbCr420P010 format.
 
   /* All YUV-Packed formats, Any new format will be added towards end of this group to maintain
      backward compatibility.

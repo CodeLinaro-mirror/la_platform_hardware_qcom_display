@@ -10,6 +10,7 @@ soong_config_module_type {
         "default",
         "var3",
         "llvmcov",
+        "smmu_proxy",
     ],
     variables: [
         "composer_version"
@@ -81,6 +82,16 @@ qtidisplay_prebuilt_defaults {
 	},
 }
 
+qtidisplay_cc_defaults {
+    name: "qtidisplay_smmu_header_defaults",
+    soong_config_variables: {
+        smmu_proxy: {
+            header_libs: [
+                "smmu_proxy_uapi_header",
+            ]
+        }
+    }
+}
 
 qtidisplay_cc_defaults {
     name: "qtidisplay_common_defaults",
@@ -94,7 +105,6 @@ qtidisplay_cc_defaults {
         "libcutils",
         "libutils",
     ],
-    clang: true,
     tidy: true,
     tidy_checks: [
         "-*",
@@ -125,6 +135,9 @@ qtidisplay_cc_defaults {
         },
         gralloc4: {
             cflags: ["-DTARGET_USES_GRALLOC4"],
+        },
+        smmu_proxy: {
+            cflags: ["-DTARGET_USES_SMMU_PROXY"],
         },
         var3 : {
             enabled: false,
@@ -327,6 +340,7 @@ subdirs = [
     "libhistogram",
     "liblight",
     "composer",
+    "composer_test_service",
     "gralloc",
     "gpu_tonemapper",
     "hdmi_cec",

@@ -15,18 +15,16 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef __AIDLCOMPOSER_H__
-#define __AIDLCOMPOSER_H__
-
 #pragma once
+
+#include <memory>
 #include <aidl/android/hardware/graphics/composer3/BnComposer.h>
 #include <utils/Mutex.h>
+#include "QtiComposer3Client.h"
 #include "AidlComposerClient.h"
 #include "DisplayConfigAIDL.h"
 
@@ -39,13 +37,12 @@ namespace composer3 {
 using aidl::android::hardware::graphics::composer3::BnComposer;
 using aidl::android::hardware::graphics::composer3::Capability;
 using aidl::android::hardware::graphics::composer3::IComposerClient;
-using ndk::ScopedAStatus;
 
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 
 class AidlComposer : public BnComposer {
  public:
-  AidlComposer();
+  AidlComposer(const shared_ptr<QtiComposer3Client> &extensions);
   virtual ~AidlComposer();
 
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
@@ -54,12 +51,16 @@ class AidlComposer : public BnComposer {
   ScopedAStatus createClient(std::shared_ptr<IComposerClient> *aidl_return) override;
   ScopedAStatus getCapabilities(std::vector<Capability> *aidl_return) override;
 
+ protected:
+  SpAIBinder createBinder() override;
+
  private:
   bool waitForClientDestroyedLocked(std::unique_lock<std::mutex> &lock);
   void onClientDestroyed();
 
+  shared_ptr<AidlComposerClient> composer_client_ = nullptr;
+  shared_ptr<QtiComposer3Client> extensions_;
   HWCSession *hwc_session_ = nullptr;
-  DisplayConfigAIDL *display_config_aidl_ = nullptr;
   std::mutex mClientMutex;
   bool mClientAlive GUARDED_BY(mClientMutex) = false;
   std::condition_variable mClientDestroyedCondition;
@@ -71,5 +72,3 @@ class AidlComposer : public BnComposer {
 }  // namespace qti
 }  // namespace vendor
 }  // namespace aidl
-
-#endif  // __AIDLCOMPOSER_H__

@@ -26,9 +26,13 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <thread>
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/locker.h>
+
 #include "hwc_callbacks.h"
 
 #define __CLASS__ "HWCCallbacks"
@@ -56,7 +60,7 @@ HWC2::Error HWCCallbacks::Hotplug(hwc2_display_t display, HWC2::Connection state
       return HWC2::Error::None;
     }
   }
-  hotplug_(hotplug_data_, display, INT32(state));
+  std::thread (hotplug_, hotplug_data_, display, INT32(state)).detach();
   return HWC2::Error::None;
 }
 
@@ -68,7 +72,7 @@ HWC2::Error HWCCallbacks::Refresh(hwc2_display_t display) {
   if (!refresh_) {
     return HWC2::Error::NoResources;
   }
-  refresh_(refresh_data_, display);
+  std::thread (refresh_, refresh_data_, display).detach();
   pending_refresh_.set(UINT32(display));
   return HWC2::Error::None;
 }

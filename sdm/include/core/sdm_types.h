@@ -32,7 +32,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -72,6 +72,7 @@
 #define __SDM_TYPES_H__
 
 namespace sdm {
+// clang-format off
 
 /*! @brief This enum represents different error codes that display interfaces may return.
 */
@@ -136,8 +137,10 @@ enum DebugTag {
   kTagCpuHint,          //!< Debug log is tagged for CPU hint Implementation.
   kTagCwb,              //!< Debug log is tagged for CWB buffer manager.
   kTagIWE,              //!< Debug log is tagged for IWE Implementation.
+  kTagWbUsage,          //!< Debug log is tagged for writeback block usage Implementation.
 };
 
+// clang-format on
 }  // namespace sdm
 
 #endif  // __SDM_TYPES_H__

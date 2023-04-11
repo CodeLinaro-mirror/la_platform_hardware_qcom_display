@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -339,40 +339,45 @@ int IPCImpl::ProcessOps(IPCOps op, const GenericPayload &in, GenericPayload *out
   int ret = 0;
   switch (op) {
     case kIpcOpsFilePath: {
-      uint32_t sz = 0;
-      uint64_t *panel_id = nullptr;
-      DemuraPaths *file_paths = nullptr;
-      sp<IDemuraFileFinder> mClient = IDemuraFileFinder::getService();
-      if (mClient != NULL) {
-        if ((ret = in.GetPayload(panel_id, &sz))) {
-          DLOGE("Failed to get input payload error = %d", ret);
-          return ret;
-        }
-        DLOGI("panel_id %" PRIu64, *panel_id);
-        if ((ret = out->GetPayload(file_paths, &sz))) {
-          DLOGE("Failed to get output payload error = %d", ret);
-          return ret;
-        }
-        mClient->getDemuraFilePaths((*panel_id), [&](const auto &tmpReturn, const auto &tmpHandle) {
-          ret = tmpReturn;
-          if (ret != 0) {
-            *file_paths = {};
-            return;
-          }
-          file_paths->configPath = (std::string)(tmpHandle.configFilePath);
-          file_paths->signaturePath = (std::string)(tmpHandle.signatureFilePath);
-          file_paths->publickeyPath = (std::string)(tmpHandle.publickeyFilePath);
-        });
-        if (ret != 0) {
-          DLOGE("getDemuraFilePaths failed %d", ret);
-          return ret;
-        }
-      } else {
+      std::shared_ptr<IDemuraFileFinder> demuraAidl = nullptr;
+      const std::string instance = std::string() + IDemuraFileFinder::descriptor + "/default";
+      if (!AServiceManager_isDeclared(instance.c_str())) {
+        ALOGE("demura hal service is not declared");
+        return -ENODEV;
+      }
+      auto demuraBinder = ::ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str()));
+      if (demuraBinder.get() == nullptr) {
+        ALOGE("demura hal service doesn't exist");
+        return -EINVAL;
+      }
+      demuraAidl = IDemuraFileFinder::fromBinder(demuraBinder);
+      if (demuraAidl == nullptr) {
         DLOGE("Could not get IDemuraFileFinder");
         return -ENODEV;
       }
-      break;
-    }
+      uint32_t sz = 0;
+      uint64_t* panel_id = nullptr;
+      DemuraPaths *file_paths = nullptr;
+      if ((ret = in.GetPayload(panel_id, &sz))) {
+        DLOGE("Failed to get input payload error = %d", ret);
+        return ret;
+      }
+      DLOGI("panel_id %" PRIu64, *panel_id);
+      if ((ret = out->GetPayload(file_paths, &sz))) {
+        DLOGE("Failed to get output payload error = %d", ret);
+        return ret;
+      }
+      DemuraFilePaths paths = {};
+      auto status = demuraAidl->getDemuraFilePaths(*panel_id, &paths);
+      if (!status.isOk()) {
+        ALOGE("getDemuraFilePaths failed, status: %d: %s",
+              status.getStatus(), status.getMessage());
+        return -EINVAL;
+      }
+      file_paths->configPath = paths.configFilePath;
+      file_paths->signaturePath = paths.signatureFilePath;
+      file_paths->publickeyPath = paths.publickeyFilePath;
+    } break;
 
     case kIpcOpsExportBuffers: {
       if ((ret = ProcessExportBuffers(in, out))) {

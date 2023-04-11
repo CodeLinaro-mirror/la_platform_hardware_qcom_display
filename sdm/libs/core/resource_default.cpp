@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -392,7 +392,11 @@ uint32_t ResourceDefault::GetMixerCount() {
   return 0;
 }
 
-void ResourceDefault::HandleTUITransition(bool tui_active) {
+void ResourceDefault::HandleTUITransition(Handle display_ctx, bool tui_active) {}
+
+DisplayError ResourceDefault::SetBlendSpace(Handle display_ctx,
+                                            const PrimariesTransfer &blend_space) {
+  return kErrorNone;
 }
 
 DisplayError ResourceDefault::PostCommit(Handle display_ctx, DispLayerStack *disp_layer_stack) {

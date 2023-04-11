@@ -15,20 +15,17 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include "hwc_layers.h"
+#include "hwc_debugger.h"
 #include <utils/debug.h>
 #include <stdint.h>
 #include <utility>
@@ -48,11 +45,11 @@ DisplayError SetCSC(const native_handle_t *handle, ColorMetaData *color_metadata
   auto error =
       gralloc::GetMetaDataValue(hnd, qtigralloc::MetadataType_ColorMetadata.value, color_metadata);
 
-  if (error == gralloc::Error::NONE) {
+  if (error != gralloc::Error::NONE) {
     int csc = HAL_CSC_ITU_R_601;
     error = gralloc::GetMetaDataValue(hnd, qtigralloc::MetadataType_ColorSpace.value, &csc);
 
-    if (error != gralloc::Error::NONE) {
+    if (error == gralloc::Error::NONE) {
       if (csc == HAL_CSC_ITU_R_601_FR || csc == HAL_CSC_ITU_R_709_FR ||
           csc == HAL_CSC_ITU_R_2020_FR) {
         color_metadata->range = Range_Full;
@@ -321,6 +318,18 @@ DisplayError ColorMetadataToDataspace(ColorMetaData color_metadata, Dataspace *d
   return kErrorNone;
 }
 
+static bool IsSdrDimmingDisabled() {
+  static bool read_prop = false;
+  static bool disable_sdr_dimming = false;
+  if (!read_prop) {
+    int value = 0;
+    HWCDebugHandler::Get()->GetProperty(DISABLE_SDR_DIMMING, &value);
+    disable_sdr_dimming = (value == 1);
+  }
+  read_prop = true;
+  return disable_sdr_dimming;
+}
+
 // Layer operations
 HWCLayer::HWCLayer(Display display_id, HWCBufferAllocator *buf_allocator)
     : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
@@ -532,6 +541,8 @@ HWC3::Error HWCLayer::SetLayerCompositionType(Composition type) {
       break;
     case Composition::CURSOR:
       break;
+    case Composition::DISPLAY_DECORATION:
+      break;
     case Composition::INVALID:
       return HWC3::Error::BadParameter;
     default:
@@ -686,16 +697,16 @@ HWC3::Error HWCLayer::SetLayerZOrder(uint32_t z) {
 HWC3::Error HWCLayer::SetLayerType(LayerType type) {
   LayerTypes layer_type = kLayerUnknown;
   switch (type) {
-    case LayerType::kUnknown:
+    case LayerType::UNKNOWN:
       layer_type = kLayerUnknown;
       break;
-    case LayerType::kApp:
+    case LayerType::APP:
       layer_type = kLayerApp;
       break;
-    case LayerType::kGame:
+    case LayerType::GAME:
       layer_type = kLayerGame;
       break;
-    case LayerType::kBrowser:
+    case LayerType::BROWSER:
       layer_type = kLayerBrowser;
       break;
     default:
@@ -708,7 +719,7 @@ HWC3::Error HWCLayer::SetLayerType(LayerType type) {
 }
 
 HWC3::Error HWCLayer::SetLayerFlag(LayerFlag flag) {
-  compatible_ = (flag == LayerFlag::kCompatible);
+  compatible_ = (flag == LayerFlag::COMPATIBLE);
 
   return HWC3::Error::None;
 }
@@ -789,7 +800,7 @@ HWC3::Error HWCLayer::SetLayerPerFrameMetadataBlobs(uint32_t num_elements,
                                                     const uint32_t *sizes,
                                                     const uint8_t *metadata) {
   if (!keys || !sizes || !metadata) {
-    DLOGE("metadata or sizes or keys is null");
+    DLOGW("metadata or sizes or keys is null");
     return HWC3::Error::BadParameter;
   }
 
@@ -816,6 +827,27 @@ HWC3::Error HWCLayer::SetLayerPerFrameMetadataBlobs(uint32_t num_elements,
         return HWC3::Error::BadParameter;
     }
   }
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCLayer::SetLayerBrightness(float brightness) {
+  if (brightness < 0.0f || brightness > 1.0f) {
+    DLOGE("Invalid brightness = %f", brightness);
+    return HWC3::Error::BadParameter;
+  }
+
+  // When SDR dimming is disabled, layer brightness needs to be reset for device composition
+  if (brightness != 1.0f && IsSdrDimmingDisabled() && client_requested_ == Composition::DEVICE) {
+    brightness = 1.0f;
+  }
+
+  if (layer_->layer_brightness != brightness) {
+    DLOGV_IF(kTagClient, "Update layer brightness from %f to %f", layer_->layer_brightness,
+             brightness);
+    layer_->layer_brightness = brightness;
+    geometry_changes_ |= kLayerBrightness;
+  }
+
   return HWC3::Error::None;
 }
 
@@ -981,6 +1013,9 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       break;
     case static_cast<int>(PixelFormat::RGBA_FP16):
       format = kFormatRGBA16161616F;
+      break;
+    case static_cast<int>(PixelFormat_V3::R_8):
+      format = kFormatA8;
       break;
     default:
       DLOGW("Unsupported format type = %d", source);
@@ -1272,6 +1307,13 @@ void HWCLayer::SetComposition(const LayerComposition &sdm_composition) {
   // Update solid fill composition
   if (sdm_composition == kCompositionSDE && layer_->flags.solid_fill != 0) {
     hwc_composition = Composition::SOLID_COLOR;
+  }
+  // Update Display Decoration composition only for A8 mask layer i.e when requested composition
+  // is DISPLAY_DECORATION
+  Composition requested_composition = GetClientRequestedCompositionType();
+  if ((sdm_composition == kCompositionSDE && layer_->input_buffer.flags.mask_layer != 0) &&
+      (requested_composition == Composition::DISPLAY_DECORATION)) {
+    hwc_composition = Composition::DISPLAY_DECORATION;
   }
   device_selected_ = hwc_composition;
 

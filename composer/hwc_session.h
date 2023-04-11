@@ -20,40 +20,40 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #ifndef __HWC_SESSION_H__
 #define __HWC_SESSION_H__
@@ -105,11 +105,12 @@ namespace composer_V2_4 = ::android::hardware::graphics::composer::V2_4;
 using HwcDisplayCapability = composer_V2_4::IComposerClient::DisplayCapability;
 using HwcDisplayConnectionType = composer_V2_4::IComposerClient::DisplayConnectionType;
 using HwcClientTargetProperty = composer_V2_4::IComposerClient::ClientTargetProperty;
+using ::aidl::vendor::qti::hardware::display::config::Attributes;
+using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
+using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfig;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
-using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
-using ::aidl::vendor::qti::hardware::display::config::Attributes;
-using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
+using ::aidl::vendor::qti::hardware::display::config::TUIEventType;
 
 namespace aidl::vendor::qti::hardware::display::config {
   class DisplayConfigAIDL;
@@ -179,6 +180,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     kClientTeardownCWB,
     kClientTrustedUI,
     kClientMax
+  };
+
+  enum CwbConfigFlag {
+    kCwbFlagPuAsCwbROI,
+    kCwbFlagAvoidRefresh,
   };
 
   HWCSession();
@@ -357,6 +363,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
                              int64_t *client_handle);
   int UnregisterCallbackClient(const int64_t client_handle);
   int NotifyResolutionChange(int32_t disp_id, Attributes& attr);
+  int NotifyTUIEventDone(int disp_id, TUIEventType event_type);
 
   virtual int RegisterClientContext(std::shared_ptr<DisplayConfig::ConfigCallback> callback,
                                     DisplayConfig::ConfigInterface **intf);
@@ -633,6 +640,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   android::status_t SetPanelLuminanceAttributes(const android::Parcel *input_parcel);
   android::status_t setColorSamplingEnabled(const android::Parcel *input_parcel);
   android::status_t HandleTUITransition(int disp_id, int event);
+  android::status_t TUIEventHandler(int disp_id, TUIEventType event_type);
   android::status_t GetDisplayPortId(uint32_t display, int *port_id);
   android::status_t UpdateTransferTime(const android::Parcel *input_parcel);
   android::status_t RetrieveDemuraTnFiles(const android::Parcel *input_parcel);
@@ -646,7 +654,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   hwc2_display_t GetActiveBuiltinDisplay();
   void HandlePendingRefresh();
   void NotifyClientStatus(bool connected);
-  int32_t GetVirtualDisplayId(HWDisplayInfo& info);
   android::status_t TUITransitionPrepare(int disp_id);
   android::status_t TUITransitionStart(int disp_id);
   android::status_t TUITransitionEnd(int disp_id);
@@ -661,7 +668,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   void NotifyDisplayAttributes(hwc2_display_t display, hwc2_config_t config);
   int WaitForVmRelease(hwc2_display_t display, int timeout_ms);
   void GetVirtualDisplayList();
-  HWC2::Error CheckWbAvailability();
   bool IsHWDisplayConnected(hwc2_display_t client_id);
 
   CoreInterface *core_intf_ = nullptr;
@@ -728,7 +734,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   Locker primary_display_lock_;
   std::map <hwc2_display_t, sdm::DisplayType> map_active_displays_;
   vector<HWDisplayInfo> virtual_display_list_ = {};
-  std::future<int> commit_done_future_;
+  std::map<hwc2_display_t, std::future<int>> commit_done_future_;
+  std::mutex tui_handler_lock_;
+  std::future<int> tui_event_handler_future_;
+  std::future<int> tui_callback_handler_future_;
 };
 }  // namespace sdm
 

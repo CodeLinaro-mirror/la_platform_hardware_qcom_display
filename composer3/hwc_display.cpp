@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -753,6 +753,13 @@ void HWCDisplay::BuildLayerStack() {
       layer_stack_.flags.scaling_rgb_layer_present = true;
     }
 
+    if (layer->input_buffer.usage &
+        static_cast<uint64_t>(
+            ::aidl::android::hardware::graphics::common::BufferUsage::FRONT_BUFFER)) {
+      layer->flags.front_buffer = true;
+      layer_stack_.flags.front_buffer_layer_present = true;
+    }
+
     if (hwc_layer->IsSingleBuffered() &&
         !(hwc_layer->IsRotationPresent() || hwc_layer->IsScalingPresent())) {
       layer->flags.single_buffer = true;
@@ -826,7 +833,9 @@ void HWCDisplay::BuildLayerStack() {
     if (hwc_layer->IsColorTransformSet()) {
       layer->flags.color_transform = true;
     }
-
+    if (hwc_layer->GetOrigClientRequestedCompositionType() == Composition::DISPLAY_DECORATION) {
+      layer->input_buffer.flags.mask_layer = true;
+    }
     layer_stack_.flags.mask_present |= layer->input_buffer.flags.mask_layer;
 
     layer->flags.compatible = hwc_layer->IsLayerCompatible();
@@ -860,6 +869,7 @@ void HWCDisplay::BuildLayerStack() {
       dump_frame_count_ && (dump_output_to_file_ || dump_input_layers_);
   DLOGV_IF(kTagClient, "layer_stack_.client_incompatible : %d", layer_stack_.client_incompatible);
   ATRACE_INT("HDRPresent ", layer_stack_.flags.hdr_present ? 1 : 0);
+  ATRACE_INT("FrontBufferPresent ", layer_stack_.flags.front_buffer_layer_present ? 1 : 0);
 }
 
 void HWCDisplay::BuildSolidFillStack() {
@@ -879,7 +889,7 @@ void HWCDisplay::BuildSolidFillStack() {
 HWC3::Error HWCDisplay::SetLayerType(LayerId layer_id, LayerType type) {
   const auto map_layer = layer_map_.find(layer_id);
   if (map_layer == layer_map_.end()) {
-    DLOGW("display [%" PRIu64"]-[%" PRIu64 "] SetLayerType (%" PRIu64 ") failed to find layer",
+    DLOGW("display [%" PRIu64 "]-[%" PRIu64 "] SetLayerType (%" PRIu64 ") failed to find layer",
           id_, type_, layer_id);
     return HWC3::Error::BadLayer;
   }
@@ -1050,6 +1060,15 @@ HWC3::Error HWCDisplay::GetColorModes(uint32_t *out_num_modes, ColorMode *out_mo
     *out_num_modes = 1;
     out_modes[0] = ColorMode::NATIVE;
   }
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplay::getDisplayDecorationSupport(PixelFormat_V3 *format,
+                                                    AlphaInterpretation *alpha) {
+  // ScreenDecoration layers supported even if RC HW is disabled since its coming from framework
+  // and is independent of RC HW support.
+  *format = PixelFormat_V3::R_8;
+  *alpha = AlphaInterpretation::COVERAGE;
   return HWC3::Error::None;
 }
 
@@ -1329,6 +1348,11 @@ HWC3::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
   dump_frame_index_ = 0;
   dump_input_layers_ = ((bit_mask_layer_type & (1 << INPUT_LAYER_DUMP)) != 0);
 
+  if (dump_input_layers_) {
+    dump_input_frame_count_ = count;
+    dump_input_frame_index_ = 0;
+  }
+
   if (tone_mapper_) {
     tone_mapper_->SetFrameDumpConfig(count);
   }
@@ -1343,10 +1367,17 @@ HWC3::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
   bool dump_output_to_file = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
   DLOGI("Requested o/p dump enable = %d", dump_output_to_file);
 
-  if (!count || (dump_output_to_file && (output_buffer_info_.alloc_buffer_info.fd >= 0))) {
-    DLOGW("FrameDump Not enabled Framecount = %d dump_output_to_file = %d o/p fd = %d", count,
-          dump_output_to_file, output_buffer_info_.alloc_buffer_info.fd);
+  if (!count) {
+    DLOGW("No frame will dump as requested output frame count = 0.");
     return HWC3::Error::None;
+  } else {
+    // If buffer is being freed, wait using lock synchronization before checking buffer.
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
+    if (dump_output_to_file && (output_buffer_info_.alloc_buffer_info.fd >= 0)) {
+      DLOGW("FrameDump Not enabled Framecount = %d dump_output_to_file = %d o/p fd = %d", count,
+            dump_output_to_file, output_buffer_info_.alloc_buffer_info.fd);
+      return HWC3::Error::None;
+    }
   }
 
   SetFrameDumpConfig(count, bit_mask_layer_type, format);
@@ -1372,28 +1403,34 @@ HWC3::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
   output_buffer_info_.buffer_config.buffer_count = 1;
   if (buffer_allocator_->AllocateBuffer(&output_buffer_info_) != 0) {
     DLOGE("Buffer allocation failed");
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
     output_buffer_info_ = {};
     return HWC3::Error::NoResources;
   }
+  DLOGI("Output Frame dumping buffer is allocated!");
 
   void *buffer = mmap(NULL, output_buffer_info_.alloc_buffer_info.size, PROT_READ | PROT_WRITE,
                       MAP_SHARED, output_buffer_info_.alloc_buffer_info.fd, 0);
 
   if (buffer == MAP_FAILED) {
     DLOGE("mmap failed with err %d", errno);
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
     buffer_allocator_->FreeBuffer(&output_buffer_info_);
     output_buffer_info_ = {};
     dump_frame_count_ = 0;
+    DLOGI("Output Frame dumping buffer is freed!");
     return HWC3::Error::NoResources;
   }
 
   const native_handle_t *handle = static_cast<native_handle_t *>(output_buffer_info_.private_data);
   HWC3::Error err = SetReadbackBuffer(handle, nullptr, cwb_config, kCWBClientFrameDump);
   if (err != HWC3::Error::None) {
-    munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size);
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
+    munmap(buffer, output_buffer_info_.alloc_buffer_info.size);
     buffer_allocator_->FreeBuffer(&output_buffer_info_);
     output_buffer_info_ = {};
     dump_frame_count_ = 0;
+    DLOGI("Output Frame dumping buffer is freed!");
     return err;
   }
   dump_output_to_file_ = dump_output_to_file;
@@ -1936,11 +1973,11 @@ void HWCDisplay::DumpInputBuffers() {
   char dir_path[PATH_MAX];
   int status;
 
-  if (!dump_frame_count_ || flush_ || !dump_input_layers_) {
+  if (!dump_input_frame_count_ || flush_ || !dump_input_layers_) {
     return;
   }
 
-  DLOGI("dump_frame_count %d dump_input_layers %d", dump_frame_count_, dump_input_layers_);
+  DLOGI("dump_frame_count %d dump_input_layers %d", dump_input_frame_count_, dump_input_layers_);
   snprintf(dir_path, sizeof(dir_path), "%s/frame_dump_disp_id_%02u_%s", HWCDebugHandler::DumpDir(),
            UINT32(id_), GetDisplayString());
 
@@ -1972,12 +2009,15 @@ void HWCDisplay::DumpInputBuffers() {
         reinterpret_cast<const native_handle_t *>(layer->input_buffer.buffer_id);
     Fence::Wait(layer->input_buffer.acquire_fence);
 
-    DLOGI("Dump layer[%d] of %lu handle %p", i, layer_stack_.layers.size(), handle);
-
     if (!handle) {
-      DLOGE("Buffer handle is null");
+      DLOGW(
+          "Buffer handle is detected as null for layer: %s(%d) out of %lu layers with layer "
+          "flag value: %u",
+          layer->layer_name.c_str(), layer->layer_id, layer_stack_.layers.size(), layer->flags);
       continue;
     }
+
+    DLOGI("Dump layer[%d] of %lu handle %p", i, layer_stack_.layers.size(), handle);
 
     void *base_ptr = NULL;
     int error = buffer_allocator_->MapBuffer(handle, nullptr, &base_ptr);
@@ -1990,15 +2030,14 @@ void HWCDisplay::DumpInputBuffers() {
     size_t result = 0;
 
     uint32_t width = 0, height = 0, alloc_size = 0;
-    int32_t format = 0;
 
     buffer_allocator_->GetWidth((void *)handle, width);
     buffer_allocator_->GetHeight((void *)handle, height);
-    buffer_allocator_->GetFormat((void *)handle, format);
     buffer_allocator_->GetAllocationSize((void *)handle, alloc_size);
 
-    snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_format%d_frame%d.raw",
-             dir_path, i, width, height, format, dump_frame_index_);
+    snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_%s_frame%d.raw",
+             dir_path, i, width, height, GetFormatString(layer->input_buffer.format),
+             dump_input_frame_index_);
 
     if (base_ptr != nullptr) {
       FILE *fp = fopen(dump_file_name, "w+");
@@ -2022,6 +2061,8 @@ void HWCDisplay::DumpInputBuffers() {
       break;
     }
   }
+  dump_input_frame_count_--;
+  dump_input_frame_index_++;
 }
 
 void HWCDisplay::DumpOutputBuffer(const BufferInfo &buffer_info, void *base,
@@ -2515,11 +2556,12 @@ bool HWCDisplay::IsLayerUpdating(HWCLayer *hwc_layer) {
   auto layer = hwc_layer->GetSDMLayer();
   // Layer should be considered updating if
   //   a) layer is in single buffer mode, or
-  //   b) valid dirty_regions(android specific hint for updating status), or
-  //   c) layer stack geometry has changed (TODO(user): Remove when SDM accepts
+  //   b) layer is front buffer rendering, or
+  //   c) valid dirty_regions(android specific hint for updating status), or
+  //   d) layer stack geometry has changed (TODO(user): Remove when SDM accepts
   //      geometry_changed as bit fields).
-  return (layer->flags.single_buffer || hwc_layer->IsSurfaceUpdated() ||
-          hwc_layer->GetGeometryChanges());
+  return (layer->flags.single_buffer || layer->flags.front_buffer ||
+          hwc_layer->IsSurfaceUpdated() || hwc_layer->GetGeometryChanges());
 }
 
 DisplayClass HWCDisplay::GetDisplayClass() {
@@ -2812,7 +2854,7 @@ HWC3::Error HWCDisplay::SetActiveConfigWithConstraints(
                                 vsync_period_change_constraints->desiredTimeNanos);
 
   out_timeline->refreshRequired = true;
-  if (info.x_pixels != fb_width_ || info.y_pixels != fb_height_) {
+  if (is_client_up_ && (info.x_pixels != fb_width_ || info.y_pixels != fb_height_)) {
     out_timeline->refreshRequired = false;
     fb_width_ = info.x_pixels;
     fb_height_ = info.y_pixels;
@@ -3032,7 +3074,7 @@ DisplayError HWCDisplay::ValidateTUITransition(SecureEvent secure_event) {
       }
       break;
     case kTUITransitionStart:
-      if (secure_event_ != kSecureEventMax) {
+      if (secure_event_ != kTUITransitionPrepare) {
         DLOGE("Invalid TUI transition from %d to %d", secure_event_, secure_event);
         return kErrorParameters;
       }
@@ -3050,8 +3092,14 @@ DisplayError HWCDisplay::ValidateTUITransition(SecureEvent secure_event) {
   return kErrorNone;
 }
 
-DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh) {
+DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh,
+                                           bool update_event_only) {
   if (secure_event == secure_event_) {
+    return kErrorNone;
+  }
+
+  if (update_event_only) {
+    secure_event_ = secure_event;
     return kErrorNone;
   }
 
@@ -3091,7 +3139,14 @@ DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs
 }
 
 DisplayError HWCDisplay::PostHandleSecureEvent(SecureEvent secure_event) {
-  return display_intf_->PostHandleSecureEvent(secure_event);
+  DisplayError err = display_intf_->PostHandleSecureEvent(secure_event);
+  if (err == kErrorNone) {
+    if (secure_event == kTUITransitionEnd || secure_event == kTUITransitionUnPrepare) {
+      return kErrorNone;
+    }
+    secure_event_ = secure_event;
+  }
+  return err;
 }
 
 int HWCDisplay::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels,
@@ -3107,41 +3162,38 @@ int HWCDisplay::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels
   return 0;
 }
 
-DisplayError HWCDisplay::TeardownConcurrentWriteback(bool *needs_refresh) {
-  if (!needs_refresh) {
-    return kErrorParameters;
-  }
-
+DisplayError HWCDisplay::TeardownConcurrentWriteback() {
   if (!display_intf_->HandleCwbTeardown()) {
-    bool pending_cwb_request = false;
-    {
-      std::unique_lock<std::mutex> lock(cwb_mutex_);
-      pending_cwb_request = !!cwb_buffer_map_.size();
-    }
-
-    if (!pending_cwb_request) {
-      dump_frame_count_ = 0;
-      dump_frame_index_ = 0;
-      dump_output_to_file_ = false;
-      if (output_buffer_base_ != nullptr) {
-        if (munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
-          DLOGW("unmap failed with err %d", errno);
-        }
-      }
-
-      if (buffer_allocator_ && buffer_allocator_->FreeBuffer(&output_buffer_info_) != 0) {
-        DLOGW("FreeBuffer failed");
-      }
-      output_buffer_info_ = {};
-      output_buffer_base_ = nullptr;
-      frame_capture_buffer_queued_ = false;
-      frame_capture_status_ = 0;
-      *needs_refresh = false;
-      return kErrorNone;
-    }
+    return kErrorNotSupported;
   }
 
-  *needs_refresh = true;
+  bool pending_cwb_request = false;
+  {
+    std::unique_lock<std::mutex> lock(cwb_mutex_);
+    pending_cwb_request = !!cwb_buffer_map_.size();
+  }
+
+  if (!pending_cwb_request) {
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
+    dump_frame_count_ = 0;
+    dump_frame_index_ = 0;
+    dump_output_to_file_ = false;
+    if (output_buffer_base_ != nullptr) {
+      if (munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
+        DLOGW("unmap failed with err %d", errno);
+      }
+    }
+
+    if (buffer_allocator_ && buffer_allocator_->FreeBuffer(&output_buffer_info_) != 0) {
+      DLOGW("FreeBuffer failed");
+    }
+    output_buffer_info_ = {};
+    output_buffer_base_ = nullptr;
+    frame_capture_buffer_queued_ = false;
+    frame_capture_status_ = 0;
+    DLOGI("Output Frame dumping buffer is freed!");
+  }
+
   return kErrorNone;
 }
 
@@ -3184,7 +3236,7 @@ HWC3::Error HWCDisplay::TryDrawMethod(DrawMethod client_drawMethod) {
     draw_method_ = kDrawDefault;
     status = HWC3::Error::Unsupported;
     DLOGI("Enabling default draw method");
-  } else if (client_drawMethod != DrawMethod::kUnifiedDraw) {
+  } else if (client_drawMethod != DrawMethod::UNIFIED_DRAW) {
     // Driver supports unified draw.
     // If client doesnt support unified draw, limit to kDrawUnified.
     draw_method_ = kDrawUnified;
@@ -3213,7 +3265,7 @@ HWC3::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   }
 
   if (secure_event_ != kSecureEventMax) {
-    DLOGE("CWB is not supported as TUI transition is in progress");
+    DLOGW("CWB is not supported as TUI transition is in progress");
     return HWC3::Error::Unsupported;
   }
 
@@ -3297,12 +3349,17 @@ HWC3::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   DisplayError error = kErrorNone;
   error = display_intf_->CaptureCwb(output_buffer, config);
   if (error) {
-    DLOGE("CaptureCwb failed");
     if (error == kErrorParameters) {
+      DLOGE("Invalid input parameter detected (display %d-%d)!", sdm_id_, type_);
       return HWC3::Error::BadParameter;
+    } else if (error == kErrorShutDown) {
+      DLOGW("Display %d-%d is not registered for readback!", sdm_id_, type_);
+    } else if (error == kErrorResources) {
+      DLOGW("Writeback block might busy or not available for display %d-%d!", sdm_id_, type_);
     } else {
-      return HWC3::Error::Unsupported;
+      DLOGW("Readback feature is not supported for display %d-%d!", sdm_id_, type_);
     }
+    return HWC3::Error::Unsupported;
   }
 
   {
@@ -3368,7 +3425,7 @@ CWBReleaseFenceError HWCDisplay::GetReadbackBufferFenceForClient(CWBClient clien
     } else {
       // If this function is called too early, then just need to check that cwb request is
       // persisting, which helps to decide the return status.
-      for (auto[id, cl] : cwb_buffer_map_) {
+      for (auto [id, cl] : cwb_buffer_map_) {
         if (cl == client) {
           handle_id = id;
           break;
@@ -3454,7 +3511,7 @@ void HWCDisplay::HandleFrameOutput() {
         cwb_resp.client = client;
         cwb_resp.status = kCWBReleaseFenceNotChecked;  // CWB request status is not yet notified
       } else {
-        for (auto & [ _, ccs ] : cwb_capture_status_map_) {
+        for (auto &[_, ccs] : cwb_capture_status_map_) {
           if (ccs.handle_id == handle_id) {
             client = ccs.client;
             break;
@@ -3462,7 +3519,7 @@ void HWCDisplay::HandleFrameOutput() {
         }
       }
     } else {
-      for (auto & [ _, ccs ] : cwb_capture_status_map_) {
+      for (auto &[_, ccs] : cwb_capture_status_map_) {
         if (ccs.handle_id != 0) {
           client = ccs.client;
           handle_id = ccs.handle_id;
@@ -3531,7 +3588,7 @@ void HWCDisplay::HandleFrameDump() {
         SetReadbackBuffer(hnd, nullptr, output_buffer_cwb_config_, kCWBClientFrameDump);
     if (err != HWC3::Error::None) {
       stop_frame_dump = true;
-      DLOGE("Unexpectedly stopped dumping of remaining %d frames for frame indices %d onwards!",
+      DLOGW("Unexpectedly stopped dumping of remaining %d frames for frame indices %d onwards!",
             dump_frame_count_, dump_frame_index_);
     } else {
       dump_frame_count_--;
@@ -3540,11 +3597,13 @@ void HWCDisplay::HandleFrameDump() {
   }
 
   if (stop_frame_dump) {
+    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
     dump_output_to_file_ = false;
     // Unmap and Free buffer
     if (munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
       DLOGE("unmap failed with err %d", errno);
     }
+
     if (buffer_allocator_->FreeBuffer(&output_buffer_info_) != 0) {
       DLOGE("FreeBuffer failed");
     }
@@ -3554,6 +3613,7 @@ void HWCDisplay::HandleFrameDump() {
     output_buffer_cwb_config_ = {};
     dump_frame_count_ = 0;
     dump_frame_index_ = 0;
+    DLOGI("Output Frame dumping buffer is freed!");
   }
 }
 
@@ -3635,7 +3695,10 @@ void HWCDisplay::NotifyCwbDone(int32_t status, const LayerBuffer &buffer) {
   }
 
   DLOGV_IF(kTagClient, "CWB notified for client = %d with buffer = %u, return status = %s(%d)",
-           client, handle_id, (!status) ? "Handled" : (status == -ETIME) ? "Timedout" : "Error",
+           client, handle_id,
+           (!status)            ? "Handled"
+           : (status == -ETIME) ? "Timedout"
+                                : "Error",
            status);
 }
 
@@ -3643,4 +3706,7 @@ void HWCDisplay::Abort() {
   display_intf_->Abort();
 }
 
+void HWCDisplay::MarkClientActive(bool is_client_up) {
+  is_client_up_ = is_client_up;
+}
 }  // namespace sdm

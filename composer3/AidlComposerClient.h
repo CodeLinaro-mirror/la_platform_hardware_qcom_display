@@ -15,21 +15,17 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef __AIDLCOMPOSERCLIENT_H__
-#define __AIDLCOMPOSERCLIENT_H__
-
 #pragma once
+
 #include <log/log.h>
 #include <unordered_set>
 #include <vector>
 #include <string>
-
+#include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #include <aidlcommonsupport/NativeHandle.h>
 #include "hwc_session.h"
@@ -47,14 +43,17 @@ namespace composer3 {
   x == 0 ? ndk::ScopedAStatus::ok() : ndk::ScopedAStatus::fromServiceSpecificError(x)
 
 using aidl::android::hardware::common::NativeHandle;
+using aidl::android::hardware::graphics::common::AlphaInterpretation;
 using aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::DisplayDecorationSupport;
+using aidl::android::hardware::graphics::common::FRect;
 using aidl::android::hardware::graphics::common::Hdr;
+using aidl::android::hardware::graphics::common::HdrConversionCapability;
+using aidl::android::hardware::graphics::common::HdrConversionStrategy;
 using aidl::android::hardware::graphics::common::PixelFormat;
 using aidl::android::hardware::graphics::common::Point;
-using aidl::android::hardware::graphics::common::Transform;
 using aidl::android::hardware::graphics::common::Rect;
-using aidl::android::hardware::graphics::common::FRect;
+using aidl::android::hardware::graphics::common::Transform;
 using aidl::android::hardware::graphics::composer3::BnComposerClient;
 using aidl::android::hardware::graphics::composer3::Buffer;
 using aidl::android::hardware::graphics::composer3::ClientTarget;
@@ -76,13 +75,14 @@ using aidl::android::hardware::graphics::composer3::FormatColorComponent;
 using aidl::android::hardware::graphics::composer3::HdrCapabilities;
 using aidl::android::hardware::graphics::composer3::IComposerCallback;
 using aidl::android::hardware::graphics::composer3::LayerBrightness;
+using aidl::android::hardware::graphics::composer3::OverlayProperties;
 using aidl::android::hardware::graphics::composer3::ParcelableBlendMode;
 using aidl::android::hardware::graphics::composer3::ParcelableComposition;
 using aidl::android::hardware::graphics::composer3::ParcelableDataspace;
 using aidl::android::hardware::graphics::composer3::ParcelableTransform;
 using aidl::android::hardware::graphics::composer3::PerFrameMetadata;
-using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
 using aidl::android::hardware::graphics::composer3::PerFrameMetadataBlob;
+using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
 using aidl::android::hardware::graphics::composer3::PlaneAlpha;
 using aidl::android::hardware::graphics::composer3::PowerMode;
 using aidl::android::hardware::graphics::composer3::ReadbackBufferAttributes;
@@ -91,8 +91,9 @@ using aidl::android::hardware::graphics::composer3::VirtualDisplay;
 using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeConstraints;
 using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeTimeline;
 using aidl::android::hardware::graphics::composer3::ZOrder;
-using ndk::ScopedAStatus;
 using ::android::hardware::hidl_handle;
+using ndk::ScopedAStatus;
+using ndk::SpAIBinder;
 
 using std::shared_ptr;
 using sdm::HWCSession;
@@ -162,6 +163,7 @@ class AidlComposerClient : public BnComposerClient {
   ScopedAStatus getDisplayPhysicalOrientation(int64_t in_display, Transform *aidl_return) override;
   ScopedAStatus getHdrCapabilities(int64_t in_display, HdrCapabilities *aidl_return) override;
   ScopedAStatus getMaxVirtualDisplayCount(int32_t *aidl_return) override;
+  ScopedAStatus getOverlaySupport(OverlayProperties *aidl_return) override;
   ScopedAStatus getPerFrameMetadataKeys(int64_t in_display,
                                         std::vector<PerFrameMetadataKey> *aidl_return) override;
   ScopedAStatus getReadbackBufferAttributes(int64_t in_display,
@@ -197,6 +199,12 @@ class AidlComposerClient : public BnComposerClient {
                                   const ::ndk::ScopedFileDescriptor &in_release_fence) override;
   ScopedAStatus setVsyncEnabled(int64_t in_display, bool in_enabled) override;
   ScopedAStatus setIdleTimerEnabled(int64_t in_display, int32_t in_timeout_ms) override;
+  ScopedAStatus getHdrConversionCapabilities(
+      std::vector<HdrConversionCapability> *_aidl_return) override;
+  ScopedAStatus setHdrConversionStrategy(const HdrConversionStrategy &in_conversionStrategy,
+                                         Hdr *_aidl_return) override;
+  ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t in_display,
+                                                          bool in_enabled) override;
 
   // Methods for RegisterCallback
   void EnableCallback(bool enable);
@@ -212,6 +220,13 @@ class AidlComposerClient : public BnComposerClient {
   // Methods for ConcurrentWriteBack
   Error getDisplayReadbackBuffer(int64_t display, const native_handle_t *rawHandle,
                                  const native_handle_t **outHandle);
+
+  // Methods for extensions (QtiComposer3Client)
+  ScopedAStatus executeQtiCommands(const std::vector<QtiDisplayCommand> &in_commands,
+                                   std::vector<CommandResultPayload> *aidl_return);
+
+ protected:
+  SpAIBinder createBinder() override;
 
  private:
   struct LayerBuffers {
@@ -237,6 +252,8 @@ class AidlComposerClient : public BnComposerClient {
     bool init();
     Error execute(const std::vector<DisplayCommand> &in_commands,
                   std::vector<CommandResultPayload> *aidl_return);
+    Error qtiExecute(const std::vector<QtiDisplayCommand> &in_commands,
+                     std::vector<CommandResultPayload> *aidl_return);
     Error validateDisplay(int64_t display);
     Error presentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
 
@@ -246,12 +263,12 @@ class AidlComposerClient : public BnComposerClient {
     template <typename field, typename... Args, typename... prototypeParams>
     void ExecuteCommand(field &commandField, void (CommandEngine::*func)(prototypeParams...),
                         Args &&... args) {
-      if (commandField) {
+      if ((static_cast<bool>(commandField))) {
         (this->*func)(std::forward<Args>(args)...);
       }
     }
     __attribute__((always_inline)) inline void writeError(std::string function, Error err) {
-      ALOGE("%s: error: %s", function.c_str(), sdm::to_string(err).c_str());
+      ALOGW("%s: error: %s", function.c_str(), sdm::to_string(err).c_str());
       mWriter->setError(mCommandIndex, INT32(err));
     }
 
@@ -303,6 +320,12 @@ class AidlComposerClient : public BnComposerClient {
         int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
+
+    // Commands from extensions (QtiComposer3Client)
+    void executeSetClientTarget_3_1(int64_t display, const ClientTarget &command);
+    void executeSetDisplayElapseTime(int64_t display, uint64_t time);
+    void executeSetLayerType(int64_t display, int64_t layer, sdm::LayerType type);
+    void executeSetLayerFlag(int64_t display, int64_t layer, sdm::LayerFlag flag);
 
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
@@ -360,5 +383,3 @@ class AidlComposerClient : public BnComposerClient {
 }  // namespace qti
 }  // namespace vendor
 }  // namespace aidl
-
-#endif  // __AIDLCOMPOSERCLIENT_H__

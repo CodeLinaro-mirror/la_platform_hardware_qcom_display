@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -117,6 +117,7 @@ class DisplayConfigAIDL : public BnDisplayConfig {
   ScopedAStatus controlQsyncCallback(bool enable) override;
   ScopedAStatus sendTUIEvent(DisplayType dpy, TUIEventType event_type) override;
   ScopedAStatus getDisplayHwId(int disp_id, int *display_hw_id) override;
+  ScopedAStatus setClientUp() override;
   ScopedAStatus getSupportedDisplayRefreshRates(DisplayType dpy,
                                                 std::vector<int> *supported_refresh_rates) override;
   ScopedAStatus isRCSupported(int disp_id, bool *supported) override;

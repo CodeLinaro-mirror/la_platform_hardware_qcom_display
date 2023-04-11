@@ -333,9 +333,8 @@ void BufferManager::RegisterHandleLocked(const private_handle_t *hnd, int ion_ha
   auto buffer = std::make_shared<Buffer>(hnd, ion_handle, ion_handle_meta);
 
   if (hnd->base_metadata) {
-    auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
 #ifdef METADATA_V2
-    buffer->reserved_size = metadata->reservedSize;
+    buffer->reserved_size = hnd->reserved_size;
     if (buffer->reserved_size > 0) {
       buffer->reserved_region_ptr =
           reinterpret_cast<void *>(hnd->base_metadata + sizeof(MetaData_t));
@@ -721,10 +720,16 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   *handle = hnd;
 
   RegisterHandleLocked(hnd, data.ion_handle, e_data.ion_handle);
-  ALOGD_IF(enable_logs, "Allocated buffer handle: %p id: %" PRIu64, hnd, hnd->id);
-  if (enable_logs) {
-    private_handle_t::Dump(hnd);
-  }
+  ALOGD_IF(enable_logs,
+           "Allocated buffer info: handle id:%" PRIu64
+           " wxh:%dx%d uwxuh:%dx%d size: %d fd:%d fd_meta:%d flags:0x%x "
+           "usage:0x%" PRIx64
+           "  format:0x%x layer_count: %d reserved_size: %d"
+           " name:\"%s\" requested_format:0x%x requested_usage:0x%" PRIx64 "",
+           hnd->id, hnd->width, hnd->height, hnd->unaligned_width, hnd->unaligned_height, hnd->size,
+           hnd->fd, hnd->fd_metadata, hnd->flags, hnd->usage, hnd->format, hnd->layer_count,
+           hnd->reserved_size, descriptor.GetName().c_str(), descriptor.GetFormat(),
+           descriptor.GetUsage());
   return Error::NONE;
 }
 

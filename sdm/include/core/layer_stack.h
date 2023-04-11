@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -172,19 +172,20 @@ enum LayerUpdate {
 };
 
 enum GeometryChanges {
-  kNone         = 0x000,
-  kBlendMode    = 0x001,
-  kDataspace    = 0x002,
+  kNone = 0x000,
+  kBlendMode = 0x001,
+  kDataspace = 0x002,
   kDisplayFrame = 0x004,
-  kPlaneAlpha   = 0x008,
-  kSourceCrop   = 0x010,
-  kTransform    = 0x020,
-  kZOrder       = 0x040,
-  kAdded        = 0x080,
-  kRemoved      = 0x100,
+  kPlaneAlpha = 0x008,
+  kSourceCrop = 0x010,
+  kTransform = 0x020,
+  kZOrder = 0x040,
+  kAdded = 0x080,
+  kRemoved = 0x100,
   kBufferGeometry = 0x200,
   kColorTransform = 0x400,
-  kDefault      = 0xFFFF,
+  kLayerBrightness = 0x800,
+  kDefault = 0xFFFF,
 };
 
 /*! @brief This structure defines rotation and flip values for a display layer.
@@ -274,6 +275,11 @@ struct LayerFlags {
       uint32_t skip_iwe : 1;
                               //!< This flag shall be set to indicate that this layer
                               //!< is handled by IWE for two phase composition.
+      // clang-format off
+      uint32_t front_buffer : 1;
+                              //!< This flag shall be set by client to indicate that the layer
+                              //!< is used for front-buffer rendering
+      // clang-format on
     };
 
     uint32_t flags = 0;       //!< For initialization purpose only.
@@ -404,6 +410,8 @@ struct LayerStackFlags {
       uint32_t iwe_present : 1;  //!< This flag shall be set to true to indicate stack has iwe layer
 
       bool default_strategy: 1;  //!< This flag indicates the default strategy usage.
+
+      uint32_t front_buffer_layer_present : 1;  //!< Set if stack has front buffer layer.
     };
 
     uint32_t flags = 0;               //!< For initialization purpose only.
@@ -526,6 +534,7 @@ struct Layer {
                                                    //!< if LayerStackFlag layer_id_support is True.
 
   std::string layer_name = "";                     //!< Layer full name
+  float layer_brightness = 1.0;                    //!< Layer brightness
 };
 
 /*! @brief This structure defines the color space + transfer of a given layer.
@@ -590,6 +599,7 @@ struct LayerStack {
   bool tonemapper_active  = false;
   CwbConfig *cwb_config = NULL;        //!< Struct that contains the original CWB configuration
                                        //!< provided by CWB client.
+  int32_t cwb_id = -1;                 //!< Populate writeback connector ID allocated for CWB.
   bool validate_only = false;
   bool client_incompatible = false;    //!< Flag to disable async commit when client target is
                                        //!< not compatible.

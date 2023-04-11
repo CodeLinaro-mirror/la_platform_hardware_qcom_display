@@ -29,6 +29,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_INFO_DRM_H__
 #define __HW_INFO_DRM_H__
 
@@ -82,6 +89,7 @@ class HWInfoDRM : public HWInfoInterface {
 
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};
   bool default_mode_ = false;
+  uint32_t max_cwb_ = 0;
 
   static const int kMaxStringLength = 1024;
   static const int kKiloUnit = 1000;

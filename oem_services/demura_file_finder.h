@@ -25,29 +25,30 @@
  *WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  *OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  *IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *Changes from Qualcomm Innovation Center are provided under the following license:
+ *Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __DEMURA_FILE_FINDER_H__
 #define __DEMURA_FILE_FINDER_H__
 
-#include <vendor/qti/hardware/display/demura/2.0/IDemuraFileFinder.h>
-#include <hidl/MQDescriptor.h>
-#include <hidl/Status.h>
+#include <aidl/vendor/qti/hardware/display/demura/BnDemuraFileFinder.h>
 #include <log/log.h>
 #include <utils/sys.h>
 #include <file_finder_interface.h>
 
+namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
 namespace demura {
-namespace V2_0 {
 namespace implementation {
-using ::android::hardware::Return;
-using ::android::hardware::Void;
 using sdm::FileFinderInterface;
-using ::vendor::qti::hardware::display::demura::V2_0::IDemuraFileFinder;
+using ::aidl::vendor::qti::hardware::display::demura::IDemuraFileFinder;
+using DemuraFilePaths = IDemuraFileFinder::DemuraFilePaths;
 
 #define OEM_FILE_FINDER_LIB_NAME "libfilefinder.so"
 #define GET_FILE_FINDER_INTF_NAME "GetFileFinderIntf"
@@ -55,26 +56,26 @@ using ::vendor::qti::hardware::display::demura::V2_0::IDemuraFileFinder;
 typedef FileFinderInterface *(*GetFileFinderIntf)();
 typedef void *(*DestroyFileFinderIntf)();
 
-class DemuraFileFinder : public IDemuraFileFinder {
+class DemuraFileFinder : public BnDemuraFileFinder {
  public:
   virtual ~DemuraFileFinder();
-  static IDemuraFileFinder *GetInstance();
+  static int Init();
   static FileFinderInterface *file_intf_;
-  static IDemuraFileFinder *file_finder_;
   static DestroyFileFinderIntf destroy_ff_intf_;
 
   // IDemuraFileFinder
-  Return<void> getDemuraFilePaths(uint64_t panel_id, getDemuraFilePaths_cb _hidl_cb) override;
+  ::ndk::ScopedAStatus getDemuraFilePaths(int64_t in_panel_id,
+                                          DemuraFilePaths* out_file_paths);
 
  private:
 };
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace demura
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
+}  // namespace aidl
 
 #endif  // __DEMURA_FILE_FINDER_H__

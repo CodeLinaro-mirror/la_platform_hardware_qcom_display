@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -63,41 +63,42 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <vendor/qti/hardware/display/demura/2.0/IDemuraFileFinder.h>
-#include <hidl/Status.h>
-#include <hidl/MQDescriptor.h>
+#include <aidl/vendor/qti/hardware/display/demura/BnDemuraFileFinder.h>
 #include <binder/ProcessState.h>
-#include <hidl/LegacySupport.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
 #include <log/log.h>
 #include "demura_file_finder.h"
 
-using vendor::qti::hardware::display::demura::V2_0::IDemuraFileFinder;
-using vendor::qti::hardware::display::demura::V2_0::implementation::DemuraFileFinder;
-
-using android::sp;
-using android::hardware::configureRpcThreadpool;
-using android::hardware::joinRpcThreadpool;
-
-using android::status_t;
-using android::OK;
-
-using android::hardware::LazyServiceRegistrar;
+using aidl::vendor::qti::hardware::display::demura::IDemuraFileFinder;
+using aidl::vendor::qti::hardware::display::demura::implementation::DemuraFileFinder;
 
 int main() {
-    android::ProcessState::initWithDriver("/dev/vndbinder");
-    android::sp<IDemuraFileFinder> demura_file_finder = DemuraFileFinder::GetInstance();
-    if (!demura_file_finder) {
-      ALOGE("Could not create the IDemuraFileFinder, not registering process!!");
-      return -1;
-    }
-    configureRpcThreadpool(1, true /*callerWillJoin*/);
+    ABinderProcess_setThreadPoolMaxThreadCount(0);
 
-    auto demura_service_registrar = LazyServiceRegistrar::getInstance();
-    if (demura_service_registrar.registerService(demura_file_finder) != OK) {
-        ALOGE("Cannot register Lazy Demura service");
-        return -EINVAL;
+    if (DemuraFileFinder::Init()) {
+        ALOGE("Failed to init");
+        return -1;
     }
 
-    joinRpcThreadpool();
-    return 0;
+    std::shared_ptr<DemuraFileFinder> demuraFileFinder =
+                                  ndk::SharedRefBase::make<DemuraFileFinder>();
+    const std::string name_demura = std::string() +
+                                    DemuraFileFinder::descriptor + "/default";
+
+    if (!demuraFileFinder) {
+        ALOGE("Failed to get IDemuraFileFinder instance");
+        return -1;
+    }
+
+    if(AServiceManager_registerLazyService(demuraFileFinder->asBinder().get(),
+                                   name_demura.c_str()) != STATUS_OK) {
+        ALOGE("Failed to register IDemuraFileFinder service");
+        return -1;
+    }
+
+    ALOGI("IDemuraFileFinder service starts to join service pool");
+    ABinderProcess_joinThreadPool();
+
+    return EXIT_FAILURE;  // should not reached
 }
