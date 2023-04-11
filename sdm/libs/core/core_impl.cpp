@@ -106,18 +106,17 @@ DisplayError CoreImpl::Init() {
   enable_null_display_ = (value == 1);
   DLOGI("property: enable_null_display_ = %d", enable_null_display_);
   if (enable_null_display_) {
-    hw_info_intf_[0] = new HWInfoDefault();
+    hw_info_intf_.push_back(new HWInfoDefault());
     return kErrorNone;
   }
 
   error = HWInfoInterface::Create(&hw_info_intf_, core_ids_);
   if (error != kErrorNone) {
     DisplayError err = HandleNullDisplay();
-
     if ((err != kErrorNone) || !enable_null_display_) {
       goto CleanupOnError;
     }
-    hw_info_intf_[0] = new HWInfoDefault();
+    hw_info_intf_.push_back(new HWInfoDefault());
     return kErrorNone;
   }
 
@@ -142,7 +141,7 @@ DisplayError CoreImpl::Init() {
     if (hw_info_intf_[0]) {
       HWInfoInterface::Destroy(hw_info_intf_);
     }
-    hw_info_intf_[0] = new HWInfoDefault();
+    hw_info_intf_.push_back(new HWInfoDefault());;
     return kErrorNone;
   }
 
@@ -418,6 +417,8 @@ DisplayError CoreImpl::DestroyNullDisplay(DisplayInterface *intf) {
 
 DisplayError CoreImpl::HandleNullDisplay() {
   // Initializing comp_mgr with default hw resource
+  HWResourceInfo hw_resource;
+  hw_resource_.push_back(hw_resource);
   DisplayError error = comp_mgr_.Init(hw_resource_, extension_intf_, buffer_allocator_,
                                       socket_handler_);
   if (error != kErrorNone) {
