@@ -136,6 +136,17 @@ class HWEventsDRM : public HWEventsInterface {
   DisplayError RegisterPowerEvents(bool enable);
   DisplayError RegisterVmReleaseEvents(bool enable);
 
+/*
+ * std::map vsync_status - save each vsync_enabled_
+ *
+ * @key:   poll_fds_[vsync_index_].fd
+ * @value: vsync_enabled_
+ *
+ * For VsyncHandlerCallback to check vsync_enabled_
+ * by specified fd in different Vsync event threads
+ */
+  static std::map<int ,bool> vsync_status;
+
   HWEventHandler *event_handler_{};
   vector<HWEventData> event_data_list_{};
   vector<pollfd> poll_fds_{};
