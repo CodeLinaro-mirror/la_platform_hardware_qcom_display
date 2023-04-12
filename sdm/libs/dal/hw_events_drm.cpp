@@ -114,6 +114,8 @@ namespace sdm {
 
 using drm_utils::DRMMaster;
 
+std::map<int ,bool> HWEventsDRM::vsync_status;
+
 DisplayError HWEventsDRM::InitializePollFd() {
   for (uint32_t i = 0; i < event_data_list_.size(); i++) {
     char data[kMaxStringLength]{};
@@ -136,6 +138,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
           poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         }
         vsync_index_ = i;
+        vsync_status[poll_fds_[vsync_index_].fd] = false;
       } break;
       case HWEvent::EXIT: {
         // Create an eventfd to be used to unblock the poll system call when
@@ -353,6 +356,7 @@ DisplayError HWEventsDRM::Deinit() {
   Sys::pthread_cancel_(event_thread_);
   WakeUpEventThread();
   pthread_join(event_thread_, NULL);
+  vsync_status.erase(poll_fds_[vsync_index_].fd);
   CloseFds();
 
   return kErrorNone;
@@ -372,6 +376,7 @@ DisplayError HWEventsDRM::SetEventState(HWEvent event, bool enable, void *arg) {
     case HWEvent::VSYNC: {
       std::lock_guard<std::mutex> lock(vsync_mutex_);
       vsync_enabled_ = enable;
+      vsync_status[poll_fds_[vsync_index_].fd] = vsync_enabled_;
       if (vsync_enabled_ && !registered_hw_events_.test(HWEvent::VSYNC)) {
         error = RegisterVSync();
         if (error != kErrorNone) {
@@ -866,6 +871,11 @@ void HWEventsDRM::HandlePanelDead(char *data) {
 void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
   HWEventsDRM *ev_data = reinterpret_cast<HWEventsDRM *>(data);
+  bool vsync_enabled = vsync_status[fd];
+
+  if (!vsync_enabled)
+    return;
+
   ev_data->vsync_handler_count_++;
   int64_t timestamp = (int64_t)(tv_sec)*1000000000 + (int64_t)(tv_usec)*1000;
   DTRACE_SCOPED();
