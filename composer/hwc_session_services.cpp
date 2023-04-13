@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -556,107 +556,9 @@ Return<int32_t> HWCSession::createTunnelledLayer(const IDisplayConfig::LayerInfo
 
 Return<int32_t> HWCSession::createTunnelledLayerforDisplay(uint32_t disp_id,
                                                  const IDisplayConfig::LayerInfo& layer) {
-  if (tunneling_enabled_ == false) {
-    DLOGE("Tunneling not enabled\n");
-    return EINVAL;
-  }
-
-  if (tunneled_layer_ != -1) {
-    DLOGE("Tunneled Layer already present for display Id %d", tunneled_display_id_);
-    return EINVAL;
-  }
-
-  tunneled_display_id_ = disp_id;
-  tunneled_layer_params_ = layer;
+  DLOGE("createTunnelledLayerforDisplay API is depricated.\n"
+        "Tunnelled layer should be created by SurfaceFlinger.");
   return 0;
-}
-
-int32_t HWCSession::CreateTunneledLayerInternal() {
-  int32_t error = -EINVAL;
-
-  if (tunneled_display_id_ == -1) {
-    DLOGE("Invalid display = %d", tunneled_display_id_);
-    return error;
-  }
-
-  int disp_idx = GetDisplayIndex(tunneled_display_id_);
-  if (disp_idx == -1) {
-    DLOGE("Invalid display = %d", tunneled_display_id_);
-    tunneled_display_id_ = -1;
-    return error;
-  }
-
-  if (!hwc_display_[disp_idx]) {
-    DLOGE("Display is not connected");
-    return error;
-  }
-
-  DLOGV("Tunneled display id = %d", tunneled_display_id_);
-
-  error = CreateLayer(tunneled_display_id_, &tunneled_layer_);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("CreateLayer failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-  SetLayerIsTunneled(tunneled_display_id_, tunneled_layer_, true);
-  error = SetLayerZOrder(tunneled_display_id_, tunneled_layer_, tunneled_layer_params_.z_order);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("SetLayerZOrder failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-
-  hwc_frect_t rect;
-  rect.left = tunneled_layer_params_.src_rect.left;
-  rect.top = tunneled_layer_params_.src_rect.top;
-  rect.right = tunneled_layer_params_.src_rect.right;
-  rect.bottom = tunneled_layer_params_.src_rect.bottom;
-  error = SetLayerSourceCrop(tunneled_display_id_, tunneled_layer_, rect);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("SetLayerSourceCrop failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-
-  error = SetLayerTransform(tunneled_display_id_, tunneled_layer_,
-                            (int32_t)tunneled_layer_params_.layer_transform );
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("SetLayerTransform failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-
-  hwc_rect_t dst_rect;
-  dst_rect.left = tunneled_layer_params_.dst_rect.left;
-  dst_rect.top = tunneled_layer_params_.dst_rect.top;
-  dst_rect.right = tunneled_layer_params_.dst_rect.right;
-  dst_rect.bottom = tunneled_layer_params_.dst_rect.bottom;
-  error = SetLayerDisplayFrame(tunneled_display_id_, tunneled_layer_, dst_rect);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("SetLayerDisplayFrame failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-
-  error = SetLayerPlaneAlpha(tunneled_display_id_, tunneled_layer_,
-                             (float)tunneled_layer_params_.plane_alpha);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("SetLayerPlaneAlpha failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-
-  error = SetLayerDataspace(tunneled_display_id_, tunneled_layer_,
-                            tunneled_layer_params_.dataspace);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("SetLayerDataspace failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-
-  error = SetLayerBlendMode(tunneled_display_id_, tunneled_layer_,
-                            (int32_t)tunneled_layer_params_.blending);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("SetLayerBlendMode failed! Exiting createTunnelledLayer.\n");
-    return error;
-  }
-
-  return 0;
-
 }
 
 Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
@@ -665,12 +567,6 @@ Return<void> HWCSession::dequeueTunnelledBuffer(const hidl_handle& buffer,
   native_handle_t* handle = nullptr;
   if (tunneling_enabled_ == false) {
     DLOGE("Tunneling not enabled\n");
-    _hidl_cb(-EINVAL, handle);
-    return Void();
-  }
-
-  if (tunneled_display_id_ == -1) {
-    DLOGE("Invalid display = %d", tunneled_display_id_);
     _hidl_cb(-EINVAL, handle);
     return Void();
   }
@@ -733,18 +629,20 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
     return EINVAL;
   }
 
-  if (tunneled_display_id_ == -1) {
-    DLOGE("Invalid display = %d", tunneled_display_id_);
+  HWCDisplay *hwc_display = hwc_display_[tunneled_display_id_];
+  if (!hwc_display) {
+    DLOGE("Primary Display is not connected. Exiting queueTunnelledBuffer\n");
     return EINVAL;
   }
 
-  int32_t error = -EINVAL;
-  if(tunneled_layer_ == -1) {
-    error = CreateTunneledLayerInternal();
-    if (error != HWC2_ERROR_NONE) {
-      return EINVAL;
+  if (tunneled_layer_ == -1) {
+    tunneled_layer_ = hwc_display->GetHWCTunnelledLayer();
+    if (tunneled_layer_ != -1) {
+      SetLayerIsTunneled(tunneled_display_id_, tunneled_layer_, true);
     }
   }
+
+  int32_t error = -EINVAL;
 
   DTRACE_SCOPED();
 
@@ -777,7 +675,6 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
 
   uint32_t types_count = 0;
   uint32_t reqs_count = 0;
-  HWCDisplay *hwc_display = hwc_display_[tunneled_display_id_];
   const native_handle_t* native_fence_handle = acquire_fence.getNativeHandle();
   int acquire_fence_fd = -1;
   // if native_fence_handle is NULL, acquire fence fd is considered -1
@@ -790,6 +687,7 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
   error = SetLayerBuffer(tunneled_display_id_, tunneled_layer_, native_handle, acquire_fence_fd);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("SetLayerBuffer failed! Exiting queueTunnelledBuffer.\n");
+    tunneled_layer_ = -1;
     return error;
   }
 
@@ -797,6 +695,7 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
     error = ValidateDisplay(tunneled_display_id_, &types_count, &reqs_count);
     if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
       DLOGE("ValidateDisplay failed! Exiting queueTunnelledBuffer.\n");
+      tunneled_layer_ = -1;
       return error;
     }
   }
@@ -812,12 +711,14 @@ Return<int32_t> HWCSession::queueTunnelledBuffer(const hidl_handle& buffer,
   error = PresentDisplay(tunneled_display_id_, &presentfence);
   if (error != HWC2_ERROR_NONE) {
     DLOGE("PresentDisplay failed! Exiting queueTunnelledBuffer.\n");
+    tunneled_layer_ = -1;
     return error;
   }
   close(presentfence);
   auto hwc_layer = hwc_display->GetHWCLayer(tunneled_layer_);
   if (hwc_layer == nullptr) {
     DLOGE("Unable to fetch corresponding hwc_layer for tunneled layer");
+    tunneled_layer_ = -1;
     return EINVAL;
   }
   int release_fence = hwc_layer->PopBackReleaseFence();
@@ -839,7 +740,6 @@ Return<int32_t> HWCSession::destroyTunnelledLayer()  {
   IsTunnelledLayerPresent(tunneled_display_id_, &tunneled_layer_present);
   if (tunneled_layer_present == false || tunneled_layer_ == -1) {
     tunneled_layer_ = -1;
-    tunneled_display_id_ = -1;
     DLOGW("No tunneled layer present! Exiting destroyTunnelledLayer");
     return EINVAL;
   }
@@ -869,7 +769,6 @@ Return<int32_t> HWCSession::destroyTunnelledLayer()  {
     DLOGE("PresentDisplay failed! Exiting destroyTunnelledLayer.\n");
     return error;
   }
-  tunneled_display_id_ = -1;
   return 0;
 }
 

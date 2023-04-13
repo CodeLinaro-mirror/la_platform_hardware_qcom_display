@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -658,8 +658,18 @@ HWCLayer *HWCDisplay::GetHWCLayer(hwc2_layer_t layer_id) {
   }
 }
 
+hwc2_layer_t HWCDisplay::GetHWCTunnelledLayer() {
+  return tunnelled_layer_;
+}
+
 HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
+  if (tunnelled_layer_ == layer_id) {
+    tunnelled_layer_ = -1;
+    has_tunneled_layer_ = false;
+  }
+
   const auto map_layer = layer_map_.find(layer_id);
+
   if (map_layer == layer_map_.end()) {
     DLOGW("[%" PRIu64 "] destroyLayer(%" PRIu64 ") failed: no such layer", id_, layer_id);
     return HWC2::Error::BadLayer;
@@ -744,6 +754,10 @@ void HWCDisplay::BuildLayerStack() {
       // UBWC PI format
       if (handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED_PI) {
         layer->input_buffer.flags.ubwc_pi = true;
+      }
+      if (tunnelling_enable_ && tunnelled_layer_== -1 &&
+          (handle->flags & private_handle_t::PRIV_FLAGS_CAMERA_WRITE)) {
+        tunnelled_layer_ = hwc_layer->GetId();
       }
     }
 
@@ -1463,12 +1477,9 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     // Set SDM composition to HWC2 type in HWCLayer
     hwc_layer->SetComposition(composition);
     HWC2::Composition device_composition  = hwc_layer->GetDeviceSelectedCompositionType();
-    if (hwc_layer->IsTunneled() && (composition != kCompositionSDE)) {
+    if (hwc_layer->IsTunneled() && has_tunneled_layer_ && (composition != kCompositionSDE)) {
       has_tunneled_layer_ = false;
-      if (DestroyLayer(hwc_layer->GetId()) != HWC2::Error::None) {
-        DLOGW("DestroyLayer failed for layer = %lu!", hwc_layer->GetId());
-      }
-      continue;
+      return HWC2::Error::BadLayer;
     }
 
     if (device_composition == HWC2::Composition::Client) {

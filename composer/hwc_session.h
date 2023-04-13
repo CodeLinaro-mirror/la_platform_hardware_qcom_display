@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -419,7 +419,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t getDisplayMaxBrightness(uint32_t display, uint32_t *max_brightness_level);
   bool HasHDRSupport(HWCDisplay *hwc_display);
   void PostInit();
-  int32_t CreateTunneledLayerInternal();
 
   int SetBestNullDisplayResolution();
   bool IsFrameworkRebootRequired(bool is_primary);
@@ -625,7 +624,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   hwc2_layer_t tunneled_layer_ = -1;
   int tunneled_layer_rf_ = -1; // tunneled layer's release fence
   IDisplayConfig::LayerInfo tunneled_layer_params_ = {};
-  int tunneled_display_id_ = -1;
+  int tunneled_display_id_ = HWC_DISPLAY_PRIMARY;
 };
 }  // namespace sdm
 

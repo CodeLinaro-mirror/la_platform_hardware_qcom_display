@@ -26,6 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #include <log/log.h>
 #include <cutils/properties.h>
@@ -183,7 +186,10 @@ bool Allocator::CheckForBufferSharing(uint32_t num_descriptors,
     }
 
     // For same format type, find the descriptor with bigger size
-    GetAlignedWidthAndHeight(GetBufferInfo(*descriptors[i]), &alignedw, &alignedh);
+    int err = GetAlignedWidthAndHeight(GetBufferInfo(*descriptors[i]), &alignedw, &alignedh);
+    if (err) {
+      return false;
+    }
     unsigned int size = GetSize(GetBufferInfo(*descriptors[i]), alignedw, alignedh);
     if (max_size < size) {
       *max_index = INT(i);
