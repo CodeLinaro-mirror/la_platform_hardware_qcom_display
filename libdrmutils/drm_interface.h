@@ -943,6 +943,12 @@ enum DynamicFrontPorchType {
   HORIZONTAL
 };
 
+enum struct DMSType {
+  DMS_VID_DISABLED,
+  DMS_VID_SEAMLESS,
+  DMS_VID_NON_SEAMLESS
+};
+
 /* Per mode info */
 struct DRMModeInfo {
   drmModeModeInfo mode;
@@ -1010,6 +1016,7 @@ struct DRMConnectorInfo {
   std::string backlight_type;
   bool has_disp_in_other_core = false;
   bool dpu_ctl_op_sync = false;
+  DMSType dms_type = DMSType::DMS_VID_DISABLED;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>

@@ -986,6 +986,11 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.dynamic_fps = connector_info_.dynamic_fps;
   hw_panel_info_.qsync_support = connector_info_.qsync_support;
   hw_panel_info_.has_cwb_crop = has_cwb_crop_;
+  if (connector_info_.dms_type == sde_drm::DMSType::DMS_VID_SEAMLESS) {
+    hw_panel_info_.dms_type = kDMSVIDSeamless;
+  } else if (connector_info_.dms_type == sde_drm::DMSType::DMS_VID_NON_SEAMLESS) {
+    hw_panel_info_.dms_type = kDMSVIDNonSeamless;
+  }
   drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
   if (hw_panel_info_.dynamic_fps) {
     uint32_t min_fps = current_mode.vrefresh;

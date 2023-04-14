@@ -260,6 +260,12 @@ enum HWPowerState {
   kPowerStateDozeSuspend,
 };
 
+enum HWDMSType {
+  kDMSVIDDisabled,
+  kDMSVIDSeamless,
+  kDMSVIDNonSeamless,
+};
+
 typedef std::map<HWSubBlockType, std::vector<LayerBufferFormat>> FormatsMap;
 typedef std::map<LayerBufferFormat, float> CompRatioMap;
 
@@ -539,6 +545,7 @@ struct HWPanelInfo {
   uint32_t qsync_fps = 0;              // Min qsync fps
   bool has_cwb_crop = false;           // CWB Crop support
   bool dpu_ctl_op_sync = false;        // Supports multi-core DPU Interface Sync
+  HWDMSType dms_type = kDMSVIDDisabled;  // DMS type
 
 
   bool operator !=(const HWPanelInfo &panel_info) {
