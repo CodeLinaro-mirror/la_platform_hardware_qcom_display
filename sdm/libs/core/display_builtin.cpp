@@ -2071,7 +2071,15 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
 
 DisplayError DisplayBuiltIn::SetActiveConfig(uint32_t index) {
   deferred_config_.MarkDirty();
-  return DisplayBase::SetActiveConfig(index);
+  auto error = DisplayBase::SetActiveConfig(index);
+  shared_ptr<Fence> release_fence = nullptr;
+  HWDMSType dms_type = client_ctx_.hw_panel_info.dms_type;
+  if (dms_type == sdm::HWDMSType::kDMSVIDNonSeamless) {
+    SetDisplayState(kStateOff, 0, &release_fence);
+    sleep(1);
+    SetDisplayState(kStateOn, 0, &release_fence);
+  }
+  return error;
 }
 
 DisplayError DisplayBuiltIn::ReconfigureDisplay() {
