@@ -35,7 +35,6 @@
 #include <stdint.h>
 #include <core/display_interface.h>
 #include <core/core_interface.h>
-#include <drm_master.h>
 #include <utils/locker.h>
 #include <utils/fence.h>
 #include <utils/debug.h>
@@ -52,7 +51,6 @@ namespace sdm {
 using std::string;
 using std::pair;
 using std::vector;
-using drm_utils::DRMMaster;
 
 const int kMaxSDELayers = 16;   // Maximum number of layers that can be handled by MDP5 hardware
                                 // in a given layer stack.
@@ -1063,7 +1061,7 @@ struct Resolution {
 
 class FrameBufferObject : public LayerBufferObject {
  public:
-  explicit FrameBufferObject(uint32_t fb_id, DRMMaster *master, LayerBufferFormat format,
+  explicit FrameBufferObject(uint32_t fb_id, uint32_t core_id, LayerBufferFormat format,
                              uint32_t width, uint32_t height, bool shallow = false,
                              bool secure = false);
   ~FrameBufferObject();
@@ -1072,7 +1070,7 @@ class FrameBufferObject : public LayerBufferObject {
 
  private:
   uint32_t fb_id_;
-  DRMMaster *master_;
+  uint32_t core_id_;
   LayerBufferFormat format_;
   uint32_t width_;
   uint32_t height_;

@@ -326,10 +326,10 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
   }
 }
 
-FrameBufferObject::FrameBufferObject(uint32_t fb_id, DRMMaster *master, LayerBufferFormat format, uint32_t width,
-                                     uint32_t height, bool shallow, bool secure)
+FrameBufferObject::FrameBufferObject(uint32_t fb_id, uint32_t core_id, LayerBufferFormat format,
+                                     uint32_t width, uint32_t height, bool shallow, bool secure)
     : fb_id_(fb_id),
-      master_(master),
+      core_id_(core_id),
       format_(format),
       width_(width),
       height_(height),
@@ -344,8 +344,8 @@ FrameBufferObject::~FrameBufferObject() {
   }
 
   DRMMaster *master;
-  DRMMaster::GetInstance(&master);
-  int ret = master_->RemoveFbId(fb_id_);
+  DRMMaster::GetInstance(&master, core_id_);
+  int ret = master->RemoveFbId(fb_id_);
   if (ret < 0) {
     DLOGE("Removing fb_id %d failed with error %d", fb_id_, errno);
   }
@@ -482,14 +482,12 @@ int HWDeviceDRM::Registry::MapBufferToFbId(Layer *layer, const LayerBuffer &buff
     auto it = layer->buffer_map->buffer_map.find(handle_id);
     if (it != layer->buffer_map->buffer_map.end()) {
       it->second.insert({core_id_, std::make_shared<FrameBufferObject>(fb_id,
-                                                     reinterpret_cast<DRMMaster*>(master_),
-                                                     buffer.format, buffer.width, buffer.height,
-                                                     secure_present)});
+                                                     core_id_, buffer.format, buffer.width,
+                                                     buffer.height, secure_present)});
     } else {
       // Create and cache the fb_id in map
       std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map;
-      dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id,
-          reinterpret_cast<DRMMaster*>(master_),
+      dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id, core_id_,
           buffer.format, buffer.width, buffer.height, false /* shallow */, secure_present);
       layer->buffer_map->buffer_map[handle_id] = dpu_buffer_map;
     }
@@ -534,8 +532,7 @@ void HWDeviceDRM::Registry::MapOutputBufferToFbId(LayerBuffer *output_buffer) {
   uint32_t fb_id = 0;
   if (CreateFbId(*output_buffer, &fb_id) >= 0) {
     std::unordered_map<uint32_t, std::shared_ptr<LayerBufferObject>> dpu_buffer_map;
-    dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id,
-        reinterpret_cast<DRMMaster*>(master_),
+    dpu_buffer_map[core_id_] = std::make_shared<FrameBufferObject>(fb_id, core_id_,
         output_buffer->format, output_buffer->width, output_buffer->height,
         false /* shallow */, secure_present);
     output_buffer_map_[handle_id] = dpu_buffer_map;
@@ -1923,7 +1920,7 @@ DisplayError HWDeviceDRM::DefaultCommit(HWLayersInfo *hw_layers_info) {
   }
 
   DRMMaster *master = nullptr;
-  int ret = DRMMaster::GetInstance(&master);
+  int ret = DRMMaster::GetInstance(&master, core_id_);
   if (ret < 0) {
     DLOGE("Failed to acquire DRMMaster instance");
     return kErrorResources;
