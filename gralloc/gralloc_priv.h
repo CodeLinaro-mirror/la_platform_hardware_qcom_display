@@ -31,7 +31,7 @@
 #define MAP_FB_MEMORY_PROP                   GRALLOC_PROP("map_fb_memory")
 
 #define ROUND_UP_PAGESIZE(x) roundUpToPageSize(x)
-inline int roundUpToPageSize(int x) {
+inline size_t roundUpToPageSize(size_t x) {
     return (x + (getpagesize()-1)) & ~(getpagesize()-1);
 }
 
