@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef QMAA
 #include <display/media/mmm_color_fmt.h>
 #endif
@@ -1599,6 +1605,12 @@ int GetImplDefinedFormat(uint64_t usage, int format) {
       } else {
         gr_format = HAL_PIXEL_FORMAT_NV12_ENCODEABLE;  // NV12
       }
+    } else if (usage & GRALLOC_USAGE_PRIVATE_10BIT && format != HAL_PIXEL_FORMAT_YCbCr_420_888) {
+      if (usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) {
+        gr_format = HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC;
+      } else {
+        gr_format = HAL_PIXEL_FORMAT_YCbCr_420_P010;
+      }
     } else if (usage & BufferUsage::CAMERA_INPUT) {
       if (usage & BufferUsage::CAMERA_OUTPUT) {
         // Assumed ZSL if both producer and consumer camera flags set
@@ -1615,12 +1627,6 @@ int GetImplDefinedFormat(uint64_t usage, int format) {
         }
       } else {
         gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS;  // NV12 preview
-      }
-    } else if (usage & GRALLOC_USAGE_PRIVATE_10BIT && format != HAL_PIXEL_FORMAT_YCbCr_420_888) {
-      if (usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) {
-        gr_format = HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC;
-      } else {
-        gr_format = HAL_PIXEL_FORMAT_YCbCr_420_P010;
       }
     } else if (usage & BufferUsage::COMPOSER_OVERLAY) {
       // XXX: If we still haven't set a format, default to RGBA8888

@@ -1734,7 +1734,9 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
   std::lock_guard<std::mutex> guard(lock_);
 
   // TBD: anorak does not support visibility, power saving features
-  dpps_intf_ = new DppsDummyImpl();
+  if (!dpps_intf_) {
+    dpps_intf_ = new DppsDummyImpl();
+  }
 }
 
 void DppsInfo::Deinit() {
