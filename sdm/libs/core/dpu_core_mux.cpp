@@ -1004,15 +1004,6 @@ void DPUCoreMux::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const {
   hw_intf_.at(core_ids_[0])->GetDRMDisplayToken(token);
 }
 
-bool DPUCoreMux::IsPrimaryDisplay() const {
-  bool is_primary_display = true;
-  for (auto hw_intf : hw_intf_) {
-    is_primary_display &= hw_intf.second->IsPrimaryDisplay();
-  }
-
-  return is_primary_display;
-}
-
 DisplayError DPUCoreMux::GetFbConfig(uint32_t width, uint32_t height,
                                      DisplayDeviceContext *device_ctx,
                                      DisplayClientContext *client_ctx) {

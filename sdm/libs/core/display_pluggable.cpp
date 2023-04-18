@@ -519,7 +519,7 @@ void DisplayPluggable::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) {
 }
 
 bool DisplayPluggable::IsPrimaryDisplay() {
-  return dpu_core_mux_->IsPrimaryDisplay();
+  return DisplayBase::IsPrimaryDisplay();
 }
 
 DisplayError DisplayPluggable::GetPanelBrightnessBasePath(std::string *base_path) {

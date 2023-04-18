@@ -110,7 +110,6 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError Init();
   virtual DisplayError Deinit();
   void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const;
-  bool IsPrimaryDisplay() const { return hw_panel_info_.is_primary_panel; }
   virtual PanelFeaturePropertyIntf *GetPanelFeaturePropertyIntf() { return nullptr; }
   virtual DisplayError GetPanelBrightnessBasePath(std::string *base_path) const {
     return kErrorNotSupported;

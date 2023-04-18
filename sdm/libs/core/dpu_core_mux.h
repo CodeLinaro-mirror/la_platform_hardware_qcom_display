@@ -104,7 +104,6 @@ class DPUCoreMux {
   bool AreAllEntriesSame(std::vector<T>& vec);
   void GetHWInterface(HWInterface **intf);
   void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const;
-  bool IsPrimaryDisplay() const;
   DisplayError SetPPConfig(void *payload, size_t size);
   DisplayError GetFbConfig(uint32_t width, uint32_t height,
                            DisplayDeviceContext *device_ctx,

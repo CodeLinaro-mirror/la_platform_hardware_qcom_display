@@ -3320,7 +3320,7 @@ void DisplayBuiltIn::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) {
 }
 
 bool DisplayBuiltIn::IsPrimaryDisplay() {
-  return dpu_core_mux_->IsPrimaryDisplay();
+  return DisplayBase::IsPrimaryDisplay();
 }
 
 DisplayError DisplayBuiltIn::GetPanelBrightnessBasePath(std::string *base_path) {

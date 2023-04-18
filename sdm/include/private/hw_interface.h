@@ -173,7 +173,7 @@ class HWInterface {
   virtual void HandleCwbTeardown(bool sync_teardown) = 0;
   virtual void SetDestScalarData(const DestScaleInfoMap dest_scale_info_map) = 0;
   virtual void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const = 0;
-  virtual bool IsPrimaryDisplay() const = 0;
+
  protected:
   virtual ~HWInterface() { }
 };
