@@ -441,11 +441,14 @@ void HWCSession::InitSupportedDisplaySlots() {
     max_virtual += virtual_display_factory_.IsGPUColorConvertSupported() ? 1 : 0;
   }
 
-  if (kPluggable == hw_disp_info.type) {
+  if (max_pluggable && (kPluggable == hw_disp_info.type)) {
     // If primary is a pluggable display, we have already used one pluggable display interface.
     max_pluggable--;
-  } else {
+  } else if (max_builtin && (kBuiltIn == hw_disp_info.type)) {
     max_builtin--;
+  } else {
+    DLOGE("No primary display present");
+    return;
   }
 
   // Init slots in accordance to h/w capability.
