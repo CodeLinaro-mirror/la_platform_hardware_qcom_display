@@ -322,7 +322,7 @@ DisplayError DisplayPluggable::VSync(int64_t timestamp) {
 }
 
 DisplayError DisplayPluggable::InitializeColorModes() {
-  PrimariesTransfer pt = {};
+  PrimariesTransfer pt;
   AttrVal var;
   if (!hw_panel_info_.hdr_enabled) {
     return kErrorNone;
@@ -399,7 +399,7 @@ DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
     return kErrorNone;
   }
   AttrVal attr = current_color_attr_->second;
-  std::string color_gamut = kNative, transfer = {};
+  std::string color_gamut = kNative, transfer = "";
 
   if (attr.begin() != attr.end()) {
     for (auto &it : attr) {
