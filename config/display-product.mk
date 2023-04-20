@@ -4,7 +4,6 @@ PRODUCT_PACKAGES += \
     android.hardware.graphics.mapper@4.0-impl-qti-display \
     vendor.qti.hardware.display.allocator-service \
     vendor.qti.hardware.display.composer-service \
-    android.hardware.light@2.0-impl \
     gralloc.$(TARGET_BOARD_PLATFORM) \
     lights.$(TARGET_BOARD_PLATFORM) \
     hdmi_cec.$(TARGET_BOARD_PLATFORM) \
@@ -90,14 +89,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.normal_noc_efficiency_factor=0.85 \
     vendor.display.camera_noc_efficiency_factor=0.70 \
     vendor.display.disable_layer_stitch=0
-endif
-
-ifeq ($(TARGET_BOARD_PLATFORM)$(TARGET_BOARD_SUFFIX),bengal_32go)
-    PRODUCT_PACKAGES += \
-        android.hardware.light@2.0-service-lazy
-else
-    PRODUCT_PACKAGES += \
-        android.hardware.light@2.0-service
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),kona)

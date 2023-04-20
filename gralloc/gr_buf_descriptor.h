@@ -26,6 +26,10 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
+
 
 #ifndef __GR_BUF_DESCRIPTOR_H__
 #define __GR_BUF_DESCRIPTOR_H__
@@ -59,6 +63,7 @@ class BufferDescriptor {
   void SetName(std::string name) { name_ = name; }
 
   void SetReservedSize(uint64_t reserved_size) { reserved_size_ = reserved_size; }
+
   uint64_t GetUsage() const { return usage_; }
 
   int GetWidth() const { return width_; }
@@ -72,6 +77,7 @@ class BufferDescriptor {
   uint64_t GetId() const { return id_; }
 
   uint64_t GetReservedSize() const { return reserved_size_; }
+
   std::string GetName() const { return name_; }
 
  private:

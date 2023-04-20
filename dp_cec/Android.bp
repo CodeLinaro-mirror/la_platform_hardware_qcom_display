@@ -1,6 +1,6 @@
 cc_library_shared {
 
-    name: "dp_cec.qcom",
+    name: "hdmi_cec.kona",
     vendor: true,
     relative_install_path: "hw",
     header_libs: [

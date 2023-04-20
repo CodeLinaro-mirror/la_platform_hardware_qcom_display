@@ -26,6 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #define DEBUG 0
 #include "QtiAllocator.h"
@@ -42,23 +45,12 @@
 #include "gr_utils.h"
 
 static void get_properties(gralloc::GrallocProperties *props) {
-  char property[PROPERTY_VALUE_MAX];
-  property_get("vendor.gralloc.use_system_heap_for_sensors", property, "1");
-  if (!(strncmp(property, "0", PROPERTY_VALUE_MAX))) {
-    props->use_system_heap_for_sensors = false;
-  }
+  props->use_system_heap_for_sensors =
+      property_get_bool("vendor.gralloc.use_system_heap_for_sensors", 1);
 
-  property_get("vendor.gralloc.disable_ubwc", property, "0");
-  if (!(strncmp(property, "1", PROPERTY_VALUE_MAX)) ||
-      !(strncmp(property, "true", PROPERTY_VALUE_MAX))) {
-    props->ubwc_disable = true;
-  }
+  props->ubwc_disable = property_get_bool("vendor.gralloc.disable_ubwc", 0);
 
-  property_get("vendor.gralloc.disable_ahardware_buffer", property, "0");
-  if (!(strncmp(property, "1", PROPERTY_VALUE_MAX)) ||
-      !(strncmp(property, "true", PROPERTY_VALUE_MAX))) {
-    props->ahardware_buffer_disable = true;
-  }
+  props->ahardware_buffer_disable = property_get_bool("vendor.gralloc.disable_ahardware_buffer", 0);
 }
 
 namespace vendor {
