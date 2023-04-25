@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include "hw_tv_drm.h"
@@ -256,11 +260,23 @@ void HWTVDRM::PopulateHWPanelInfo() {
 }
 
 DisplayError HWTVDRM::Commit(HWLayers *hw_layers) {
+
+  HWLayersInfo &hw_layer_info = hw_layers->info;
   DisplayError error = UpdateHDRMetaData(hw_layers);
   if (error != kErrorNone) {
     return error;
   }
-  return HWDeviceDRM::Commit(hw_layers);
+
+  SetupConcurrentWriteback(hw_layer_info, false);
+
+  error = HWDeviceDRM::Commit(hw_layers);
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  PostCommitConcurrentWriteback(hw_layer_info.stack->output_buffer);
+
+  return error;
 }
 
 DisplayError HWTVDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
