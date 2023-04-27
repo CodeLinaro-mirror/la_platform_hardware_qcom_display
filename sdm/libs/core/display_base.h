@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DISPLAY_BASE_H__
 #define __DISPLAY_BASE_H__
 
@@ -202,6 +209,7 @@ class DisplayBase : public DisplayInterface {
   HWLayers hw_layers_;
   bool needs_validate_ = true;
   bool vsync_enable_ = false;
+  bool pflip_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
   HWInfoInterface *hw_info_intf_ = NULL;
   ColorManagerProxy *color_mgr_ = NULL;  // each display object owns its ColorManagerProxy

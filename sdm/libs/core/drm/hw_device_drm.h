@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_DEVICE_DRM_H__
 #define __HW_DEVICE_DRM_H__
 
@@ -93,6 +100,7 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
   // This API is no longer supported, expectation is to call the correct API on HWEvents
   virtual DisplayError SetVSyncState(bool enable);
+  virtual void SetPageFlipState(bool enable, void *user_data);
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
   virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
@@ -223,6 +231,8 @@ class HWDeviceDRM : public HWInterface {
   bool secure_display_active_ = false;
   uint64_t debug_dump_count_ = 0;
   bool synchronous_commit_ = false;
+  bool enable_pflip_event_ = false;
+  void *pflip_user_data_ = {};
   uint32_t topology_control_ = 0;
   uint32_t vrefresh_ = 0;
   uint64_t bit_clk_rate_ = 0;

@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_EVENTS_DRM_H__
 #define __HW_EVENTS_DRM_H__
 
@@ -67,9 +74,11 @@ class HWEventsDRM : public HWEventsInterface {
   static void *DisplayEventThread(void *context);
   static void VSyncHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                    unsigned int tv_usec, void *data);
-
+  static void PFlipHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
+                                   unsigned int tv_usec, void *data);
   void *DisplayEventHandler();
   void HandleVSync(char *data);
+  void HandlePageFlip(char *data);
   void HandleIdleTimeout(char *data);
   void HandleCECMessage(char *data);
   void HandleThreadExit(char *data) {}
@@ -85,6 +94,8 @@ class HWEventsDRM : public HWEventsInterface {
   DisplayError InitializePollFd();
   DisplayError CloseFds();
   DisplayError RegisterVSync();
+  DisplayError RequestPageFlip(uint32_t crtc_id, uint32_t fb_id,
+                               uint32_t flags,   void *userdata);
   DisplayError RegisterPanelDead(bool enable);
   DisplayError RegisterIdleNotify(bool enable);
   DisplayError RegisterIdlePowerCollapse(bool enable);

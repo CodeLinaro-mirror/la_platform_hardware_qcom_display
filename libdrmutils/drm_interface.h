@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_INTERFACE_H__
 #define __DRM_INTERFACE_H__
 
@@ -855,9 +862,10 @@ class DRMAtomicReqInterface {
    * [input]: synchronous: Determines if the call should block until a h/w flip
    * [input]: retain_planes: Retains already staged planes. Useful when not explicitly programming
    *          planes but still need the previously staged ones to not be unstaged
+   * [input]: user_data: call back object
    * [return]: Error code if the API fails, 0 on success.
    */
-  virtual int Commit(bool synchronous, bool retain_planes) = 0;
+  virtual int Commit(bool synchronous, bool retain_planes, void *user_data) = 0;
 
   /*
    * Validate the params set via Perform().

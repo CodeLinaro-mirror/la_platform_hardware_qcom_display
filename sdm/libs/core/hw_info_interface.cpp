@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/utils.h>
 
 #include "drm/hw_info_drm.h"
@@ -38,7 +45,7 @@ namespace sdm {
 DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
   DisplayError error = kErrorNone;
 
-  for (uint32_t i = 0; i < 16; i++) {
+  for (uint32_t i = 0; i < 1; i++) {
     HWInfoInterface *hw_info = new HWInfoDRM(i);
     if (hw_info) {
       error = hw_info->Init();

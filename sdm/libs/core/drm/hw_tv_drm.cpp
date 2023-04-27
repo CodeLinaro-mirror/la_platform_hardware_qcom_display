@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include "hw_tv_drm.h"
 #include <math.h>
 #include <sys/time.h>
@@ -198,7 +205,7 @@ DisplayError HWTVDRM::PowerOff(bool teardown) {
     // LP connecter prop N/A for External
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
   }
-  int ret = drm_atomic_intf_->Commit(true /* synchronous */, false /* retain_planes*/);
+  int ret = drm_atomic_intf_->Commit(true /* synchronous */, false /* retain_planes*/, pflip_user_data_);
   if (ret) {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
