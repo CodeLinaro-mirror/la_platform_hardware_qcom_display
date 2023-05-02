@@ -62,7 +62,8 @@ int SDMCompBufferAllocator::GetGrallocInstance() {
     return kErrorNone;
   }
 
-  allocator_ = IAllocator::getService();
+  allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+      AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
   if (allocator_ == nullptr) {
     DLOGE("Unable to get allocator");
     return kErrorCriticalResource;
@@ -179,18 +180,13 @@ int SDMCompBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
     return kErrorMemory;
   }
 
-  hidl_handle raw_handle = nullptr;
-
-  allocator_->allocate(descriptor, 1,
-                       [&](const auto &_error, const auto &_stride, const auto &_buffers) {
-                         hidl_err = _error;
-                         raw_handle = _buffers[0];
-                       });
-
-  if (hidl_err != Error::NONE) {
+  AllocationResult result;
+  auto status = allocator_->allocate(descriptor, 1, &result);
+  if (!status.isOk()) {
     DLOGE("Failed to allocate buffer");
     return kErrorMemory;
   }
+  hidl_handle raw_handle = android::makeFromAidl(result.buffers[0]);
 
   mapper_->importBuffer(raw_handle, [&](const auto &_error, const auto &_buffer) {
     hidl_err = _error;
