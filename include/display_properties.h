@@ -233,6 +233,7 @@
 #define PRIORITIZE_CLIENT_CWB                DISPLAY_PROP("prioritize_client_cwb")
 #define TRANSIENT_FPS_CYCLE_COUNT            DISPLAY_PROP("transient_fps_cycle_count")
 #define CORE_ID_MASK                         DISPLAY_PROP("core_id_mask")
+#define XR_VARIANT                           DISPLAY_PROP("xr_variant")
 
 // Add all other.properties above
 // End of property
