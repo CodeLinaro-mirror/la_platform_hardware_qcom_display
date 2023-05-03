@@ -1857,6 +1857,7 @@ std::string DisplayBuiltIn::Dump() {
   os << " clk: " << display_attributes.clock_khz;
   os << " Topology: " << display_attributes.topology;
   os << " Qsync mode: " << active_qsync_mode_;
+  os << " CAC enabled: " << disp_layer_stack_->stack_info.enable_cac;
   os << std::noboolalpha;
 
   DynamicRangeType curr_dynamic_range = kSdrType;
