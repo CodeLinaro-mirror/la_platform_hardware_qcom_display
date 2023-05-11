@@ -4460,22 +4460,22 @@ int32_t HWCSession::PerformCacConfig(const android::Parcel *input_parcel) {
 
   if (cac_enable) {
     if (input_parcel->dataPosition() != input_parcel->dataSize()) {
-      config.k0r = DOUBLE(input_parcel->readInt64());
+      config.k0r = input_parcel->readDouble();
     }
     if (input_parcel->dataPosition() != input_parcel->dataSize()) {
-      config.k1r = DOUBLE(input_parcel->readInt64());
+      config.k1r = input_parcel->readDouble();
     }
     if (input_parcel->dataPosition() != input_parcel->dataSize()) {
-      config.k0b = DOUBLE(input_parcel->readInt64());
+      config.k0b = input_parcel->readDouble();
     }
     if (input_parcel->dataPosition() != input_parcel->dataSize()) {
-      config.k1b = DOUBLE(input_parcel->readInt64());
+      config.k1b = input_parcel->readDouble();
     }
     if (input_parcel->dataPosition() != input_parcel->dataSize()) {
-      config.pixel_pitch = DOUBLE(input_parcel->readInt64());
+      config.pixel_pitch = input_parcel->readDouble();
     }
     if (input_parcel->dataPosition() != input_parcel->dataSize()) {
-      config.normalization = DOUBLE(input_parcel->readInt64());
+      config.normalization = input_parcel->readDouble();
     }
     if (input_parcel->dataPosition() != input_parcel->dataSize()) {
       config.mid_le_y_offset = UINT32(input_parcel->readInt32());
