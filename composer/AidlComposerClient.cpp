@@ -17,7 +17,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -449,7 +449,8 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 }
 
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
-  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+  auto error = hwc_session_->GetOverlaySupport(aidl_return);
+  return TO_BINDER_STATUS(INT32(error));
 }
 
 ScopedAStatus AidlComposerClient::getHdrConversionCapabilities(
