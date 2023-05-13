@@ -1,7 +1,6 @@
 # Display product definitions
 PRODUCT_PACKAGES += \
     android.hardware.graphics.composer@2.4-impl \
-    android.hardware.graphics.composer@2.4-service \
     android.hardware.graphics.mapper@3.0-impl-qti-display \
     android.hardware.graphics.mapper@4.0-impl-qti-display \
     vendor.qti.hardware.display.allocator-service \
@@ -32,6 +31,12 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.mapper@3.0 \
     vendor.qti.hardware.display.mapper@4.0.vendor \
     modetest
+
+ifneq ($(TARGET_IS_HEADLESS),true)
+PRODUCT_PACKAGES += \
+    android.hardware.graphics.composer@2.4-service \
+
+endif #TARGET_IS_HEADLESS
 
 #Enable AIDL Hal for S
 ifeq ($(ENABLE_MEMTRACK_AIDL_HAL),true)
