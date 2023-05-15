@@ -288,11 +288,13 @@ struct DisplayConfigGroupInfo {
   float y_dpi = 0.0f;             //!< Dots per inch in Y-direction.
   bool is_yuv = false;            //!< If the display output is in YUV format.
   bool smart_panel = false;       //!< If the display config has smart panel.
+  bool fsc_panel = false;         //!< If the display panel is fsd panel
+  uint32_t num_fsc_fields = 0;    //!< Panel's fsc fields if panel is fsc panel
 
   bool operator==(const DisplayConfigGroupInfo& info) const {
-    return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) &&
-            (x_dpi == info.x_dpi) && (y_dpi == info.y_dpi) && (is_yuv == info.is_yuv) &&
-            (smart_panel == info.smart_panel));
+    return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) && (x_dpi == info.x_dpi) &&
+            (y_dpi == info.y_dpi) && (is_yuv == info.is_yuv) && (smart_panel == info.smart_panel) &&
+            (fsc_panel == info.fsc_panel) && (num_fsc_fields == info.num_fsc_fields));
   }
 };
 

@@ -42,6 +42,8 @@ cc_binary {
         "libdrm",
         "libc",
         "vendor.qti.hardware.display.mapperextensions@1.3",
+        "vendor.qti.hardware.display.config-V5-ndk",
+        "libbinder_ndk",
     ],
     srcs: [
         "sdm_comp_buffer_allocator.cpp",

@@ -1058,4 +1058,13 @@ void CompManager::SetDisplayLayerStack(Handle display_ctx, DispLayerStack *disp_
   disp_comp_ctx->strategy->SetDisplayLayerStack(disp_layer_stack);
 }
 
+void CompManager::GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+  if (resource_intf_) {
+    DisplayCompositionContext *display_comp_ctx =
+        reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+    resource_intf_->GetDSConfig(display_comp_ctx->display_resource_ctx, dest_scale_info_map);
+  }
+}
+
 }  // namespace sdm

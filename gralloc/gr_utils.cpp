@@ -117,6 +117,9 @@ bool IsYuvFormat(int format) {
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_4_BATCH:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH:
     case HAL_PIXEL_FORMAT_MULTIPLANAR_FLEX:
+    case HAL_PIXEL_FORMAT_NV12_FLEX_2_BATCH:
+    case HAL_PIXEL_FORMAT_NV12_FLEX_4_BATCH:
+    case HAL_PIXEL_FORMAT_NV12_FLEX_8_BATCH:
       return true;
     default:
       return false;
@@ -215,6 +218,9 @@ bool IsCameraCustomFormat(int format, uint64_t usage) {
     case static_cast<int>(PixelFormat::RAW_OPAQUE):
     case static_cast<int>(PixelFormat::RAW10):
     case static_cast<int>(PixelFormat::RAW12):
+    case HAL_PIXEL_FORMAT_NV12_FLEX_2_BATCH:
+    case HAL_PIXEL_FORMAT_NV12_FLEX_4_BATCH:
+    case HAL_PIXEL_FORMAT_NV12_FLEX_8_BATCH:
       if (usage & GRALLOC_USAGE_HW_COMPOSER) {
         ALOGW("%s: HW_Composer flag is set for camera custom format: 0x%x, Usage: 0x%" PRIx64,
               __FUNCTION__, format, usage);
@@ -524,6 +530,11 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
       case HAL_PIXEL_FORMAT_NV21_ZSL:
         size = ALIGN((alignedw * alignedh) + (alignedw * alignedh) / 2, SIZE_4K);
         break;
+      case static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010):
+      case static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT):
+      case static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT):
+        ALOGW("%s: Pixel format: 0x%x is not supported by gralloc", __FUNCTION__, format);
+        return 0;
       default:
         ALOGE("%s: Unrecognized pixel format: 0x%x", __FUNCTION__, format);
         return 0;

@@ -47,6 +47,7 @@ namespace sdm {
 
 #define NUM_UBWC_CR_STATS_LAYERS 2
 typedef std::vector<std::pair<int, int>> UbwcCrStatsVector;
+struct LayerBuffer;
 
 /*! @brief This enum represents display layer inverse gamma correction (IGC) types.
 
@@ -97,6 +98,8 @@ enum LayerBufferFormat {
   kFormatRGBA16161616FUbwc,  //!< UBWC aligned floating point 16-bits Red, Green, Blue, Alpha
                              //!< interleaved in RGBA order.
   kFormatA8,                 //!< 8-bits Alpha format.
+  kFormatC8Ubwc,             // UBWC aligned C8 format. Y-plane only, No UV-Plane.
+  kFormatC8Fsc,              // C8 format. Y-plane only, No UV-Plane.
 
   /* All YUV-Planar formats, Any new format will be added towards end of this group to maintain
      backward compatibility.
@@ -270,11 +273,12 @@ struct LayerBuffer {
   LayerBufferFormat format = kFormatRGBA8888;     //!< Format of the buffer content.
   ColorMetaData color_metadata = {};              //!< CSC + Range + Transfer + Matrix + HDR Info
   LayerIGC igc = kIGCNotSpecified;                //!< IGC that will be applied on this layer.
-  LayerBufferPlane planes[4] = {};
-                                //!< Array of planes that this buffer contains. RGB buffer formats
-                                //!< have 1 plane whereas YUV buffer formats may have upto 4 planes
-                                //!< Total number of planes for the buffer will be interpreted based
-                                //!< on the buffer format specified.
+  LayerBufferPlane planes[5] = {};                //!< Array of planes that this buffer contains.
+                                                  //!< RGB buffer formatshave 1 plane ,YUV buffer
+                                                  //!< formats may have upto 4 planes and Fsc 5
+                                                  //!< field usecase have 5 planes Total number  of
+                                                  //!< planes for the buffer will be interpreted
+                                                  //!< based on the buffer format specified.
 
   shared_ptr<Fence> acquire_fence = nullptr;
                                 //!< File descriptor referring to a sync fence object which will be

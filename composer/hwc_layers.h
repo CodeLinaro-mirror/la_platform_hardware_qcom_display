@@ -17,10 +17,17 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_LAYERS_H__
 #define __HWC_LAYERS_H__
 
-/* This class translates HWC2 Layer functions to the SDM LayerStack
+/* This class translates HWC3 Layer functions to the SDM LayerStack
  */
 
 #include <QtiGralloc.h>
@@ -28,25 +35,16 @@
 #include <core/layer_stack.h>
 #include <core/layer_buffer.h>
 #include <utils/utils.h>
-#define HWC2_INCLUDE_STRINGIFICATION
-#define HWC2_USE_CPP11
-#include <hardware/hwcomposer2.h>
-#undef HWC2_INCLUDE_STRINGIFICATION
-#undef HWC2_USE_CPP11
-#include <android/hardware/graphics/composer/2.3/IComposerClient.h>
-#include <vendor/qti/hardware/display/composer/3.1/IQtiComposerClient.h>
 
 #include <map>
 #include <set>
 
 #include "core/buffer_allocator.h"
 #include "hwc_buffer_allocator.h"
+#include "hwc_common.h"
 
-using PerFrameMetadataKey =
-    android::hardware::graphics::composer::V2_3::IComposerClient::PerFrameMetadataKey;
-using vendor::qti::hardware::display::composer::V3_1::IQtiComposerClient;
-using android::hardware::graphics::common::V1_2::Dataspace;
-using android::hardware::graphics::common::V1_2::PixelFormat;
+using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
+using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace sdm {
 
@@ -68,40 +66,41 @@ enum LayerTypes {
 
 class HWCLayer {
  public:
-  explicit HWCLayer(hwc2_display_t display_id, HWCBufferAllocator *buf_allocator);
+  explicit HWCLayer(Display display_id, HWCBufferAllocator *buf_allocator);
   ~HWCLayer();
   uint32_t GetZ() const { return z_; }
-  hwc2_layer_t GetId() const { return id_; }
+  LayerId GetId() const { return id_; }
   std::string GetName() const { return name_; }
   LayerTypes GetType() const { return type_; }
   Layer *GetSDMLayer() { return layer_; }
   void ResetPerFrameData();
 
-  HWC2::Error SetLayerBlendMode(HWC2::BlendMode mode);
-  HWC2::Error SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> acquire_fence);
-  HWC2::Error SetLayerColor(hwc_color_t color);
-  HWC2::Error SetLayerCompositionType(HWC2::Composition type);
-  HWC2::Error SetLayerDataspace(int32_t dataspace);
-  HWC2::Error SetLayerDisplayFrame(hwc_rect_t frame);
-  HWC2::Error SetCursorPosition(int32_t x, int32_t y);
-  HWC2::Error SetLayerPlaneAlpha(float alpha);
-  HWC2::Error SetLayerSourceCrop(hwc_frect_t crop);
-  HWC2::Error SetLayerSurfaceDamage(hwc_region_t damage);
-  HWC2::Error SetLayerTransform(HWC2::Transform transform);
-  HWC2::Error SetLayerVisibleRegion(hwc_region_t visible);
-  HWC2::Error SetLayerPerFrameMetadata(uint32_t num_elements, const PerFrameMetadataKey *keys,
+  HWC3::Error SetLayerBlendMode(BlendMode mode);
+  HWC3::Error SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> acquire_fence);
+  HWC3::Error SetLayerColor(Color color);
+  HWC3::Error SetLayerCompositionType(Composition type);
+  HWC3::Error SetLayerDataspace(int32_t dataspace);
+  HWC3::Error SetLayerDisplayFrame(Rect frame);
+  HWC3::Error SetCursorPosition(int32_t x, int32_t y);
+  HWC3::Error SetLayerPlaneAlpha(float alpha);
+  HWC3::Error SetLayerSourceCrop(FRect crop);
+  HWC3::Error SetLayerSurfaceDamage(Region damage);
+  HWC3::Error SetLayerTransform(Transform transform);
+  HWC3::Error SetLayerVisibleRegion(Region visible);
+  HWC3::Error SetLayerPerFrameMetadata(uint32_t num_elements, const PerFrameMetadataKey *keys,
                                        const float *metadata);
-  HWC2::Error SetLayerPerFrameMetadataBlobs(uint32_t num_elements, const PerFrameMetadataKey *keys,
+  HWC3::Error SetLayerPerFrameMetadataBlobs(uint32_t num_elements, const PerFrameMetadataKey *keys,
                                             const uint32_t *sizes, const uint8_t *metadata);
-  HWC2::Error SetLayerZOrder(uint32_t z);
-  HWC2::Error SetLayerType(IQtiComposerClient::LayerType type);
-  HWC2::Error SetLayerFlag(IQtiComposerClient::LayerFlag flag);
-  HWC2::Error SetLayerColorTransform(const float *matrix);
+  HWC3::Error SetLayerZOrder(uint32_t z);
+  HWC3::Error SetLayerType(LayerType type);
+  HWC3::Error SetLayerFlag(LayerFlag flag);
+  HWC3::Error SetLayerColorTransform(const float *matrix);
+  HWC3::Error SetLayerBrightness(float brightness);
   void SetComposition(const LayerComposition &sdm_composition);
-  HWC2::Composition GetClientRequestedCompositionType() { return client_requested_; }
-  HWC2::Composition GetOrigClientRequestedCompositionType() { return client_requested_orig_; }
-  void UpdateClientCompositionType(HWC2::Composition type) { client_requested_ = type; }
-  HWC2::Composition GetDeviceSelectedCompositionType() { return device_selected_; }
+  Composition GetClientRequestedCompositionType() { return client_requested_; }
+  Composition GetOrigClientRequestedCompositionType() { return client_requested_orig_; }
+  void UpdateClientCompositionType(Composition type) { client_requested_ = type; }
+  Composition GetDeviceSelectedCompositionType() { return device_selected_; }
   int32_t GetLayerDataspace() { return dataspace_; }
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   void ResetGeometryChanges();
@@ -129,13 +128,13 @@ class HWCLayer {
   Layer *layer_ = nullptr;
   LayerTypes type_ = kLayerUnknown;
   uint32_t z_ = 0;
-  const hwc2_layer_t id_;
+  const LayerId id_;
   std::string name_;
-  const hwc2_display_t display_id_;
-  static std::atomic<hwc2_layer_t> next_id_;
+  const Display display_id_;
+  static std::atomic<LayerId> next_id_;
   shared_ptr<Fence> release_fence_;
   HWCBufferAllocator *buffer_allocator_ = NULL;
-  int32_t dataspace_ = HAL_DATASPACE_UNKNOWN;
+  int32_t dataspace_ = INT32(Dataspace::UNKNOWN);
   LayerTransform layer_transform_ = {};
   LayerRect dst_rect_ = {};
   bool single_buffer_ = false;
@@ -151,21 +150,21 @@ class HWCLayer {
   bool ignore_sdr_histogram_md_ = false;
 
   // Composition requested by client(SF) Original
-  HWC2::Composition client_requested_orig_ = HWC2::Composition::Device;
+  Composition client_requested_orig_ = Composition::DEVICE;
   // Composition requested by client(SF) Modified for internel use
-  HWC2::Composition client_requested_ = HWC2::Composition::Device;
+  Composition client_requested_ = Composition::DEVICE;
   // Composition selected by SDM
-  HWC2::Composition device_selected_ = HWC2::Composition::Device;
+  Composition device_selected_ = Composition::DEVICE;
   uint32_t geometry_changes_ = GeometryChanges::kNone;
 
-  void SetRect(const hwc_rect_t &source, LayerRect *target);
-  void SetRect(const hwc_frect_t &source, LayerRect *target);
-  uint32_t GetUint32Color(const hwc_color_t &source);
+  void SetRect(const Rect &source, LayerRect *target);
+  void SetRect(const FRect &source, LayerRect *target);
+  uint32_t GetUint32Color(const Color &source);
   void GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec);
   DisplayError SetMetaData(const native_handle_t *pvt_handle, Layer *layer);
   uint32_t RoundToStandardFPS(float fps);
   void ValidateAndSetCSC(const native_handle_t *handle);
-  void SetDirtyRegions(hwc_region_t surface_damage);
+  void SetDirtyRegions(Region surface_damage);
 };
 
 struct SortLayersByZ {

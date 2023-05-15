@@ -673,6 +673,8 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   const string max_os_brightness = "max os brightness=";
   const string max_panel_backlight = "max panel backlight=";
   const string backlight_type = "backlight type=";
+  const string fsc_panel = "is fsc panel=";
+  const string num_fsc_fields = "num fsc fields=";
 
   while (std::getline(stream, line)) {
     if (line.find(pixel_formats) != string::npos) {
@@ -716,8 +718,11 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
       if (string(line, backlight_type.length()) == "dcs") {
         info->backlight_type = string(line, backlight_type.length());
       }
+    } else if (line.find(fsc_panel) != string::npos) {
+      info->fsc_panel = (string(line, fsc_panel.length()) == "true");
+    } else if (line.find(num_fsc_fields) != string::npos) {
+      info->num_fsc_fields = std::stoi(string(line, num_fsc_fields.length()));
     }
-
   }
 
   drmModeFreePropertyBlob(blob);
@@ -980,8 +985,9 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, uint64_t *panel_id) {
 
 int DRMConnector::GetInfo(DRMConnectorInfo *info) {
   uint32_t conn_id = drm_connector_->connector_id;
-  if (!skip_connector_reload_ && (IsTVConnector(drm_connector_->connector_type)
-      || (DRM_MODE_CONNECTOR_VIRTUAL == drm_connector_->connector_type))) {
+  if (!skip_connector_reload_ && (IsTVConnector(drm_connector_->connector_type) ||
+                                  (DRM_MODE_CONNECTOR_VIRTUAL == drm_connector_->connector_type) ||
+                                  (DRM_MODE_CONNECTOR_DSI == drm_connector_->connector_type))) {
     // Reload since for some connectors like Virtual and DP, modes may change.
     drmModeConnectorPtr drm_connector = drmModeGetConnector(fd_, conn_id);
     if (!drm_connector) {
@@ -1439,6 +1445,17 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       }
       drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::CACHE_STATE),
                   connector_cache_state);
+    } break;
+
+    case DRMOps::CONNECTOR_SET_EPT: {
+      if (!prop_mgr_.IsPropertyAvailable(DRMProperty::EPT)) {
+        return;
+      }
+
+      uint64_t expected_present_time = va_arg(args, uint64_t);
+      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::EPT),
+                               expected_present_time);
+      DRM_LOGD("Connector %d: Setting ePT = %" PRId64, obj_id, expected_present_time);
     } break;
 
     default:

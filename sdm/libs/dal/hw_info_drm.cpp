@@ -101,6 +101,9 @@
 #ifndef DRM_FORMAT_MOD_QCOM_TIGHT
 #define DRM_FORMAT_MOD_QCOM_TIGHT fourcc_mod_code(QCOM, 0x4)
 #endif
+#ifndef DRM_FORMAT_MOD_QCOM_FSC_TILE
+#define DRM_FORMAT_MOD_QCOM_FSC_TILE fourcc_mod_code(QCOM, 0x20)
+#endif
 
 #define __CLASS__ "HWInfoDRM"
 
@@ -923,6 +926,13 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
       fmts.push_back(drm_format_modifier == DRM_FORMAT_MOD_QCOM_COMPRESSED
                          ? kFormatRGBA16161616FUbwc
                          : kFormatRGBA16161616F);
+      break;
+    case DRM_FORMAT_C8:
+      if (drm_format_modifier == (DRM_FORMAT_MOD_QCOM_COMPRESSED | DRM_FORMAT_MOD_QCOM_FSC_TILE)) {
+         fmts.push_back(kFormatC8Ubwc);
+      } else if (drm_format_modifier == DRM_FORMAT_MOD_QCOM_FSC_TILE) {
+         fmts.push_back(kFormatC8Fsc);
+      }
       break;
     default:
       break;

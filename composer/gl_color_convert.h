@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GL_COLOR_CONVERT_H__
 #define __GL_COLOR_CONVERT_H__
 
@@ -41,8 +48,8 @@ enum GLRenderTarget {
 
 class GLColorConvert {
  public:
-  static GLColorConvert* GetInstance(GLRenderTarget target, bool secure);
-  static void Destroy(GLColorConvert* intf);
+  static GLColorConvert *GetInstance(GLRenderTarget target, bool secure);
+  static void Destroy(GLColorConvert *intf);
 
   virtual int Blit(const native_handle_t *src_hnd, const native_handle_t *dst_hnd,
                    const GLRect &src_rect, const GLRect &dst_rect,
@@ -50,8 +57,9 @@ class GLColorConvert {
                    const shared_ptr<Fence> &dst_acquire_fence,
                    shared_ptr<Fence> *release_fence) = 0;
   virtual void Reset() = 0;
+
  protected:
-  virtual ~GLColorConvert() { }
+  virtual ~GLColorConvert() {}
 };
 
 }  // namespace sdm

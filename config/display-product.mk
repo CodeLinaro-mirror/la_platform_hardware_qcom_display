@@ -49,8 +49,8 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/backlight_calib_vtdr6130_amol
 #Smomo config xml file
 PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_COPY_OUT_VENDOR)/etc/smomo_setting.xml
 
-#SDR Dimming config file
-PRODUCT_COPY_FILES += hardware/qcom/display/config/display_id_sample.xml:$(TARGET_COPY_OUT_VENDOR)/etc/displayconfig/display_id_sample.xml
+#SDR Dimming config file for vtdr6130, display id is 4630947039571902851
+PRODUCT_COPY_FILES += hardware/qcom/display/config/display_id_sample.xml:$(TARGET_COPY_OUT_VENDOR)/etc/displayconfig/display_id_4630947039571902851.xml
 
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.demo.hdmirotationlock=false \
@@ -85,7 +85,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_async_vds_creation=1 \
     vendor.display.enable_rounded_corner=1 \
     vendor.display.disable_3d_adaptive_tm=1 \
-    vendor.display.disable_sdr_dimming=1 \
+    vendor.display.disable_sdr_dimming=0 \
     vendor.display.enable_rc_support=1 \
     vendor.display.disable_sdr_histogram=1 \
     vendor.display.enable_hdr10_gpu_target=1 \
@@ -156,7 +156,7 @@ SOONG_CONFIG_NAMESPACES += qtidisplay
 SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            gralloc4 displayconfig_enabled \
                            default var1 var2 var3 llvmcov  \
-                           composer_version smmu_proxy
+                           smmu_proxy
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -170,12 +170,6 @@ SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
-
-SOONG_CONFIG_qtidisplay_composer_version := v2
-ifeq ($(TARGET_USES_COMPOSER3),true)
-    SOONG_CONFIG_qtidisplay_composer_version := v3
-    $(warning "Using composer3")
-endif
 
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
     SOONG_CONFIG_qtidisplay_smmu_proxy := true

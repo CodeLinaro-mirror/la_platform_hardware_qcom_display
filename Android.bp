@@ -12,9 +12,6 @@ soong_config_module_type {
         "llvmcov",
         "smmu_proxy",
     ],
-    variables: [
-        "composer_version"
-    ],
     properties: [
         "cflags",
         "enabled",
@@ -25,11 +22,6 @@ soong_config_module_type {
         "native_coverage",
 	"vendor",
     ],
-}
-
-soong_config_string_variable {
-	name: "composer_version",
-	values: ["v2", "v3", "qmaa"],
 }
 
 soong_config_module_type {
@@ -145,9 +137,6 @@ qtidisplay_cc_defaults {
                 enabled: true,
             },
         },
-        composer_version : {
-
-        },
     },
 }
 
@@ -187,43 +176,6 @@ qtidisplay_cc_defaults {
         },
     },
 }
-
-qtidisplay_cc_defaults {
-    name: "qtidisplay_composer2_defaults",
-    defaults: ["qtidisplay_defaults"],
-    soong_config_variables: {
-	    composer_version: {
-	        v2: {
-	            enabled: true,
-	        },
-	        v3: {
-	            enabled: false,
-	        },
-	        conditions_default: {
-	            enabled: false,
-	        },
-	    },
-    }
-}
-
-qtidisplay_cc_defaults {
-    name: "qtidisplay_composer3_defaults",
-    defaults: ["qtidisplay_defaults"],
-    soong_config_variables: {
-	    composer_version: {
-	        v2: {
-	            enabled: false,
-	        },
-	        v3: {
-	            enabled: true,
-	        },
-	        conditions_default: {
-	            enabled: false,
-	        },
-	    },
-    }
-}
-
 
 qtidisplay_cc_defaults {
     name: "qtidisplay_alloc_defaults",

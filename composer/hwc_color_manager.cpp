@@ -28,40 +28,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <dlfcn.h>
 #include <cutils/sockets.h>
@@ -70,8 +41,6 @@
 #include <utils/String16.h>
 #include <binder/Parcel.h>
 #include <QtiGralloc.h>
-#include <hardware/hwcomposer.h>
-#include <hardware/hwcomposer_defs.h>
 #include <QService.h>
 
 #include <utils/constants.h>
@@ -131,7 +100,7 @@ void HWCColorManager::MarshallStructIntoParcel(const PPDisplayAPIPayload &data,
     out_parcel->write(data.payload, data.size);
 }
 
-HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator * buffer_allocator) {
+HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator *buffer_allocator) {
   HWCColorManager *color_mgr = new HWCColorManager(buffer_allocator);
 
   if (color_mgr) {
@@ -156,7 +125,7 @@ HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator * buffer
     if (diag_client_lib.Open(QDCM_DIAG_CLIENT_LIBRARY_NAME)) {
       if (!diag_client_lib.Sym(INIT_QDCM_DIAG_CLIENT_NAME,
                                reinterpret_cast<void **>(&color_mgr->qdcm_diag_init_)) ||
-        !diag_client_lib.Sym(DEINIT_QDCM_DIAG_CLIENT_NAME,
+          !diag_client_lib.Sym(DEINIT_QDCM_DIAG_CLIENT_NAME,
                                reinterpret_cast<void **>(&color_mgr->qdcm_diag_deinit_))) {
         DLOGE("Fail to retrieve = %s from %s", INIT_QDCM_DIAG_CLIENT_NAME,
               QDCM_DIAG_CLIENT_LIBRARY_NAME);
@@ -178,12 +147,10 @@ HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator * buffer
   return color_mgr;
 }
 
-HWCColorManager::HWCColorManager(HWCBufferAllocator *buffer_allocator) :
-    buffer_allocator_(buffer_allocator) {
-}
+HWCColorManager::HWCColorManager(HWCBufferAllocator *buffer_allocator)
+    : buffer_allocator_(buffer_allocator) {}
 
-HWCColorManager::~HWCColorManager() {
-}
+HWCColorManager::~HWCColorManager() {}
 
 void HWCColorManager::DestroyColorManager() {
   if (qdcm_mode_mgr_) {
@@ -223,10 +190,10 @@ int HWCColorManager::SetSolidFill(const void *params, bool enable, HWCDisplay *h
     solid_fill_params_ = PPColorFillParams();
   }
 
-  if (solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.b_bitdepth
-    || solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.g_bitdepth) {
+  if (solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.b_bitdepth ||
+      solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.g_bitdepth) {
     DLOGE("invalid bit depth r %d g %d b %d", solid_fill_params_.color.r_bitdepth,
-        solid_fill_params_.color.g_bitdepth, solid_fill_params_.color.b_bitdepth);
+          solid_fill_params_.color.g_bitdepth, solid_fill_params_.color.b_bitdepth);
     return -EINVAL;
   }
 
@@ -238,9 +205,10 @@ int HWCColorManager::SetSolidFill(const void *params, bool enable, HWCDisplay *h
 
   if (enable) {
     LayerRect solid_fill_rect = {
-      FLOAT(solid_fill_params_.rect.x), FLOAT(solid_fill_params_.rect.y),
-      FLOAT(solid_fill_params_.rect.x) + FLOAT(solid_fill_params_.rect.width),
-      FLOAT(solid_fill_params_.rect.y) + FLOAT(solid_fill_params_.rect.height),
+        FLOAT(solid_fill_params_.rect.x),
+        FLOAT(solid_fill_params_.rect.y),
+        FLOAT(solid_fill_params_.rect.x) + FLOAT(solid_fill_params_.rect.width),
+        FLOAT(solid_fill_params_.rect.y) + FLOAT(solid_fill_params_.rect.height),
     };
 
     hwc_display->Perform(HWCDisplayBuiltIn::SET_QDCM_SOLID_FILL_INFO, &solid_fill_color);

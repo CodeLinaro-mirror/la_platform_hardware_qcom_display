@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GL_COLOR_CONVERT_IMPL_H__
 #define __GL_COLOR_CONVERT_IMPL_H__
 
@@ -50,6 +57,7 @@ class GLColorConvertImpl : public GLColorConvert, public GLCommon {
   virtual int Init();
   virtual int Deinit();
   virtual void Reset();
+
  private:
   GLRenderTarget target_ = kTargetRGBA;
   bool secure_ = false;

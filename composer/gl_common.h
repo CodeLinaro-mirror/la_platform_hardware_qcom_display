@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GL_COMMON_H__
 #define __GL_COMMON_H__
 
@@ -72,7 +79,7 @@ class GLCommon {
   virtual void SetViewport(const GLRect &dst_rect);
 
  protected:
-  virtual ~GLCommon() { }
+  virtual ~GLCommon() {}
 
  private:
   EGLImageWrapper image_wrapper_;

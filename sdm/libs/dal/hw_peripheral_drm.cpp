@@ -258,6 +258,9 @@ DisplayError HWPeripheralDRM::Commit(HWLayersInfo *hw_layers_info) {
   SetSelfRefreshState();
   SetVMReqState();
 
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_EPT, token_.conn_id,
+                            hw_layers_info->expected_present_time);
+
   DisplayError error = HWDeviceDRM::Commit(hw_layers_info);
   shared_ptr<Fence> cwb_fence = Fence::Create(INT(cwb_fence_fd), "cwb_fence");
   if (error != kErrorNone) {
@@ -302,14 +305,18 @@ void HWPeripheralDRM::ResetDestScalarCache() {
 }
 
 void HWPeripheralDRM::SetDestScalarData(const HWLayersInfo &hw_layer_info) {
+  SetDestScalarData(hw_layer_info.dest_scale_info_map);
+}
+
+void HWPeripheralDRM::SetDestScalarData(const DestScaleInfoMap dest_scale_info_map) {
   if (!hw_scale_ || !dest_scaler_blocks_used_) {
     return;
   }
 
   for (uint32_t i = 0; i < dest_scaler_blocks_used_; i++) {
-    auto it = hw_layer_info.dest_scale_info_map.find(i);
+    auto it = dest_scale_info_map.find(i);
 
-    if (it == hw_layer_info.dest_scale_info_map.end()) {
+    if (it == dest_scale_info_map.end()) {
       continue;
     }
 
@@ -343,7 +350,7 @@ void HWPeripheralDRM::SetDestScalarData(const HWLayersInfo &hw_layer_info) {
   }
 
   if (needs_ds_update_) {
-    sde_dest_scalar_data_.num_dest_scaler = UINT32(hw_layer_info.dest_scale_info_map.size());
+    sde_dest_scalar_data_.num_dest_scaler = UINT32(dest_scale_info_map.size());
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_DEST_SCALER_CONFIG, token_.crtc_id,
                               reinterpret_cast<uint64_t>(&sde_dest_scalar_data_));
   }
@@ -541,6 +548,7 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, SyncPoints *syn
     pending_power_state_ = kPowerStateOn;
     return kErrorDeferred;
   }
+  SetVMReqState();
 
   if (switch_mode_valid_ && doze_poms_switch_done_ && (current_mode_index_ == cmd_mode_index_)) {
     HWDeviceDRM::SetDisplayMode(kModeVideo);
@@ -567,6 +575,7 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, SyncPoints *syn
   idle_pc_enabled_ = true;
   pending_poms_switch_ = false;
   active_ = true;
+  SetTUIState();
 
   CacheDestScalarData();
 

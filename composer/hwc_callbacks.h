@@ -27,15 +27,18 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_CALLBACKS_H__
 #define __HWC_CALLBACKS_H__
 
-#define HWC2_INCLUDE_STRINGIFICATION
-#define HWC2_USE_CPP11
 #include <utils/locker.h>
-#include <hardware/hwcomposer2.h>
-#undef HWC2_INCLUDE_STRINGIFICATION
-#undef HWC2_USE_CPP11
+#include "hwc_common.h"
 
 namespace sdm {
 
@@ -48,55 +51,46 @@ class HWCCallbacks {
   // Async powermode update requires dummy hwc displays.
   // Limit dummy displays to builtin/pluggable type for now.
   static const int kNumRealDisplays = 1 + kNumBuiltIn + kNumPluggable + kNumVirtual;
-  static const int kNumDisplays = 1 + kNumBuiltIn + kNumPluggable + kNumVirtual +
-                                    1 + kNumBuiltIn + kNumPluggable;
+  static const int kNumDisplays =
+      1 + kNumBuiltIn + kNumPluggable + kNumVirtual + 1 + kNumBuiltIn + kNumPluggable;
 
-  HWC2::Error Hotplug(hwc2_display_t display, HWC2::Connection state);
-  HWC2::Error Refresh(hwc2_display_t display);
-  HWC2::Error Vsync(hwc2_display_t display, int64_t timestamp);
-  HWC2::Error Vsync_2_4(hwc2_display_t display, int64_t timestamp, uint32_t period);
-  HWC2::Error VsyncPeriodTimingChanged(hwc2_display_t display,
-                                       hwc_vsync_period_change_timeline_t *updated_timeline);
-  HWC2::Error SeamlessPossible(hwc2_display_t display);
-  HWC2::Error Register(HWC2::Callback, hwc2_callback_data_t callback_data,
-                       hwc2_function_pointer_t pointer);
-  void UpdateVsyncSource(hwc2_display_t from) {
-    vsync_source_ = from;
-  }
-  hwc2_display_t GetVsyncSource() { return vsync_source_; }
+  HWC3::Error Hotplug(Display display, bool state);
+  HWC3::Error Refresh(Display display);
+  HWC3::Error Vsync(Display display, int64_t timestamp, uint32_t period);
+  HWC3::Error VsyncIdle(Display display);
+  HWC3::Error VsyncPeriodTimingChanged(Display display,
+                                       VsyncPeriodChangeTimeline *updated_timeline);
+  HWC3::Error SeamlessPossible(Display display);
+  HWC3::Error Register(CallbackCommand descriptor, void *callback_data, void *pointer);
+  void UpdateVsyncSource(Display from) { vsync_source_ = from; }
+  Display GetVsyncSource() { return vsync_source_; }
 
-  bool VsyncCallbackRegistered() { return (vsync_ != nullptr && vsync_data_ != nullptr); }
-  bool Vsync_2_4CallbackRegistered() { return (vsync_2_4_ != nullptr); }
-  bool NeedsRefresh(hwc2_display_t display) { return pending_refresh_.test(UINT32(display)); }
-  void ResetRefresh(hwc2_display_t display) { pending_refresh_.reset(UINT32(display)); }
+  bool VsyncCallbackRegistered() { return (vsync_ != nullptr && callback_data_ != nullptr); }
+  bool NeedsRefresh(Display display) { return pending_refresh_.test(UINT32(display)); }
+  void ResetRefresh(Display display) { pending_refresh_.reset(UINT32(display)); }
   bool IsClientConnected() {
     SCOPE_LOCK(hotplug_lock_);
     return client_connected_;
   }
 
  private:
-  hwc2_callback_data_t hotplug_data_ = nullptr;
-  hwc2_callback_data_t refresh_data_ = nullptr;
-  hwc2_callback_data_t vsync_data_ = nullptr;
-  hwc2_callback_data_t vsync_2_4_data_ = nullptr;
-  hwc2_callback_data_t vsync_period_timing_changed_data_ = nullptr;
-  hwc2_callback_data_t seamless_possible_data_ = nullptr;
+  void *callback_data_ = nullptr;
 
-  HWC2_PFN_HOTPLUG hotplug_ = nullptr;
-  HWC2_PFN_REFRESH refresh_ = nullptr;
-  HWC2_PFN_VSYNC vsync_ = nullptr;
-  HWC2_PFN_VSYNC_2_4 vsync_2_4_ = nullptr;
-  HWC2_PFN_VSYNC_PERIOD_TIMING_CHANGED vsync_period_timing_changed_ = nullptr;
-  HWC2_PFN_SEAMLESS_POSSIBLE seamless_possible_ = nullptr;
+  onHotplug_func_t *hotplug_ = nullptr;
+  onRefresh_func_t *refresh_ = nullptr;
+  onVsync_func_t *vsync_ = nullptr;
+  onSeamlessPossible_func_t *seamless_possible_ = nullptr;
+  onVsyncPeriodTimingChanged_func_t *vsync_changed_ = nullptr;
+  onVsyncIdle_func_t *vsync_idle_ = nullptr;
 
-  hwc2_display_t vsync_source_ = HWC_DISPLAY_PRIMARY;   // hw vsync is active on this display
-  std::bitset<kNumDisplays> pending_refresh_;         // Displays waiting to get refreshed
+  Display vsync_source_ = HWC_DISPLAY_PRIMARY;  // hw vsync is active on this display
+  std::bitset<kNumDisplays> pending_refresh_;   // Displays waiting to get refreshed
 
   Locker hotplug_lock_;
   Locker refresh_lock_;
   Locker vsync_lock_;
-  Locker vsync_2_4_lock_;
-  Locker vsync_period_timing_changed_lock_;
+  Locker vsync_idle_lock_;
+  Locker vsync_changed_lock_;
   Locker seamless_possible_lock_;
   bool client_connected_ = false;
 };

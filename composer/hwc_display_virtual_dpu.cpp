@@ -27,19 +27,27 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <hwc_display_virtual_dpu.h>
 
 #define __CLASS__ "HWCDisplayVirtualDPU"
 
 namespace sdm {
 
-HWCDisplayVirtualDPU::HWCDisplayVirtualDPU(CoreInterface *core_intf, HWCBufferAllocator
-                                           *buffer_allocator, HWCCallbacks *callbacks,
-                                           hwc2_display_t id, int32_t sdm_id, uint32_t width,
-                                           uint32_t height, float min_lum, float max_lum)
-  : HWCDisplayVirtual(core_intf, buffer_allocator, callbacks, id, sdm_id, width, height),
-    min_lum_(min_lum), max_lum_(max_lum) {
-}
+HWCDisplayVirtualDPU::HWCDisplayVirtualDPU(CoreInterface *core_intf,
+                                           HWCBufferAllocator *buffer_allocator,
+                                           HWCCallbacks *callbacks, Display id, int32_t sdm_id,
+                                           uint32_t width, uint32_t height, float min_lum,
+                                           float max_lum)
+    : HWCDisplayVirtual(core_intf, buffer_allocator, callbacks, id, sdm_id, width, height),
+      min_lum_(min_lum),
+      max_lum_(max_lum) {}
 
 int HWCDisplayVirtualDPU::Init() {
   int status = HWCDisplay::Init();
@@ -58,7 +66,7 @@ int HWCDisplayVirtualDPU::Init() {
     return status;
   }
 
-  status = INT32(SetPowerMode(HWC2::PowerMode::On, false /* teardown */));
+  status = INT32(SetPowerMode(PowerMode::ON, false /* teardown */));
   if (status) {
     DLOGW("Failed to set power mode on virtual display");
     return status;
@@ -88,10 +96,10 @@ int HWCDisplayVirtualDPU::SetConfig(uint32_t width, uint32_t height) {
   return 0;
 }
 
-HWC2::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
+HWC3::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
                                                   shared_ptr<Fence> release_fence) {
-  HWC2::Error error = HWCDisplayVirtual::SetOutputBuffer(buf, release_fence);
-  if (error != HWC2::Error::None) {
+  HWC3::Error error = HWCDisplayVirtual::SetOutputBuffer(buf, release_fence);
+  if (error != HWC3::Error::None) {
     return error;
   }
 
@@ -107,17 +115,16 @@ HWC2::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
 
     GetMixerResolution(&active_width, &active_height);
     buffer_allocator_->GetCustomWidthAndHeight(output_handle, &new_width, &new_height);
-    buffer_allocator_->GetAlignedWidthAndHeight(INT(new_width), INT(new_height),
-                                                output_handle_format, 0, &new_aligned_w,
-                                                &new_aligned_h);
+    buffer_allocator_->GetAlignedWidthAndHeight(
+        INT(new_width), INT(new_height), output_handle_format, 0, &new_aligned_w, &new_aligned_h);
     buffer_allocator_->GetAlignedWidthAndHeight(INT(active_width), INT(active_height),
                                                 output_handle_format, 0, &active_aligned_w,
                                                 &active_aligned_h);
-    if (new_aligned_w != active_aligned_w  || new_aligned_h != active_aligned_h) {
+    if (new_aligned_w != active_aligned_w || new_aligned_h != active_aligned_h) {
       int status = SetConfig(UINT32(new_width), UINT32(new_height));
       if (status) {
         DLOGE("SetConfig failed custom WxH %dx%d", new_width, new_height);
-        return HWC2::Error::BadParameter;
+        return HWC3::Error::BadParameter;
       }
     }
 
@@ -127,17 +134,17 @@ HWC2::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
     output_buffer_.unaligned_height = UINT32(new_height);
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtualDPU::PreValidateDisplay(bool *exit_validate) {
+HWC3::Error HWCDisplayVirtualDPU::PreValidateDisplay(bool *exit_validate) {
   // Draw method gets set as part of first commit.
   SetDrawMethod();
 
   if (NeedsGPUBypass()) {
     MarkLayersForGPUBypass();
     *exit_validate = true;
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   BuildLayerStack();
@@ -162,10 +169,10 @@ HWC2::Error HWCDisplayVirtualDPU::PreValidateDisplay(bool *exit_validate) {
 
   *exit_validate = false;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtualDPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+HWC3::Error HWCDisplayVirtualDPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
   bool exit_validate = false;
   auto status = PreValidateDisplay(&exit_validate);
   if (exit_validate) {
@@ -175,21 +182,21 @@ HWC2::Error HWCDisplayVirtualDPU::Validate(uint32_t *out_num_types, uint32_t *ou
   return PrepareLayerStack(out_num_types, out_num_requests);
 }
 
-HWC2::Error HWCDisplayVirtualDPU::Present(shared_ptr<Fence> *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayVirtualDPU::Present(shared_ptr<Fence> *out_retire_fence) {
+  auto status = HWC3::Error::None;
 
   if (!output_buffer_.buffer_id) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
   if (NeedsGPUBypass()) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   layer_stack_.output_buffer = &output_buffer_;
 
   status = HWCDisplay::CommitLayerStack();
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     return status;
   }
 
@@ -198,7 +205,7 @@ HWC2::Error HWCDisplayVirtualDPU::Present(shared_ptr<Fence> *out_retire_fence) {
   return status;
 }
 
-HWC2::Error HWCDisplayVirtualDPU::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence) {
+HWC3::Error HWCDisplayVirtualDPU::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence) {
   DTRACE_SCOPED();
   // Retire fence points to WB done.
   // Explicitly query for output buffer acquire fence.
@@ -211,7 +218,7 @@ HWC2::Error HWCDisplayVirtualDPU::PostCommitLayerStack(shared_ptr<Fence> *out_re
   return status;
 }
 
-HWC2::Error HWCDisplayVirtualDPU::CommitOrPrepare(bool validate_only,
+HWC3::Error HWCDisplayVirtualDPU::CommitOrPrepare(bool validate_only,
                                                   shared_ptr<Fence> *out_retire_fence,
                                                   uint32_t *out_num_types,
                                                   uint32_t *out_num_requests, bool *needs_commit) {
@@ -223,13 +230,12 @@ HWC2::Error HWCDisplayVirtualDPU::CommitOrPrepare(bool validate_only,
   return status;
 }
 
-HWC2::Error HWCDisplayVirtualDPU::SetPanelLuminanceAttributes(float min_lum, float max_lum) {
+HWC3::Error HWCDisplayVirtualDPU::SetPanelLuminanceAttributes(float min_lum, float max_lum) {
   DisplayError err = display_intf_->SetPanelLuminanceAttributes(min_lum, max_lum);
   if (err != kErrorNone) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm
-

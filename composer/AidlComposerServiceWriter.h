@@ -40,8 +40,8 @@ namespace hardware {
 namespace display {
 namespace composer3 {
 
-using aidl::android::hardware::graphics::composer3::ChangedCompositionTypes;
 using aidl::android::hardware::graphics::composer3::ChangedCompositionLayer;
+using aidl::android::hardware::graphics::composer3::ChangedCompositionTypes;
 using aidl::android::hardware::graphics::composer3::ClientTargetPropertyWithBrightness;
 using aidl::android::hardware::graphics::composer3::CommandError;
 using aidl::android::hardware::graphics::composer3::CommandResultPayload;

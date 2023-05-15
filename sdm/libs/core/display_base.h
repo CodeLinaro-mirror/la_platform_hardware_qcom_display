@@ -348,6 +348,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   virtual void IdleTimeout() {}
   std::chrono::system_clock::time_point WaitUntil();
   virtual void Abort();
+  DisplayError DisableDestinationScalar();
 
   DisplayMutex disp_mutex_;
   std::thread commit_thread_;
@@ -443,6 +444,8 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   bool disable_cwb_idle_fallback_ = false;
   bool allow_tonemap_native_ = false;
   bool avoid_qsync_mode_change_ = false;
+  LayerBuffer cwb_output_buf_ = {};
+  bool cwb_active_ = false;
 
  private:
   // Max tolerable power-state-change wait-times in milliseconds.
@@ -466,6 +469,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   DisplayError InitBorderLayers();
   std::vector<LayerRect> GetBorderRects();
   void GenerateBorderLayers(const std::vector<LayerRect> &border_rects);
+  uint32_t GetMixerCountFromTopology(HWTopology topology);
   unsigned int rc_cached_res_width_ = 0;
   unsigned int rc_cached_res_height_ = 0;
   unsigned int rc_cached_mixer_width_ = 0;

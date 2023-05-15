@@ -67,6 +67,7 @@
 
 namespace sde_drm {
 
+// clang-format off
 DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "type") { return DRMProperty::TYPE; }
   if (name == "FB_ID") { return DRMProperty::FB_ID; }
@@ -240,8 +241,14 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "SDE_SSPP_UCSC_CSC_V1") { return DRMProperty::SDE_SSPP_UCSC_CSC_V1; }
   if (name == "SDE_SSPP_UCSC_GC_V1") { return DRMProperty::SDE_SSPP_UCSC_GC_V1; }
   if (name == "SDE_SSPP_UCSC_ALPHA_DITHER_V1") { return DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1; }
+  if (name == "EPT") { return DRMProperty::EPT; }
+  if (name == "prefill_size") { return DRMProperty::PREFILL_SIZE; }
+  if (name == "prefill_time") { return DRMProperty::PREFILL_TIME; }
+  if (name == "syscache_type") { return DRMProperty::SYS_CACHE_TYPE; }
+  if (name == "buffer_mode") { return DRMProperty::BUFFER_MODE; }
 
   return DRMProperty::INVALID;
 }
+// clang-format on
 
 }  // namespace sde_drm

@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <QtiGralloc.h>
 #include <sync/sync.h>
 
@@ -50,7 +57,7 @@
 namespace sdm {
 
 ToneMapSession::ToneMapSession(HWCBufferAllocator *buffer_allocator)
-  : tone_map_task_(*this), buffer_allocator_(buffer_allocator) {
+    : tone_map_task_(*this), buffer_allocator_(buffer_allocator) {
   buffer_info_.resize(kNumIntermediateBuffers);
 }
 
@@ -65,37 +72,31 @@ void ToneMapSession::OnTask(const ToneMapTaskCode &task_code,
   switch (task_code) {
 #ifndef TARGET_HEADLESS
     case ToneMapTaskCode::kCodeGetInstance: {
-        ToneMapGetInstanceContext *ctx = static_cast<ToneMapGetInstanceContext *>(task_context);
-        Lut3d &lut_3d = ctx->layer->lut_3d;
-        Color10Bit *grid_entries = NULL;
-        int grid_size = 0;
-        if (lut_3d.validGridEntries) {
-          grid_entries = lut_3d.gridEntries;
-          grid_size = INT(lut_3d.gridSize);
-        }
-        gpu_tone_mapper_ = TonemapperFactory_GetInstance(tone_map_config_.type,
-                                                         lut_3d.lutEntries, lut_3d.dim,
-                                                         grid_entries, grid_size,
-                                                         tone_map_config_.secure);
+      ToneMapGetInstanceContext *ctx = static_cast<ToneMapGetInstanceContext *>(task_context);
+      Lut3d &lut_3d = ctx->layer->lut_3d;
+      Color10Bit *grid_entries = NULL;
+      int grid_size = 0;
+      if (lut_3d.validGridEntries) {
+        grid_entries = lut_3d.gridEntries;
+        grid_size = INT(lut_3d.gridSize);
       }
-      break;
+      gpu_tone_mapper_ =
+          TonemapperFactory_GetInstance(tone_map_config_.type, lut_3d.lutEntries, lut_3d.dim,
+                                        grid_entries, grid_size, tone_map_config_.secure);
+    } break;
 
     case ToneMapTaskCode::kCodeBlit: {
-        ToneMapBlitContext *ctx = static_cast<ToneMapBlitContext *>(task_context);
-        uint8_t buffer_index = current_buffer_index_;
-        const void *dst_hnd = reinterpret_cast<const void *>
-                                (buffer_info_[buffer_index].private_data);
-        const void *src_hnd = reinterpret_cast<const void *>
-                                (ctx->layer->input_buffer.buffer_id);
-        int fence = gpu_tone_mapper_->blit(dst_hnd, src_hnd, Fence::Dup(ctx->merged));
-        ctx->fence = Fence::Create(fence, "tonemap");
-      }
-      break;
+      ToneMapBlitContext *ctx = static_cast<ToneMapBlitContext *>(task_context);
+      uint8_t buffer_index = current_buffer_index_;
+      const void *dst_hnd = reinterpret_cast<const void *>(buffer_info_[buffer_index].private_data);
+      const void *src_hnd = reinterpret_cast<const void *>(ctx->layer->input_buffer.buffer_id);
+      int fence = gpu_tone_mapper_->blit(dst_hnd, src_hnd, Fence::Dup(ctx->merged));
+      ctx->fence = Fence::Create(fence, "tonemap");
+    } break;
 
     case ToneMapTaskCode::kCodeDestroy: {
-        delete gpu_tone_mapper_;
-      }
-      break;
+      delete gpu_tone_mapper_;
+    } break;
 
 #endif
     default:
@@ -153,7 +154,7 @@ void ToneMapSession::SetToneMapConfig(Layer *layer, PrimariesTransfer blend_cs) 
 }
 
 bool ToneMapSession::IsSameToneMapConfig(Layer *layer, PrimariesTransfer blend_cs) {
-  LayerBuffer& buffer = layer->input_buffer;
+  LayerBuffer &buffer = layer->input_buffer;
   native_handle_t *handle = static_cast<native_handle_t *>(buffer_info_[0].private_data);
   int tonemap_type = buffer.flags.hdr ? TONEMAP_FORWARD : TONEMAP_INVERSE;
 
@@ -182,26 +183,27 @@ int HWCToneMapper::HandleToneMap(LayerStack *layer_stack) {
     if (layer->request.flags.tone_map) {
       DLOGV_IF(kTagClient, "Tonemapping for layer at index %d", i);
       switch (layer->composition) {
-      case kCompositionGPUTarget:
-        if (!gpu_count) {
-          // When all layers are on FrameBuffer and if they do not update in the next draw cycle,
-          // then SDM marks them for SDE Composition because the cached FB layer gets displayed.
-          // GPU count will be 0 in this case. Try to use the existing tone-mapped frame buffer.
-          // No ToneMap/Blit is required. Just update the buffer & acquire fence fd of FB layer.
-          if (!tone_map_sessions_.empty() && (fb_session_index_ >= 0)) {
-            ToneMapSession *fb_tone_map_session = tone_map_sessions_.at(UINT32(fb_session_index_));
-            fb_tone_map_session->UpdateBuffer(nullptr /* acquire_fence */, &layer->input_buffer);
-            fb_tone_map_session->layer_index_ = INT(i);
-            fb_tone_map_session->acquired_ = true;
-            return 0;
+        case kCompositionGPUTarget:
+          if (!gpu_count) {
+            // When all layers are on FrameBuffer and if they do not update in the next draw cycle,
+            // then SDM marks them for SDE Composition because the cached FB layer gets displayed.
+            // GPU count will be 0 in this case. Try to use the existing tone-mapped frame buffer.
+            // No ToneMap/Blit is required. Just update the buffer & acquire fence fd of FB layer.
+            if (!tone_map_sessions_.empty() && (fb_session_index_ >= 0)) {
+              ToneMapSession *fb_tone_map_session =
+                  tone_map_sessions_.at(UINT32(fb_session_index_));
+              fb_tone_map_session->UpdateBuffer(nullptr /* acquire_fence */, &layer->input_buffer);
+              fb_tone_map_session->layer_index_ = INT(i);
+              fb_tone_map_session->acquired_ = true;
+              return 0;
+            }
           }
-        }
-        error = AcquireToneMapSession(layer, &session_index, layer_stack->blend_cs);
-        fb_session_index_ = INT(session_index);
-        break;
-      default:
-        error = AcquireToneMapSession(layer, &session_index, layer_stack->blend_cs);
-        break;
+          error = AcquireToneMapSession(layer, &session_index, layer_stack->blend_cs);
+          fb_session_index_ = INT(session_index);
+          break;
+        default:
+          error = AcquireToneMapSession(layer, &session_index, layer_stack->blend_cs);
+          break;
       }
 
       if (error != kErrorNone) {
@@ -219,7 +221,7 @@ int HWCToneMapper::HandleToneMap(LayerStack *layer_stack) {
   return 0;
 }
 
-void HWCToneMapper::ToneMap(Layer* layer, ToneMapSession *session) {
+void HWCToneMapper::ToneMap(Layer *layer, ToneMapSession *session) {
   ToneMapBlitContext ctx = {};
   ctx.layer = layer;
 
@@ -227,8 +229,8 @@ void HWCToneMapper::ToneMap(Layer* layer, ToneMapSession *session) {
 
   // use and close the layer->input_buffer acquire fence fd.
   // remove create when rf made it as a shared_ptr
-  ctx.merged = Fence::Merge(session->release_fence_[buffer_index],
-                            layer->input_buffer.acquire_fence);
+  ctx.merged =
+      Fence::Merge(session->release_fence_[buffer_index], layer->input_buffer.acquire_fence);
 
   DTRACE_BEGIN("GPU_TM_BLIT");
   session->tone_map_task_.PerformTask(ToneMapTaskCode::kCodeBlit, &ctx);
@@ -311,7 +313,7 @@ void HWCToneMapper::DumpToneMapOutput(ToneMapSession *session, shared_ptr<Fence>
            HWCDebugHandler::DumpDir(), width, height, dump_frame_index_);
 
   if (base_ptr != nullptr) {
-    FILE* fp = fopen(dump_file_name, "w+");
+    FILE *fp = fopen(dump_file_name, "w+");
     if (fp) {
       DLOGI("base addr = %p", base_ptr);
       result = fwrite(base_ptr, size, 1, fp);
@@ -338,8 +340,8 @@ DisplayError HWCToneMapper::AcquireToneMapSession(Layer *layer, uint32_t *sessio
   for (uint32_t i = 0; i < tone_map_sessions_.size(); i++) {
     ToneMapSession *tonemap_session = tone_map_sessions_.at(i);
     if (!tonemap_session->acquired_ && tonemap_session->IsSameToneMapConfig(layer, blend_cs)) {
-      tonemap_session->current_buffer_index_ = (tonemap_session->current_buffer_index_ + 1) %
-                                                ToneMapSession::kNumIntermediateBuffers;
+      tonemap_session->current_buffer_index_ =
+          (tonemap_session->current_buffer_index_ + 1) % ToneMapSession::kNumIntermediateBuffers;
       tonemap_session->acquired_ = true;
       *session_index = i;
       return kErrorNone;

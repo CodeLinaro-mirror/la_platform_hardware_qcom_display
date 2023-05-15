@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_PLUGGABLE_TEST_H__
 #define __HWC_DISPLAY_PLUGGABLE_TEST_H__
 
@@ -41,11 +48,11 @@ class HWCDisplayPluggableTest : public HWCDisplay {
  public:
   static int Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
-                    uint32_t panel_bpp, uint32_t pattern_type, HWCDisplay **hwc_display);
+                    qService::QService *qservice, Display id, int32_t sdm_id, uint32_t panel_bpp,
+                    uint32_t pattern_type, HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
-  virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
   virtual int Perform(uint32_t operation, ...);
 
  protected:
@@ -81,8 +88,8 @@ class HWCDisplayPluggableTest : public HWCDisplay {
  private:
   HWCDisplayPluggableTest(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                           HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                          qService::QService *qservice, hwc2_display_t id,
-                          int32_t sdm_id, uint32_t panel_bpp, uint32_t pattern_type);
+                          qService::QService *qservice, Display id, int32_t sdm_id,
+                          uint32_t panel_bpp, uint32_t pattern_type);
   int Init();
   int Deinit();
   void DumpInputBuffer();
@@ -97,7 +104,7 @@ class HWCDisplayPluggableTest : public HWCDisplay {
   int DeinitLayer(Layer *layer);
   int CreateLayerStack();
   int DestroyLayerStack();
-  HWC2::Error PostCommit(shared_ptr<Fence> *out_retire_fence);
+  HWC3::Error PostCommit(shared_ptr<Fence> *out_retire_fence);
 
   static const uint32_t kTestLayerCnt = 1;
 };
@@ -105,4 +112,3 @@ class HWCDisplayPluggableTest : public HWCDisplay {
 }  // namespace sdm
 
 #endif  // __HWC_DISPLAY_PLUGGABLE_TEST_H__
-

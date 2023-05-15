@@ -117,6 +117,8 @@ class HWDeviceDRM : public HWInterface {
   }
 
  protected:
+  const int kEarlyPrefil = 40;
+
   // From HWInterface
   virtual DisplayError GetDisplayId(int32_t *display_id);
   virtual DisplayError GetActiveConfig(uint32_t *active_config);
@@ -223,6 +225,7 @@ class HWDeviceDRM : public HWInterface {
   static const int kMaxStringLength = 1024;
   static const int kNumPhysicalDisplays = 2;
   static const int kMaxSysfsCommandLength = 12;
+  static const int kPixelThroughput = 3;
 
   DisplayError SetFormat(const LayerBufferFormat &source, uint32_t *target);
   DisplayError SetStride(HWDeviceType device_type, LayerBufferFormat format, uint32_t width,
@@ -283,6 +286,7 @@ class HWDeviceDRM : public HWInterface {
   DisplayError GetPanelBlMaxLvl(uint32_t *bl_max);
   DisplayError SetPPConfig(void *payload, size_t size);
   DisplayError GetQsyncFps(uint32_t *qsync_fps) { return kErrorNotSupported; }
+  void SetDestScalarData(const DestScaleInfoMap dest_scale_info_map) { return; };
 
   class Registry {
    public:
@@ -373,6 +377,7 @@ class HWDeviceDRM : public HWInterface {
 
  private:
   void GetCWBCapabilities();
+  void UpdateDisplayAttributesForFSC(HWDisplayAttributes *display_attributes);
 
   std::string interface_str_ = "DSI";
   bool resolution_switch_enabled_ = false;

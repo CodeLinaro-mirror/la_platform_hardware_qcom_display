@@ -10,6 +10,7 @@
 #include <binder/ProcessState.h>
 #include <hidl/LegacySupport.h>
 #include <cutils/properties.h>
+#include <android/binder_process.h>
 
 #include "composer_test_service.h"
 #include "comp_test_bnd_service.h"
@@ -86,7 +87,7 @@ int ComposerTestService::ConfigureCWBTest(const android::Parcel *input_parcel) {
   }
 
   struct CWBConfig cwb_config;
-  cwb_config.disp = static_cast<DisplayConfig::DisplayType>(input_parcel->readInt32());
+  cwb_config.disp = static_cast<DisplayType>(input_parcel->readInt32());
   cwb_config.post_processed = input_parcel->readInt32();
   cwb_config.format = static_cast<LayerBufferFormat>(input_parcel->readInt32());
   cwb_config.trigger_frequency = input_parcel->readInt64();
@@ -106,7 +107,7 @@ int ComposerTestService::StopCWBTest(const android::Parcel *input_parcel) {
   if (!cwb_test_intf_) {
     return -EINVAL;
   }
-  auto disp = static_cast<DisplayConfig::DisplayType>(input_parcel->readInt32());
+  auto disp = static_cast<DisplayType>(input_parcel->readInt32());
   return cwb_test_intf_->StopTest(disp);
 }
 
@@ -119,11 +120,11 @@ int main(int, char **) {
   ps->startThreadPool();
 
   sdm::ComposerTestService composer_test_service;
-  composer_test_service.Init();
   configureRpcThreadpool(4, true /*callerWillJoin*/);
+  composer_test_service.Init();
   CompTestBndService::Init(&composer_test_service);
 
-  joinRpcThreadpool();
+  ABinderProcess_joinThreadPool();
 
   return 0;
 }

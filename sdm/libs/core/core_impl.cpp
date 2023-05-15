@@ -42,7 +42,6 @@
 #include <private/hw_info_interface.h>
 #include <map>
 #include <vector>
-#include <thread>
 
 #include "color_manager.h"
 #include "core_impl.h"
@@ -465,13 +464,20 @@ DisplayError CoreImpl::ReserveDemuraResources() {
       DLOGI("[%u] Needs Demura resources %u", req.first, req_cnt);
       // Reserving demura resources requires knowledge of which rect to reserve when the req_cnt
       // is 1. As the HW pipeline for any display is not known yet, we shall assume primary display
-      // takes 0 and non-primary takes 1. When req_cnt > 1, pass in -1
+      // takes 0 and non-primary takes 1. When req_cnt == 2 (Dual LM topology usecase), pass in -1
+      // For rest of the topology return error as they are not supported for demura.
       int8_t preferred_rect = -1;
       if (req_cnt == 1) {
         HWDisplayInfo &info = hw_displays_info_[req.first];
         preferred_rect = info.is_primary ? 0 : 1;
         DLOGI("[%u] is single LM. Requesting Demura rect %d", req.first, preferred_rect);
+      } else if (req_cnt == 2) {
+        preferred_rect = -1;
+      } else {
+        DLOGE("Invalid demura Requirement count = %d", req_cnt);
+        return kErrorResources;
       }
+
       if ((err = comp_mgr_.ReserveDemuraFetchResources(req.first, preferred_rect)) !=
           kErrorNone) {
         DLOGE("Failed to reserve resources error = %d", err);
@@ -553,6 +559,17 @@ void CoreIPCVmCallbackImpl::Init() {
     DLOGE("failed to create the payload for out_reg. Error:%d", ret);
     return;
   }
+
+  server_thread_exit_ = false;
+  server_thread_ = std::thread(&CoreIPCVmCallbackImpl::OnServerReadyThread, this);
+
+  // wait for thread to start running
+  std::unique_lock<std::mutex> lck(server_thread_lock_);
+  if (server_thread_ready_cv_.wait_for(lck, std::chrono::milliseconds(100)) ==
+      std::cv_status::timeout) {
+    DLOGW("server thread ready timeout");
+  }
+
   if ((ret = ipc_intf_->ProcessOps(kIpcOpsRegisterVmCallback, in_reg, &out_reg))) {
     DLOGE("Failed to register vm callback, error = %d", ret);
     return;
@@ -570,14 +587,23 @@ void CoreIPCVmCallbackImpl::Deinit() {
   int ret = in_unreg.CreatePayload<int>(cb_hnd_in);
   if (ret) {
     DLOGE("failed to create the payload for in_unreg. Error:%d", ret);
-    return;
+    goto end;
   }
+
   *cb_hnd_in = cb_hnd_out_;
   if ((ret = ipc_intf_->ProcessOps(kIpcOpsUnRegisterVmCallback, in_unreg, nullptr))) {
     DLOGE("Failed to unregister vm callback, error = %d", ret);
-    return;
+    goto end;
   }
+
+end:
   server_ready_ = false;
+
+  if (server_thread_.joinable()) {
+    server_thread_exit_ = true;
+    server_thread_cv_.notify_one();
+    server_thread_.join();
+  }
 }
 
 void CoreIPCVmCallbackImpl::OnServerReady() {
@@ -586,12 +612,19 @@ void CoreIPCVmCallbackImpl::OnServerReady() {
     return;
   }
   server_ready_ = true;
-  std::thread(CoreIPCVmCallbackImpl::OnServerReadyThread, this).detach();
+  server_thread_cv_.notify_one();
 }
 
-void CoreIPCVmCallbackImpl::OnServerReadyThread(CoreIPCVmCallbackImpl *obj) {
-  if (obj->SendPanelBootParams()) {
-    DLOGE("Failed to Send SendPanelBootParams");
+void CoreIPCVmCallbackImpl::OnServerReadyThread() {
+  server_thread_ready_cv_.notify_one();
+
+  std::unique_lock<std::mutex> lck(server_thread_lock_);
+  while (!server_thread_exit_) {
+    server_thread_cv_.wait(lck);
+
+    if (SendPanelBootParams()) {
+      DLOGE("Failed to Send SendPanelBootParams");
+    }
   }
 }
 

@@ -46,6 +46,9 @@
 #include <memory>
 #include <vector>
 #include <utility>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #include "comp_manager.h"
 
@@ -64,7 +67,7 @@ class CoreIPCVmCallbackImpl : public IPCVmCallbackIntf {
   void OnServerReady();
   void OnServerExit();
   void Deinit();
-  static void OnServerReadyThread(CoreIPCVmCallbackImpl *obj);
+  void OnServerReadyThread();
   virtual ~CoreIPCVmCallbackImpl() {}
 
  private:
@@ -73,6 +76,12 @@ class CoreIPCVmCallbackImpl : public IPCVmCallbackIntf {
   std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
   HWInfoInterface *hw_info_intf_ = nullptr;
   bool server_ready_ = false;
+  bool server_thread_exit_ = false;
+
+  std::thread server_thread_;
+  std::mutex server_thread_lock_;
+  std::condition_variable server_thread_ready_cv_;
+  std::condition_variable server_thread_cv_;
 };
 
 class CoreImpl : public CoreInterface {

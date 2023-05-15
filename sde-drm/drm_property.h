@@ -239,6 +239,11 @@ enum struct DRMProperty {
   SDE_SSPP_UCSC_ALPHA_DITHER_V1,
   SPR_INIT_CFG_V2,
   SPR_UDC_CFG_V2,
+  EPT,
+  PREFILL_SIZE,
+  PREFILL_TIME,
+  SYS_CACHE_TYPE,
+  BUFFER_MODE,
 
   // Insert above
   MAX

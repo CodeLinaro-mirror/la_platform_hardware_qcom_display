@@ -186,6 +186,7 @@ class HWInterface {
   virtual DisplayError UpdateTransferTime(uint32_t transfer_time) = 0;
   virtual DisplayError CancelDeferredPowerMode() = 0;
   virtual void HandleCwbTeardown(bool sync_teardown) = 0;
+  virtual void SetDestScalarData(const DestScaleInfoMap dest_scale_info_map) = 0;
 
  protected:
   virtual ~HWInterface() { }

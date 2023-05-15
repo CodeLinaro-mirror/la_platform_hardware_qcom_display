@@ -275,6 +275,30 @@ enum struct DRMOps {
    */
   PLANES_RESET_LUT,
   /*
+   * Op: Sets plane prefill size
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - size value
+   */
+  PLANES_SET_PREFILL_SIZE,
+  /*
+   * Op: Sets plane prefill time
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - time value
+   */
+  PLANES_SET_PREFILL_TIME,
+  /*
+   * Op: Sets plane EVA cache
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - cache type
+   */
+  PLANES_SET_SYS_CACHE_TYPE,
+  /*
+   * Op: Sets plane buffer mode
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - independent or single
+   */
+  PLANES_BUFFER_MODE,
+  /*
    * Op: Activate or deactivate a CRTC
    * Arg: uint32_t - CRTC ID
    *      uint32_t - 1 to enable, 0 to disable
@@ -608,6 +632,12 @@ enum struct DRMOps {
    *      uint32_t - Cache state
    */
   CONNECTOR_SET_CACHE_STATE,
+  /*
+   * Op: Sets Expected Present Time on connector
+   * Arg: uint32_t - Connector ID
+   *      uint64_t - Expected Present Time
+   */
+  CONNECTOR_SET_EPT,
 };
 
 enum struct DRMRotation {
@@ -943,6 +973,8 @@ struct DRMConnectorInfo {
   uint32_t max_panel_backlight;
   bool is_reserved;
   std::string backlight_type;
+  bool fsc_panel = false;
+  uint32_t num_fsc_fields = 0;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>
@@ -1254,6 +1286,11 @@ struct DRMFp16Config {
 enum struct DRMCacheWBState {
   DISABLED = 0,
   ENABLED,
+};
+
+enum struct DRMBufferMode {
+  INDEPENDENT = 0,
+  SINGLE,
 };
 
 /* DRM Atomic Request Property Set.

@@ -96,6 +96,8 @@ class DmaManager : public AllocInterface {
   void *mem_utils_lib_ = {};
   CreateMemBufInterface CreateMemBuf_ = nullptr;
   DestroyMemBufInterface DestroyMemBuf_ = nullptr;
+  bool movable_heap_system_available_ = false;
+  bool movable_heap_ubwcp_available_ = false;
 };
 
 }  // namespace gralloc

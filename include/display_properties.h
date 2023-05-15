@@ -136,6 +136,7 @@
 #define FORCE_TONEMAPPING                    DISPLAY_PROP("force_tonemapping")
 // Allows color management(tonemapping) in native mode (native mode is considered BT709+sRGB)
 #define ALLOW_TONEMAP_NATIVE                 DISPLAY_PROP("allow_tonemap_native")
+#define ENABLE_METADATA_DUMPING              DISPLAY_PROP("enable_metadata_dump")
 
 // RC
 #define ENABLE_ROUNDED_CORNER                DISPLAY_PROP("enable_rounded_corner")
@@ -168,6 +169,7 @@
 #define ANTI_AGING_IDLE_TIMER                DISPLAY_PROP("demura_idle_timer")
 #define ANTI_AGING_MEMORY_SIZE               DISPLAY_PROP("demura_memory_size")
 #define ANTI_AGING_RECALIB_TIMER_DIVIDER     DISPLAY_PROP("demura_recalib_timer_divider")
+#define ANTI_AGING_ENABLE_LOGGING            DISPLAY_PROP("antiaging_enable_logging")
 
 // PERF hint properties
 #define ENABLE_PERF_HINT_LARGE_COMP_CYCLE    DISPLAY_PROP("enable_perf_hint_large_comp_cycle")
@@ -206,6 +208,7 @@
 #define SECURE_PREVIEW_ONLY_PROP             GRALLOC_PROP("secure_preview_only")
 #define USE_DMA_BUF_HEAPS_PROP               GRALLOC_PROP("use_dma_buf_heaps")
 #define USE_SYSTEM_HEAP_FOR_SENSORS_PROP     GRALLOC_PROP("use_system_heap_for_sensors")
+#define HW_SUPPORTS_UBWCP                    GRALLOC_PROP("hw_supports_ubwcp")
 
 // Add all vendor.gralloc.properties above
 

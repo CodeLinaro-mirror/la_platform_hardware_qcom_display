@@ -30,6 +30,14 @@
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_BUFFER_ALLOCATOR_H__
 #define __HWC_BUFFER_ALLOCATOR_H__
 
@@ -45,8 +53,8 @@
 #include <QtiGrallocPriv.h>
 
 using android::hardware::graphics::allocator::V4_0::IAllocator;
-using android::hardware::graphics::mapper::V4_0::IMapper;
 using android::hardware::graphics::common::V1_1::BufferUsage;
+using android::hardware::graphics::mapper::V4_0::IMapper;
 using vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
 using IQtiMapperExtensions_v1_3 =
     vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
@@ -68,9 +76,9 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetAlignedWidthAndHeight(int width, int height, int format, uint32_t alloc_type,
                                int *aligned_width, int *aligned_height);
   int GetAllocatedBufferInfo(const BufferConfig &buffer_config,
-                                      AllocatedBufferInfo *allocated_buffer_info);
-  int GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4],
-                               uint32_t offset[4], uint32_t *num_planes);
+                             AllocatedBufferInfo *allocated_buffer_info);
+  int GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4], uint32_t offset[4],
+                      uint32_t *num_planes);
   int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
   int MapBuffer(const native_handle_t *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
   int UnmapBuffer(const native_handle_t *handle, int *release_fence);

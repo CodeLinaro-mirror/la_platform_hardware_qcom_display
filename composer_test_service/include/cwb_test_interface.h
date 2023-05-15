@@ -6,8 +6,12 @@
 #ifndef __CWB_TEST_INTERFACE_H__
 #define __CWB_TEST_INTERFACE_H__
 
+#include <aidl/vendor/qti/hardware/display/config/IDisplayConfig.h>
+
 #include "core/buffer_allocator.h"
-#include "config/config_defs.h"
+
+using aidl::vendor::qti::hardware::display::config::DisplayType;
+using aidl::vendor::qti::hardware::display::config::Rect;
 
 namespace sdm {
 
@@ -15,7 +19,7 @@ namespace sdm {
 
 struct CWBConfig {
   /* target display */
-  DisplayConfig::DisplayType disp = DisplayConfig::DisplayType::kPrimary;
+  DisplayType disp = DisplayType::PRIMARY;
 
   /* flag to specify DSPP output */
   bool post_processed = false;
@@ -24,7 +28,7 @@ struct CWBConfig {
   LayerBufferFormat format = kFormatRGBA8888;
 
   /* CWB ROI */
-  DisplayConfig::Rect cwb_roi = {};
+  Rect cwb_roi = {};
 
   /* frequency in milli seconds at which CWB is to be triggered */
   uint64_t trigger_frequency = 100;
@@ -36,7 +40,7 @@ class CWBTestInterface {
   virtual int ConfigureCWB(struct CWBConfig cwb_config) = 0;
 
   /* stop CWB test */
-  virtual int StopTest(DisplayConfig::DisplayType disp) = 0;
+  virtual int StopTest(DisplayType disp) = 0;
 
  protected:
   virtual ~CWBTestInterface() { }

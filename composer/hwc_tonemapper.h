@@ -27,13 +27,18 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_TONEMAPPER_H__
 #define __HWC_TONEMAPPER_H__
 
 #include <fcntl.h>
 #include <sys/mman.h>
-
-#include <hardware/hwcomposer.h>
 
 #include <core/layer_stack.h>
 #include <utils/sys.h>
@@ -113,7 +118,7 @@ class HWCToneMapper {
   DisplayError AcquireToneMapSession(Layer *layer, uint32_t *sess_idx, PrimariesTransfer blend_cs);
   void DumpToneMapOutput(ToneMapSession *session, shared_ptr<sdm::Fence> acquire_fence);
 
-  std::vector<ToneMapSession*> tone_map_sessions_;
+  std::vector<ToneMapSession *> tone_map_sessions_;
   HWCBufferAllocator *buffer_allocator_ = nullptr;
   uint32_t dump_frame_count_ = 0;
   uint32_t dump_frame_index_ = 0;

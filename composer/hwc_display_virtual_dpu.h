@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_VIRTUAL_DPU_H__
 #define __HWC_DISPLAY_VIRTUAL_DPU_H__
 
@@ -37,16 +44,16 @@ namespace sdm {
 class HWCDisplayVirtualDPU : public HWCDisplayVirtual {
  public:
   HWCDisplayVirtualDPU(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                       HWCCallbacks *callbacks, hwc2_display_t id, int32_t sdm_id,
-                       uint32_t width, uint32_t height, float min_lum, float max_lum);
+                       HWCCallbacks *callbacks, Display id, int32_t sdm_id, uint32_t width,
+                       uint32_t height, float min_lum, float max_lum);
   virtual int Init();
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
-  virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
-  virtual HWC2::Error SetOutputBuffer(buffer_handle_t buf, shared_ptr<Fence> release_fence);
-  virtual HWC2::Error SetPanelLuminanceAttributes(float min_lum, float max_lum);
-  virtual HWC2::Error PreValidateDisplay(bool *exit_validate);
-  virtual HWC2::Error PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence);
-  virtual HWC2::Error CommitOrPrepare(bool validate_only, shared_ptr<Fence> *out_retire_fence,
+  virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error SetOutputBuffer(buffer_handle_t buf, shared_ptr<Fence> release_fence);
+  virtual HWC3::Error SetPanelLuminanceAttributes(float min_lum, float max_lum);
+  virtual HWC3::Error PreValidateDisplay(bool *exit_validate);
+  virtual HWC3::Error PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error CommitOrPrepare(bool validate_only, shared_ptr<Fence> *out_retire_fence,
                                       uint32_t *out_num_types, uint32_t *out_num_requests,
                                       bool *needs_commit);
 

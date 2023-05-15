@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
 * met:
@@ -30,40 +28,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -84,11 +53,12 @@ void HWCDisplayVirtual::Destroy(HWCDisplay *hwc_display) {
 }
 
 HWCDisplayVirtual::HWCDisplayVirtual(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                                     HWCCallbacks *callbacks, hwc2_display_t id, int32_t sdm_id,
-                                     uint32_t width, uint32_t height) :
-      HWCDisplay(core_intf, buffer_allocator, callbacks, nullptr, nullptr, kVirtual, id, sdm_id,
-                 DISPLAY_CLASS_VIRTUAL), width_(width), height_(height)  {
-}
+                                     HWCCallbacks *callbacks, Display id, int32_t sdm_id,
+                                     uint32_t width, uint32_t height)
+    : HWCDisplay(core_intf, buffer_allocator, callbacks, nullptr, nullptr, kVirtual, id, sdm_id,
+                 DISPLAY_CLASS_VIRTUAL),
+      width_(width),
+      height_(height) {}
 
 int HWCDisplayVirtual::Init() {
   flush_on_error_ = true;
@@ -103,22 +73,22 @@ bool HWCDisplayVirtual::NeedsGPUBypass() {
   return display_paused_ || active_secure_sessions_.any() || layer_set_.empty();
 }
 
-HWC2::Error HWCDisplayVirtual::Present(shared_ptr<Fence> *out_retire_fence) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayVirtual::Present(shared_ptr<Fence> *out_retire_fence) {
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::PreValidateDisplay(bool *exit_validate) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayVirtual::PreValidateDisplay(bool *exit_validate) {
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::CommitOrPrepare(bool validate_only,
+HWC3::Error HWCDisplayVirtual::CommitOrPrepare(bool validate_only,
                                                shared_ptr<Fence> *out_retire_fence,
-                                               uint32_t *out_num_types,
-                                               uint32_t *out_num_requests, bool *needs_commit) {
-  return HWC2::Error::None;
+                                               uint32_t *out_num_types, uint32_t *out_num_requests,
+                                               bool *needs_commit) {
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
+HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
   if (dump_frame_count_ && !flush_ && dump_output_layer_) {
     if (output_handle_) {
       BufferInfo buffer_info;
@@ -129,7 +99,7 @@ HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
       if (error != 0) {
         DLOGE("Failed to map output buffer, error = %d", error);
         dump_frame_index_ = dump_frame_count_ = 0;
-        return HWC2::Error::BadParameter;
+        return HWC3::Error::BadParameter;
       }
       uint32_t width, height, alloc_size = 0;
       int32_t format, flags = 0;
@@ -153,7 +123,7 @@ HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
       error = buffer_allocator_->UnmapBuffer(output_handle, &release_fence);
       if (error != 0) {
         DLOGE("Failed to unmap buffer, error = %d", error);
-        return HWC2::Error::BadParameter;
+        return HWC3::Error::BadParameter;
       }
     } else {
       DLOGW(
@@ -164,13 +134,13 @@ HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
     }
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
+HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
                                                shared_ptr<Fence> release_fence) {
   if (buf == nullptr) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
   const native_handle_t *output_handle = static_cast<const native_handle_t *>(buf);
 
@@ -180,18 +150,18 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
     buffer_allocator_->GetFormat((void *)output_handle, output_handle_format);
     ColorMetaData color_metadata = {};
 
-    if (output_handle_format == static_cast<int>(PixelFormat::RGBA_8888)) {
-      output_handle_format = static_cast<int>(PixelFormat::RGBX_8888);
+    if (output_handle_format == static_cast<int>(PixelFormat_V3::RGBA_8888)) {
+      output_handle_format = static_cast<int>(PixelFormat_V3::RGBX_8888);
     }
 
     LayerBufferFormat new_sdm_format =
         HWCLayer::GetSDMFormat(output_handle_format, output_handle_flags);
     if (new_sdm_format == kFormatInvalid) {
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
     }
 
     if (sdm::SetCSC(output_handle, &color_metadata) != kErrorNone) {
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
     }
 
     output_buffer_.flags.secure = 0;
@@ -218,30 +188,30 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
 
   output_buffer_.acquire_fence = release_fence;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
+HWC3::Error HWCDisplayVirtual::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                                   int32_t format, CwbConfig &cwb_config) {
   HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format);
   dump_output_layer_ = ((bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP)) != 0);
 
   DLOGI("output_layer_dump_enable %d", dump_output_layer_);
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::GetDisplayType(int32_t *out_type) {
+HWC3::Error HWCDisplayVirtual::GetDisplayType(int32_t *out_type) {
   if (out_type == nullptr) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
-  *out_type = HWC2_DISPLAY_TYPE_VIRTUAL;
+  *out_type = INT32(DisplayBasicType::kVirtual);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::SetColorMode(ColorMode mode) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayVirtual::SetColorMode(ColorMode mode) {
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm

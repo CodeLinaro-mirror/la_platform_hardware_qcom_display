@@ -146,6 +146,7 @@ class ResourceDefault : public ResourceInterface {
   virtual uint32_t GetMixerCount();
   virtual DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
   virtual void HandleTUITransition(Handle display_ctx, bool tui_active);
+  virtual void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map) { return; }
 
  private:
   enum PipeOwner {

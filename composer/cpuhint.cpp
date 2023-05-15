@@ -1,7 +1,5 @@
 /* Copyright (c) 2015, 2020-2021, The Linux Foundataion. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
 * met:
@@ -29,6 +27,13 @@
 *
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <dlfcn.h>
 #include <thread>
@@ -53,17 +58,14 @@ DisplayError CPUHint::Init(HWCDebugHandler *debug_handler) {
                              reinterpret_cast<void **>(&fn_perf_hint_acq_rel_offload_)) ||
         !vendor_ext_lib_.Sym("perf_lock_rel_offload",
                              reinterpret_cast<void **>(&fn_perf_lock_rel_offload_)) ||
-        !vendor_ext_lib_.Sym("perf_hint",
-                             reinterpret_cast<void **>(&fn_perf_hint_)) ||
-        !vendor_ext_lib_.Sym("perf_event",
-                             reinterpret_cast<void **>(&fn_perf_event_))) {
+        !vendor_ext_lib_.Sym("perf_hint", reinterpret_cast<void **>(&fn_perf_hint_)) ||
+        !vendor_ext_lib_.Sym("perf_event", reinterpret_cast<void **>(&fn_perf_event_))) {
       DLOGW("Failed to load symbols for Vendor Extension Library");
       return kErrorNotSupported;
     }
     DLOGI("Successfully Loaded Vendor Extension Library symbols");
-    enabled_ = (fn_perf_hint_acq_rel_offload_ != NULL &&
-                fn_perf_lock_rel_offload_ != NULL && fn_perf_hint_ != NULL &&
-                fn_perf_event_ != NULL);
+    enabled_ = (fn_perf_hint_acq_rel_offload_ != NULL && fn_perf_lock_rel_offload_ != NULL &&
+                fn_perf_hint_ != NULL && fn_perf_event_ != NULL);
   } else {
     DLOGW("Failed to open %s : %s", path, vendor_ext_lib_.Error());
   }
@@ -72,22 +74,24 @@ DisplayError CPUHint::Init(HWCDebugHandler *debug_handler) {
 }
 
 int CPUHint::ReqHintsOffload(int hint, int tid) {
-  if(enabled_ && hint > 0) {
+  if (enabled_ && hint > 0) {
     if (large_comp_cycle_.status == kActive) {
-      nsecs_t currentTime = systemTime(SYSTEM_TIME_MONOTONIC);
-      nsecs_t difference = currentTime-large_comp_cycle_.startTime;
+      nsecs_t current_time = systemTime(SYSTEM_TIME_MONOTONIC);
+      nsecs_t difference = current_time - large_comp_cycle_.start_time;
 
       if (nanoseconds_to_seconds(difference) >= 4) {
-        DLOGV_IF(kTagCpuHint, "Renew large composition hint:%d [start_time:%" PRIu64
-                 " - current_time:%" PRIu64 " = %" PRIu64 "]", large_comp_cycle_.handleId,
-                 large_comp_cycle_.startTime, currentTime, difference);
+        DLOGV_IF(kTagCpuHint,
+                 "Renew large composition hint:%d [start_time:%" PRIu64 " - current_time:%" PRIu64
+                 " = %" PRIu64 "]",
+                 large_comp_cycle_.handle_id, large_comp_cycle_.start_time, current_time,
+                 difference);
 
         large_comp_cycle_.status = kRenew;
       }
 
       if (tid != 0 && tid != large_comp_cycle_.tid) {
         DLOGV_IF(kTagCpuHint, "Renew large composition hint:%d [oldTid:%d newTid:%d]",
-                 large_comp_cycle_.handleId, large_comp_cycle_.tid, tid);
+                 large_comp_cycle_.handle_id, large_comp_cycle_.tid, tid);
 
         large_comp_cycle_.status = kRenew;
       }
@@ -95,21 +99,22 @@ int CPUHint::ReqHintsOffload(int hint, int tid) {
 
     if (large_comp_cycle_.status == kInactive || large_comp_cycle_.status == kRenew) {
       PerfHintStatus current_status = large_comp_cycle_.status;
-      int handle = fn_perf_hint_acq_rel_offload_(large_comp_cycle_.handleId, hint, nullptr,
-                                                 tid, 0, 0, nullptr);
+      int handle = fn_perf_hint_acq_rel_offload_(large_comp_cycle_.handle_id, hint, nullptr, tid, 0,
+                                                 0, nullptr);
       if (handle < 0) {
         DLOGW("Failed to request large composition hint ret:%d", handle);
         return -1;
       }
 
-      large_comp_cycle_.handleId = handle;
+      large_comp_cycle_.handle_id = handle;
       large_comp_cycle_.tid = (tid != 0) ? tid : large_comp_cycle_.tid;
-      large_comp_cycle_.startTime = systemTime(SYSTEM_TIME_MONOTONIC);
+      large_comp_cycle_.start_time = systemTime(SYSTEM_TIME_MONOTONIC);
       large_comp_cycle_.status = kActive;
-      DLOGV_IF(kTagCpuHint, "Successfully %s large comp hint: handle_id:%d type:0x%x startTime:%"
-               PRIu64 " status:%d", (current_status == kInactive) ? "initialized" : "renewed",
-               large_comp_cycle_.handleId, kLargeComposition, large_comp_cycle_.startTime,
-               large_comp_cycle_.status);
+      DLOGV_IF(
+          kTagCpuHint,
+          "Successfully %s large comp hint: handle_id:%d type:0x%x startTime:%" PRIu64 " status:%d",
+          (current_status == kInactive) ? "initialized" : "renewed", large_comp_cycle_.handle_id,
+          kLargeComposition, large_comp_cycle_.start_time, large_comp_cycle_.status);
     }
   }
 
@@ -118,16 +123,16 @@ int CPUHint::ReqHintsOffload(int hint, int tid) {
 
 int CPUHint::ReqHintRelease() {
   if (large_comp_cycle_.status == kActive || large_comp_cycle_.status == kRenew) {
-    int ret = fn_perf_lock_rel_offload_(large_comp_cycle_.handleId);
+    int ret = fn_perf_lock_rel_offload_(large_comp_cycle_.handle_id);
     if (ret < 0) {
       DLOGV_IF(kTagCpuHint, "Failed to release large comp hint ret:%d", ret);
       return -1;
     }
 
     DLOGV_IF(kTagCpuHint, "Release large comp hint ret:%d", ret);
-    large_comp_cycle_.handleId = 0;
+    large_comp_cycle_.handle_id = 0;
     large_comp_cycle_.tid = 0;
-    large_comp_cycle_.startTime = 0;
+    large_comp_cycle_.start_time = 0;
     large_comp_cycle_.status = kInactive;
   }
   return 0;
@@ -137,25 +142,26 @@ int CPUHint::ReqHint(PerfHintThreadType type, int tid) {
   std::lock_guard<std::mutex> lock(tid_lock_);
 
   std::thread worker(
-    [this](uint32_t tid, PerfHintThreadType type) {
-      int ret = fn_perf_hint_(kHintPassPid, nullptr, tid, type);
-      if (ret == kPassPidSuccess) {
-        DLOGV_IF(kTagCpuHint, "Successfully sent HWC's tid:%d", tid);
-        return 0;
-      } else {
-        DLOGW("Failed to send HWC's tid:%d", tid);
-        return -1;
-      }
-    }, tid, type);
+      [this](uint32_t tid, PerfHintThreadType type) {
+        int ret = fn_perf_hint_(kHintPassPid, nullptr, tid, type);
+        if (ret == kPassPidSuccess) {
+          DLOGV_IF(kTagCpuHint, "Successfully sent HWC's tid:%d", tid);
+          return 0;
+        } else {
+          DLOGW("Failed to send HWC's tid:%d", tid);
+          return -1;
+        }
+      },
+      tid, type);
 
   worker.detach();
   return 0;
 }
 
 void CPUHint::ReqEvent(int event) {
-  if(enabled_ && event > 0) {
-      DLOGV_IF(kTagCpuHint, "Sending event/hint (0x%08x) to Perf HAL.", event);
-      fn_perf_event_(event, nullptr, 0, nullptr);
+  if (enabled_ && event > 0) {
+    DLOGV_IF(kTagCpuHint, "Sending event/hint (0x%08x) to Perf HAL.", event);
+    fn_perf_event_(event, nullptr, 0, nullptr);
   }
 }
 

@@ -1,7 +1,5 @@
 /* Copyright (c) 2015, 2020-2021, The Linux Foundataion. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
 * met:
@@ -29,6 +27,13 @@
 *
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __CPUHINT_H__
 #define __CPUHINT_H__
 
@@ -52,9 +57,9 @@ enum PerfHintStatus {
 };
 
 struct LongTermHintInfo {
-  int handleId = 0;
+  int handle_id = 0;
   int tid = 0;
-  nsecs_t startTime = 0;
+  nsecs_t start_time = 0;
   PerfHintStatus status = kInactive;
 };
 
@@ -71,18 +76,18 @@ class CPUHint {
  private:
   const int kLargeComposition = 0x00001097;
   const int kHintPassPid = 0x0000109C;  // Inform mpctl about the TID
-  const int kPassPidSuccess = -2;  // Check if mpctl received the TID
+  const int kPassPidSuccess = -2;       // Check if mpctl received the TID
 
   bool enabled_ = false;
   DynLib vendor_ext_lib_;
   int (*fn_perf_hint_acq_rel_offload_)(int handle, int hint, const char *pkg, int duration,
-                                       int type, int numArgs, int list[]) = NULL;
+                                       int type, int num_args, int list[]) = NULL;
   int (*fn_perf_hint_)(int hint, const char *pkg, int duration, int type) = NULL;
   int (*fn_perf_lock_rel_offload_)(int handle) = NULL;
-  void (*fn_perf_event_)(int eventId, const char *pkg, int numArgs, int list[]) = NULL;
+  void (*fn_perf_event_)(int event_id, const char *pkg, int num_args, int list[]) = NULL;
   std::mutex tid_lock_;
 
-  LongTermHintInfo large_comp_cycle_ {};
+  LongTermHintInfo large_comp_cycle_{};
 };
 
 }  // namespace sdm

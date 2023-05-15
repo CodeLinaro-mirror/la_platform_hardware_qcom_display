@@ -50,22 +50,21 @@ ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_
     *aidl_return = nullptr;
     return TO_BINDER_STATUS(INT32(Error::NoResources));
   }
-
-  composer_client_ = ndk::SharedRefBase::make<AidlComposerClient>();
-  if (!composer_client_ || !composer_client_->init()) {
+  auto composer_client = ndk::SharedRefBase::make<AidlComposerClient>();
+  if (!composer_client || !composer_client->init()) {
     *aidl_return = nullptr;
     return TO_BINDER_STATUS(INT32(Error::NoResources));
   }
 
   if (extensions_) {
-    extensions_->init(composer_client_);
+    extensions_->init(composer_client);
   }
 
   auto clientDestroyed = [this]() { onClientDestroyed(); };
-  composer_client_->setOnClientDestroyed(clientDestroyed);
+  composer_client->setOnClientDestroyed(clientDestroyed);
 
   mClientAlive = true;
-  *aidl_return = composer_client_;
+  *aidl_return = composer_client;
 
   return ScopedAStatus::ok();
 }
@@ -88,7 +87,6 @@ binder_status_t AidlComposer::dump(int fd, const char ** /*args*/, uint32_t /*nu
 ScopedAStatus AidlComposer::getCapabilities(std::vector<Capability> *aidl_return) {
   const std::array<Capability, 2> all_caps = {{
       Capability::SIDEBAND_STREAM,
-      Capability::SKIP_VALIDATE,
   }};
 
   uint32_t count = 0;
@@ -136,7 +134,7 @@ bool AidlComposer::waitForClientDestroyedLocked(std::unique_lock<std::mutex> &lo
     // inverted (create and then destroy). Wait for a brief period to
     // see if the existing client is destroyed.
     ALOGI("waiting for previous client to be destroyed");
-    mClientDestroyedCondition.wait_for(lock, 1s, [this]() -> bool { return !mClientAlive; });
+    mClientDestroyedCondition.wait_for(lock, 5s, [this]() -> bool { return !mClientAlive; });
     if (mClientAlive) {
       ALOGE("previous client was not destroyed");
     }

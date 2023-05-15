@@ -31,6 +31,13 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <QtiGralloc.h>
 
 #include <gralloctypes/Gralloc4.h>
@@ -47,10 +54,10 @@
 
 using android::hardware::hidl_handle;
 using android::hardware::hidl_vec;
-using vendor::qti::hardware::display::mapperextensions::V1_0::PlaneLayout;
 using android::hardware::graphics::common::V1_2::PixelFormat;
 using android::hardware::graphics::mapper::V4_0::BufferDescriptor;
 using android::hardware::graphics::mapper::V4_0::Error;
+using vendor::qti::hardware::display::mapperextensions::V1_0::PlaneLayout;
 using MapperExtError = vendor::qti::hardware::display::mapperextensions::V1_0::Error;
 using vendor::qti::hardware::display::mapper::V4_0::IQtiMapper;
 
@@ -105,7 +112,7 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
 
   if (buffer_config.access_control.empty()) {
     if (buffer_config.secure) {
-       alloc_flags |= BufferUsage::PROTECTED;
+      alloc_flags |= BufferUsage::PROTECTED;
     }
 
     if (buffer_config.secure_camera) {
@@ -140,7 +147,7 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
       }
       SetBufferAccessControlInfo(it->second, &buf_perm[kBufferClientUnTrustedVM]);
     } else {
-       alloc_flags |= BufferUsage::PROTECTED;
+      alloc_flags |= BufferUsage::PROTECTED;
     }
 
     it = buffer_config.access_control.find(kBufferClientTrustedVM);
@@ -215,7 +222,7 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
     }
     auto error = gralloc::GetMetaDataValue(hnd, QTI_MEM_HANDLE, &alloc_buffer_info->mem_handle);
     if (error != gralloc::Error::NONE) {
-      err = -EINVAL;;
+      err = -EINVAL;
       goto cleanup;
     }
   }
@@ -666,8 +673,8 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
   return 0;
 }
 
-int HWCBufferAllocator::GetAllocatedBufferInfo(
-    const BufferConfig &buffer_config, AllocatedBufferInfo *allocated_buffer_info) {
+int HWCBufferAllocator::GetAllocatedBufferInfo(const BufferConfig &buffer_config,
+                                               AllocatedBufferInfo *allocated_buffer_info) {
   BufferInfo buffer_info = {buffer_config, *allocated_buffer_info};
   // TODO(user): This API should pass the buffer_info of the already allocated buffer
   // The private_data can then be typecast to the private_handle and used directly.
@@ -734,8 +741,7 @@ int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info, uin
   // We are only returning buffer layout for progressive or single field formats.
   *num_planes = (plane_layouts.size() > 3) ? 2 : plane_layouts.size();
 
-  for (int i = 0; i < *num_planes; i++)
-  {
+  for (int i = 0; i < *num_planes; i++) {
     offset[i] = static_cast<uint32_t>(plane_layouts[i].offset);
     stride[i] = static_cast<uint32_t>(plane_layouts[i].stride_bytes);
   }
@@ -812,9 +818,8 @@ int HWCBufferAllocator::GetCustomContentMetadata(void *buf, CustomContentMetadat
   if (!buf || !dest || !mapper_ext_) {
     err = -EINVAL;
   } else {
-    auto map_err = mapper_ext_->getMetaDataValue(buf,
-                                                 qtigralloc::MetadataType_CustomContentMetadata,
-                                                 dest);
+    auto map_err =
+        mapper_ext_->getMetaDataValue(buf, qtigralloc::MetadataType_CustomContentMetadata, dest);
     if (map_err != MapperExtError::NONE) {
       err = -ENOTSUP;
     }

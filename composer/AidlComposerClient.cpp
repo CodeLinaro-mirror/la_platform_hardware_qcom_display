@@ -98,8 +98,6 @@ AidlComposerClient::~AidlComposerClient() {
     }
   }
 
-  hwc_session_->Deinit();
-
   mDisplayData.clear();
 
   mHandleImporter.cleanup();
@@ -1277,12 +1275,19 @@ void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
 
 void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(
     int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime) {
-  // TODO: Add impl here and in hwc_session / hwc_display
-  //   auto err = mClient.hwc_session_->SetSetExpectedPresentTime(display, expectedPresentTime);
-  //   if (err != Error::None) {
-  //     writeError(__FUNCTION__, static_cast<int32_t>(err));
-  //   }
-  // writeError(__FUNCTION__, Error::Unsupported);
+  if (!expectedPresentTime.has_value()) {
+    return;
+  }
+
+  uint64_t expectedPresentTimestamp = 0;
+  if (expectedPresentTime->timestampNanos > 0) {
+    expectedPresentTimestamp = static_cast<uint64_t>(expectedPresentTime->timestampNanos);
+  }
+
+  auto err = mClient.hwc_session_->SetExpectedPresentTime(display, expectedPresentTimestamp);
+  if (err != Error::None) {
+    writeError(__FUNCTION__, err);
+  }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(

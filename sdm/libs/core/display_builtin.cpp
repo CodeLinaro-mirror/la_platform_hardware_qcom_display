@@ -218,6 +218,7 @@ DisplayError DisplayBuiltIn::Init() {
 }
 
 DisplayError DisplayBuiltIn::Deinit() {
+  dpps_info_.Deinit();
   {
     ClientLock lock(disp_mutex_);
 
@@ -225,8 +226,6 @@ DisplayError DisplayBuiltIn::Deinit() {
       vm_cb_intf_->Deinit();
       delete vm_cb_intf_;
     }
-
-    dpps_info_.Deinit();
 
     if (demura_) {
       SetDemuraIntfStatus(false);
@@ -368,12 +367,19 @@ void DisplayBuiltIn::CacheFrameROI() {
 }
 
 void DisplayBuiltIn::UpdateQsyncMode() {
-  if (!hw_panel_info_.qsync_support || avoid_qsync_mode_change_) {
+  if (!hw_panel_info_.qsync_support) {
     return;
   }
 
+  // Get qsync min fps for the current mode
+  uint32_t qsync_mode_min_fps = 0;
+  hw_intf_->GetQsyncFps(&qsync_mode_min_fps);
   QSyncMode mode = kQSyncModeNone;
-  if (lower_fps_ && enable_qsync_idle_) {
+  if (!qsync_mode_min_fps) {
+    // Set qsync mode to 0 when the current mode doesn't support it.
+    mode = kQSyncModeNone;
+    DLOGV_IF(kTagDisplay, "Qsync disabled as current mode doesn't support it");
+  } else if (lower_fps_ && enable_qsync_idle_) {
     // Override to continuous mode upon idling.
     mode = kQSyncModeContinuous;
     DLOGV_IF(kTagDisplay, "Qsync entering continuous mode");
@@ -390,8 +396,24 @@ void DisplayBuiltIn::UpdateQsyncMode() {
   DLOGV_IF(kTagDisplay, "display %d-%d update: %d mode: %d", display_id_, display_type_,
            disp_layer_stack_->info.hw_avr_info.update, mode);
 
-  // Store active mde.
+  if (mode != active_qsync_mode_) {
+    HandleUpdateTransferTime(mode);
+  }
+
+  // Store active mode.
   active_qsync_mode_ = mode;
+}
+
+void DisplayBuiltIn::HandleUpdateTransferTime(QSyncMode mode) {
+  if (mode == kQSyncModeNone) {
+    DLOGI("Qsync mode set to %d successfully, setting transfer time to min: %d", mode,
+          hw_panel_info_.transfer_time_us_min);
+    UpdateTransferTime(hw_panel_info_.transfer_time_us_min);
+  } else {
+    DLOGI("Qsync mode set to %d successfully, setting transfer time to max: %d", mode,
+          hw_panel_info_.transfer_time_us_max);
+    UpdateTransferTime(hw_panel_info_.transfer_time_us_max);
+  }
 }
 
 HWAVRModes DisplayBuiltIn::GetAvrMode(QSyncMode mode) {
@@ -609,7 +631,8 @@ DisplayError DisplayBuiltIn::SetupDemuraLayer() {
 #else
   uint32_t aligned_width = ALIGN(static_cast<int>(buffer->buffer_config.width), 32);
   uint32_t aligned_height = ALIGN(static_cast<int>(buffer->buffer_config.height), 32);
-  float bpp = GetBufferFormatBpp(kFormatRGB888);
+  demura_layer_.input_buffer.format = buffer->buffer_config.format;
+  float bpp = GetBufferFormatBpp(kFormatBGRA8888);
   uint32_t stride = static_cast<uint32_t>(aligned_width * bpp);
   demura_layer_.input_buffer.size = hfc_buffer_size_;
   demura_layer_.input_buffer.width = aligned_width;
@@ -1022,7 +1045,7 @@ void DisplayBuiltIn::HandleQsyncPostCommit() {
     event_handler_->HandleEvent(kPostIdleTimeout);
   }
 
-  bool qsync_enabled = (qsync_mode_ != kQSyncModeNone);
+  bool qsync_enabled = (active_qsync_mode_ != kQSyncModeNone);
   if (qsync_enabled == qsync_enabled_) {
     return;
   }
@@ -1067,6 +1090,11 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
   error = DisplayBase::SetDisplayState(state, teardown, release_fence);
   if (error != kErrorNone) {
     return error;
+  }
+
+  if (secure_event_ == kTUITransitionEnd && state == kStateOff) {
+    SetPanelBrightness(cached_brightness_);
+    pending_brightness_ = false;
   }
 
   if (hw_panel_info_.mode != panel_mode) {
@@ -1763,11 +1791,11 @@ std::string DisplayBuiltIn::Dump() {
     return os.str();
   }
 
-  LayerBuffer *out_buffer = disp_layer_stack_->info.output_buffer;
-  if (out_buffer) {
-    os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
+  if (cwb_active_) {
+    os << "\n Output buffer res: " << cwb_output_buf_.width << "x" << cwb_output_buf_.height
+       << " format: " << GetFormatString(cwb_output_buf_.format);
   }
+
   HWLayersInfo &layer_info = disp_layer_stack_->info;
   for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
     LayerRect &l_roi = layer_info.left_frame_roi.at(i);
@@ -1966,16 +1994,22 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
   return;
 
 exit:
-  Deinit();
+  Deinit_nolock();
   dpps_intf_ = new DppsDummyImpl();
 }
 
-void DppsInfo::Deinit() {
+void DppsInfo::Deinit_nolock() {
   if (dpps_intf_) {
     dpps_intf_->Deinit();
     dpps_intf_ = NULL;
   }
   dpps_impl_lib_.~DynLib();
+  DLOGI("Dpps info deinit done");
+}
+
+void DppsInfo::Deinit() {
+  std::lock_guard<std::mutex> guard(lock_);
+  Deinit_nolock();
 }
 
 void DppsInfo::DppsNotifyOps(enum DppsNotifyOps op, void *payload, size_t size) {
@@ -2013,17 +2047,6 @@ DisplayError DisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
   needs_avr_update_ = true;
   validated_ = false;
   event_handler_->Refresh();
-
-  if (qsync_mode_ == kQSyncModeNone) {
-    DLOGI("Qsync mode set to %d successfully, setting transfer time to min: %d", qsync_mode_,
-          hw_panel_info_.transfer_time_us_min);
-    UpdateTransferTime(hw_panel_info_.transfer_time_us_min);
-  } else {
-    DLOGI("Qsync mode set to %d successfully, setting transfer time to max: %d", qsync_mode_,
-          hw_panel_info_.transfer_time_us_max);
-    UpdateTransferTime(hw_panel_info_.transfer_time_us_max);
-  }
-
   return kErrorNone;
 }
 
@@ -2794,7 +2817,7 @@ void DisplayIPCVmCallbackImpl::ExportHFCBuffer() {
 
   buffer_info_hfc_.buffer_config.width = hfc_buffer_width_;
   buffer_info_hfc_.buffer_config.height = hfc_buffer_height_;
-  buffer_info_hfc_.buffer_config.format = kFormatRGB888;
+  buffer_info_hfc_.buffer_config.format = kFormatBGRA8888;
   buffer_info_hfc_.buffer_config.buffer_count = 1;
   std::bitset<kBufferPermMax> buf_perm;
   buf_perm.set(kBufferPermRead);

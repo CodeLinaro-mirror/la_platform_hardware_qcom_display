@@ -1,8 +1,6 @@
 /*
  *Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
- *Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -29,12 +27,19 @@
  *IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __IPC_IMPL_H__
 #define __IPC_IMPL_H__
 
 #include <core/ipc_interface.h>
-#include <vendor/qti/hardware/display/demura/2.0/IDemuraFileFinder.h>
-
+#include <aidl/vendor/qti/hardware/display/demura/IDemuraFileFinder.h>
+#include <android/binder_manager.h>
 #include <thread>
 
 #include "qrtr_client_interface.h"
@@ -44,8 +49,8 @@
 
 namespace sdm {
 
-using ::android::sp;
-using ::vendor::qti::hardware::display::demura::V2_0::IDemuraFileFinder;
+using ::aidl::vendor::qti::hardware::display::demura::IDemuraFileFinder;
+using DemuraFilePaths = IDemuraFileFinder::DemuraFilePaths;
 
 #define MEMBUF_CLIENT_LIB_NAME "libmemutils.so"
 
@@ -55,9 +60,9 @@ using ::vendor::qti::hardware::display::demura::V2_0::IDemuraFileFinder;
 typedef int (*GetMemBufInterface)(MemBuf **mem_buf_hnd);
 typedef int (*PutMemBufInterface)();
 
-class IPCImpl: public IPCIntf, QRTRCallbackInterface {
+class IPCImpl : public IPCIntf, QRTRCallbackInterface {
  public:
-  virtual ~IPCImpl() {};
+  virtual ~IPCImpl(){};
   int Init();
   int Deinit();
   int SetParameter(IPCParams param, const GenericPayload &in);
@@ -78,7 +83,7 @@ class IPCImpl: public IPCIntf, QRTRCallbackInterface {
   static std::mutex vm_lock_;
   static int client_id_;
   static bool server_ready_;
-  static std::map<int, IPCVmCallbackIntf*> callbacks_;
+  static std::map<int, IPCVmCallbackIntf *> callbacks_;
   static MemBuf *mem_buf_;
   static DynLib mem_buf_client_lib_;
   static GetMemBufInterface GetMemBuf;

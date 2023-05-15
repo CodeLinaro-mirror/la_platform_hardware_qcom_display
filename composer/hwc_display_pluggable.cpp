@@ -28,40 +28,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <cutils/properties.h>
 #include <utils/constants.h>
@@ -76,16 +47,16 @@
 namespace sdm {
 
 int HWCDisplayPluggable::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                               HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                               qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
-                               uint32_t primary_width, uint32_t primary_height,
-                               bool use_primary_res, HWCDisplay **hwc_display) {
+                                HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
+                                qService::QService *qservice, Display id, int32_t sdm_id,
+                                uint32_t primary_width, uint32_t primary_height,
+                                bool use_primary_res, HWCDisplay **hwc_display) {
   uint32_t pluggable_width = 0;
   uint32_t pluggable_height = 0;
   DisplayError error = kErrorNone;
 
-  HWCDisplay *hwc_display_pluggable = new HWCDisplayPluggable(core_intf, buffer_allocator,
-                                                  callbacks, event_handler, qservice, id, sdm_id);
+  HWCDisplay *hwc_display_pluggable = new HWCDisplayPluggable(
+      core_intf, buffer_allocator, callbacks, event_handler, qservice, id, sdm_id);
   int status = hwc_display_pluggable->Init();
   if (status) {
     delete hwc_display_pluggable;
@@ -132,6 +103,8 @@ int HWCDisplayPluggable::Init() {
   color_mode_ = new HWCColorMode(display_intf_);
   color_mode_->Init();
 
+  HWCDisplay::TryDrawMethod(DrawMethod::UNIFIED_DRAW);
+
   return status;
 }
 
@@ -146,26 +119,24 @@ HWCDisplayPluggable::HWCDisplayPluggable(CoreInterface *core_intf,
                                          HWCBufferAllocator *buffer_allocator,
                                          HWCCallbacks *callbacks,
                                          HWCDisplayEventHandler *event_handler,
-                                         qService::QService *qservice,
-                                         hwc2_display_t id,
-                                         int32_t sdm_id)
+                                         qService::QService *qservice, Display id, int32_t sdm_id)
     : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kPluggable, id,
-                 sdm_id, DISPLAY_CLASS_PLUGGABLE) {
-}
+                 sdm_id, DISPLAY_CLASS_PLUGGABLE) {}
 
-HWC2::Error HWCDisplayPluggable::PreValidateDisplay(bool *exit_validate) {
+HWC3::Error HWCDisplayPluggable::PreValidateDisplay(bool *exit_validate) {
   DTRACE_SCOPED();
 
   // Draw method gets set as part of first commit.
   SetDrawMethod();
 
-  auto status = HWC2::Error::None;
+  auto status = HWC3::Error::None;
   bool res_exhausted = false;
   // If no resources are available for the current display, mark it for GPU by pass and continue to
   // do invalidate until the resources are available
   if (active_secure_sessions_[kSecureDisplay] || display_paused_ ||
-     (mmrm_restricted_ && (current_power_mode_ == HWC2::PowerMode::Off ||
-     current_power_mode_ == HWC2::PowerMode::DozeSuspend)) || CheckResourceState(&res_exhausted)) {
+      (mmrm_restricted_ &&
+       (current_power_mode_ == PowerMode::OFF || current_power_mode_ == PowerMode::DOZE_SUSPEND)) ||
+      CheckResourceState(&res_exhausted)) {
     MarkLayersForGPUBypass();
     *exit_validate = true;
     return status;
@@ -181,8 +152,8 @@ HWC2::Error HWCDisplayPluggable::PreValidateDisplay(bool *exit_validate) {
 
   // Apply current Color Mode and Render Intent.
   status = color_mode_->ApplyCurrentColorModeWithRenderIntent(
-                                                 static_cast<bool>(layer_stack_.flags.hdr_present));
-  if (status != HWC2::Error::None || has_color_tranform_) {
+      static_cast<bool>(layer_stack_.flags.hdr_present));
+  if (status != HWC3::Error::None || has_color_tranform_) {
     // Fallback to GPU Composition if Color Mode can't be applied or if a color tranform needs to be
     // applied.
     MarkLayersForClientComposition();
@@ -193,7 +164,7 @@ HWC2::Error HWCDisplayPluggable::PreValidateDisplay(bool *exit_validate) {
   return status;
 }
 
-HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+HWC3::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
   bool exit_validate = false;
   auto status = PreValidateDisplay(&exit_validate);
   if (exit_validate) {
@@ -205,9 +176,9 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
   return PrepareLayerStack(out_num_types, out_num_requests);
 }
 
-HWC2::Error HWCDisplayPluggable::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence) {
+HWC3::Error HWCDisplayPluggable::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence) {
   DTRACE_SCOPED();
-  auto status = HWC2::Error::None;
+  auto status = HWC3::Error::None;
 
   HandleFrameOutput();
 
@@ -219,13 +190,13 @@ HWC2::Error HWCDisplayPluggable::PostCommitLayerStack(shared_ptr<Fence> *out_ret
   return status;
 }
 
-HWC2::Error HWCDisplayPluggable::Present(shared_ptr<Fence> *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggable::Present(shared_ptr<Fence> *out_retire_fence) {
+  auto status = HWC3::Error::None;
   bool res_exhausted = false;
 
   if (!active_secure_sessions_[kSecureDisplay] && !display_paused_ &&
-     !(mmrm_restricted_ && (current_power_mode_ == HWC2::PowerMode::Off ||
-     current_power_mode_ == HWC2::PowerMode::DozeSuspend))) {
+      !(mmrm_restricted_ && (current_power_mode_ == PowerMode::OFF ||
+                             current_power_mode_ == PowerMode::DOZE_SUSPEND))) {
     // Proceed only if any resources are available to be allocated for the current display,
     // Otherwise keep doing invalidate
     if (CheckResourceState(&res_exhausted)) {
@@ -234,14 +205,14 @@ HWC2::Error HWCDisplayPluggable::Present(shared_ptr<Fence> *out_retire_fence) {
     }
 
     status = HWCDisplay::CommitLayerStack();
-    if (status == HWC2::Error::None) {
+    if (status == HWC3::Error::None) {
       status = PostCommitLayerStack(out_retire_fence);
     }
   }
   return status;
 }
 
-void HWCDisplayPluggable::ApplyScanAdjustment(hwc_rect_t *display_frame) {
+void HWCDisplayPluggable::ApplyScanAdjustment(Rect *display_frame) {
   if ((underscan_width_ <= 0) || (underscan_height_ <= 0)) {
     return;
   }
@@ -264,14 +235,14 @@ void HWCDisplayPluggable::ApplyScanAdjustment(hwc_rect_t *display_frame) {
   int x_offset = INT((FLOAT(mixer_width) * width_ratio) / 2.0f);
   int y_offset = INT((FLOAT(mixer_height) * height_ratio) / 2.0f);
 
-  display_frame->left = (display_frame->left * INT32(new_mixer_width) / INT32(mixer_width))
-                        + x_offset;
-  display_frame->top = (display_frame->top * INT32(new_mixer_height) / INT32(mixer_height)) +
-                       y_offset;
-  display_frame->right = ((display_frame->right * INT32(new_mixer_width)) / INT32(mixer_width)) +
-                         x_offset;
-  display_frame->bottom = ((display_frame->bottom * INT32(new_mixer_height)) / INT32(mixer_height))
-                          + y_offset;
+  display_frame->left =
+      (display_frame->left * INT32(new_mixer_width) / INT32(mixer_width)) + x_offset;
+  display_frame->top =
+      (display_frame->top * INT32(new_mixer_height) / INT32(mixer_height)) + y_offset;
+  display_frame->right =
+      ((display_frame->right * INT32(new_mixer_width)) / INT32(mixer_width)) + x_offset;
+  display_frame->bottom =
+      ((display_frame->bottom * INT32(new_mixer_height)) / INT32(mixer_height)) + y_offset;
 }
 
 static void AdjustSourceResolution(uint32_t dst_width, uint32_t dst_height, uint32_t *src_width,
@@ -281,8 +252,8 @@ static void AdjustSourceResolution(uint32_t dst_width, uint32_t dst_height, uint
 }
 
 void HWCDisplayPluggable::GetDownscaleResolution(uint32_t primary_width, uint32_t primary_height,
-                                                uint32_t *non_primary_width,
-                                                uint32_t *non_primary_height) {
+                                                 uint32_t *non_primary_width,
+                                                 uint32_t *non_primary_height) {
   uint32_t primary_area = primary_width * primary_height;
   uint32_t non_primary_area = (*non_primary_width) * (*non_primary_height);
 
@@ -320,7 +291,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
       display_null_.GetDisplayState(&state);
       display_intf_->SetDisplayState(state, false /* teardown */, &release_fence);
 
-      SetVsyncEnabled(HWC2::Vsync::Enable);
+      SetVsyncEnabled(true);
 
       display_null_.SetActive(false);
       DLOGI("Display is connected successfully.");
@@ -342,7 +313,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
       }
       display_null_.SetFrameBufferConfig(fb_config);
 
-      SetVsyncEnabled(HWC2::Vsync::Disable);
+      SetVsyncEnabled(false);
       core_intf_->DestroyDisplay(display_intf_);
       display_intf_ = &display_null_;
 
@@ -368,32 +339,32 @@ DisplayError HWCDisplayPluggable::Flush() {
   return display_intf_->Flush(&layer_stack_);
 }
 
-HWC2::Error HWCDisplayPluggable::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
+HWC3::Error HWCDisplayPluggable::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
   if (out_modes == nullptr) {
     *out_num_modes = color_mode_->GetColorModeCount();
   } else {
     color_mode_->GetColorModes(out_num_modes, out_modes);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayPluggable::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
-                                                 RenderIntent *out_intents) {
+HWC3::Error HWCDisplayPluggable::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+                                                  RenderIntent *out_intents) {
   if (out_intents == nullptr) {
     *out_num_intents = color_mode_->GetRenderIntentCount(mode);
   } else {
     color_mode_->GetRenderIntents(mode, out_num_intents, out_intents);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayPluggable::SetColorMode(ColorMode mode) {
+HWC3::Error HWCDisplayPluggable::SetColorMode(ColorMode mode) {
   return SetColorModeWithRenderIntent(mode, RenderIntent::COLORIMETRIC);
 }
 
-HWC2::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
+HWC3::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
   auto status = color_mode_->CacheColorModeWithRenderIntent(mode, intent);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for mode = %d intent = %d", mode, intent);
     return status;
   }
@@ -403,12 +374,12 @@ HWC2::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, Re
   return status;
 }
 
-HWC2::Error HWCDisplayPluggable::UpdatePowerMode(HWC2::PowerMode mode) {
+HWC3::Error HWCDisplayPluggable::UpdatePowerMode(PowerMode mode) {
   current_power_mode_ = mode;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
+HWC3::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
                                                    android_color_transform_t hint) {
   if (HAL_COLOR_TRANSFORM_IDENTITY == hint) {
     has_color_tranform_ = false;
@@ -423,7 +394,7 @@ HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
   geometry_changes_ |= GeometryChanges::kColorTransform;
   callbacks_->Refresh(id_);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm

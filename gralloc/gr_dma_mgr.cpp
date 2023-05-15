@@ -87,6 +87,15 @@ void DmaManager::InitMemUtils() {
     ALOGW("GetMemBuf failed!! %d", err);
     return;
   }
+
+  // check heap availability
+  auto heap_list = buffer_allocator_.GetDmabufHeapList();
+
+  movable_heap_system_available_ = heap_list.find("system-movable") != heap_list.end();
+  movable_heap_ubwcp_available_ = heap_list.find("ubwcp-movable") != heap_list.end();
+
+  ALOGI("system movable heap is %d ", movable_heap_system_available_);
+  ALOGI("ubwcp movable heap is %d ", movable_heap_ubwcp_available_);
 }
 
 void DmaManager::DeinitMemUtils() {
@@ -313,6 +322,12 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_
       heap_name = "qcom,secure-pixel";
     }
     type |= qtigralloc::PRIV_FLAGS_SECURE_BUFFER;
+  } else {
+    if (usage & BufferUsage::CAMERA_OUTPUT) {
+      //Allocate buffer from qcom,moveable heap for only camera use case
+      if (movable_heap_system_available_)
+        heap_name = "qcom,system-movable";
+    }
   }
 
   if (usage & GRALLOC_USAGE_PRIVATE_TRUSTED_VM) {

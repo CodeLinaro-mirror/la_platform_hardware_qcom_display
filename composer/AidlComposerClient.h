@@ -95,10 +95,10 @@ using ::android::hardware::hidl_handle;
 using ndk::ScopedAStatus;
 using ndk::SpAIBinder;
 
-using std::shared_ptr;
-using sdm::HWCSession;
 using sdm::Fence;
+using sdm::HWCSession;
 using sdm::HWC3::Error;
+using std::shared_ptr;
 
 class BufferCacheEntry {
  public:
@@ -262,7 +262,7 @@ class AidlComposerClient : public BnComposerClient {
    private:
     template <typename field, typename... Args, typename... prototypeParams>
     void ExecuteCommand(field &commandField, void (CommandEngine::*func)(prototypeParams...),
-                        Args &&... args) {
+                        Args &&...args) {
       if ((static_cast<bool>(commandField))) {
         (this->*func)(std::forward<Args>(args)...);
       }

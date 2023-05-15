@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
 * met:
@@ -30,40 +28,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <cutils/properties.h>
 #include <sync/sync.h>
@@ -95,7 +64,7 @@ static void SetRect(LayerRect &src_rect, GLRect *target) {
 
 int HWCDisplayBuiltIn::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                               HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                              qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                              qService::QService *qservice, Display id, int32_t sdm_id,
                               HWCDisplay **hwc_display) {
   int status = 0;
   uint32_t builtin_width = 0;
@@ -137,13 +106,12 @@ void HWCDisplayBuiltIn::Destroy(HWCDisplay *hwc_display) {
 
 HWCDisplayBuiltIn::HWCDisplayBuiltIn(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                      HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                                     qService::QService *qservice, hwc2_display_t id,
-                                     int32_t sdm_id)
+                                     qService::QService *qservice, Display id, int32_t sdm_id)
     : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kBuiltIn, id,
                  sdm_id, DISPLAY_CLASS_BUILTIN),
       buffer_allocator_(buffer_allocator),
-      cpu_hint_(NULL), layer_stitch_task_(*this) {
-}
+      cpu_hint_(NULL),
+      layer_stitch_task_(*this) {}
 
 int HWCDisplayBuiltIn::Init() {
   cpu_hint_ = new CPUHint();
@@ -170,7 +138,7 @@ int HWCDisplayBuiltIn::Init() {
   HWCDebugHandler::Get()->GetProperty(ENABLE_OPTIMIZE_REFRESH, &value);
   enable_optimize_refresh_ = (value == 1);
   if (enable_optimize_refresh_) {
-    DLOGI("Drop redundant drawcycles %" PRIu64 , id_);
+    DLOGI("Drop redundant drawcycles %" PRIu64, id_);
   }
 
   int vsyncs = 0;
@@ -182,16 +150,16 @@ int HWCDisplayBuiltIn::Init() {
   is_primary_ = display_intf_->IsPrimaryDisplay();
 
   windowed_display_ = Debug::GetWindowRect(is_primary_, &window_rect_.left, &window_rect_.top,
-                             &window_rect_.right, &window_rect_.bottom) == 0;
+                                           &window_rect_.right, &window_rect_.bottom) == 0;
   DLOGI("Window rect : [%f %f %f %f] is_primary_=%d", window_rect_.left, window_rect_.top,
-         window_rect_.right, window_rect_.bottom, is_primary_);
+        window_rect_.right, window_rect_.bottom, is_primary_);
 
   if (is_primary_) {
     value = 0;
     HWCDebugHandler::Get()->GetProperty(ENABLE_POMS_DURING_DOZE, &value);
     enable_poms_during_doze_ = (value == 1);
     if (enable_poms_during_doze_) {
-      DLOGI("Enable POMS during Doze mode %" PRIu64 , id_);
+      DLOGI("Enable POMS during Doze mode %" PRIu64, id_);
     }
   }
 
@@ -226,6 +194,8 @@ int HWCDisplayBuiltIn::Init() {
 
   LoadMixedModePerfHintThreshold();
 
+  HWCDisplay::TryDrawMethod(DrawMethod::UNIFIED_DRAW);
+
   return status;
 }
 
@@ -250,13 +220,13 @@ void HWCDisplayBuiltIn::ValidateUiScaling() {
   force_reset_lut_ = false;
 }
 
-HWC2::Error HWCDisplayBuiltIn::PreValidateDisplay(bool *exit_validate) {
+HWC3::Error HWCDisplayBuiltIn::PreValidateDisplay(bool *exit_validate) {
   DTRACE_SCOPED();
 
   // Draw method gets set as part of first commit.
   SetDrawMethod();
 
-  auto status = HWC2::Error::None;
+  auto status = HWC3::Error::None;
   bool res_exhausted = false;
   // If no resources are available for the current display, mark it for GPU by pass and continue to
   // do invalidate until the resources are available
@@ -285,7 +255,7 @@ HWC2::Error HWCDisplayBuiltIn::PreValidateDisplay(bool *exit_validate) {
 
   // Apply current Color Mode and Render Intent.
   if (color_mode_->ApplyCurrentColorModeWithRenderIntent(
-      static_cast<bool>(layer_stack_.flags.hdr_present)) != HWC2::Error::None) {
+          static_cast<bool>(layer_stack_.flags.hdr_present)) != HWC3::Error::None) {
     // Fallback to GPU Composition, if Color Mode can't be applied.
     MarkLayersForClientComposition();
   }
@@ -309,7 +279,7 @@ HWC2::Error HWCDisplayBuiltIn::PreValidateDisplay(bool *exit_validate) {
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::CommitLayerStack() {
+HWC3::Error HWCDisplayBuiltIn::CommitLayerStack() {
   skip_commit_ = CanSkipCommit();
   return HWCDisplay::CommitLayerStack();
 }
@@ -339,21 +309,21 @@ bool HWCDisplayBuiltIn::CanSkipCommit() {
   {
     std::unique_lock<std::mutex> lock(cwb_mutex_);
     skip_commit = enable_optimize_refresh_ && !pending_commit_ && !buffers_latched &&
-                  !pending_refresh_ && !vsync_source && (cwb_buffer_map_.size() == 0)
-                  && !needs_validation;
+                  !pending_refresh_ && !vsync_source && (cwb_buffer_map_.size() == 0) &&
+                  !needs_validation;
   }  // releasing the cwb state lock
   pending_refresh_ = false;
 
   return skip_commit;
 }
 
-HWC2::Error HWCDisplayBuiltIn::CommitStitchLayers() {
+HWC3::Error HWCDisplayBuiltIn::CommitStitchLayers() {
   if (disable_layer_stitch_) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   if (!display_intf_->IsValidated() || skip_commit_) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   LayerStitchContext ctx = {};
@@ -380,35 +350,38 @@ HWC2::Error HWCDisplayBuiltIn::CommitStitchLayers() {
 
   if (!ctx.stitch_params.size()) {
     // No layers marked for stitch.
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   layer_stitch_task_.PerformTask(LayerStitchTaskCode::kCodeStitch, &ctx);
   // Set release fence.
   output_buffer.acquire_fence = ctx.release_fence;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetPowerMode(HWC2::PowerMode mode, bool teardown) {
+HWC3::Error HWCDisplayBuiltIn::SetPowerMode(PowerMode mode, bool teardown) {
   auto status = HWCDisplay::SetPowerMode(mode, teardown);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     return status;
   }
-  DLOGV_IF(kTagClient, "Setting Power State as \'%s\' for %d-%d", (mode == HWC2::PowerMode::On)?
-           "ON": (mode == HWC2::PowerMode::Off)? "OFF": (mode == HWC2::PowerMode::Doze)? "DOZE":
-           "DOZE_SUSPEND", sdm_id_, type_);
+  DLOGV_IF(kTagClient, "Setting Power State as \'%s\' for %d-%d",
+           (mode == PowerMode::ON)     ? "ON"
+           : (mode == PowerMode::OFF)  ? "OFF"
+           : (mode == PowerMode::DOZE) ? "DOZE"
+                                       : "DOZE_SUSPEND",
+           sdm_id_, type_);
   if (cpu_hint_) {
     switch (mode) {
-      case HWC2::PowerMode::Doze:
-      case HWC2::PowerMode::DozeSuspend:
+      case PowerMode::DOZE:
+      case PowerMode::DOZE_SUSPEND:
         // Perf hal doesn't differentiate b/w doze and doze-suspend, so send doze hint for both.
         cpu_hint_->ReqEvent(kPerfHintDisplayDoze);
         break;
-      case HWC2::PowerMode::On:
+      case PowerMode::ON:
         cpu_hint_->ReqEvent(kPerfHintDisplayOn);
         break;
-      case HWC2::PowerMode::Off:
+      case PowerMode::OFF:
         cpu_hint_->ReqEvent(kPerfHintDisplayOff);
         break;
       default:
@@ -420,11 +393,11 @@ HWC2::Error HWCDisplayBuiltIn::SetPowerMode(HWC2::PowerMode mode, bool teardown)
   display_intf_->GetConfig(&fixed_info);
   is_cmd_mode_ = fixed_info.is_cmdmode;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::Present(shared_ptr<Fence> *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayBuiltIn::Present(shared_ptr<Fence> *out_retire_fence) {
+  auto status = HWC3::Error::None;
   bool res_exhausted = false;
 
   DTRACE_SCOPED();
@@ -436,16 +409,16 @@ HWC2::Error HWCDisplayBuiltIn::Present(shared_ptr<Fence> *out_retire_fence) {
     return status;
   }
 
-  if (display_paused_ ) {
+  if (display_paused_) {
     return status;
   } else {
-    if (status != HWC2::Error::None) {
+    if (status != HWC3::Error::None) {
       DLOGE("Stitch failed: %d", status);
       return status;
     }
 
     status = CommitLayerStack();
-    if (status == HWC2::Error::None) {
+    if (status == HWC3::Error::None) {
       status = PostCommitLayerStack(out_retire_fence);
     }
   }
@@ -475,33 +448,33 @@ void HWCDisplayBuiltIn::PostCommitStitchLayers() {
   }
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
+HWC3::Error HWCDisplayBuiltIn::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
   if (out_modes == nullptr) {
     *out_num_modes = color_mode_->GetColorModeCount();
   } else {
     color_mode_->GetColorModes(out_num_modes, out_modes);
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+HWC3::Error HWCDisplayBuiltIn::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                                 RenderIntent *out_intents) {
   if (out_intents == nullptr) {
     *out_num_intents = color_mode_->GetRenderIntentCount(mode);
   } else {
     color_mode_->GetRenderIntents(mode, out_num_intents, out_intents);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorMode(ColorMode mode) {
+HWC3::Error HWCDisplayBuiltIn::SetColorMode(ColorMode mode) {
   return SetColorModeWithRenderIntent(mode, RenderIntent::COLORIMETRIC);
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
+HWC3::Error HWCDisplayBuiltIn::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
   auto status = color_mode_->CacheColorModeWithRenderIntent(mode, intent);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for mode = %d intent = %d", mode, intent);
     return status;
   }
@@ -509,9 +482,9 @@ HWC2::Error HWCDisplayBuiltIn::SetColorModeWithRenderIntent(ColorMode mode, Rend
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorModeById(int32_t color_mode_id) {
+HWC3::Error HWCDisplayBuiltIn::SetColorModeById(int32_t color_mode_id) {
   auto status = color_mode_->SetColorModeById(color_mode_id);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for mode = %d", color_mode_id);
     return status;
   }
@@ -521,18 +494,18 @@ HWC2::Error HWCDisplayBuiltIn::SetColorModeById(int32_t color_mode_id) {
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorModeFromClientApi(int32_t color_mode_id) {
+HWC3::Error HWCDisplayBuiltIn::SetColorModeFromClientApi(int32_t color_mode_id) {
   DisplayError error = kErrorNone;
   std::string mode_string;
 
   error = display_intf_->GetColorModeName(color_mode_id, &mode_string);
   if (error) {
     DLOGE("Failed to get mode name for mode %d", color_mode_id);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   auto status = color_mode_->SetColorModeFromClientApi(mode_string);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("Failed to set mode = %d", color_mode_id);
     return status;
   }
@@ -540,9 +513,9 @@ HWC2::Error HWCDisplayBuiltIn::SetColorModeFromClientApi(int32_t color_mode_id) 
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::RestoreColorTransform() {
+HWC3::Error HWCDisplayBuiltIn::RestoreColorTransform() {
   auto status = color_mode_->RestoreColorTransform();
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed to RestoreColorTransform");
     return status;
   }
@@ -552,14 +525,14 @@ HWC2::Error HWCDisplayBuiltIn::RestoreColorTransform() {
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
+HWC3::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
                                                  android_color_transform_t hint) {
   if (!matrix) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   auto status = color_mode_->SetColorTransform(matrix, hint);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for hint = %d", hint);
     color_tranform_failed_ = true;
     return status;
@@ -571,7 +544,7 @@ HWC2::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
+HWC3::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
                                                    uint32_t v_start, uint32_t v_end,
                                                    uint32_t factor_in, uint32_t factor_out) {
   DisplayError error = kErrorNone;
@@ -581,18 +554,18 @@ HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_
 
   if (h_start >= h_end || v_start >= v_end || factor_in > kMaxFactorVal ||
       factor_out > kMaxFactorVal) {
-    DLOGE("Invalid roi region = [%u, %u, %u, %u, %u, %u]",
-           h_start, h_end, v_start, v_end, factor_in, factor_out);
-    return HWC2::Error::BadParameter;
+    DLOGE("Invalid roi region = [%u, %u, %u, %u, %u, %u]", h_start, h_end, v_start, v_end,
+          factor_in, factor_out);
+    return HWC3::Error::BadParameter;
   }
 
   GetPanelResolution(&panel_width, &panel_height);
 
-  if (h_start >= panel_width || h_end > panel_width ||
-      v_start >= panel_height || v_end > panel_height) {
-    DLOGE("Invalid roi region = [%u, %u, %u, %u], panel resolution = [%u, %u]",
-           h_start, h_end, v_start, v_end, panel_width, panel_height);
-    return HWC2::Error::BadParameter;
+  if (h_start >= panel_width || h_end > panel_width || v_start >= panel_height ||
+      v_end > panel_height) {
+    DLOGE("Invalid roi region = [%u, %u, %u, %u], panel resolution = [%u, %u]", h_start, h_end,
+          v_start, v_end, panel_width, panel_height);
+    return HWC3::Error::BadParameter;
   }
 
   dpps_ad4_roi_cfg.h_start = h_start;
@@ -604,30 +577,30 @@ HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_
 
   error = display_intf_->SetDisplayDppsAdROI(&dpps_ad4_roi_cfg);
   if (error)
-    return HWC2::Error::BadConfig;
+    return HWC3::Error::BadConfig;
 
   callbacks_->Refresh(id_);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetFrameTriggerMode(uint32_t mode) {
+HWC3::Error HWCDisplayBuiltIn::SetFrameTriggerMode(uint32_t mode) {
   DisplayError error = kErrorNone;
   FrameTriggerMode trigger_mode = kFrameTriggerDefault;
 
   if (mode >= kFrameTriggerMax) {
     DLOGE("Invalid input mode %d", mode);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   trigger_mode = static_cast<FrameTriggerMode>(mode);
   error = display_intf_->SetFrameTriggerMode(trigger_mode);
   if (error)
-    return HWC2::Error::BadConfig;
+    return HWC3::Error::BadConfig;
 
   callbacks_->Refresh(HWC_DISPLAY_PRIMARY);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 int HWCDisplayBuiltIn::Perform(uint32_t operation, ...) {
@@ -651,15 +624,15 @@ int HWCDisplayBuiltIn::Perform(uint32_t operation, ...) {
       SetDisplayMode(UINT32(val));
       break;
     case SET_QDCM_SOLID_FILL_INFO:
-      solid_fill_color = va_arg(args, LayerSolidFill*);
+      solid_fill_color = va_arg(args, LayerSolidFill *);
       SetQDCMSolidFillInfo(true, *solid_fill_color);
       break;
     case UNSET_QDCM_SOLID_FILL_INFO:
-      solid_fill_color = va_arg(args, LayerSolidFill*);
+      solid_fill_color = va_arg(args, LayerSolidFill *);
       SetQDCMSolidFillInfo(false, *solid_fill_color);
       break;
     case SET_QDCM_SOLID_FILL_RECT:
-      rect = va_arg(args, LayerRect*);
+      rect = va_arg(args, LayerRect *);
       solid_fill_rect_ = *rect;
       break;
     case UPDATE_TRANSFER_TIME:
@@ -739,7 +712,7 @@ int HWCDisplayBuiltIn::HandleSecureSession(const std::bitset<kSecureMax> &secure
                                            is_active_secure_display);
   }
 
-  if (current_power_mode_ != HWC2::PowerMode::On) {
+  if (current_power_mode_ != PowerMode::ON) {
     return 0;
   }
 
@@ -754,8 +727,8 @@ int HWCDisplayBuiltIn::HandleSecureSession(const std::bitset<kSecureMax> &secure
     }
 
     DLOGI("SecureDisplay state changed from %d to %d for display %" PRIu64 " %d-%d",
-          active_secure_sessions_.test(kSecureDisplay), secure_sessions.test(kSecureDisplay),
-          id_, sdm_id_, type_);
+          active_secure_sessions_.test(kSecureDisplay), secure_sessions.test(kSecureDisplay), id_,
+          sdm_id_, type_);
   }
   active_secure_sessions_ = secure_sessions;
   *power_on_pending = false;
@@ -795,7 +768,8 @@ void HWCDisplayBuiltIn::HandleFrameCapture() {
   frame_capture_status_ = (ret == kCWBReleaseFenceWaitTimedOut) ? -ETIME : (ret) ? -1 : 0;
   frame_capture_buffer_queued_ = false;
 
-  DLOGV_IF(kTagQDCM, "Frame captured: frame_capture_buffer_queued_ %d",frame_capture_buffer_queued_);
+  DLOGV_IF(kTagQDCM, "Frame captured: frame_capture_buffer_queued_ %d",
+           frame_capture_buffer_queued_);
 }
 
 int HWCDisplayBuiltIn::FrameCaptureAsync(const BufferInfo &output_buffer_info,
@@ -813,8 +787,8 @@ int HWCDisplayBuiltIn::FrameCaptureAsync(const BufferInfo &output_buffer_info,
   }
 
   const native_handle_t *buffer = static_cast<native_handle_t *>(output_buffer_info.private_data);
-  HWC2::Error err = SetReadbackBuffer(buffer, nullptr, cwb_config, kCWBClientColor);
-  if (err != HWC2::Error::None) {
+  HWC3::Error err = SetReadbackBuffer(buffer, nullptr, cwb_config, kCWBClientColor);
+  if (err != HWC3::Error::None) {
     return -1;
   }
   frame_capture_buffer_queued_ = true;
@@ -823,8 +797,7 @@ int HWCDisplayBuiltIn::FrameCaptureAsync(const BufferInfo &output_buffer_info,
   return 0;
 }
 
-DisplayError HWCDisplayBuiltIn::SetDetailEnhancerConfig
-                                   (const DisplayDetailEnhancerData &de_data) {
+DisplayError HWCDisplayBuiltIn::SetDetailEnhancerConfig(const DisplayDetailEnhancerData &de_data) {
   DisplayError error = kErrorNotSupported;
 
   if (display_intf_) {
@@ -837,7 +810,7 @@ DisplayError HWCDisplayBuiltIn::SetHWDetailedEnhancerConfig(void *params) {
   DisplayError err = kErrorNone;
   DisplayDetailEnhancerData de_data;
 
-  PPDETuningCfgData *de_tuning_cfg_data = reinterpret_cast<PPDETuningCfgData*>(params);
+  PPDETuningCfgData *de_tuning_cfg_data = reinterpret_cast<PPDETuningCfgData *>(params);
   if (de_tuning_cfg_data->cfg_pending) {
     if (!de_tuning_cfg_data->cfg_en) {
       de_data.enable = 0;
@@ -846,16 +819,17 @@ DisplayError HWCDisplayBuiltIn::SetHWDetailedEnhancerConfig(void *params) {
       de_data.override_flags = kOverrideDEEnable;
       de_data.enable = 1;
 #ifdef DISP_DE_LPF_BLEND
-      DLOGV_IF(kTagQDCM, "Enable DE: flags %u, sharp_factor %d, thr_quiet %d, thr_dieout %d, "
-        "thr_low %d, thr_high %d, clip %d, quality %d, content_type %d, de_blend %d, "
-        "de_lpf_h %d, de_lpf_m %d, de_lpf_l %d",
-        de_tuning_cfg_data->params.flags, de_tuning_cfg_data->params.sharp_factor,
-        de_tuning_cfg_data->params.thr_quiet, de_tuning_cfg_data->params.thr_dieout,
-        de_tuning_cfg_data->params.thr_low, de_tuning_cfg_data->params.thr_high,
-        de_tuning_cfg_data->params.clip, de_tuning_cfg_data->params.quality,
-        de_tuning_cfg_data->params.content_type, de_tuning_cfg_data->params.de_blend,
-        de_tuning_cfg_data->params.de_lpf_h, de_tuning_cfg_data->params.de_lpf_m,
-        de_tuning_cfg_data->params.de_lpf_l);
+      DLOGV_IF(kTagQDCM,
+               "Enable DE: flags %u, sharp_factor %d, thr_quiet %d, thr_dieout %d, "
+               "thr_low %d, thr_high %d, clip %d, quality %d, content_type %d, de_blend %d, "
+               "de_lpf_h %d, de_lpf_m %d, de_lpf_l %d",
+               de_tuning_cfg_data->params.flags, de_tuning_cfg_data->params.sharp_factor,
+               de_tuning_cfg_data->params.thr_quiet, de_tuning_cfg_data->params.thr_dieout,
+               de_tuning_cfg_data->params.thr_low, de_tuning_cfg_data->params.thr_high,
+               de_tuning_cfg_data->params.clip, de_tuning_cfg_data->params.quality,
+               de_tuning_cfg_data->params.content_type, de_tuning_cfg_data->params.de_blend,
+               de_tuning_cfg_data->params.de_lpf_h, de_tuning_cfg_data->params.de_lpf_m,
+               de_tuning_cfg_data->params.de_lpf_l);
 #endif
       if (de_tuning_cfg_data->params.flags & kDeTuningFlagSharpFactor) {
         de_data.override_flags |= kOverrideDESharpen1;
@@ -961,7 +935,7 @@ DisplayError HWCDisplayBuiltIn::DisablePartialUpdateOneFrame() {
   return error;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetDisplayedContentSamplingEnabledVndService(bool enabled) {
+HWC3::Error HWCDisplayBuiltIn::SetDisplayedContentSamplingEnabledVndService(bool enabled) {
   std::unique_lock<decltype(sampling_mutex)> lk(sampling_mutex);
   vndservice_sampling_vote = enabled;
   if (api_sampling_vote || vndservice_sampling_vote) {
@@ -971,18 +945,14 @@ HWC2::Error HWCDisplayBuiltIn::SetDisplayedContentSamplingEnabledVndService(bool
     display_intf_->colorSamplingOff();
     histogram.stop();
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetDisplayedContentSamplingEnabled(int32_t enabled,
+HWC3::Error HWCDisplayBuiltIn::SetDisplayedContentSamplingEnabled(bool enabled,
                                                                   uint8_t component_mask,
                                                                   uint64_t max_frames) {
-  if ((enabled != HWC2_DISPLAYED_CONTENT_SAMPLING_ENABLE) &&
-      (enabled != HWC2_DISPLAYED_CONTENT_SAMPLING_DISABLE))
-    return HWC2::Error::BadParameter;
-
   std::unique_lock<decltype(sampling_mutex)> lk(sampling_mutex);
-  if (enabled == HWC2_DISPLAYED_CONTENT_SAMPLING_ENABLE) {
+  if (enabled) {
     api_sampling_vote = true;
   } else {
     api_sampling_vote = false;
@@ -999,20 +969,21 @@ HWC2::Error HWCDisplayBuiltIn::SetDisplayedContentSamplingEnabled(int32_t enable
     display_intf_->colorSamplingOff();
     histogram.stop();
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetDisplayedContentSamplingAttributes(
+HWC3::Error HWCDisplayBuiltIn::GetDisplayedContentSamplingAttributes(
     int32_t *format, int32_t *dataspace, uint8_t *supported_components) {
-  return histogram.getAttributes(format, dataspace, supported_components);
+  return (
+      static_cast<HWC3::Error>(histogram.getAttributes(format, dataspace, supported_components)));
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetDisplayedContentSample(
+HWC3::Error HWCDisplayBuiltIn::GetDisplayedContentSample(
     uint64_t max_frames, uint64_t timestamp, uint64_t *numFrames,
     int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
     uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]) {
   histogram.collect(max_frames, timestamp, samples_size, samples, numFrames);
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 DisplayError HWCDisplayBuiltIn::SetMixerResolution(uint32_t width, uint32_t height) {
@@ -1025,20 +996,20 @@ DisplayError HWCDisplayBuiltIn::GetMixerResolution(uint32_t *width, uint32_t *he
   return display_intf_->GetMixerResolution(width, height);
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
+HWC3::Error HWCDisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
   // Client needs to ensure that config change and qsync mode change
   // are not triggered in the same drawcycle.
   if (pending_config_) {
     DLOGE("Failed to set qsync mode. Pending active config transition");
-    return HWC2::Error::Unsupported;
+    return HWC3::Error::Unsupported;
   }
 
   auto err = display_intf_->SetQSyncMode(qsync_mode);
   if (err != kErrorNone) {
-    return HWC2::Error::Unsupported;
+    return HWC3::Error::Unsupported;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 DisplayError HWCDisplayBuiltIn::ControlIdlePowerCollapse(bool enable, bool synchronous) {
@@ -1091,68 +1062,68 @@ DisplayError HWCDisplayBuiltIn::GetSupportedDSIClock(std::vector<uint64_t> *bitc
   return kErrorNotSupported;
 }
 
-HWC2::Error HWCDisplayBuiltIn::UpdateDisplayId(hwc2_display_t id) {
+HWC3::Error HWCDisplayBuiltIn::UpdateDisplayId(Display id) {
   id_ = id;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetPendingRefresh() {
+HWC3::Error HWCDisplayBuiltIn::SetPendingRefresh() {
   pending_refresh_ = true;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetPanelBrightness(float brightness) {
+HWC3::Error HWCDisplayBuiltIn::SetPanelBrightness(float brightness) {
   DisplayError ret = display_intf_->SetPanelBrightness(brightness);
   if (ret != kErrorNone) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetPanelBrightness(float *brightness) {
+HWC3::Error HWCDisplayBuiltIn::GetPanelBrightness(float *brightness) {
   DisplayError ret = display_intf_->GetPanelBrightness(brightness);
   if (ret != kErrorNone) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetPanelMaxBrightness(uint32_t *max_brightness_level) {
+HWC3::Error HWCDisplayBuiltIn::GetPanelMaxBrightness(uint32_t *max_brightness_level) {
   DisplayError ret = display_intf_->GetPanelMaxBrightness(max_brightness_level);
   if (ret != kErrorNone) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetBLScale(uint32_t level) {
+HWC3::Error HWCDisplayBuiltIn::SetBLScale(uint32_t level) {
   DisplayError ret = display_intf_->SetBLScale(level);
   if (ret != kErrorNone) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::UpdatePowerMode(HWC2::PowerMode mode) {
+HWC3::Error HWCDisplayBuiltIn::UpdatePowerMode(PowerMode mode) {
   current_power_mode_ = mode;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetClientTarget(buffer_handle_t target,
-                                               shared_ptr<Fence> acquire_fence,
-                                               int32_t dataspace, hwc_region_t damage) {
+HWC3::Error HWCDisplayBuiltIn::SetClientTarget(buffer_handle_t target,
+                                               shared_ptr<Fence> acquire_fence, int32_t dataspace,
+                                               Region damage) {
   DTRACE_SCOPED();
-  HWC2::Error error = HWCDisplay::SetClientTarget(target, acquire_fence, dataspace, damage);
-  if (error != HWC2::Error::None) {
+  HWC3::Error error = HWCDisplay::SetClientTarget(target, acquire_fence, dataspace, damage);
+  if (error != HWC3::Error::None) {
     return error;
   }
 
   // windowed_display and dynamic scaling are not supported.
   if (windowed_display_) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   Layer *sdm_layer = client_target_->GetSDMLayer();
@@ -1164,11 +1135,11 @@ HWC2::Error HWCDisplayBuiltIn::SetClientTarget(buffer_handle_t target,
       fb_height != sdm_layer->input_buffer.unaligned_height) {
     if (SetFrameBufferConfig(sdm_layer->input_buffer.unaligned_width,
                              sdm_layer->input_buffer.unaligned_height)) {
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
     }
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 DisplayError HWCDisplayBuiltIn::UpdateTransferTime(uint32_t transfer_time) {
@@ -1219,21 +1190,18 @@ void HWCDisplayBuiltIn::OnTask(const LayerStitchTaskCode &task_code,
                                SyncTask<LayerStitchTaskCode>::TaskContext *task_context) {
   switch (task_code) {
     case LayerStitchTaskCode::kCodeGetInstance: {
-        gl_layer_stitch_ = GLLayerStitch::GetInstance(false /* Non-secure */);
-      }
-      break;
+      gl_layer_stitch_ = GLLayerStitch::GetInstance(false /* Non-secure */);
+    } break;
     case LayerStitchTaskCode::kCodeStitch: {
-        DTRACE_SCOPED();
-        LayerStitchContext* ctx = reinterpret_cast<LayerStitchContext*>(task_context);
-        gl_layer_stitch_->Blit(ctx->stitch_params, &(ctx->release_fence));
-      }
-      break;
+      DTRACE_SCOPED();
+      LayerStitchContext *ctx = reinterpret_cast<LayerStitchContext *>(task_context);
+      gl_layer_stitch_->Blit(ctx->stitch_params, &(ctx->release_fence));
+    } break;
     case LayerStitchTaskCode::kCodeDestroyInstance: {
-        if (gl_layer_stitch_) {
-          GLLayerStitch::Destroy(gl_layer_stitch_);
-        }
+      if (gl_layer_stitch_) {
+        GLLayerStitch::Destroy(gl_layer_stitch_);
       }
-      break;
+    } break;
   }
 }
 
@@ -1373,15 +1341,19 @@ bool HWCDisplayBuiltIn::NeedsLargeCompPerfHint() {
   }
 
   if (large_comp_hint_threshold_ > 0 && layer_set_.size() >= large_comp_hint_threshold_) {
-    DLOGV_IF(kTagResources, "Number of app layers %d meet requirement %d. Set perf hint for large "
-             "comp cycle", layer_set_.size(), large_comp_hint_threshold_);
+    DLOGV_IF(kTagResources,
+             "Number of app layers %d meet requirement %d. Set perf hint for large "
+             "comp cycle",
+             layer_set_.size(), large_comp_hint_threshold_);
     return true;
   }
 
   // Send hints when the device is in multi-display or when a skip layer is present.
   if (layer_stack_.flags.skip_present || is_multi_display_) {
-    DLOGV_IF(kTagResources, "Found skip_layer:%d or is_multidisplay:%d. Set perf hint for large "
-             "comp cycle", layer_stack_.flags.skip_present, is_multi_display_);
+    DLOGV_IF(kTagResources,
+             "Found skip_layer:%d or is_multidisplay:%d. Set perf hint for large "
+             "comp cycle",
+             layer_stack_.flags.skip_present, is_multi_display_);
     return true;
   }
 
@@ -1398,11 +1370,14 @@ bool HWCDisplayBuiltIn::NeedsLargeCompPerfHint() {
     return false;
   }
 
-  auto it = mixed_mode_threshold_.find(active_refresh_rate_);;
+  auto it = mixed_mode_threshold_.find(active_refresh_rate_);
+  ;
   if (it != mixed_mode_threshold_.end()) {
     if (gpu_layer_count < it->second) {
-      DLOGV_IF(kTagResources, "Number of GPU layers :%d does not meet mixed mode perf hints "
-               "threshold:%d for %d fps", gpu_layer_count, it->second, active_refresh_rate_);
+      DLOGV_IF(kTagResources,
+               "Number of GPU layers :%d does not meet mixed mode perf hints "
+               "threshold:%d for %d fps",
+               gpu_layer_count, it->second, active_refresh_rate_);
       return false;
     }
   } else {
@@ -1417,7 +1392,7 @@ bool HWCDisplayBuiltIn::NeedsLargeCompPerfHint() {
   return true;
 }
 
-HWC2::Error HWCDisplayBuiltIn::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence) {
+HWC3::Error HWCDisplayBuiltIn::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence) {
   DTRACE_SCOPED();
   HandleFrameOutput();
   PostCommitStitchLayers();
@@ -1427,17 +1402,17 @@ HWC2::Error HWCDisplayBuiltIn::PostCommitLayerStack(shared_ptr<Fence> *out_retir
   }
 
   auto status = HWCDisplay::PostCommitLayerStack(out_retire_fence);
-/*  display_intf_->GetConfig(&fixed_info);
-  is_cmd_mode_ = fixed_info.is_cmdmode;
+  /*  display_intf_->GetConfig(&fixed_info);
+    is_cmd_mode_ = fixed_info.is_cmdmode;
 
-  // For video mode panel with dynamic fps, update the active mode index.
-  // This is needed to report the correct Vsync period when client queries
-  // using GetDisplayVsyncPeriod API.
-  if (!is_cmd_mode_ && !disable_dyn_fps_) {
-    hwc2_config_t active_config = hwc_config_map_.at(0);
-    GetActiveConfig(&active_config);
-    SetActiveConfigIndex(active_config);
-  }*/
+    // For video mode panel with dynamic fps, update the active mode index.
+    // This is needed to report the correct Vsync period when client queries
+    // using GetDisplayVsyncPeriod API.
+    if (!is_cmd_mode_ && !disable_dyn_fps_) {
+      Config active_config = hwc_config_map_.at(0);
+      GetActiveConfig(&active_config);
+      SetActiveConfigIndex(active_config);
+    }*/
 
   pending_commit_ = false;
 
@@ -1461,9 +1436,9 @@ bool HWCDisplayBuiltIn::HasReadBackBufferSupport() {
   return fixed_info.readback_supported;
 }
 
-HWC2::Error HWCDisplayBuiltIn::NotifyDisplayCalibrationMode(bool in_calibration) {
+HWC3::Error HWCDisplayBuiltIn::NotifyDisplayCalibrationMode(bool in_calibration) {
   auto status = color_mode_->NotifyDisplayCalibrationMode(in_calibration);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("Failed for notify QDCM mode = %d", in_calibration);
     return status;
   }
@@ -1487,10 +1462,10 @@ uint32_t HWCDisplayBuiltIn::GetUpdatingAppLayersCount() {
   return updating_count;
 }
 
-HWC2::Error HWCDisplayBuiltIn::CommitOrPrepare(bool validate_only,
+HWC3::Error HWCDisplayBuiltIn::CommitOrPrepare(bool validate_only,
                                                shared_ptr<Fence> *out_retire_fence,
-                                               uint32_t *out_num_types,
-                                               uint32_t *out_num_requests, bool *needs_commit) {
+                                               uint32_t *out_num_types, uint32_t *out_num_requests,
+                                               bool *needs_commit) {
   DTRACE_SCOPED();
 
   auto status = HWCDisplay::CommitOrPrepare(validate_only, out_retire_fence, out_num_types,
@@ -1522,87 +1497,101 @@ void HWCDisplayBuiltIn::LoadMixedModePerfHintThreshold() {
   mixed_mode_threshold_.insert(std::make_pair<int32_t, int32_t>(240, 4));
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetAlternateDisplayConfig(bool set) {
-  hwc2_config_t alt_config = 0;
+HWC3::Error HWCDisplayBuiltIn::SetAlternateDisplayConfig(bool set) {
+  Config alt_config = 0;
   DisplayError error = kErrorNone;
 
   // return early if non-DSC mode is already set
   if (set && alternate_config_ != -1) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   if (!set && alternate_config_ == -1) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   error = display_intf_->SetAlternateDisplayConfig(&alt_config);
   if (error != kErrorNone) {
-    return HWC2::Error::Unsupported;
+    return HWC3::Error::Unsupported;
   }
 
   auto status = SetActiveConfig(alt_config);
-  if (set && status == HWC2::Error::None) {
-      alternate_config_ = alt_config;
+  if (set && status == HWC3::Error::None) {
+    alternate_config_ = alt_config;
   }
 
-  if (!set) { // set alternate config to -1 on reset call
+  if (!set) {  // set alternate config to -1 on reset call
     alternate_config_ = -1;
   }
 
   // Trigger refresh. This config gets applied on next commit.
   callbacks_->Refresh(id_);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetDimmingEnable(int int_enabled) {
+HWC3::Error HWCDisplayBuiltIn::SetDimmingEnable(int int_enabled) {
   DLOGV("Display ID: %" PRId64 " enabled: %d", id_, int_enabled);
   DisplayError error = display_intf_->SetDimmingEnable(int_enabled);
 
   if (error != kErrorNone) {
     DLOGE("Failed. enabled = %d, error = %d", int_enabled, error);
-    return HWC2::Error::BadDisplay;
+    return HWC3::Error::BadDisplay;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetDimmingMinBl(int min_bl) {
+HWC3::Error HWCDisplayBuiltIn::SetDimmingMinBl(int min_bl) {
   DLOGV("Display ID: %" PRId64 " min_bl: %d", id_, min_bl);
   DisplayError error = display_intf_->SetDimmingMinBl(min_bl);
 
   if (error != kErrorNone) {
     DLOGE("Failed. min_bl = %d, error = %d", min_bl, error);
-    return HWC2::Error::BadDisplay;
+    return HWC3::Error::BadDisplay;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::RetrieveDemuraTnFiles() {
+HWC3::Error HWCDisplayBuiltIn::RetrieveDemuraTnFiles() {
   DLOGV("Display ID: %" PRId64, id_);
   DisplayError error = display_intf_->RetrieveDemuraTnFiles();
 
   if (error != kErrorNone) {
-    DLOGE("Failed. error = %d",error);
-    return HWC2::Error::BadDisplay;
+    DLOGE("Failed. error = %d", error);
+    return HWC3::Error::BadDisplay;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetDemuraState(int state) {
+HWC3::Error HWCDisplayBuiltIn::SetDemuraState(int state) {
   DLOGV("Display ID: %" PRId64 " state: %d", id_, state);
   DisplayError error = display_intf_->SetDemuraState(state);
 
   if (error != kErrorNone) {
     DLOGE("Failed. state = %d, error = %d", state, error);
-    return HWC2::Error::BadDisplay;
+    return HWC3::Error::BadDisplay;
   }
 
   callbacks_->Refresh(id_);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplayBuiltIn::SetDemuraConfig(int demura_idx) {
+  DLOGV("Display ID: %" PRId64 " config: %d", id_, demura_idx);
+  DisplayError error = display_intf_->SetDemuraConfig(demura_idx);
+
+  if (error != kErrorNone) {
+    DLOGE("Failed. config = %d, error = %d", demura_idx, error);
+    return HWC3::Error::BadDisplay;
+  }
+
+  callbacks_->Refresh(id_);
+
+  return HWC3::Error::None;
 }
 
 void HWCDisplayBuiltIn::HandleLargeCompositionHint(bool release) {
