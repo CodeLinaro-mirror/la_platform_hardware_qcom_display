@@ -86,6 +86,10 @@ DisplayError HWInterface::Create(int32_t display_id, DisplayType type,
       return kErrorUndefined;
   }
 
+  if (!hw) {
+    DLOGE("hw is null for display type %u",type);
+    return kErrorMemory;
+  }
   error = hw->Init();
   if (error != kErrorNone) {
     delete hw;
