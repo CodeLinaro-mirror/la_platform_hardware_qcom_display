@@ -1,3 +1,5 @@
+AM_CPPFLAGS += "-DTRUSTED_VM"
+
 cpp_sources = debug.cpp \
               rect.cpp \
               sys.cpp \
