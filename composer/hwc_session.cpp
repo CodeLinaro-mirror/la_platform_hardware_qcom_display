@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -2479,7 +2479,7 @@ void HWCSession::UEventHandler(const char *uevent_data, int length) {
     // MST hotplug will not carry connection status/test pattern etc.
     // Pluggable display handler will check all connection status' and take action accordingly.
     const char *str_status = GetTokenValue(uevent_data, length, "status=");
-    const char *str_mst = GetTokenValue(uevent_data, length, "MST_HOTPLUG=");
+    const char *str_mst = GetTokenValue(uevent_data, length, "HOTPLUG=");
     if (!str_status && !str_mst) {
       return;
     }

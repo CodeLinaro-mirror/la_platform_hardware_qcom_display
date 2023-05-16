@@ -77,7 +77,7 @@
 #include "qdp_cec.h"
 
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
-#define HDMI_HPD_STATE_PATH "/sys/bus/i2c/devices/0-002b/get_hpd_stat"
+#define HDMI_HPD_STATE_PATH "/sys/bus/i2c/devices/i2c-0/0-002b/get_hpd_stat"
 
 namespace qdpcec {
 
