@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -248,6 +248,12 @@ enum HWPowerState {
   kPowerStateOn,
   kPowerStateDoze,
   kPowerStateDozeSuspend,
+};
+
+enum HWDMSType {
+  kDMSVIDDisabled,
+  kDMSVIDSeamless,
+  kDMSVIDNonSeamless,
 };
 
 typedef std::map<HWSubBlockType, std::vector<LayerBufferFormat>> FormatsMap;
@@ -530,6 +536,7 @@ struct HWPanelInfo {
   uint32_t supported_colorspaces = 0;  // supported_colorspaces for DP displays.
   uint32_t qsync_fps = 0;              // Min qsync fps
   bool dpu_ctl_op_sync = false;        // Supports multi-core DPU Interface Sync
+  HWDMSType dms_type = kDMSVIDDisabled;  // DMS type
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||
