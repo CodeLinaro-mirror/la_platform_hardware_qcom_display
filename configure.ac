@@ -37,6 +37,7 @@ AC_SUBST([LIBUTILS_LIBS])
 
 AC_SUBST([COMMON_CFLAGS], [-Wall -Werror -Wno-sign-conversion -Wconversion -DDEBUG_CALC_FPS])
 AC_SUBST([AM_CPPFLAGS], [--std=c++11])
+AC_SUBST([AM_CPPFLAGS], [-fno-operator-names])
 
 AC_ARG_WITH(sanitized-headers,
    AS_HELP_STRING([--with-sanitized-headers=DIR],
