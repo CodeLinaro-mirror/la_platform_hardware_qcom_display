@@ -30,7 +30,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -742,6 +742,9 @@ DisplayError HWPeripheralDRM::SetPanelBrightness(int level) {
   if (connector_info_.backlight_type != "dcs") {
     DLOGW("Failed to open node = %s, error = %s ", brightness_node.c_str(),
           strerror(errno));
+    if (fd >= 0) {
+      Sys::close_(fd);
+    }
     return kErrorFileDescriptor;
   }
 #endif
@@ -784,6 +787,9 @@ DisplayError HWPeripheralDRM::GetPanelBrightness(int *level) {
   if (connector_info_.backlight_type != "dcs") {
     DLOGW("Failed to open brightness node = %s, error = %s", brightness_node.c_str(),
            strerror(errno));
+    if (fd >= 0) {
+      Sys::close_(fd);
+    }
     return kErrorFileDescriptor;
   }
 #endif
@@ -824,6 +830,9 @@ void HWPeripheralDRM::GetHWPanelMaxBrightness() {
   if (connector_info_.backlight_type != "dcs") {
     DLOGW("Failed to open max brightness node = %s, error = %s", brightness_node.c_str(),
           strerror(errno));
+    if (fd >= 0) {
+      Sys::close_(fd);
+    }
     return;
   }
 #endif
