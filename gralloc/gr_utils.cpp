@@ -51,15 +51,16 @@
 
 #define ASTC_BLOCK_SIZE 16
 
-#define ONLY_GPU_CPU_USAGE_MASK (BufferUsage::GPU_TEXTURE | BufferUsage::GPU_RENDER_TARGET | \
-                                 BufferUsage::GPU_DATA_BUFFER | BufferUsage::RENDERSCRIPT | \
-                                 BufferUsage::CPU_READ_MASK | BufferUsage::CPU_WRITE_MASK)
+#define ONLY_GPU_USAGE_MASK                                                                       \
+    (BufferUsage::GPU_TEXTURE | BufferUsage::GPU_RENDER_TARGET | BufferUsage::GPU_CUBE_MAP |      \
+     BufferUsage::GPU_MIPMAP_COMPLETE | BufferUsage::GPU_DATA_BUFFER | BufferUsage::RENDERSCRIPT)
 
-#define NON_GPU_CPU_USAGE_MASK (BufferUsage::COMPOSER_CLIENT_TARGET | \
-                                BufferUsage::COMPOSER_OVERLAY | BufferUsage::COMPOSER_CURSOR | \
-                                BufferUsage::VIDEO_ENCODER | BufferUsage::CAMERA_OUTPUT | \
-                                BufferUsage::CAMERA_INPUT | BufferUsage::VIDEO_DECODER | \
-                                GRALLOC_USAGE_PRIVATE_CDSP | GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY)
+#define NON_GPU_USAGE_MASK                                                                        \
+    (BufferUsage::COMPOSER_CLIENT_TARGET | BufferUsage::COMPOSER_OVERLAY |                        \
+     BufferUsage::COMPOSER_CURSOR | BufferUsage::VIDEO_ENCODER | BufferUsage::CAMERA_OUTPUT |     \
+     BufferUsage::CAMERA_INPUT | BufferUsage::VIDEO_DECODER | BufferUsage::CPU_READ_MASK |        \
+     BufferUsage::CPU_WRITE_MASK | GRALLOC_USAGE_PRIVATE_CDSP |                                   \
+     GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY)
 
 namespace gralloc {
 
@@ -883,11 +884,11 @@ bool IsTileRendered(int format) {
   return IsGpuDepthStencilFormat(format);
 }
 
-bool IsOnlyGpuCpuUsage(uint64_t usage) {
-  if (usage & NON_GPU_CPU_USAGE_MASK) {
+bool IsOnlyGpuUsage(uint64_t usage) {
+  if (usage & NON_GPU_USAGE_MASK) {
     return false;
   }
-  if (usage & ONLY_GPU_CPU_USAGE_MASK) {
+  if (usage & ONLY_GPU_USAGE_MASK) {
     return true;
   }
   return false;
@@ -1222,9 +1223,19 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   if (IsUncompressedRGBFormat(format)) {
     unsigned int aligned_w = width;
     unsigned int aligned_h = height;
-    if (AdrenoMemInfo::GetInstance()) {
+    unsigned int alignment = 32;
+
+    if (usage & ONLY_GPU_USAGE_MASK) {
+      if (AdrenoMemInfo::GetInstance() == nullptr) {
+        ALOGE("Unable to get adreno instance");
+        return -1;
+      }
       AdrenoMemInfo::GetInstance()->AlignUnCompressedRGB(width, height, format, tile, alignedw,
                                                          alignedh);
+    } else {
+      alignment = GetBppForUncompressedRGB(format) * 8;
+      *alignedw = ALIGN(width, alignment);
+      *alignedh = height;
     }
 #ifndef QMAA
     if (((usage & BufferUsage::VIDEO_ENCODER) || (usage & BufferUsage::VIDEO_DECODER)) &&
@@ -1244,14 +1255,20 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   }
 
   if (IsGpuDepthStencilFormat(format)) {
-    if (IsTileRendered(info.format)) {
-      tile = true;
-    }
-    if (AdrenoMemInfo::GetInstance()) {
+    if (usage & ONLY_GPU_USAGE_MASK) {
+      if (IsTileRendered(info.format)) {
+        tile = true;
+      }
+      if (AdrenoMemInfo::GetInstance() == nullptr) {
+        ALOGE("Unable to get adreno instance");
+        return -1;
+      }
       AdrenoMemInfo::GetInstance()->AlignGpuDepthStencilFormat(width, height, format, tile,
                                                                alignedw, alignedh);
+    } else {
+      ALOGE("DepthStencil format without GPU usage flags");
+      return -1;
     }
-    return 0;
   }
 
   if (ubwc_enabled) {
@@ -1260,10 +1277,16 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   }
 
   if (IsCompressedRGBFormat(format)) {
-    if (AdrenoMemInfo::GetInstance()) {
+    if (usage & ONLY_GPU_USAGE_MASK) {
+      if (AdrenoMemInfo::GetInstance() == nullptr) {
+        ALOGE("Unable to get adreno instance");
+        return -1;
+      }
       AdrenoMemInfo::GetInstance()->AlignCompressedRGB(width, height, format, alignedw, alignedh);
+    } else {
+      ALOGE("CompressedRGB format without GPU usage flags");
+      return -1;
     }
-    return 0;
   }
 
   int aligned_w = width;
@@ -1275,12 +1298,17 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
 #ifndef QMAA
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP:
-      if (AdrenoMemInfo::GetInstance() == nullptr) {
-        ALOGW("%s: AdrenoMemInfo instance pointing to a NULL value.", __FUNCTION__);
-        return -1;
+      if (usage & ONLY_GPU_USAGE_MASK) {
+        if (AdrenoMemInfo::GetInstance() == nullptr) {
+          ALOGE("Unable to get adreno instance");
+          return -1;
+        }
+        alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
+        aligned_w = ALIGN(width, alignment);
+      } else {
+        // Keep default alignment as per current GpuPixelAlignment
+        aligned_w = ALIGN(width, 64);
       }
-      alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
-      aligned_w = ALIGN(width, alignment);
       break;
 #endif
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
@@ -1307,7 +1335,7 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
       if (AdrenoAlignmentRequired(usage)) {
         if (AdrenoMemInfo::GetInstance() == nullptr) {
           ALOGE("Unable to get adreno instance");
-          return 0;
+          return -1;
         }
         alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
         aligned_w = ALIGN(width, alignment);
@@ -1489,9 +1517,10 @@ bool CanUseAdrenoForSize(int buffer_type, uint64_t usage) {
     return false;
   }
 
-  if (!IsOnlyGpuCpuUsage(usage)) {
+  if (!IsOnlyGpuUsage(usage)) {
     return false;
   }
+
   return true;
 }
 
