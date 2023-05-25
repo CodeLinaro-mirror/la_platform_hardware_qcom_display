@@ -501,6 +501,10 @@ DisplayError HWCBufferAllocator::MapBuffer(const private_handle_t *handle, int a
   hidl_handle acquire_fence_handle;
   if (acquire_fence >= 0) {
     auto h = native_handle_init(acquire_fence_storage, 1, 0);
+    if (!h) {
+      DLOGE("native_handle_init failed");
+      return kErrorParameters;
+    }
     h->data[0] = acquire_fence;
     acquire_fence_handle = h;
   }
