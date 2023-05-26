@@ -24,7 +24,6 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-*
 * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
@@ -647,8 +646,17 @@ DisplayError DisplayBase::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t
     // a CWB active frame, then LM resolution is reconfigured to FB resolution in PrePrepare phase.
     error = GetFrameBufferConfig(&display_config);
     if (error == kErrorNone) {
-      cwb_config->cwb_full_rect.right = display_config.x_pixels;
-      cwb_config->cwb_full_rect.bottom = display_config.y_pixels;
+      // populate cwb_full_rect for each core
+      cwb_config->cwb_full_rect.right = 0;
+      cwb_config->cwb_full_rect.bottom = 0;
+      for (auto& res_info : hw_resource_info_) {
+        if (res_info.has_concurrent_writeback) {
+          cwb_config->cwb_full_rect.right +=
+              static_cast<float> (device_ctx_[res_info.core_id].fb_config.x_pixels);
+          cwb_config->cwb_full_rect.bottom =
+              static_cast<float> (device_ctx_[res_info.core_id].fb_config.y_pixels);
+        }
+      }
       LayerRect cwb_roi = cwb_config->cwb_roi;
       if (pu_as_cwb_roi) {
         *x_pixels = display_config.x_pixels;
@@ -688,7 +696,8 @@ void DisplayBase::ConfigureCwbParams(LayerStack *layer_stack) {
     }
   } else if (cwb_configured_) {  // CWB isn't requested in the current draw cycle.
     // Release dither data
-    if (color_mgr_) {
+    if (layer_stack->cwb_config && layer_stack->cwb_config->tap_point != CwbTapPoint::kLmTapPoint
+        && color_mgr_) {
       error = color_mgr_->ConfigureCWBDither(layer_stack->cwb_config, true);
       if (error != kErrorNone) {
         DLOGE("Release dither data failed.");
@@ -700,9 +709,15 @@ void DisplayBase::ConfigureCwbParams(LayerStack *layer_stack) {
 }
 
 bool DisplayBase::IsWriteBackSupportedFormat(const LayerBufferFormat &format) {
+  if (!HasConcurrentWriteback()) {
+    return false;
+  }
   // check whether writeback supported for parameter color format or not.
   bool has_wb_support = true;
   for (auto& res_info : hw_resource_info_) {
+    if (!res_info.has_concurrent_writeback) {
+      continue;
+    }
     std::map<HWSubBlockType, std::vector<LayerBufferFormat>>::iterator it =
     res_info.supported_formats_map.find(HWSubBlockType::kHWWBIntfOutput);
     if (it == res_info.supported_formats_map.end()) {
@@ -4653,9 +4668,9 @@ bool DisplayBase::HasNoiseLayer() {
 }
 
 bool DisplayBase::HasConcurrentWriteback() {
-  bool has_concurrent_writeback = true;
+  bool has_concurrent_writeback = false;
   for (auto& res_info : hw_resource_info_) {
-    has_concurrent_writeback = has_concurrent_writeback &
+    has_concurrent_writeback = has_concurrent_writeback |
                                res_info.has_concurrent_writeback;
   }
 

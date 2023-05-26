@@ -1015,7 +1015,7 @@ DisplayError DPUCoreMux::GetFbConfig(uint32_t width, uint32_t height,
     device_ctx->at(core_ids_[i]).fb_config = client_ctx->fb_config;
 
     uint32_t dpu_fb_width = client_ctx->fb_config.x_pixels *
-                           (device_ctx->at(core_ids_[i]).display_attributes.x_pixels /
+                           (FLOAT(device_ctx->at(core_ids_[i]).display_attributes.x_pixels) /
                             client_ctx->display_attributes.x_pixels);
     device_ctx->at(core_ids_[i]).fb_config.x_pixels = dpu_fb_width;
   }
