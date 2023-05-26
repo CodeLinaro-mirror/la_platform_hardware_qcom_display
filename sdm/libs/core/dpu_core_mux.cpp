@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -1018,8 +1018,8 @@ DisplayError DPUCoreMux::GetFbConfig(uint32_t width, uint32_t height,
     device_ctx->at(core_ids_[i]).fb_config = client_ctx->fb_config;
 
     uint32_t dpu_fb_width = client_ctx->fb_config.x_pixels *
-                            (device_ctx->at(core_ids_[i]).display_attributes.x_pixels /
-                             client_ctx->display_attributes.x_pixels);
+        (FLOAT(device_ctx->at(core_ids_[i]).display_attributes.x_pixels) /
+         client_ctx->display_attributes.x_pixels);
     device_ctx->at(core_ids_[i]).fb_config.x_pixels = dpu_fb_width;
   }
   return error;
