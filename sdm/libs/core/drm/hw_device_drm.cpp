@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #define __STDC_FORMAT_MACROS
@@ -104,9 +108,11 @@ using sde_drm::DRMSecureMode;
 using sde_drm::DRMSecurityLevel;
 using sde_drm::DRMCscType;
 using sde_drm::DRMMultiRectMode;
+using sde_drm::DRMCWbCaptureMode;
 
 namespace sdm {
 
+CWBConfig HWDeviceDRM::cwb_config_ = {};
 /* Converting topologies to number of splits */
 static inline uint32_t ConvertTopology2Splits(enum HWTopology topology) {
   static const uint32_t topoloty2splits_table[] = {
@@ -950,6 +956,13 @@ DisplayError HWDeviceDRM::GetConfigIndex(char *mode, uint32_t *index) {
   return kErrorNone;
 }
 
+void HWDeviceDRM::FlushConcurrentWriteback() {
+  TeardownConcurrentWriteback();
+  cwb_config_.cwb_disp_id = -1;
+  DLOGI("Flushing out CWB Config. cwb_enabled = %d , cwb_disp_id : %d", cwb_config_.enabled,
+        cwb_config_.cwb_disp_id);
+}
+
 DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, int *release_fence) {
   SetQOSData(qos_data);
 
@@ -1003,6 +1016,16 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
   }
+
+  if (cwb_config_.cwb_disp_id == display_id_) {  // Incase display power-off in cwb active/teardown
+    // state, then reset cwb_display_id to un-block other displays from performing CWB.
+    if (cwb_config_.enabled) {
+      FlushConcurrentWriteback();
+    } else {  // for CWB Post-teardown (the frame following teardown) frame
+      cwb_config_.cwb_disp_id = -1;
+    }
+  }
+
   pending_doze_ = false;
   last_power_mode_ = DRMPowerMode::OFF;
 
@@ -1387,8 +1410,9 @@ void HWDeviceDRM::ClearSolidfillStages() {
 
 DisplayError HWDeviceDRM::Validate(HWLayers *hw_layers) {
   DTRACE_SCOPED();
-
+  HWLayersInfo &hw_layer_info = hw_layers->info;
   DisplayError err = kErrorNone;
+  SetupConcurrentWriteback(hw_layer_info, true);
   registry_.Register(hw_layers);
   SetupAtomic(hw_layers, true /* validate */);
 
@@ -2161,6 +2185,130 @@ DisplayError HWDeviceDRM::SetDynamicDSIClock(uint64_t bit_clk_rate) {
 
 DisplayError HWDeviceDRM::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
   return kErrorNotSupported;
+}
+
+void HWDeviceDRM::SetupConcurrentWriteback(const HWLayersInfo &hw_layer_info, bool validate) {
+  bool enable = hw_resource_.has_concurrent_writeback && hw_layer_info.stack->output_buffer;
+
+  if (!(enable || cwb_config_.enabled)) {  // the frame is neither cwb setup nor cwb teardown frame
+    cwb_config_.cwb_disp_id = -1;
+    return;
+  }
+
+ if (cwb_config_.cwb_disp_id != -1 && cwb_config_.cwb_disp_id != display_id_) {
+    // Either cwb is currently active or tearing down on display cwb_config_.cwb_disp_id
+    DLOGW("CWB already busy with display : %d", cwb_config_.cwb_disp_id);
+    return;
+  } else {
+    cwb_config_.cwb_disp_id = display_id_;
+  }
+
+  bool setup_modes = enable && !cwb_config_.enabled && validate;
+  if (setup_modes && (SetupConcurrentWritebackModes() == kErrorNone)) {
+    cwb_config_.enabled = true;
+  }
+
+  if (cwb_config_.enabled) {
+    if (enable) {
+      // Set DRM properties for Concurrent Writeback.
+      ConfigureConcurrentWriteback(hw_layer_info.stack);
+
+      if (!validate) {
+        // Set GET_RETIRE_FENCE property to get Concurrent Writeback fence.
+        int *fence = &hw_layer_info.stack->output_buffer->release_fence_fd;
+        drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE,
+                                  cwb_config_.token.conn_id, fence);
+      }
+    } else {
+      // Tear down the Concurrent Writeback topology.
+      drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
+    }
+  }
+}
+
+DisplayError HWDeviceDRM::TeardownConcurrentWriteback(void) {
+  if (cwb_config_.enabled) {
+    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
+    cwb_config_.enabled = false;
+    registry_.Clear();
+  }
+
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::SetupConcurrentWritebackModes() {
+  // To setup Concurrent Writeback topology, get the Connector ID of Virtual display
+  if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::VIRTUAL, &cwb_config_.token)) {
+    DLOGE("RegisterDisplay failed for Concurrent Writeback");
+    return kErrorResources;
+  }
+
+  // Set the modes based on Primary display.
+  std::vector<drmModeModeInfo> modes;
+  for (auto &item : connector_info_.modes) {
+    modes.push_back(item.mode);
+  }
+
+  // Inform the mode list to driver.
+  struct sde_drm_wb_cfg cwb_cfg = {};
+  cwb_cfg.connector_id = cwb_config_.token.conn_id;
+  cwb_cfg.flags = SDE_DRM_WB_CFG_FLAGS_CONNECTED;
+  cwb_cfg.count_modes = UINT32(modes.size());
+  cwb_cfg.modes = (uint64_t)modes.data();
+
+  int ret = -EINVAL;
+#ifdef DRM_IOCTL_SDE_WB_CONFIG
+  ret = drmIoctl(dev_fd_, DRM_IOCTL_SDE_WB_CONFIG, &cwb_cfg);
+#endif
+  if (ret) {
+    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
+    DLOGE("Dump CWBConfig: mode_count %d flags %x", cwb_cfg.count_modes, cwb_cfg.flags);
+    DumpConnectorModeInfo();
+    return kErrorHardware;
+  }
+
+  return kErrorNone;
+}
+
+void HWDeviceDRM::ConfigureConcurrentWriteback(LayerStack *layer_stack) {
+  LayerBuffer *output_buffer = layer_stack->output_buffer;
+  registry_.MapOutputBufferToFbId(output_buffer);
+
+  // Set the topology for Concurrent Writeback: [CRTC_PRIMARY_DISPLAY - CONNECTOR_VIRTUAL_DISPLAY].
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, token_.crtc_id);
+
+  // Set CRTC Capture Mode
+  DRMCWbCaptureMode capture_mode = layer_stack->flags.post_processed_output ?
+                                   DRMCWbCaptureMode::DSPP_OUT : DRMCWbCaptureMode::MIXER_OUT;
+  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CAPTURE_MODE, token_.crtc_id, capture_mode);
+
+  // Set Connector Output FB
+  uint32_t fb_id = registry_.GetOutputFbId(output_buffer->handle_id);
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_FB_ID, cwb_config_.token.conn_id, fb_id);
+
+  // Set Connector Secure Mode
+  bool secure = output_buffer->flags.secure;
+  DRMSecureMode mode = secure ? DRMSecureMode::SECURE : DRMSecureMode::NON_SECURE;
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_FB_SECURE_MODE, cwb_config_.token.conn_id, mode);
+
+  // Set Connector Output Rect
+  sde_drm::DRMRect dst = {};
+  dst.left = 0;
+  dst.top = 0;
+  dst.right = display_attributes_[current_mode_index_].x_pixels;
+  dst.bottom = display_attributes_[current_mode_index_].y_pixels;
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_RECT, cwb_config_.token.conn_id, dst);
+}
+
+void HWDeviceDRM::PostCommitConcurrentWriteback(LayerBuffer *output_buffer) {
+  bool enabled = hw_resource_.has_concurrent_writeback && output_buffer;
+
+  if (enabled)
+    return;
+
+  if (cwb_config_.cwb_disp_id == display_id_) {
+    TeardownConcurrentWriteback();
+  }
 }
 
 }  // namespace sdm

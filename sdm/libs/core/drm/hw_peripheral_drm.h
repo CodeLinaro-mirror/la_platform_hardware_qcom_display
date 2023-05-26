@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __HW_PERIPHERAL_DRM_H__
@@ -36,10 +40,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace sdm {
 
-struct CWBConfig {
-  bool enabled = false;
-  sde_drm::DRMDisplayToken token = {};
-};
 
 class HWPeripheralDRM : public HWDeviceDRM {
  public:
@@ -61,7 +61,6 @@ class HWPeripheralDRM : public HWDeviceDRM {
   virtual DisplayError SetDynamicDSIClock(uint64_t bit_clk_rate);
   virtual DisplayError GetDynamicDSIClock(uint64_t *bit_clk_rate);
   virtual DisplayError SetDisplayAttributes(uint32_t index);
-  virtual DisplayError TeardownConcurrentWriteback(void);
   virtual DisplayError SetPanelBrightness(int level);
   virtual DisplayError GetPanelBrightness(int *level);
   virtual void GetHWPanelMaxBrightness();
@@ -69,10 +68,6 @@ class HWPeripheralDRM : public HWDeviceDRM {
  private:
   void SetDestScalarData(HWLayersInfo hw_layer_info, bool validate);
   void ResetDisplayParams();
-  DisplayError SetupConcurrentWritebackModes();
-  void SetupConcurrentWriteback(const HWLayersInfo &hw_layer_info, bool validate);
-  void ConfigureConcurrentWriteback(LayerStack *stack);
-  void PostCommitConcurrentWriteback(LayerBuffer *output_buffer);
   void SetIdlePCState() {
     drm_atomic_intf_->Perform(sde_drm::DRMOps::CRTC_SET_IDLE_PC_STATE, token_.crtc_id,
                               idle_pc_state_);

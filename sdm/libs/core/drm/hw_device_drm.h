@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __HW_DEVICE_DRM_H__
@@ -46,13 +50,19 @@
 #define IOCTL_LOGE(ioctl, type) \
   DLOGE("ioctl %s, device = %d errno = %d, desc = %s", #ioctl, type, errno, strerror(errno))
 
-#define UI_FBID_LIMIT 3
+#define UI_FBID_LIMIT 5
 #define VIDEO_FBID_LIMIT 16
 #define OFFLINE_ROTATOR_FBID_LIMIT 2
 
 using sde_drm::DRMPowerMode;
 namespace sdm {
 class HWInfoInterface;
+
+struct CWBConfig {
+  bool enabled = false;
+  int32_t cwb_disp_id = -1;
+  sde_drm::DRMDisplayToken token = {};
+};
 
 struct SDECsc {
   struct sde_drm_csc_v1 csc_v1 = {};
@@ -113,7 +123,7 @@ class HWDeviceDRM : public HWInterface {
   virtual void PopulateHWPanelInfo();
   virtual DisplayError SetDppsFeature(void *payload, size_t size) { return kErrorNotSupported; }
   virtual DisplayError GetDppsFeatureInfo(void *payload, size_t size) { return kErrorNotSupported; }
-  virtual DisplayError TeardownConcurrentWriteback(void) { return kErrorNotSupported; }
+  virtual DisplayError TeardownConcurrentWriteback(void);
   virtual DisplayError HandleSecureEvent(SecureEvent secure_event, HWLayers *hw_layers) {
     return kErrorNotSupported;
   }
@@ -125,7 +135,7 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError GetDynamicDSIClock(uint64_t *bit_clk_rate);
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data);
-
+  virtual void FlushConcurrentWriteback();
   enum {
     kHWEventVSync,
     kHWEventBlank,
@@ -168,6 +178,10 @@ class HWDeviceDRM : public HWInterface {
   void DumpConnectorModeInfo();
   void SetFullROI();
   void SetQOSData(const HWQosData &qos_data);
+  DisplayError SetupConcurrentWritebackModes();
+  void SetupConcurrentWriteback(const HWLayersInfo &hw_layer_info, bool validate);
+  void ConfigureConcurrentWriteback(LayerStack *stack);
+  void PostCommitConcurrentWriteback(LayerBuffer *output_buffer);
 
   class Registry {
    public:
@@ -228,7 +242,7 @@ class HWDeviceDRM : public HWInterface {
   uint64_t bit_clk_rate_ = 0;
   bool update_mode_ = false;
   DRMPowerMode last_power_mode_ = DRMPowerMode::OFF;
-
+  static CWBConfig cwb_config_;
  private:
   std::string interface_str_ = "DSI";
   bool resolution_switch_enabled_ = false;

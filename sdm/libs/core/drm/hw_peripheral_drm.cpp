@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <fcntl.h>
@@ -121,7 +125,6 @@ DisplayError HWPeripheralDRM::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
 DisplayError HWPeripheralDRM::Validate(HWLayers *hw_layers) {
   HWLayersInfo &hw_layer_info = hw_layers->info;
   SetDestScalarData(hw_layer_info, true);
-  SetupConcurrentWriteback(hw_layer_info, true);
   SetIdlePCState();
 
   return HWDeviceDRM::Validate(hw_layers);
@@ -138,9 +141,7 @@ DisplayError HWPeripheralDRM::Commit(HWLayers *hw_layers) {
     return error;
   }
 
-  if (cwb_config_.enabled && (error == kErrorNone)) {
-    PostCommitConcurrentWriteback(hw_layer_info.stack->output_buffer);
-  }
+  PostCommitConcurrentWriteback(hw_layer_info.stack->output_buffer);
 
   // Initialize to default after successful commit
   synchronous_commit_ = false;
@@ -314,117 +315,6 @@ DisplayError HWPeripheralDRM::HandleSecureEvent(SecureEvent secure_event, HWLaye
   }
 
   return kErrorNone;
-}
-
-void HWPeripheralDRM::SetupConcurrentWriteback(const HWLayersInfo &hw_layer_info, bool validate) {
-  bool enable = hw_resource_.has_concurrent_writeback && hw_layer_info.stack->output_buffer;
-  if (!(enable || cwb_config_.enabled)) {
-    return;
-  }
-
-  bool setup_modes = enable && !cwb_config_.enabled && validate;
-  if (setup_modes && (SetupConcurrentWritebackModes() == kErrorNone)) {
-    cwb_config_.enabled = true;
-  }
-
-  if (cwb_config_.enabled) {
-    if (enable) {
-      // Set DRM properties for Concurrent Writeback.
-      ConfigureConcurrentWriteback(hw_layer_info.stack);
-
-      if (!validate) {
-        // Set GET_RETIRE_FENCE property to get Concurrent Writeback fence.
-        int *fence = &hw_layer_info.stack->output_buffer->release_fence_fd;
-        drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE,
-                                  cwb_config_.token.conn_id, fence);
-      }
-    } else {
-      // Tear down the Concurrent Writeback topology.
-      drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
-    }
-  }
-}
-
-DisplayError HWPeripheralDRM::TeardownConcurrentWriteback(void) {
-  if (cwb_config_.enabled) {
-    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
-    cwb_config_.enabled = false;
-    registry_.Clear();
-  }
-
-  return kErrorNone;
-}
-
-DisplayError HWPeripheralDRM::SetupConcurrentWritebackModes() {
-  // To setup Concurrent Writeback topology, get the Connector ID of Virtual display
-  if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::VIRTUAL, &cwb_config_.token)) {
-    DLOGE("RegisterDisplay failed for Concurrent Writeback");
-    return kErrorResources;
-  }
-
-  // Set the modes based on Primary display.
-  std::vector<drmModeModeInfo> modes;
-  for (auto &item : connector_info_.modes) {
-    modes.push_back(item.mode);
-  }
-
-  // Inform the mode list to driver.
-  struct sde_drm_wb_cfg cwb_cfg = {};
-  cwb_cfg.connector_id = cwb_config_.token.conn_id;
-  cwb_cfg.flags = SDE_DRM_WB_CFG_FLAGS_CONNECTED;
-  cwb_cfg.count_modes = UINT32(modes.size());
-  cwb_cfg.modes = (uint64_t)modes.data();
-
-  int ret = -EINVAL;
-#ifdef DRM_IOCTL_SDE_WB_CONFIG
-  ret = drmIoctl(dev_fd_, DRM_IOCTL_SDE_WB_CONFIG, &cwb_cfg);
-#endif
-  if (ret) {
-    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
-    DLOGE("Dump CWBConfig: mode_count %d flags %x", cwb_cfg.count_modes, cwb_cfg.flags);
-    DumpConnectorModeInfo();
-    return kErrorHardware;
-  }
-
-  return kErrorNone;
-}
-
-void HWPeripheralDRM::ConfigureConcurrentWriteback(LayerStack *layer_stack) {
-  LayerBuffer *output_buffer = layer_stack->output_buffer;
-  registry_.MapOutputBufferToFbId(output_buffer);
-
-  // Set the topology for Concurrent Writeback: [CRTC_PRIMARY_DISPLAY - CONNECTOR_VIRTUAL_DISPLAY].
-  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, token_.crtc_id);
-
-  // Set CRTC Capture Mode
-  DRMCWbCaptureMode capture_mode = layer_stack->flags.post_processed_output ?
-                                   DRMCWbCaptureMode::DSPP_OUT : DRMCWbCaptureMode::MIXER_OUT;
-  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CAPTURE_MODE, token_.crtc_id, capture_mode);
-
-  // Set Connector Output FB
-  uint32_t fb_id = registry_.GetOutputFbId(output_buffer->handle_id);
-  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_FB_ID, cwb_config_.token.conn_id, fb_id);
-
-  // Set Connector Secure Mode
-  bool secure = output_buffer->flags.secure;
-  DRMSecureMode mode = secure ? DRMSecureMode::SECURE : DRMSecureMode::NON_SECURE;
-  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_FB_SECURE_MODE, cwb_config_.token.conn_id, mode);
-
-  // Set Connector Output Rect
-  sde_drm::DRMRect dst = {};
-  dst.left = 0;
-  dst.top = 0;
-  dst.right = display_attributes_[current_mode_index_].x_pixels;
-  dst.bottom = display_attributes_[current_mode_index_].y_pixels;
-  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_RECT, cwb_config_.token.conn_id, dst);
-}
-
-void HWPeripheralDRM::PostCommitConcurrentWriteback(LayerBuffer *output_buffer) {
-  bool enabled = hw_resource_.has_concurrent_writeback && output_buffer;
-
-  if (!enabled) {
-    TeardownConcurrentWriteback();
-  }
 }
 
 DisplayError HWPeripheralDRM::ControlIdlePowerCollapse(bool enable, bool synchronous) {
