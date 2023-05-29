@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -26,6 +26,42 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #ifndef __DRM_PROPERTY_H__
 #define __DRM_PROPERTY_H__
@@ -86,6 +122,7 @@ enum struct DRMProperty {
   DIM_STAGES_V1,
   IDLE_TIME,
   RETIRE_FENCE,
+  RETIRE_FENCE_OFFSET,
   DST_X,
   DST_Y,
   DST_W,
@@ -173,6 +210,36 @@ enum struct DRMProperty {
   DSPP_CAPABILITIES,
   SPR_INIT_CFG_V1,
   DSPP_RC_MASK_V1,
+  PANEL_MODE,
+  DEMURA_INIT_CFG_V1,
+  DEMURA_PANEL_ID,
+  DEMURA_BOOT_PLANE_V1,
+  DEMURA_CFG0_PARAM2,
+  DYN_BIT_CLK,
+  SDE_PP_CWB_DITHER_V2,
+  NOISE_LAYER_V1,
+  DSC_MODE,
+  DIMMING_BL_LUT,
+  DIMMING_DYN_CTRL,
+  DIMMING_MIN_BL,
+  DYN_TRANSFER_TIME,  // Setter
+  TRANSFER_TIME,      // Getter
+  JITTER_CONFIG,
+  EARLY_FENCE_LINE,
+  DNSC_BLR,
+  WB_USAGE_TYPE,
+  SDE_SSPP_FP16_IGC_V1,
+  SDE_SSPP_FP16_GC_V1,
+  SDE_SSPP_FP16_CSC_V1,
+  SDE_SSPP_FP16_UNMULT_V1,
+  SDE_SSPP_UCSC_UNMULT_V1,
+  SDE_SSPP_UCSC_IGC_V1,
+  SDE_SSPP_UCSC_CSC_V1,
+  SDE_SSPP_UCSC_GC_V1,
+  SDE_SSPP_UCSC_ALPHA_DITHER_V1,
+  SPR_INIT_CFG_V2,
+  SPR_UDC_CFG_V2,
+  EPT,
 
   // Insert above
   MAX

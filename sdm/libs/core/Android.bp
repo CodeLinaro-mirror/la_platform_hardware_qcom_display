@@ -8,6 +8,8 @@ cc_library_shared {
     header_libs: [
         "display_headers",
         "qti_kernel_headers",
+        "qti_display_kernel_headers",
+        "device_kernel_headers",
     ],
     cflags: [
         "-fno-operator-names",
@@ -21,6 +23,7 @@ cc_library_shared {
         "libdrm",
         "libdrmutils",
         "libsdedrm",
+        "libsdmdal",
     ],
 
     srcs: [
@@ -30,21 +33,11 @@ cc_library_shared {
         "display_builtin.cpp",
         "display_pluggable.cpp",
         "display_virtual.cpp",
+        "noise_plugin_intf_impl.cpp",
         "comp_manager.cpp",
         "strategy.cpp",
         "resource_default.cpp",
         "color_manager.cpp",
-        "hw_events_interface.cpp",
-        "hw_info_interface.cpp",
-        "hw_interface.cpp",
-        "drm/hw_info_drm.cpp",
-        "drm/hw_device_drm.cpp",
-        "drm/hw_peripheral_drm.cpp",
-        "drm/hw_tv_drm.cpp",
-        "drm/hw_events_drm.cpp",
-        "drm/hw_scale_drm.cpp",
-        "drm/hw_virtual_drm.cpp",
-        "drm/hw_color_manager_drm.cpp",
     ],
 
 }

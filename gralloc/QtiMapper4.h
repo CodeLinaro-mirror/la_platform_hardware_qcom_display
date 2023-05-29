@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __QTIMAPPER4_H__
@@ -260,6 +264,9 @@ class QtiMapper : public IQtiMapper {
       {qtigralloc::MetadataType_SingleBufferMode, "Single buffer mode flag", true, true},
       {qtigralloc::MetadataType_CVPMetadata, "CVP metadata", true, true},
       {qtigralloc::MetadataType_VideoHistogramStats, "Video histogram stats", true, true},
+#ifdef QTI_VIDEO_TRANSCODE_STATS
+      {qtigralloc::MetadataType_VideoTranscodeStats, "Video transcode stats", true, true},
+#endif
       {qtigralloc::MetadataType_FD, "fd from private_handle_t", true, false},
       {qtigralloc::MetadataType_PrivateFlags, "Flags in private_handle_t", true, false},
       {qtigralloc::MetadataType_AlignedWidthInPixels, "width in private_handle_t", true, false},
@@ -273,6 +280,18 @@ class QtiMapper : public IQtiMapper {
 #endif
 #ifdef QTI_VIDEO_TS_INFO
       {qtigralloc::MetadataType_VideoTimestampInfo, "Video timestamp info", true, true},
+#endif
+#ifdef QTI_BUFFER_PERMISSION
+      {qtigralloc::MetadataType_BufferPermission, "BufferPermission", true, true},
+#endif
+#ifdef QTI_MEM_HANDLE
+      {qtigralloc::MetadataType_MemHandle, "MemHandle", true, false},
+#endif
+#ifdef QTI_TIMED_RENDERING
+      {qtigralloc::MetadataType_TimedRendering, "timed rendering", true, true},
+#endif
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+      {qtigralloc::MetadataType_CustomContentMetadata, "Custom content metadata", true, true},
 #endif
   };
 };

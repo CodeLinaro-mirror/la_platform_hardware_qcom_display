@@ -17,11 +17,18 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __EGLIMAGE_BUFFER_H__
 #define __EGLIMAGE_BUFFER_H__
 
 #include <cutils/native_handle.h>
-#include <gralloc_priv.h>
+#include <QtiGrallocPriv.h>
 #include <ui/GraphicBuffer.h>
 #include "engine.h"
 
@@ -43,7 +50,7 @@ class EGLImageBuffer {
   void bindAsTexture(int target);
   void bindAsFramebuffer();
   ~EGLImageBuffer();
-  static EGLImageBuffer *from(const private_handle_t *src);
+  static EGLImageBuffer *from(const qtigralloc::private_handle_t *src);
   static void clear();
 };
 

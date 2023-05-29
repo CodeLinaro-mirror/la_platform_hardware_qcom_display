@@ -1,6 +1,7 @@
 cc_library_shared {
 
     name: "libdrmutils",
+    defaults: ["qtidisplay_defaults"],
     sanitize: {
         integer_overflow: true,
     },
@@ -8,6 +9,8 @@ cc_library_shared {
     header_libs: [
         "display_headers",
         "qti_kernel_headers",
+        "qti_display_kernel_headers",
+        "device_kernel_headers",
     ],
     shared_libs: [
         "libdrm",
@@ -21,7 +24,6 @@ cc_library_shared {
         "-Werror",
         "-fno-operator-names",
     ],
-    clang: true,
 
     srcs: [
         "drm_master.cpp",

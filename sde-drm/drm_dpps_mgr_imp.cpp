@@ -207,7 +207,7 @@ void DRMDppsManagerImp::Init(int fd, drmModeRes* res) {
   int ret = 0;
 
   if (fd < 0 || !res) {
-    DRM_LOGE("Invalid drm fd %d or res %p", fd, res);
+    DRM_LOGE("Invalid drm fd %d or res %pK", fd, res);
     return;
   }
 
@@ -345,7 +345,8 @@ void DRMDppsManagerImp::CacheDppsFeature(uint32_t obj_id, va_list args) {
   }
 }
 
-void DRMDppsManagerImp::CommitDppsFeatures(drmModeAtomicReq *req, const DRMDisplayToken &tok) {
+void DRMDppsManagerImp::CommitDppsFeatures(drmModeAtomicReq *req, const DRMDisplayToken &tok,
+    uint32_t validate_only) {
   std::lock_guard<std::mutex> guard(api_lock_);
   int ret = 0;
 
@@ -360,6 +361,8 @@ void DRMDppsManagerImp::CommitDppsFeatures(drmModeAtomicReq *req, const DRMDispl
         if (ret < 0)
           DRM_LOGE("AtomicAddProperty failed obj_id 0x%x, prop_id %d ret %d ", it->obj_id,
                    it->prop_id, ret);
+        else if (validate_only)
+          it++;
         else
           it = dpps_dirty_prop_.erase(it);
       } else {
@@ -469,7 +472,7 @@ int DRMDppsManagerImp::InitLtmBuffers(struct DRMDppsFeatureInfo *info) {
   }
 
   if (!info->payload || info->payload_size != sizeof(struct DRMDppsLtmBuffers)) {
-    DRM_LOGE("Invalid payload %p size %d expected %zu", info->payload, info->payload_size,
+    DRM_LOGE("Invalid payload %pK size %d expected %zu", info->payload, info->payload_size,
        sizeof(struct DRMDppsLtmBuffers));
     return -EINVAL;
   }

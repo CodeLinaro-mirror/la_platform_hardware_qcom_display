@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2016-2018, 2020-2021 The Linux Foundation. All rights reserved.
+* Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/formats.h>
 #include <errno.h>
 
@@ -44,6 +51,7 @@ bool IsUBWCFormat(LayerBufferFormat format) {
   case kFormatRGBX1010102Ubwc:
   case kFormatYCbCr420TP10Ubwc:
   case kFormatYCbCr420P010Ubwc:
+  case kFormatRGBA16161616FUbwc:
     return true;
   default:
     return false;
@@ -66,6 +74,16 @@ bool Is10BitFormat(LayerBufferFormat format) {
   case kFormatYCbCr420TP10Ubwc:
   case kFormatYCbCr420P010Ubwc:
   case kFormatYCbCr420P010Venus:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool Is16BitFormat(LayerBufferFormat format) {
+  switch (format) {
+  case kFormatRGBA16161616F:
+  case kFormatRGBA16161616FUbwc:
     return true;
   default:
     return false;
@@ -100,12 +118,14 @@ bool IsRgbFormat(const LayerBufferFormat &format) {
     case kFormatRGBA4444:
     case kFormatBGR565Ubwc:
     case kFormatRGB101010:
+    case kFormatRGBA16161616F:
+    case kFormatRGBA16161616FUbwc:
       return true;
     default:
       return false;
   }
 }
-
+// clang-format off
 const char *GetFormatString(const LayerBufferFormat &format) {
   switch (format) {
   case kFormatARGB8888:                 return "ARGB_8888";
@@ -154,10 +174,13 @@ const char *GetFormatString(const LayerBufferFormat &format) {
   case kFormatYCbCr420P010Venus:        return "Y_CBCR_420_P010_VENUS";
   case kFormatYCbCr420TP10Tile:         return "Y_CBCR_420_TP10_TILED";
   case kFormatYCbCr420P010Tile:         return "Y_CBCR_420_P010_TILED";
+  case kFormatRGBA16161616F:            return "RGBA16161616F";
+  case kFormatRGBA16161616FUbwc:        return "RGBA16161616F_UBWC";
+  case kFormatA8:                       return "A8";
   default:                              return "UNKNOWN";
   }
 }
-
+// clang-format on
 BufferLayout GetBufferLayout(LayerBufferFormat format) {
   switch (format) {
   case kFormatYCbCr420TP10Ubwc:
@@ -174,6 +197,9 @@ BufferLayout GetBufferLayout(LayerBufferFormat format) {
 float GetBufferFormatBpp(LayerBufferFormat format) {
   float bpp = 0.0f;
   switch (format) {
+    case kFormatRGBA16161616F:
+    case kFormatRGBA16161616FUbwc:
+      return 8.0f;
     case kFormatARGB8888:
     case kFormatRGBA8888:
     case kFormatBGRA8888:
@@ -224,6 +250,8 @@ float GetBufferFormatBpp(LayerBufferFormat format) {
     case kFormatYCbCr420SPVenusUbwc:
     case kFormatYCbCr420SPVenusTile:
       return 1.5f;
+    case kFormatA8:
+      return 1.0f;
     default:
       return 0.0f;
   }
@@ -308,6 +336,8 @@ bool HasAlphaChannel(LayerBufferFormat format) {
   case kFormatBGRA1010102:
   case kFormatABGR2101010:
   case kFormatRGBA1010102Ubwc:
+  case kFormatRGBA16161616F:
+  case kFormatRGBA16161616FUbwc:
     return true;
   default:
     return false;
@@ -324,5 +354,8 @@ bool IsWideColor(const ColorPrimaries &primary) {
   }
 }
 
-}  // namespace sdm
+bool IsExtendedRange(LayerBuffer buffer) {
+  return (Is16BitFormat(buffer.format) && buffer.color_metadata.range == Range_Extended);
+}
 
+}  // namespace sdm

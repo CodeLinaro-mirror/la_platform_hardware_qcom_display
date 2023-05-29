@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, The Linux Foundataion. All rights reserved.
+/* Copyright (c) 2020-2021, The Linux Foundataion. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,7 +27,45 @@
 *
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <sstream>
+#include <string>
+#include <tuple>
 #include <errno.h>
 #include <string>
 #include <drm_logger.h>
@@ -48,6 +86,12 @@ using std::lock_guard;
 
 static DRMPanelFeatureMgr panel_feature_mgr;
 
+// Demura Planes' Default Bit Indices
+static uint8_t DEMURA_DMA1RECT0 = 0x1;
+static uint8_t DEMURA_DMA1RECT1 = 0x2;
+static uint8_t DEMURA_DMA3RECT0 = 0x3;
+static uint8_t DEMURA_DMA3RECT1 = 0x4;
+
 DRMPanelFeatureMgrIntf *GetPanelFeatureManagerIntf() {
   return &panel_feature_mgr;
 }
@@ -56,7 +100,7 @@ void DRMPanelFeatureMgr::Init(int fd, drmModeRes* res) {
   lock_guard<mutex> lock(lock_);
 
   if (!res || (fd < 0)) {
-    DRM_LOGE("Invalid arguments for init - fd %d and DRM resources pointer 0x%p", fd, (void *)res);
+    DRM_LOGE("Invalid arguments for init - fd %d and DRM resources pointer 0x%pK", fd, (void *)res);
     return;
   }
 
@@ -85,24 +129,39 @@ void DRMPanelFeatureMgr::Init(int fd, drmModeRes* res) {
     }
   }
 
-  drm_property_map_[kDRMPanelFeatureSPRInit] = DRMProperty::SPR_INIT_CFG_V1;
+  drm_property_map_[kDRMPanelFeatureDemuraResources] = DRMProperty::DEMURA_BOOT_PLANE_V1;
+  drm_property_map_[kDRMPanelFeatureDemuraInit] = DRMProperty::DEMURA_INIT_CFG_V1;
+  drm_property_map_[kDRMPanelFeaturePanelId] = DRMProperty::DEMURA_PANEL_ID;
+  drm_property_map_[kDRMPanelFeatureSPRUDC] = DRMProperty::SPR_UDC_CFG_V2;
   drm_property_map_[kDRMPanelFeatureSPRPackType] = DRMProperty::CAPABILITIES;
   drm_property_map_[kDRMPanelFeatureDsppIndex] = DRMProperty::DSPP_CAPABILITIES;
   drm_property_map_[kDRMPanelFeatureDsppSPRInfo] = DRMProperty::DSPP_CAPABILITIES;
   drm_property_map_[kDRMPanelFeatureDsppDemuraInfo] = DRMProperty::DSPP_CAPABILITIES;
   drm_property_map_[kDRMPanelFeatureDsppRCInfo] = DRMProperty::DSPP_CAPABILITIES;
   drm_property_map_[kDRMPanelFeatureRCInit] = DRMProperty::DSPP_RC_MASK_V1;
+  drm_property_map_[kDRMPanelFeatureDemuraCfg0Param2] = DRMProperty::DEMURA_CFG0_PARAM2;
 
+  drm_prop_type_map_[kDRMPanelFeatureDemuraResources] = DRMPropType::kPropBitmask;
+  drm_prop_type_map_[kDRMPanelFeatureDemuraInit] = DRMPropType::kPropBlob;
+  drm_prop_type_map_[kDRMPanelFeaturePanelId] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureSPRInit] = DRMPropType::kPropBlob;
+  drm_prop_type_map_[kDRMPanelFeatureSPRUDC] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureRCInit] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureSPRPackType] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureDsppIndex] = DRMPropType::kPropRange;
   drm_prop_type_map_[kDRMPanelFeatureDsppSPRInfo] = DRMPropType::kPropRange;
   drm_prop_type_map_[kDRMPanelFeatureDsppDemuraInfo] = DRMPropType::kPropRange;
   drm_prop_type_map_[kDRMPanelFeatureDsppRCInfo] = DRMPropType::kPropRange;
+  drm_prop_type_map_[kDRMPanelFeatureDemuraCfg0Param2] = DRMPropType::kPropBlob;
 
-  feature_info_tbl_[kDRMPanelFeatureSPRInit] = DRMPanelFeatureInfo {kDRMPanelFeatureSPRInit,
-      DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_spr_init_cfg), 0};
+  feature_info_tbl_[kDRMPanelFeatureDemuraResources] = DRMPanelFeatureInfo {
+    kDRMPanelFeatureDemuraResources, DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, 0, 0};
+  feature_info_tbl_[kDRMPanelFeatureDemuraInit] = DRMPanelFeatureInfo {kDRMPanelFeatureDemuraInit,
+      DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_dem_cfg), 0};
+  feature_info_tbl_[kDRMPanelFeaturePanelId] = DRMPanelFeatureInfo {kDRMPanelFeaturePanelId,
+      DRM_MODE_OBJECT_CONNECTOR, UINT32_MAX, 1, sizeof(uint64_t), 0};
+  feature_info_tbl_[kDRMPanelFeatureSPRUDC] = DRMPanelFeatureInfo{
+      kDRMPanelFeatureSPRUDC, DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_spr_udc_cfg), 0};
   feature_info_tbl_[kDRMPanelFeatureRCInit] = DRMPanelFeatureInfo {
       kDRMPanelFeatureRCInit, DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_rc_mask_cfg), 0};
   feature_info_tbl_[kDRMPanelFeatureSPRPackType] = DRMPanelFeatureInfo {kDRMPanelFeatureSPRPackType,
@@ -115,6 +174,13 @@ void DRMPanelFeatureMgr::Init(int fd, drmModeRes* res) {
     kDRMPanelFeatureDsppDemuraInfo, DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, 64, 0};
   feature_info_tbl_[kDRMPanelFeatureDsppRCInfo] = DRMPanelFeatureInfo {
     kDRMPanelFeatureDsppRCInfo, DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, 64, 0};
+  feature_info_tbl_[kDRMPanelFeatureDemuraCfg0Param2] =
+      DRMPanelFeatureInfo{kDRMPanelFeatureDemuraCfg0Param2,
+                          DRM_MODE_OBJECT_CRTC,
+                          UINT32_MAX,
+                          1,
+                          sizeof(drm_msm_dem_cfg0_param2),
+                          0};
 }
 
 void DRMPanelFeatureMgr::Deinit() {
@@ -161,6 +227,24 @@ int DRMPanelFeatureMgr::InitObjectProps(int obj_id, int obj_type) {
       continue;
     }
 
+    if (prop_enum == DRMProperty::SPR_INIT_CFG_V1) {
+      drm_property_map_[kDRMPanelFeatureSPRInit] = DRMProperty::SPR_INIT_CFG_V1;
+      feature_info_tbl_[kDRMPanelFeatureSPRInit] = DRMPanelFeatureInfo{kDRMPanelFeatureSPRInit,
+                                                                       DRM_MODE_OBJECT_CRTC,
+                                                                       UINT32_MAX,
+                                                                       1,
+                                                                       sizeof(drm_msm_spr_init_cfg),
+                                                                       0};
+    } else if (prop_enum == DRMProperty::SPR_INIT_CFG_V2) {
+      drm_property_map_[kDRMPanelFeatureSPRInit] = DRMProperty::SPR_INIT_CFG_V2;
+      feature_info_tbl_[kDRMPanelFeatureSPRInit] = DRMPanelFeatureInfo{kDRMPanelFeatureSPRInit,
+                                                                       DRM_MODE_OBJECT_CRTC,
+                                                                       UINT32_MAX,
+                                                                       2,
+                                                                       sizeof(drm_msm_spr_init_cfg),
+                                                                       0};
+    }
+
     prop_mgr_.SetPropertyId(prop_enum, info->prop_id);
     drmModeFreeProperty(info);
   }
@@ -169,8 +253,68 @@ int DRMPanelFeatureMgr::InitObjectProps(int obj_id, int obj_type) {
   return 0;
 }
 
+void DRMPanelFeatureMgr::ParsePanelId(uint32_t blob_id, DRMPanelFeatureInfo *info) {
+  drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(dev_fd_, blob_id);
+  if (!blob) {
+    return;
+  }
+
+  if (!blob->data) {
+    return;
+  }
+
+  if (blob->length != sizeof(uint64_t)) {
+    DRM_LOGE("Expecting %zu bytes but got %u", sizeof(uint64_t), blob->length);
+    return;
+  }
+
+  uint64_t* panel_id = reinterpret_cast<uint64_t *>(info->prop_ptr);
+  // Read as-is / big endian. Driver has supplied the value in this manner.
+  uint8_t *data = (uint8_t*)(blob->data);
+  for (size_t i = 0; i < blob->length; i++) {
+    *panel_id = (*panel_id << 8) | *data;
+    data++;
+  }
+  info->prop_size = sizeof(uint64_t);
+
+  drmModeFreePropertyBlob(blob);
+}
+
+void DRMPanelFeatureMgr::ParseDemuraResources(drmModePropertyRes *prop, uint64_t value,
+                                              DRMPanelFeatureInfo *info) {
+  // Values come as bit indices, not fully-realized values, for DRM_MODE_PROP_BITMASK
+  for (auto i = 0; i < prop->count_enums; i++) {
+    std::string enum_name(prop->enums[i].name);
+    if (enum_name == "demura_dma1_rect0") {
+      DEMURA_DMA1RECT0 = (1 << prop->enums[i].value);
+    } else if (enum_name == "demura_dma1_rect1") {
+      DEMURA_DMA1RECT1 = (1 << prop->enums[i].value);
+    } else if (enum_name == "demura_dma3_rect0") {
+      DEMURA_DMA3RECT0 = (1 << prop->enums[i].value);
+    } else if (enum_name == "demura_dma3_rect1") {
+      DEMURA_DMA3RECT1 = (1 << prop->enums[i].value);
+    }
+  }
+
+  FetchResourceList *frl = reinterpret_cast<FetchResourceList*>(info->prop_ptr);
+  if (value & DEMURA_DMA1RECT0) {
+    frl->push_back(std::make_tuple("DMA", 1, 0));
+  }
+  if (value & DEMURA_DMA1RECT1) {
+    frl->push_back(std::make_tuple("DMA", 1, 1));
+  }
+  if (value & DEMURA_DMA3RECT0) {
+    frl->push_back(std::make_tuple("DMA", 3, 0));
+  }
+  if (value & DEMURA_DMA3RECT1) {
+    frl->push_back(std::make_tuple("DMA", 3, 1));
+  }
+
+  info->prop_size += frl->size();
+}
+
 void DRMPanelFeatureMgr::ParseDsppCapabilities(uint32_t blob_id, std::vector<int> *values,
-                                            uint32_t *size, const std::string str) {
+                                               uint32_t *size, const std::string str) {
   drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(dev_fd_, blob_id);
   if (!blob) {
     DRM_LOGW("Unable to find blob for id %d", blob_id);
@@ -254,7 +398,7 @@ void DRMPanelFeatureMgr::GetPanelFeatureInfo(DRMPanelFeatureInfo *info) {
 
   DRMProperty prop_enum = drm_property_map_[info->prop_id];
   if (!prop_mgr_.IsPropertyAvailable(prop_enum)) {
-    DRM_LOGE("Property id is not available for DRMProperty: %d feature-id: %d",
+    DRM_LOGW("Property id is not available for DRMProperty: %d feature-id: %d",
              prop_enum, info->prop_id);
     return;
   }
@@ -289,17 +433,21 @@ void DRMPanelFeatureMgr::GetPanelFeatureInfo(DRMPanelFeatureInfo *info) {
       ParseCapabilities(props->prop_values[j],
               reinterpret_cast<char *> (info->prop_ptr), info->prop_size, "spr_pack_type");
     } else if (info->prop_id == kDRMPanelFeatureDsppIndex) {
-      ParseCapabilities(props->prop_values[j],
-              reinterpret_cast<char *> (info->prop_ptr), info->prop_size, "dspp_index");
+      ParseDsppCapabilities(props->prop_values[j],
+              reinterpret_cast<std::vector<int> *>(info->prop_ptr), &(info->prop_size), "dspp");
+    } else if (info->prop_id == kDRMPanelFeatureDemuraResources) {
+      ParseDemuraResources(property, props->prop_values[j], info);
+    } else if (info->prop_id == kDRMPanelFeaturePanelId) {
+      ParsePanelId(props->prop_values[j], info);
     } else if (info->prop_id == kDRMPanelFeatureDsppSPRInfo) {
-      ParseCapabilities(props->prop_values[j],
-              reinterpret_cast<char *> (info->prop_ptr), info->prop_size, "spr");
+      ParseDsppCapabilities(props->prop_values[j],
+              reinterpret_cast<std::vector<int> *>(info->prop_ptr), &(info->prop_size), "spr");
     } else if (info->prop_id == kDRMPanelFeatureDsppDemuraInfo) {
-      ParseCapabilities(props->prop_values[j],
-              reinterpret_cast<char *> (info->prop_ptr), info->prop_size, "demura");
+      ParseDsppCapabilities(props->prop_values[j],
+              reinterpret_cast<std::vector<int> *>(info->prop_ptr), &(info->prop_size), "demura");
     } else if (info->prop_id == kDRMPanelFeatureDsppRCInfo) {
       ParseDsppCapabilities(props->prop_values[j],
-              reinterpret_cast<std::vector<int> *> (info->prop_ptr), &(info->prop_size), "rc");
+              reinterpret_cast<std::vector<int> *>(info->prop_ptr), &(info->prop_size), "rc");
     } else if (drm_prop_type_map_[info->prop_id] == DRMPropType::kPropBlob) {
       drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(dev_fd_, props->prop_values[j]);
       if (!blob || !blob->data || !blob->length) {
@@ -330,78 +478,159 @@ void DRMPanelFeatureMgr::CachePanelFeature(const DRMPanelFeatureInfo &info) {
     return;
   }
 
-  dirty_features_[info.prop_id].first = true;
-  dirty_features_[info.prop_id].second = info;
+  for (auto &it : dirty_features_) {
+    if ((it.obj_id == info.obj_id) && (it.prop_id == info.prop_id)) {
+      it = info;
+      DLOGW("Property is set twice obj_id %d, prop_id %d", it.obj_id, it.prop_id);
+      return;
+    }
+  }
+
+  dirty_features_.push_back(info);
 }
 
-void DRMPanelFeatureMgr::CommitPanelFeatures(drmModeAtomicReq *req, const DRMDisplayToken &tok) {
-  int ret = 0;
-
+void DRMPanelFeatureMgr::CommitPanelFeatures(drmModeAtomicReq *req, const DRMDisplayToken &token) {
   lock_guard<mutex> lock(lock_);
-  for (auto it = dirty_features_.begin(); it != dirty_features_.end(); it++) {
-    DRMPanelFeatureInfo &info = it->second;
-
-    if (!it->first)
-        continue;
-
-    if (info.prop_id >= kDRMPanelFeatureMax) {
-      DRM_LOGE("invalid property info to set id %d value ptr %" PRIu64 , info.prop_id, info.prop_ptr);
-      continue;
-    }
-
-    // Commit only features meant for the given DisplayToken
-    if (tok.crtc_id != info.obj_id && tok.conn_id != info.obj_id) {
-      continue;
-    }
-
-    uint32_t prop_id = prop_mgr_.GetPropertyId(drm_property_map_[info.prop_id]);
-    uint64_t value = 0;
-
-    if (DRMPropType::kPropBlob == drm_prop_type_map_[info.prop_id]) {
-      uint32_t blob_id = 0;
-      if (!info.prop_ptr) {
-        // Reset the feature.
-        ret = drmModeAtomicAddProperty(req, info.obj_id, prop_id, 0);
-        if (ret < 0) {
-          DRM_LOGE("failed to add property ret:%d, obj_id:%d prop_id:%u value:%" PRIu64,
-                    ret, info.obj_id, prop_id, value);
-          return;
-        }
-        continue;
-      }
-
-      ret = drmModeCreatePropertyBlob(dev_fd_, reinterpret_cast<void *> (info.prop_ptr),
-              info.prop_size, &blob_id);
-      if (ret || blob_id == 0) {
-        DRM_LOGE("failed to create blob ret %d, id = %d prop_ptr:%" PRIu64 " prop_sz:%d",
-                ret, blob_id, info.prop_ptr, info.prop_size);
-        return;
-      }
-
-      if (drm_prop_blob_ids_map_[info.prop_id]) {
-        ret = drmModeDestroyPropertyBlob(dev_fd_, drm_prop_blob_ids_map_[info.prop_id]);
-        if (ret) {
-          DRM_LOGE("failed to destroy blob for feature %d, ret = %d", info.prop_id, ret);
-          return;
-        }
-      }
-      drm_prop_blob_ids_map_[info.prop_id] = blob_id;
-
-      value = blob_id;
-    } else if (info.prop_size == sizeof(uint64_t)) {
-      value = (reinterpret_cast<uint64_t *> (info.prop_ptr))[0];
+  for (auto it = dirty_features_.begin(); it != dirty_features_.end();) {
+    if (it->obj_id == token.crtc_id || it->obj_id == token.conn_id) {
+      DRMPanelFeatureInfo info = *it;
+      ApplyDirtyFeature(req, token, info);
+      it = dirty_features_.erase(it);
     } else {
-      DRM_LOGE("Unsupported property type id = %d size:%d", info.prop_id, info.prop_size);
+      it++;
     }
-
-    ret = drmModeAtomicAddProperty(req, info.obj_id, prop_id, value);
-    if (ret < 0) {
-      DRM_LOGE("failed to add property ret:%d, obj_id:%d prop_id:%x value:%" PRIu64,
-                ret, info.obj_id, prop_id, value);
-    }
-    *it = {};
   }
 }
 
-}  // namespace sde_drm
+void DRMPanelFeatureMgr::NullCommitPanelFeatures(drmModeAtomicReq *req,
+                                                 const DRMDisplayToken &token) {
+  lock_guard<mutex> lock(lock_);
+  for (auto it = dirty_features_.begin(); it != dirty_features_.end();) {
+    if (it->obj_id == token.crtc_id || it->obj_id == token.conn_id) {
+      DRMPanelFeatureInfo info = *it;
 
+      auto entry_iter = apply_in_null_commit_.find(info.obj_id);
+      if (entry_iter == apply_in_null_commit_.end()) {
+        it++;
+        continue;
+      }
+
+      if (entry_iter->second != info.prop_id) {
+        it++;
+        continue;
+      }
+
+      ApplyDirtyFeature(req, token, info);
+      it = dirty_features_.erase(it);
+      apply_in_null_commit_.erase(info.obj_id);
+    } else {
+      it++;
+    }
+  }
+}
+
+// LCOV_EXCL_START
+void DRMPanelFeatureMgr::ResetPanelFeatures(drmModeAtomicReq *req,
+                                                 const DRMDisplayToken &token) {
+  lock_guard<mutex> lock(lock_);
+  DRMPanelFeatureInfo info;
+
+  info.prop_id = kDRMPanelFeatureSPRInit;
+  info.obj_id = token.crtc_id;
+  info.prop_ptr = 0;
+  ApplyDirtyFeature(req, token, info);
+
+  info.prop_id = kDRMPanelFeatureDemuraInit;
+  ApplyDirtyFeature(req, token, info);
+
+  info.prop_id = kDRMPanelFeatureSPRUDC;
+  uint32_t prop_id = prop_mgr_.GetPropertyId(drm_property_map_[info.prop_id]);
+  if (prop_id) {
+    ApplyDirtyFeature(req, token, info);
+  }
+}
+// LCOV_EXCL_STOP
+
+void DRMPanelFeatureMgr::MarkForNullCommit(const DRMDisplayToken &token, const DRMPanelFeatureID &id) {
+  DRMPanelFeatureInfo &info = feature_info_tbl_[id];
+  uint32_t obj_id = 0;
+  switch (info.obj_type) {
+    case DRM_MODE_OBJECT_CRTC:
+      obj_id = token.crtc_id;
+      break;
+    case DRM_MODE_OBJECT_CONNECTOR:
+      obj_id = token.conn_id;
+      break;
+    default:
+      return;
+  }
+  apply_in_null_commit_[obj_id] = id;
+  DLOGI("Marked %u for null commit", id);
+}
+
+void DRMPanelFeatureMgr::ApplyDirtyFeature(drmModeAtomicReq *req, const DRMDisplayToken &token,
+                                           DRMPanelFeatureInfo &info) {
+  int ret = 0;
+  if (info.prop_id >= kDRMPanelFeatureMax) {
+    DRM_LOGE("invalid property info to set id %d value ptr %" PRIu64, info.prop_id, info.prop_ptr);
+    return;
+  }
+
+  // Commit only features meant for the given DisplayToken
+  if (token.crtc_id != info.obj_id && token.conn_id != info.obj_id) {
+    return;
+  }
+
+  uint32_t prop_id = prop_mgr_.GetPropertyId(drm_property_map_[info.prop_id]);
+  if (!prop_id) {
+    DRM_LOGE("prop_id is 0 for panel feature-id %u", info.prop_id);
+    return;
+  }
+  uint64_t value = 0;
+
+  if (DRMPropType::kPropBlob == drm_prop_type_map_[info.prop_id]) {
+    uint32_t blob_id = 0;
+    if (!info.prop_ptr) {
+      // Reset the feature.
+      ret = drmModeAtomicAddProperty(req, info.obj_id, prop_id, 0);
+      if (ret < 0) {
+        DRM_LOGE("failed to add property ret:%d, obj_id:%d prop_id:%u value:%" PRIu64,
+                  ret, info.obj_id, prop_id, value);
+      }
+      DLOGI("Commited panel feature [disabled]: %u-%u", info.prop_id, prop_id);
+      return;
+    }
+
+    ret = drmModeCreatePropertyBlob(dev_fd_, reinterpret_cast<void *> (info.prop_ptr),
+            info.prop_size, &blob_id);
+    if (ret || blob_id == 0) {
+      DRM_LOGE("failed to create blob ret %d, id = %d prop_ptr:%" PRIu64 " prop_sz:%d",
+              ret, blob_id, info.prop_ptr, info.prop_size);
+      return;
+    }
+
+    if (drm_prop_blob_ids_map_[info.prop_id]) {
+      ret = drmModeDestroyPropertyBlob(dev_fd_, drm_prop_blob_ids_map_[info.prop_id]);
+      if (ret) {
+        DRM_LOGE("failed to destroy blob for feature %d, ret = %d", info.prop_id, ret);
+        return;
+      }
+    }
+    drm_prop_blob_ids_map_[info.prop_id] = blob_id;
+
+    value = blob_id;
+  } else if (info.prop_size == sizeof(uint64_t)) {
+    value = (reinterpret_cast<uint64_t *> (info.prop_ptr))[0];
+  } else {
+    DRM_LOGE("Unsupported property type id = %d size:%d", info.prop_id, info.prop_size);
+  }
+
+  ret = drmModeAtomicAddProperty(req, info.obj_id, prop_id, value);
+  if (ret < 0) {
+    DRM_LOGE("failed to add property ret:%d, obj_id:%d prop_id:%x value:%" PRIu64,
+              ret, info.obj_id, prop_id, value);
+  }
+  DLOGI("Commited panel feature [enabled]: %u-%u", info.prop_id, prop_id);
+}
+
+}  // namespace sde_drm

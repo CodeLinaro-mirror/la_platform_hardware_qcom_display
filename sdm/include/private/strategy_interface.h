@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, 2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -22,14 +22,20 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __STRATEGY_INTERFACE_H__
 #define __STRATEGY_INTERFACE_H__
 
 #include <core/sdm_types.h>
 #include <core/display_interface.h>
 #include <vector>
-
 #include "hw_info_types.h"
+#include "layer_feedback.h"
 
 namespace sdm {
 
@@ -40,15 +46,23 @@ struct StrategyConstraints {
 
   uint32_t max_layers = kMaxSDELayers;  //!< Maximum number of layers that shall be programmed
                                         //!< on hardware for the given layer stack.
+  LayerFeedback feedback = LayerFeedback(0);  //!< Feedback from Layer Precheck
+
+  bool idle_timeout = false;
+  bool gpu_fallback_mode = false;  //!< This flag forces GPU composition strategy.
+  bool tonemapping_query_mandatory = false;  //!< This flag forces a strategy with tonemapping query
 };
 
 class StrategyInterface {
  public:
-  virtual DisplayError Start(HWLayersInfo *hw_layers_info, uint32_t *max_attempts) = 0;
-  virtual DisplayError GetNextStrategy(StrategyConstraints *constraints) = 0;
+  virtual DisplayError Start(DispLayerStack *disp_layer_stack, uint32_t *max_attempts,
+                             StrategyConstraints *constraints) = 0;
+  virtual DisplayError GetNextStrategy() = 0;
   virtual DisplayError Stop() = 0;
+  virtual DisplayError SetDrawMethod(const DisplayDrawMethod &draw_method) = 0;
   virtual DisplayError Reconfigure(const HWPanelInfo &hw_panel_info,
                                    const HWResourceInfo &hw_res_info,
+                                   const HWDisplayAttributes &display_attributes,
                                    const HWMixerAttributes &mixer_attributes,
                                    const DisplayConfigVariableInfo &fb_config) = 0;
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;
@@ -57,8 +71,7 @@ class StrategyInterface {
   /* Sets the list of color modes supported on a display */
   virtual DisplayError SetColorModesInfo(const std::vector<PrimariesTransfer> &colormodes_cs) = 0;
   virtual DisplayError SetBlendSpace(const PrimariesTransfer &blend_space) = 0;
-  virtual bool CanSkipValidate(bool *needs_buffer_swap) = 0;
-  virtual DisplayError SwapBuffers() = 0;
+  virtual void SetDisplayLayerStack(DispLayerStack *disp_layer_stack) = 0;
 
   virtual ~StrategyInterface() { }
 };

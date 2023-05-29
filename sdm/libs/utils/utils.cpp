@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2016 - 2017, 2020-2021 The Linux Foundation. All rights reserved.
+* Copyright (c) 2016 - 2017, 2020 - 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,10 +27,48 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include <unistd.h>
 #include <math.h>
 #include <utils/sys.h>
 #include <utils/utils.h>
+#include <utils/debug.h>
+#include <utils/formats.h>
 
 #include <algorithm>
 
@@ -70,6 +108,14 @@ uint64_t GetSystemTimeInNs() {
   return (uint64_t) ts.tv_sec * pow(10, 9) + (uint64_t)ts.tv_nsec;
 }
 
+void SetRealTimePriority() {
+  struct sched_param param = {0};
+  param.sched_priority = 2;
+  if (sched_setscheduler(0, SCHED_FIFO | SCHED_RESET_ON_FORK, &param) != 0) {
+    DLOGW("Couldn't set SCHED_FIFO: %d", errno);
+  }
+}
+
 void AdjustSize(const int min_size, const int bound_start, const int bound_end, int *input_start,
                 int *input_end) {
   // This fucntion is for expanding ROI dimension marked by input_start & input_end
@@ -90,7 +136,11 @@ void AdjustSize(const int min_size, const int bound_start, const int bound_end, 
 }
 
 void ApplyCwbRoiRestrictions(LayerRect &roi, const LayerRect &cwb_full_frame,
-                             const int cwb_alignment_factor) {
+                             const int cwb_alignment_factor,
+                             LayerBufferFormat format) {
+  if (!IsUBWCFormat(format)) {
+    return;
+  }
   // Make ROI's (width * height) as 256B aligned
   uint32_t roi_width = UINT32(roi.right - roi.left);
   uint32_t roi_height = UINT32(roi.bottom - roi.top);
@@ -138,6 +188,21 @@ void ApplyCwbRoiRestrictions(LayerRect &roi, const LayerRect &cwb_full_frame,
     AdjustSize(roi_height + height_to_expand, 0, INT(cwb_full_frame.bottom), &roi_top, &roi_bottom);
     roi.top = FLOAT(roi_top);
     roi.bottom = FLOAT(roi_bottom);
+  }
+}
+
+const char *GetCompositionName(const LayerComposition &composition) {
+  switch (composition) {
+  case kCompositionGPU:           return "GPU";
+  case kCompositionSDE:           return "SDE";
+  case kCompositionCursor:        return "CURSOR";
+  case kCompositionStitch:        return "STITCH";
+  case kCompositionGPUTarget:     return "GPU_TARGET";
+  case kCompositionStitchTarget:  return "STITCH_TARGET";
+  case kCompositionDemura:        return "DEMURA";
+  case kCompositionCWBTarget:     return "CWB_TARGET";
+  case kCompositionIWE:           return "IWE";
+  default:                        return "UNKNOWN";
   }
 }
 

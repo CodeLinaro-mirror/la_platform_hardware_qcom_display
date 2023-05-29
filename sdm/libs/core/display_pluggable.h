@@ -25,12 +25,13 @@
 #ifndef __DISPLAY_PLUGGABLE_H__
 #define __DISPLAY_PLUGGABLE_H__
 
+#include <private/hw_events_interface.h>
+
 #include <map>
 #include <string>
 #include <vector>
 
 #include "display_base.h"
-#include "hw_events_interface.h"
 
 namespace sdm {
 
@@ -63,7 +64,6 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;
   DisplayError Blank(bool blank) override { return kErrorNone; }
-  void IdleTimeout() override {}
   void CECMessage(char *message) override;
   void IdlePowerCollapse() override {}
   void PingPongTimeout() override {}
@@ -71,10 +71,12 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
   void HwRecovery(const HWRecoveryEvent sdm_event_code) override;
   void HandleBacklightEvent(float brightness_level) override;
   void Histogram(int histogram_fd, uint32_t blob_id) override;
+  void MMRMEvent(uint32_t clk) override;
+  void HandlePowerEvent() override;
+  void HandleVmReleaseEvent() override;
 
   void UpdateColorModes();
   void InitializeColorModesFromColorspace();
-  DisplayError TeardownConcurrentWriteback(void) override { return kErrorNotSupported; }
 
  private:
   DisplayError GetOverrideConfig(uint32_t *mode_index);
@@ -84,8 +86,7 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
 
   bool underscan_supported_ = false;
   HWScanSupport scan_support_;
-  std::vector<HWEvent> event_list_ = {HWEvent::VSYNC, HWEvent::IDLE_NOTIFY, HWEvent::EXIT,
-                                      HWEvent::CEC_READ_MESSAGE, HWEvent::HW_RECOVERY};
+  std::vector<HWEvent> event_list_;
   uint32_t current_refresh_rate_ = 0;
 };
 

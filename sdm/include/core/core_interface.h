@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2018 - 2020 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018 - 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 /*! @file core_interface.h
   @brief Interface file for core of the display subsystem.
 
@@ -37,6 +44,7 @@
 #ifndef __CORE_INTERFACE_H__
 #define __CORE_INTERFACE_H__
 
+#include <core/ipc_interface.h>
 #include <stdint.h>
 #include <map>
 #include <vector>
@@ -110,6 +118,10 @@ struct HWDisplayInfo {
   bool is_primary = false;                     //!< True only if this is the main display of the
                                                //!< device.
   bool is_wb_ubwc_supported = true;            //!< check hardware wb ubwc support
+  bool is_reserved = false;                    //!< check if currently reserved by any display
+  uint32_t max_linewidth = 0;                  //!< max width supported by connector
+  uint32_t max_cwb = 0;                        //!< Maximum CWB instances supported concurrently,
+                                               //!< and it is valid only for virtual display.
 };
 
 /*! @brief Information on all displays as a map with display_id as key.
@@ -215,6 +227,13 @@ class CoreInterface {
   */
   virtual DisplayError DestroyDisplay(DisplayInterface *interface) = 0;
 
+#ifdef PROFILE_COVERAGE_DATA
+  /*! @brief Method to destroy a display device.
+
+  */
+  virtual DisplayError DumpCodeCoverage() = 0;
+#endif
+
   /*! @brief Method to update the bandwidth limit as per given mode.
 
     @param[in] mode indicate the mode or use case
@@ -270,6 +289,25 @@ class CoreInterface {
     @return returns true if the given format is supported by rotator otherwise false
   */
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) = 0;
+
+  /*! @brief Method to reserve the resources for demura at bootup.
+
+    @return returns true if resources are successfully reserved.
+  */
+  virtual DisplayError ReserveDemuraResources() = 0;
+
+  /*! @brief Method to request to get virtual display ID (h/w writeback block ID).
+
+    @details Client shall use this method to get virtual display ID (h/w writeback block ID),
+    if it is available, else it could be available after tearing down any lower priority usage
+    writeback block out of existing usage. And it makes sure that tearing down usage has lower
+    priority than requesting usage.
+
+    @param[out] vdisp_id Virtual Display ID for DPU based virtual display.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id) = 0;
 
  protected:
   virtual ~CoreInterface() { }

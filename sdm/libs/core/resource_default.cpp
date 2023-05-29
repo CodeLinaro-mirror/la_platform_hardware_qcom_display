@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2016, 2018-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2016, 2018-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -22,6 +22,42 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include <math.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -30,6 +66,7 @@
 #include <utils/sys.h>
 #include <dlfcn.h>
 #include <algorithm>
+#include <string>
 
 #include "resource_default.h"
 
@@ -138,6 +175,7 @@ DisplayError ResourceDefault::RegisterDisplay(int32_t display_id, DisplayType ty
                                               const HWDisplayAttributes &display_attributes,
                                               const HWPanelInfo &hw_panel_info,
                                               const HWMixerAttributes &mixer_attributes,
+                                              const Resolution &fb_resolution,
                                               Handle *display_ctx) {
   DisplayError error = kErrorNone;
 
@@ -174,6 +212,7 @@ DisplayError ResourceDefault::RegisterDisplay(int32_t display_id, DisplayType ty
   display_resource_ctx->display_attributes = display_attributes;
   display_resource_ctx->hw_block_type = hw_block_type;
   display_resource_ctx->mixer_attributes = mixer_attributes;
+  display_resource_ctx->fb_resolution = fb_resolution;
 
   *display_ctx = display_resource_ctx;
   return error;
@@ -194,31 +233,45 @@ DisplayError ResourceDefault::UnregisterDisplay(Handle display_ctx) {
 DisplayError ResourceDefault::ReconfigureDisplay(Handle display_ctx,
                                                  const HWDisplayAttributes &display_attributes,
                                                  const HWPanelInfo &hw_panel_info,
-                                                 const HWMixerAttributes &mixer_attributes) {
+                                                 const HWMixerAttributes &mixer_attributes,
+                                                 const Resolution &fb_resolution) {
   DisplayResourceContext *display_resource_ctx =
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
 
   display_resource_ctx->display_attributes = display_attributes;
   display_resource_ctx->mixer_attributes = mixer_attributes;
+  display_resource_ctx->fb_resolution = fb_resolution;
 
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::Start(Handle display_ctx) {
+DisplayError ResourceDefault::Precheck(Handle display_ctx, DispLayerStack *disp_layer_stack,
+                                       LayerFeedback* feedback) {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::Stop(Handle display_ctx, HWLayers *hw_layers) {
+DisplayError ResourceDefault::Start(Handle display_ctx, LayerStack *layer_stack) {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::Prepare(Handle display_ctx, HWLayers *hw_layers) {
+DisplayError ResourceDefault::Stop(Handle display_ctx, DispLayerStack *disp_layer_stack) {
+  return kErrorNone;
+}
+
+DisplayError ResourceDefault::SetDrawMethod(Handle display_ctx,
+                                            const DisplayDrawMethod &draw_method) {
+  return kErrorNone;
+}
+
+DisplayError ResourceDefault::Prepare(Handle display_ctx, DispLayerStack *disp_layer_stack,
+                                      LayerFeedback *feedback) {
   DisplayResourceContext *display_resource_ctx =
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
 
   DisplayError error = kErrorNone;
-  const struct HWLayersInfo &layer_info = hw_layers->info;
+  const struct HWLayersInfo &layer_info = disp_layer_stack->info;
   HWBlockType hw_block_type = display_resource_ctx->hw_block_type;
+  *feedback = LayerFeedback(0);
 
   DLOGV_IF(kTagResources, "==== Resource reserving start: hw_block_type = %d ====", hw_block_type);
 
@@ -234,7 +287,7 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, HWLayers *hw_layers) {
     return kErrorParameters;
   }
 
-  error = Config(display_resource_ctx, hw_layers);
+  error = Config(display_resource_ctx, disp_layer_stack);
   if (error != kErrorNone) {
     DLOGV_IF(kTagResources, "Resource config failed");
     return error;
@@ -250,7 +303,7 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, HWLayers *hw_layers) {
   uint32_t right_index = num_pipe_;
   bool need_scale = false;
 
-  struct HWLayerConfig &layer_config = hw_layers->config[0];
+  struct HWLayerConfig &layer_config = disp_layer_stack->info.config[0];
 
   HWPipeInfo *left_pipe = &layer_config.left_pipe;
   HWPipeInfo *right_pipe = &layer_config.right_pipe;
@@ -316,15 +369,37 @@ CleanupOnError:
   return kErrorResources;
 }
 
-DisplayError ResourceDefault::PostPrepare(Handle display_ctx, HWLayers *hw_layers) {
+DisplayError ResourceDefault::PostPrepare(Handle display_ctx, DispLayerStack *disp_layer_stack) {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::Commit(Handle display_ctx, HWLayers *hw_layers) {
+DisplayError ResourceDefault::Commit(Handle display_ctx, DispLayerStack *disp_layer_stack) {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::PostCommit(Handle display_ctx, HWLayers *hw_layers) {
+DisplayError ResourceDefault::PreCommit(Handle display_ctx) {
+  return kErrorNone;
+}
+
+void ResourceDefault::HandleSkipValidate(Handle display_ctx) {
+}
+
+std::string ResourceDefault::Dump() {
+  return "";
+}
+
+uint32_t ResourceDefault::GetMixerCount() {
+  return 0;
+}
+
+void ResourceDefault::HandleTUITransition(Handle display_ctx, bool tui_active) {}
+
+DisplayError ResourceDefault::SetBlendSpace(Handle display_ctx,
+                                            const PrimariesTransfer &blend_space) {
+  return kErrorNone;
+}
+
+DisplayError ResourceDefault::PostCommit(Handle display_ctx, DispLayerStack *disp_layer_stack) {
   DisplayResourceContext *display_resource_ctx =
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
   HWBlockType hw_block_type = display_resource_ctx->hw_block_type;
@@ -525,8 +600,8 @@ DisplayError ResourceDefault::DisplaySplitConfig(DisplayResourceContext *display
 }
 
 DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ctx,
-                                HWLayers *hw_layers) {
-  HWLayersInfo &layer_info = hw_layers->info;
+                                     DispLayerStack *disp_layer_stack) {
+  HWLayersInfo &layer_info = disp_layer_stack->info;
   DisplayError error = kErrorNone;
   const Layer &layer = layer_info.hw_layers.at(0);
 
@@ -535,7 +610,7 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
     return error;
   }
 
-  struct HWLayerConfig *layer_config = &hw_layers->config[0];
+  struct HWLayerConfig *layer_config = &disp_layer_stack->info.config[0];
   HWPipeInfo &left_pipe = layer_config->left_pipe;
   HWPipeInfo &right_pipe = layer_config->right_pipe;
 
@@ -912,7 +987,8 @@ DisplayError ResourceDefault::CalculateDecimation(float downscale, uint8_t *deci
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::ValidateAndSetCursorPosition(Handle display_ctx, HWLayers *hw_layers,
+DisplayError ResourceDefault::ValidateAndSetCursorPosition(Handle display_ctx,
+                                                           DispLayerStack *disp_layer_stack,
                                                            int x, int y,
                                                            DisplayConfigVariableInfo *fb_config) {
   return kErrorNotSupported;
@@ -931,8 +1007,7 @@ DisplayError ResourceDefault::SetDetailEnhancerData(Handle display_ctx,
   return kErrorNotSupported;
 }
 
-DisplayError ResourceDefault::UpdateSyncHandle(Handle display_ctx,
-                                               const shared_ptr<Fence> &sync_handle) {
+DisplayError ResourceDefault::UpdateSyncHandle(Handle display_ctx, const SyncPoints &sync_points) {
   return kErrorNotSupported;
 }
 

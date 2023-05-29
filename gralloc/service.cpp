@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -25,28 +25,36 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
+
 #include <hidl/LegacySupport.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
+#include <aidlcommonsupport/NativeHandle.h>
+
+#include <string>
 
 #include "QtiAllocator.h"
+#include "QtiAllocatorAIDL.h"
 
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
-using IQtiAllocator3 = vendor::qti::hardware::display::allocator::V3_0::IQtiAllocator;
 using IQtiAllocator4 = vendor::qti::hardware::display::allocator::V4_0::IQtiAllocator;
+using aidl::android::hardware::graphics::allocator::impl::QtiAllocatorAIDL;
 
 int main(int, char **) {
-  android::sp<IQtiAllocator3> service3 =
-      new vendor::qti::hardware::display::allocator::V3_0::implementation::QtiAllocator();
-
-  configureRpcThreadpool(4, true /*callerWillJoin*/);
-  if (service3->registerAsService() != android::OK) {
-    ALOGE("Cannot register QTI Allocator 3 service");
-    return -EINVAL;
+  // same as SF main thread
+  struct sched_param param = {0};
+  param.sched_priority = 2;
+  if (sched_setscheduler(0, SCHED_FIFO | SCHED_RESET_ON_FORK, &param) != 0) {
+    ALOGI("%s: failed to set priority: %s", __FUNCTION__, strerror(errno));
   }
-  ALOGI("Initialized qti-allocator 3");
 
-#ifdef TARGET_USES_GRALLOC4
+  ALOGI("Registering qti-allocator 4");
   android::sp<IQtiAllocator4> service4 =
       new vendor::qti::hardware::display::allocator::V4_0::implementation::QtiAllocator();
   if (service4->registerAsService() != android::OK) {
@@ -54,9 +62,26 @@ int main(int, char **) {
     return -EINVAL;
   }
   ALOGI("Initialized qti-allocator 4");
-#endif
 
-  joinRpcThreadpool();
+  ALOGI("Registering QTI Allocator AIDL as a service");
+  auto allocator = ndk::SharedRefBase::make<QtiAllocatorAIDL>();
+  const std::string instance = std::string() + QtiAllocatorAIDL::descriptor + "/default";
+  if (!allocator->asBinder().get()) {
+    ALOGW("QTI Allocator AIDL's binder is null");
+    return EXIT_FAILURE;
+  }
+
+  binder_status_t status =
+      AServiceManager_addService(allocator->asBinder().get(), instance.c_str());
+  if (status != STATUS_OK) {
+    ALOGW("Failed to register QTI Allocator AIDL as a service (status:%d)", status);
+    return EXIT_FAILURE;
+  }
+  ALOGI("Initialized QTI Allocator AIDL");
+
+  ABinderProcess_setThreadPoolMaxThreadCount(4);
+  ABinderProcess_startThreadPool();
+  ABinderProcess_joinThreadPool();
 
   return 0;
 }

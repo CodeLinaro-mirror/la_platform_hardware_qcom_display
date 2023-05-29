@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/constants.h>
 #include <cutils/properties.h>
 #include <display_properties.h>
@@ -50,7 +57,7 @@ void HWCDebugHandler::DebugAll(bool enable, int verbose_level) {
     }
     debug_handler_.verbose_level_ = verbose_level;
   } else {
-    debug_handler_.log_mask_ = 0x1;   // kTagNone should always be printed.
+    debug_handler_.log_mask_ = 0x1;  // kTagNone should always be printed.
     debug_handler_.verbose_level_ = 0;
   }
 
@@ -75,6 +82,30 @@ void HWCDebugHandler::DebugStrategy(bool enable, int verbose_level) {
     debug_handler_.verbose_level_ = verbose_level;
   } else {
     debug_handler_.log_mask_[kTagStrategy] = 0;
+    debug_handler_.verbose_level_ = 0;
+  }
+
+  DebugHandler::SetLogMask(debug_handler_.log_mask_);
+}
+
+void HWCDebugHandler::DebugIWE(bool enable, int verbose_level) {
+  if (enable) {
+    debug_handler_.log_mask_[kTagIWE] = 1;
+    debug_handler_.verbose_level_ = verbose_level;
+  } else {
+    debug_handler_.log_mask_[kTagIWE] = 0;
+    debug_handler_.verbose_level_ = 0;
+  }
+
+  DebugHandler::SetLogMask(debug_handler_.log_mask_);
+}
+
+void HWCDebugHandler::DebugWbUsage(bool enable, int verbose_level) {
+  if (enable) {
+    debug_handler_.log_mask_[kTagWbUsage] = 1;
+    debug_handler_.verbose_level_ = verbose_level;
+  } else {
+    debug_handler_.log_mask_[kTagWbUsage] = 0;
     debug_handler_.verbose_level_ = 0;
   }
 
@@ -224,7 +255,7 @@ void HWCDebugHandler::EndTrace() {
   atrace_end(ATRACE_TAG);
 }
 
-int  HWCDebugHandler::GetIdleTimeoutMs() {
+int HWCDebugHandler::GetIdleTimeoutMs() {
   int value = IDLE_TIMEOUT_DEFAULT_MS;
   debug_handler_.GetProperty(IDLE_TIME_PROP, &value);
 
@@ -251,4 +282,3 @@ int HWCDebugHandler::GetProperty(const char *property_name, char *value) {
 }
 
 }  // namespace sdm
-

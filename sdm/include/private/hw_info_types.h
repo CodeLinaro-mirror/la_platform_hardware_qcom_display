@@ -22,6 +22,42 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #ifndef __HW_INFO_TYPES_H__
 #define __HW_INFO_TYPES_H__
 
@@ -38,6 +74,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <tuple>
 
 namespace sdm {
 using std::string;
@@ -56,6 +93,12 @@ const int kMaxSDELayers = 16;   // Maximum number of layers that can be handled 
 #define MAX_CSC_MATRIX_COEFF_SIZE   9
 #define MAX_CSC_CLAMP_SIZE          6
 #define MAX_CSC_BIAS_SIZE           3
+
+// FP16 / UCSC Max Size
+#define FP16_CSC_CFG0_PARAM_LEN     12
+#define FP16_CSC_CFG1_PARAM_LEN     8
+#define UCSC_CSC_CFG0_PARAM_LEN     FP16_CSC_CFG0_PARAM_LEN
+#define UCSC_CSC_CFG1_PARAM_LEN     FP16_CSC_CFG1_PARAM_LEN
 
 #define MAX_SPLIT_COUNT             2
 
@@ -127,8 +170,9 @@ enum HWPipeFlags {
   kInterlaced = 1 << 10,
   kUpdating = 1 < 11,
   kSolidFill = 1 << 12,
-  kTonemap1d = 1 << 13,
-  kTonemap3d = 1 << 14,
+  kTonemap1d = 1 << 13,  // legacy tonemap flag - DMA
+  kTonemap3d = 1 << 14,  // 3d gamut flag - VIG
+  kUCSC = 1 << 15,       // UCSC tonemap flag - DMA & VIG
 };
 
 enum HWAVRModes {
@@ -181,8 +225,10 @@ enum HwColorspace {
 
 enum HWSrcTonemap {
   kSrcTonemapNone,
-  kSrcTonemap1d,  // DMA
-  kSrcTonemap3d,  // VIG
+  kSrcTonemap1d,      // legacy DMA tonemap
+  kSrcTonemap3d,      // 3d gamut tonemap - VIG
+  kSrcTonemapUcsc,    // UCSC tonemap - DMA & VIG
+  kSrcTonemapUcsc3d,  // UCSC + 3d gamut tonemap - VIG
 };
 
 enum HWToneMapLut {
@@ -191,6 +237,30 @@ enum HWToneMapLut {
   kDma1dGc,     // DMA GC Lut
   kVig1dIgc,    // VIG IGC Lut
   kVig3dGamut,  // 3D Gamut Lut
+};
+
+enum HWUcscBlockType {
+  kUcscUnmult,       // UCSC UNMULT
+  kUcscIgc,          // UCSC IGC
+  kUcscCsc,          // UCSC CSC
+  kUcscGc,           // UCSC GC
+  kUcscAlphaDither,  // UCSC ALPHA DITHER
+  kUcscBlockMax,
+};
+
+enum HWUcscGcMode {
+  kUcscGcModeSrgb,      // SRGB
+  kUcscGcModePq,        // PQ
+  kUcscGcModeGamma2_2,  // GAMMA2.2
+  kUcscGcModeHlg,       // HLG
+};
+
+enum HWUcscIgcMode {
+  kUcscIgcModeSrgb,      // SRGB
+  kUcscIgcModeRec709,    // REC709
+  kUcscIgcModeGamma2_2,  // GAMMA2.2
+  kUcscIgcModeHlg,       // HLG
+  kUcscIgcModePq,        // PQ
 };
 
 enum HWWriteOperation {
@@ -230,9 +300,15 @@ class PPFeatureInfo {
 };
 
 struct HWDynBwLimitInfo {
-  uint32_t cur_mode = kBwVFEOn;
+  uint32_t cur_mode = kBwVFEOff;
   uint64_t total_bw_limit[kBwModeMax] = { 0 };
   uint64_t pipe_bw_limit[kBwModeMax] = { 0 };
+};
+
+enum SplashType {
+  kSplashNone,
+  kSplashLayer,
+  kSplashDemura,
 };
 
 struct HWPipeCaps {
@@ -243,7 +319,12 @@ struct HWPipeCaps {
   bool inverse_pma = 0;
   uint32_t dgm_csc_version = 0;
   std::map<HWToneMapLut, uint32_t> tm_lut_version_map = {};
+  std::map<HWUcscBlockType, uint32_t> ucsc_block_version_map = {};
   bool block_sec_ui = false;
+  int32_t cont_splash_disp_id = -1;
+  SplashType splash_type = kSplashNone;
+  int32_t pipe_idx = -1;
+  int32_t demura_block_capability = -1;
 };
 
 struct HWRotatorInfo {
@@ -261,6 +342,9 @@ enum HWQseedStepVersion {
   kQseed3v4,
   kQseed3litev4,
   kQseed3litev5,
+  kQseed3litev7,
+  kQseed3litev8,
+  kQseed3litev9,
 };
 
 struct HWDestScalarInfo {
@@ -269,6 +353,11 @@ struct HWDestScalarInfo {
   uint32_t max_output_width = 0;
   uint32_t max_scale_up = 1;
   uint32_t prefill_lines = 4;
+};
+
+struct SyncPoints {
+  shared_ptr<Fence> release_fence = nullptr;
+  shared_ptr<Fence> retire_fence = nullptr;
 };
 
 enum SmartDMARevision {
@@ -362,6 +451,13 @@ struct HWResourceInfo {
   bool has_micro_idle = false;
   uint32_t ubwc_version = 1;
   uint32_t rc_total_mem_size = 0;
+  std::map<uint32_t, uint32_t> plane_to_connector = {};
+  std::vector<uint32_t> initial_demura_planes = {};
+  uint32_t demura_count = 0;
+  uint32_t dspp_count = 0;
+  bool skip_inline_rot_threshold = false;
+  bool has_noise_layer = false;
+  uint32_t dsc_block_count = 0;
 };
 
 struct HWSplitInfo {
@@ -423,12 +519,17 @@ struct HWPanelInfo {
   float blackness_level = 0.0f;       // Panel's blackness level
   HWColorPrimaries primaries = {};    // WRGB color primaries
   HWPanelOrientation panel_orientation = {};  // Panel Orientation
-  uint32_t transfer_time_us = 0;       // transfer time in micro seconds to panel's active region
-  uint32_t allowed_mode_switch = 0;    // Allowed mode switch bit mask
-  bool qsync_support = false;          // Specifies panel supports qsync feature or not.
-  bool dyn_bitclk_support = false;     // Bit clk can be updated to avoid RF interference.
+  uint32_t transfer_time_us = 0;      // transfer time in micro seconds to panel's active region
+  uint32_t transfer_time_us_min = 0;  // min transfer time in micro seconds to panel's active region
+  uint32_t transfer_time_us_max = 0;  // max transfer time in micro seconds to panel's active region
+  uint32_t allowed_mode_switch = 0;   // Allowed mode switch bit mask
+  uint32_t panel_mode_caps = 0;       // Video/Command mode capability bit mask
+  bool qsync_support = false;         // Specifies panel supports qsync feature or not.
+  bool dyn_bitclk_support = false;    // Bit clk can be updated to avoid RF interference.
   std::vector<uint64_t> bitclk_rates;  // Supported bit clk levels.
   uint32_t supported_colorspaces = 0;  // supported_colorspaces for DP displays.
+  uint32_t qsync_fps = 0;              // Min qsync fps
+  bool has_cwb_crop = false;           // CWB Crop support
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||
@@ -446,7 +547,10 @@ struct HWPanelInfo {
             (left_roi_count != panel_info.left_roi_count) ||
             (right_roi_count != panel_info.right_roi_count) ||
             (transfer_time_us != panel_info.transfer_time_us) ||
+            (transfer_time_us_min != panel_info.transfer_time_us_min) ||
+            (transfer_time_us_max != panel_info.transfer_time_us_max) ||
             (allowed_mode_switch != panel_info.allowed_mode_switch) ||
+            (panel_mode_caps != panel_info.panel_mode_caps) ||
             (qsync_support != panel_info.qsync_support) ||
             (dyn_bitclk_support != panel_info.dyn_bitclk_support) ||
             (bitclk_rates != panel_info.bitclk_rates));
@@ -561,12 +665,22 @@ struct HWCsc {
   uint32_t post_clamp[MAX_CSC_CLAMP_SIZE] = {0};
 };
 
+struct HWUcscCsc {
+  uint64_t flags = 0;
+  uint32_t cfg_param_0_len = UCSC_CSC_CFG0_PARAM_LEN;
+  uint32_t cfg_param_0[UCSC_CSC_CFG0_PARAM_LEN] = {0};
+  uint32_t cfg_param_1_len = UCSC_CSC_CFG1_PARAM_LEN;
+  uint32_t cfg_param_1[UCSC_CSC_CFG1_PARAM_LEN] = {0};
+};
+
 struct HWScaleData {
   struct enable {
     uint8_t scale = 0;
     uint8_t direction_detection = 0;
     uint8_t detail_enhance = 0;
     uint8_t dyn_exp_disable = 0;     // RGB format dynamic pixel expansion disable.
+    uint8_t dir45_detection = 0;
+    uint8_t corner_detection = 0;
   } enable;
   uint32_t dst_width = 0;
   uint32_t dst_height = 0;
@@ -619,6 +733,7 @@ struct HWAVRInfo {
 struct HWPipeCscInfo {
   HWWriteOperation op = kNoOp;
   HWCsc csc = {};
+  bool dgm_csc_config = false;
 };
 
 struct HWPipeTonemapLutInfo {
@@ -630,6 +745,17 @@ struct HWPipeTonemapLutInfo {
 struct HWPipeTonemapInversePma {
   HWWriteOperation op = kNoOp;
   bool inverse_pma = false;
+};
+
+struct HWPipeUcscConfig {
+  uint8_t unmult_en = 0;
+  uint8_t igc_en = 0;
+  HWUcscIgcMode igc_lut_sel = kUcscIgcModeSrgb;
+  uint8_t csc_en = 0;
+  HWUcscCsc csc = {};
+  uint8_t gc_en = 0;
+  HWUcscGcMode gc_lut_sel = kUcscGcModeSrgb;
+  uint8_t alpha_dither_en = 0;
 };
 
 struct HWPipeInfo {
@@ -650,6 +776,8 @@ struct HWPipeInfo {
   HWPipeTonemapInversePma inverse_pma_info = {};
   HWPipeCscInfo dgm_csc_info = {};
   std::vector<HWPipeTonemapLutInfo> lut_info = {};
+  HWPipeUcscConfig ucsc_config = {};
+  std::map<HWUcscBlockType, HWWriteOperation> ucsc_write_op = {};
   LayerTransform transform;
   HWSrcTonemap tonemap = kSrcTonemapNone;
   LayerBufferFormat format = kFormatARGB8888;  // src format of the buffer
@@ -664,6 +792,17 @@ struct HWSolidfillStage {
   LayerSolidFill solid_fill_info = {};
 };
 
+struct NoiseLayerConfig {
+  bool enable = false;
+  uint64_t flags = 0;               // if enable, read honor other fields
+  uint32_t zpos_noise = 0;          // Set by noise plugin
+  uint32_t zpos_attn = 0;           // Set by noise plugin
+  uint32_t attenuation_factor = 1;  // Set by noise plugin
+  uint32_t noise_strength = 0;      // Noise strength set by noise algo
+  uint32_t alpha_noise = 0;         // Noise Alpha (transparency coefficient) set by noise algo
+  bool temporal_en = 0;             // Temporal enable set by noise algo
+};
+
 struct HWLayerConfig {
   HWPipeInfo left_pipe {};           // pipe for left side of output
   HWPipeInfo right_pipe {};          // pipe for right side of output
@@ -672,6 +811,7 @@ struct HWLayerConfig {
   HWSolidfillStage hw_solidfill_stage {};
   float compression = 1.0f;
   bool use_solidfill_stage = false;
+  NoiseLayerConfig hw_noise_layer_cfg {};
 };
 
 struct HWHDRLayerInfo {
@@ -694,46 +834,16 @@ struct RCLayersInfo {
   int top_height = 0;
   int bottom_width = 0;
   int bottom_height = 0;
+  std::vector<uint32_t> mask_layer_idx = {};
+  std::vector<uint32_t> rc_hw_layer_idx = {};
 };
 
 struct LayerExt {
   std::vector<LayerRect> excl_rects = {};  // list of exclusion rects
 };
 
-struct HWLayersInfo {
-  LayerStack *stack = NULL;          // Input layer stack. Set by the caller.
-  uint32_t app_layer_count = 0;      // Total number of app layers. Must not be 0.
-  uint32_t gpu_target_index = 0;     // GPU target layer index. 0 if not present.
-  uint32_t stitch_target_index = 0;  // Blit target layer index. 0 if not present.
-  std::vector<ColorPrimaries> wide_color_primaries = {};  // list of wide color primaries
-
-  std::vector<Layer> hw_layers = {};  // Layers which need to be programmed on the HW
-  std::vector<LayerExt> layer_exts = {};  // Extention layer having list of
-                                          // exclusion rectangles for each layer
-  std::vector<uint32_t> index {};   // Indexes of the layers from the layer stack which need to
-                                 // be programmed on hardware.
-  std::vector<uint32_t> roi_index {};  // Stores the ROI index where the layers are visible.
-  shared_ptr<Fence> sync_handle = nullptr;  // Release fence id for current draw cycle.
-  int set_idle_time_ms = -1;    // Set idle time to the new specified value.
-                                //    -1 indicates no change in idle time since last set value.
-  std::vector<LayerRect> left_frame_roi = {};   // Left ROI.
-  std::vector<LayerRect> right_frame_roi = {};  // Right ROI.
-  LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
-  bool roi_split = false;          // Indicates separated left and right ROI
-  bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
-  bool fast_path_composition = false;  // Indicates frame has fast path composition
-  DestScaleInfoMap dest_scale_info_map = {};
-  HWHDRLayerInfo hdr_layer_info = {};
-  Handle pvt_data = NULL;   // Private data used by sdm extension only.
-  bool game_present = false;  // Indicates there is game layer or not
-  bool rc_config = false;
-  RCLayersInfo rc_layers_info = {};
-  CwbConfig *hw_cwb_config = NULL;     //!< Struct that contains CWB configuration passed to
-                                       //!< driver by SDM.
-  bool spr_enable = false;
-  uint64_t rc_pu_flag_status = 0;
-  bool rc_pu_needs_full_roi = false;
-};
+typedef std::tuple<std::string, int32_t, int8_t> FetchResource;
+typedef std::vector<FetchResource> FetchResourceList;
 
 struct HWQosData {
   bool valid = false;
@@ -751,17 +861,131 @@ struct HWQosData {
 enum UpdateType {
   kUpdateResources,  // Indicates Strategy & RM execution, which can update resources.
   kSwapBuffers,      // Indicates Strategy & RM execution, which can update buffer handler and crop.
+  kUpdateLuts,       // Indicates TM only Strategy execution, which can update SSPP color features.
   kUpdateMax,
 };
 
-struct HWLayers {
-  HWLayersInfo info {};
+struct HWDNSCPCMNData {
+  uint32_t phase_init_h;
+  uint32_t phase_step_h;
+  uint32_t phase_init_v;
+  uint32_t phase_step_v;
+};
+
+struct HWDNSCGaussianData {
+  uint32_t norm_h;
+  uint32_t ratio_h;
+  uint32_t norm_v;
+  uint32_t ratio_v;
+  vector<uint32_t> coef_hori;
+  vector<uint32_t> coef_vert;
+};
+
+struct HWDNSCDitherConfig {
+  uint64_t dither_flags;
+  uint32_t temporal_en;
+  uint32_t c0_bitdepth;
+  uint32_t c1_bitdepth;
+  uint32_t c2_bitdepth;
+  uint32_t c3_bitdepth;
+  vector<uint32_t> dither_matrix;
+};
+
+struct HWDNSCInfo {
+  bool enabled = false;
+
+  uint32_t early_fence_line;
+  uint32_t cache_state;
+
+  uint32_t flags;
+  uint32_t num_blocks;
+
+  uint32_t src_width;
+  uint32_t src_height;
+  uint32_t dst_width;
+  uint32_t dst_height;
+
+  uint32_t flags_h;
+  uint32_t flags_v;
+
+  HWDNSCPCMNData pcmn_data = {};
+  HWDNSCGaussianData gaussian_data = {};
+  HWDNSCDitherConfig dither_data = {};
+};
+
+enum SelfRefreshState {
+  kSelfRefreshNone,
+  kSelfRefreshReadAlloc,   // Indicates to writeback in LLCC when fetching from DDR
+                           // Used during GPU based idle fallback
+  kSelfRefreshWriteAlloc,  // Indicates to writeback in LLCC when sending to DDR
+                           // Used during CWB based idle fallback
+  kSelfRefreshDisableReadAlloc,     // Indicates to disable self refresh
+};
+
+struct HWLayersInfo {
+  uint32_t app_layer_count = 0;      // Total number of app layers. Must not be 0.
+  int32_t gpu_target_index = -1;     // GPU target layer index. -1 if not present.
+  int32_t stitch_target_index = -1;  // Blit target layer index. -1 if not present.
+  int32_t demura_target_index = -1;  // Demura target layer index. -1 if not present.
+  int32_t noise_layer_index = -1;    // Noise layer index. -1 if not present.
+  int32_t cwb_target_index = -1;     // CWB target layer index. -1 if not present.
+  int32_t iwe_target_index = -1;     // IWE target layer index. -1 if not present.
+  std::vector<ColorPrimaries> wide_color_primaries = {};  // list of wide color primaries
+
+  std::vector<Layer> hw_layers = {};  // Layers which need to be programmed on the HW
+  std::vector<LayerExt> layer_exts = {};  // Extention layer having list of
+                                          // exclusion rectangles for each layer
+  std::vector<uint32_t> index {};   // Indexes of the layers from the layer stack which need to
+                                 // be programmed on hardware.
+  std::vector<uint32_t> roi_index {};  // Stores the ROI index where the layers are visible.
+  shared_ptr<Fence> sync_handle = nullptr;  // Release fence id for current draw cycle.
+  int set_idle_time_ms = -1;    // Set idle time to the new specified value.
+                                //    -1 indicates no change in idle time since last set value.
+  std::vector<LayerRect> left_frame_roi = {};   // Left ROI.
+  std::vector<LayerRect> right_frame_roi = {};  // Right ROI.
+  LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
+  bool roi_split = false;          // Indicates separated left and right ROI
+  bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
+  DestScaleInfoMap dest_scale_info_map = {};
+  HWHDRLayerInfo hdr_layer_info = {};
+  Handle pvt_data = NULL;   // Private data used by sdm extension only.
+  bool game_present = false;  // Indicates there is game layer or not
+  bool rc_config = false;
+  RCLayersInfo rc_layers_info = {};
+  bool spr_enable = false;
   HWLayerConfig config[kMaxSDELayers] {};
   float output_compression = 1.0f;
   HWQosData qos_data = {};
   HWAVRInfo hw_avr_info = {};
+  NoiseLayerConfig noise_layer_info = {};
   std::bitset<kUpdateMax> updates_mask = 0;
   uint64_t elapse_timestamp = 0;
+  bool do_hw_validate = true;
+  uint32_t retire_fence_offset = 0;
+  bool trigger_async_commit = false;  // This field hints if asynchronous commit can be triggered.
+  shared_ptr<Fence> retire_fence = nullptr;  // Retire fence for current draw cycle.
+  LayerStackFlags flags;               //!< Flags associated with this layer set.
+  PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
+  LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
+                                       //!< rendered for virtual displays.
+                                       //!< NOTE: This field applies to a virtual display only.
+  uint32_t output_fb_id = 0;           //!< FB ID of the output buffer of virtual display
+  CwbConfig *hw_cwb_config = NULL;     //!< Struct that contains CWB configuration passed to
+                                       //!< driver by SDM.
+  int32_t cwb_id = -1;                 //!< Populate writeback connector ID allocated for CWB.
+  bool stitch_present = false;  // Indicates there is stitch layer or not
+  bool demura_present = false;  // Indicates there is demura layer or not
+  bool cwb_present = false;  // Indicates there is cwb layer or not
+  bool lower_fps = false;  // This field hints to lower the fps in case of idle fallback
+  bool iwe_enabled = false;
+  HWDNSCInfo dnsc_cfg = {};
+  SelfRefreshState self_refresh_state = kSelfRefreshNone;
+  uint64_t expected_present_time = 0;
+};
+
+struct DispLayerStack {
+  LayerStack *stack = NULL;          // Input layer stack. Set by the caller.
+  HWLayersInfo info {};
 };
 
 struct HWDisplayAttributes : DisplayConfigVariableInfo {
@@ -769,10 +993,9 @@ struct HWDisplayAttributes : DisplayConfigVariableInfo {
   uint32_t v_front_porch = 0;  //!< Vertical front porch of panel
   uint32_t v_back_porch = 0;   //!< Vertical back porch of panel
   uint32_t v_pulse_width = 0;  //!< Vertical pulse width of panel
-  uint32_t h_total = 0;        //!< Total width of panel (hActive + hFP + hBP + hPulseWidth)
-  uint32_t v_total = 0;        //!< Total height of panel (vActive + vFP + vBP + vPulseWidth)
   uint32_t clock_khz = 0;      //!< Stores the pixel clock of panel in khz
-  HWTopology topology = kUnknown;  //!< Stores the topology information.
+  HWTopology topology = kUnknown;   //!< Stores the topology information.
+  uint32_t topology_num_split = 1;  //!< Stores the topology split number information.
 
   bool operator !=(const HWDisplayAttributes &display_attributes) {
     return ((is_device_split != display_attributes.is_device_split) ||
@@ -786,30 +1009,15 @@ struct HWDisplayAttributes : DisplayConfigVariableInfo {
             (v_back_porch != display_attributes.v_back_porch) ||
             (v_pulse_width != display_attributes.v_pulse_width) ||
             (h_total != display_attributes.h_total) ||
+            (v_total != display_attributes.v_total) ||
             (is_yuv != display_attributes.is_yuv) ||
             (clock_khz != display_attributes.clock_khz) ||
-            (topology != display_attributes.topology));
+            (topology != display_attributes.topology) ||
+            (topology_num_split != display_attributes.topology_num_split));
   }
 
   bool operator ==(const HWDisplayAttributes &display_attributes) {
     return !(operator !=(display_attributes));
-  }
-
-  bool OnlyFpsChanged(const HWDisplayAttributes &display_attributes) {
-    return ((fps != display_attributes.fps) &&
-            (vsync_period_ns != display_attributes.vsync_period_ns) &&
-            (x_pixels == display_attributes.x_pixels) &&
-            (y_pixels == display_attributes.y_pixels) &&
-            (x_dpi == display_attributes.x_dpi) &&
-            (y_dpi == display_attributes.y_dpi) &&
-            (topology == display_attributes.topology) &&
-            (is_device_split == display_attributes.is_device_split) &&
-            (v_front_porch == display_attributes.v_front_porch) &&
-            (v_back_porch == display_attributes.v_back_porch) &&
-            (v_pulse_width == display_attributes.v_pulse_width) &&
-            (h_total == display_attributes.h_total) &&
-            (is_yuv == display_attributes.is_yuv) &&
-            (clock_khz == display_attributes.clock_khz));
   }
 };
 
@@ -839,7 +1047,44 @@ struct HWMixerAttributes {
   }
 };
 
+struct Resolution {
+  uint32_t x_pixels;
+  uint32_t y_pixels;
+};
+
+class FrameBufferObject : public LayerBufferObject {
+ public:
+  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format,
+                             uint32_t width, uint32_t height, bool shallow = false);
+  ~FrameBufferObject();
+  uint32_t GetFbId();
+  bool IsEqual(LayerBufferFormat format, uint32_t width, uint32_t height);
+
+ private:
+  uint32_t fb_id_;
+  LayerBufferFormat format_;
+  uint32_t width_;
+  uint32_t height_;
+  bool shallow_;
+};
+
+/* Downscale Blur flags */
+#define DNSC_BLUR_EN                    (1 << 0)
+#define DNSC_BLUR_RND_8B_EN             (1 << 1)
+#define DNSC_BLUR_DITHER_EN             (1 << 2)
+
+/* Downscale Blur horizontal/vertical filter flags */
+#define DNSC_BLUR_GAUS_FILTER           (1 << 0)
+#define DNSC_BLUR_PCMN_FILTER           (1 << 1)
+
+enum CwbClient {
+  kCwbClientNone,
+  kCwbClientExternal,
+  kCwbClientDemura,
+  kCwbClientIdleFallback,
+  kCwbClientMax,
+};
+
 }  // namespace sdm
 
 #endif  // __HW_INFO_TYPES_H__
-

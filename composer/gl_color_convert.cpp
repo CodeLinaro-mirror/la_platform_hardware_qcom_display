@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "gl_color_convert_impl.h"
 #include "gl_color_convert.h"
 
@@ -34,8 +41,8 @@
 
 namespace sdm {
 
-GLColorConvert* GLColorConvert::GetInstance(GLRenderTarget target, bool secure) {
-  GLColorConvertImpl* color_convert = new GLColorConvertImpl(target, secure);
+GLColorConvert *GLColorConvert::GetInstance(GLRenderTarget target, bool secure) {
+  GLColorConvertImpl *color_convert = new GLColorConvertImpl(target, secure);
   if (color_convert == nullptr) {
     DLOGE("Failed to create color convert instance for %d target %d secure", target, secure);
     return nullptr;
@@ -53,8 +60,8 @@ GLColorConvert* GLColorConvert::GetInstance(GLRenderTarget target, bool secure) 
   return color_convert;
 }
 
-void GLColorConvert::Destroy(GLColorConvert* intf) {
-  GLColorConvertImpl* color_convert = static_cast<GLColorConvertImpl*>(intf);
+void GLColorConvert::Destroy(GLColorConvert *intf) {
+  GLColorConvertImpl *color_convert = static_cast<GLColorConvertImpl *>(intf);
   if (color_convert->Deinit() != 0) {
     DLOGE("De Init failed");
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GL_COLOR_CONVERT_IMPL_H__
 #define __GL_COLOR_CONVERT_IMPL_H__
 
@@ -42,15 +49,15 @@ class GLColorConvertImpl : public GLColorConvert, public GLCommon {
  public:
   GLColorConvertImpl(GLRenderTarget target, bool secure);
   virtual ~GLColorConvertImpl();
-  virtual int Blit(const private_handle_t *src_hnd, const private_handle_t *dst_hnd,
+  virtual int Blit(const native_handle_t *src_hnd, const native_handle_t *dst_hnd,
                    const GLRect &src_rect, const GLRect &dst_rect,
                    const shared_ptr<Fence> &src_acquire_fence,
-                   const shared_ptr<Fence> &dst_acquire_fence,
-                   shared_ptr<Fence> *release_fence);
+                   const shared_ptr<Fence> &dst_acquire_fence, shared_ptr<Fence> *release_fence);
   virtual int CreateContext(GLRenderTarget target, bool secure);
   virtual int Init();
   virtual int Deinit();
   virtual void Reset();
+
  private:
   GLRenderTarget target_ = kTargetRGBA;
   bool secure_ = false;

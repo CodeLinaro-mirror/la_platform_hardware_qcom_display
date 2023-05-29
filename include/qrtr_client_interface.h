@@ -27,12 +27,17 @@
 *IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __QRTR_CLIENT_INTERFACE_H__
 #define __QRTR_CLIENT_INTERFACE_H__
 
 #include<string>
-
-#include "vm_interface.h"
 
 namespace sdm {
 
@@ -58,7 +63,7 @@ class QRTRCallbackInterface {
  public:
   virtual void OnServerReady() = 0;
   virtual void OnServerExit() = 0;
-  virtual int OnResponse(Response *rsp) = 0;
+  virtual int OnResponse(void *rsp, size_t cmd_size) = 0;
 
  protected:
   virtual ~QRTRCallbackInterface() {};
@@ -66,7 +71,7 @@ class QRTRCallbackInterface {
 
 class QRTRClientInterface {
  public:
-  virtual int SendCommand(const Command &cmd) = 0;
+  virtual int SendCommand(void *cmd, size_t cmd_size) = 0;
  protected:
   virtual ~QRTRClientInterface() {};
 };

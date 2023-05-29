@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2011-2016,2018-2020, The Linux Foundation. All rights reserved.
-
+ * Copyright (c) 2011-2016,2018-2021, The Linux Foundation. All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -25,17 +25,29 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+/*
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __GR_UTILS_H__
 #define __GR_UTILS_H__
 
+#include <hardware/gralloc.h>
+#include <QtiGralloc.h>
+#include <QtiGrallocPriv.h>
+#include <QtiGrallocDefs.h>
+#include <utils/debug.h>
 #include <android/hardware/graphics/common/1.2/types.h>
-
+#include <aidl/android/hardware/graphics/common/PixelFormat.h>
+#include <gralloctypes/Gralloc4.h>
 #include <limits>
-
-#include "gralloc_priv.h"
-#include "qdMetaData.h"
+#include <vector>
 
 #define SZ_2M 0x200000
 #define SZ_1M 0x100000
@@ -53,7 +65,17 @@
 #define INT(exp) static_cast<int>(exp)
 #define UINT(exp) static_cast<unsigned int>(exp)
 
+#define OVERFLOW(x, y) (((y) != 0) && ((x) > (UINT_MAX / (y))))
+
+#define ROUND_UP_PAGESIZE(x) roundUpToPageSize(x)
+inline size_t roundUpToPageSize(size_t x) {
+  return (x + (getpagesize() - 1)) & ~(getpagesize() - 1);
+}
+
+using aidl::android::hardware::graphics::common::StandardMetadataType;
+using android::hardware::graphics::common::V1_2::PixelFormat;
 using android::hardware::graphics::common::V1_1::BufferUsage;
+using private_handle_t = qtigralloc::private_handle_t;
 
 namespace gralloc {
 struct BufferInfo {
@@ -134,6 +156,13 @@ enum PlaneComponent {
   PLANE_COMPONENT_META = 1 << 31,
 };
 
+/* Flag to determine interlaced content
+  * Value maps to Flags presents in types.hal of QtiMapperextensions
+  */
+enum {
+  LAYOUT_INTERLACED_FLAG = 1 << 0,
+};
+
 struct PlaneLayoutInfo {
   /** Components represented the type of plane. */
   PlaneComponent component;
@@ -169,6 +198,7 @@ struct PlaneLayoutInfo {
 bool IsYuvFormat(int format);
 bool IsCompressedRGBFormat(int format);
 bool IsUncompressedRGBFormat(int format);
+bool IsGpuDepthStencilFormat(int format);
 uint32_t GetBppForUncompressedRGB(int format);
 bool CpuCanAccess(uint64_t usage);
 bool CpuCanRead(uint64_t usage);
@@ -185,7 +215,8 @@ int GetAlignedWidthAndHeight(const BufferInfo &d, unsigned int *aligned_w,
                               unsigned int *aligned_h);
 int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]);
 int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32_t height,
-                    int32_t flags, int *plane_count, PlaneLayoutInfo plane_info[8]);
+                    int32_t interlaced, int *plane_count, PlaneLayoutInfo plane_info[8],
+                    const private_handle_t *hnd = nullptr, struct android_ycbcr *ycbcr = nullptr);
 void GetRGBPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32_t height,
                      int32_t flags, int *plane_count, PlaneLayoutInfo *plane_info);
 unsigned int GetRgbMetaSize(int format, uint32_t width, uint32_t height, uint64_t usage);
@@ -196,6 +227,7 @@ int GetRgbDataAddress(private_handle_t *hnd, void **rgb_data);
 bool IsUBwcFormat(int format);
 bool IsUBwcSupported(int format);
 bool IsTileRendered(int format);
+bool IsOnlyGpuUsage(uint64_t usage);
 bool IsUBwcPISupported(int format, uint64_t usage);
 bool IsUBwcEnabled(int format, uint64_t usage);
 bool IsCameraCustomFormat(int format, uint64_t usage);
@@ -230,6 +262,20 @@ bool HasAlphaComponent(int32_t format);
 void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
                   uint64_t *drm_format_modifier);
 bool CanAllocateZSLForSecureCamera();
+
+uint64_t GetCustomContentMetadataSize(int format, uint64_t usage);
+uint64_t GetMetaDataSize(uint64_t reserved_region_size, uint64_t custom_content_md_region_size = 0);
+void UnmapAndReset(private_handle_t *handle);
+int ValidateAndMap(private_handle_t *handle);
+Error GetColorSpaceFromColorMetaData(ColorMetaData color_metadata, uint32_t *color_space);
+Error GetMetaDataByReference(void *buffer, int64_t type, void **out);
+Error GetMetaDataValue(void *buffer, int64_t type, void *in);
+Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out);
+Error ColorMetadataToDataspace(ColorMetaData color_metadata,
+                               aidl::android::hardware::graphics::common::Dataspace *dataspace);
+Error GetPlaneLayout(private_handle_t *handle,
+                     std::vector<aidl::android::hardware::graphics::common::PlaneLayout> *out);
+Error SetMetaData(private_handle_t *handle, uint64_t paramType, void *param);
 }  // namespace gralloc
 
 #endif  // __GR_UTILS_H__

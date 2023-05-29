@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015 - 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2018, 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 /*! @file buffer_allocator.h
   @brief Interface file for platform specific buffer allocator.
 
@@ -38,6 +45,9 @@
 
 #include <errno.h>
 #include <cstddef>
+#include <map>
+#include <bitset>
+
 #include "layer_buffer.h"
 
 namespace sdm {
@@ -45,6 +55,22 @@ namespace sdm {
 
   @sa BufferInfo::BufferConfig
 */
+
+enum BufferClient {
+  kBufferClientDPU,
+  kBufferClientUnTrustedVM,
+  kBufferClientTrustedVM,
+  kBufferClientMax,
+};
+
+enum BufferPerm {
+  kBufferPermRead = 0,
+  kBufferPermWrite = 1,
+  kBufferPermExecute = 2,
+  kBufferPermMax,
+};
+
+typedef std::map<BufferClient, std::bitset<kBufferPermMax>> BufferAccessControlMap;
 
 struct BufferConfig {
   uint32_t width = 0;                         //!< Specifies buffer width for buffer allocation.
@@ -59,6 +85,18 @@ struct BufferConfig {
   bool gfx_client = false;                    //!< Specifies whether buffer is used by gfx.
   bool trusted_ui = false;                    //!< Specifies buffer to be allocated from non-secure
                                               //!< contiguous memory.
+  BufferAccessControlMap access_control;      //!< Specifies the access permission for this buffer
+
+  bool operator!=(const BufferConfig& config) const {
+    return width != config.width   ||
+           height != config.height ||
+           format != config.format ||
+           secure != config.secure ||
+           cache != config.cache   ||
+           secure_camera != config.secure_camera ||
+           gfx_client != config.gfx_client ||
+           trusted_ui != config.trusted_ui;
+  }
 };
 
 /*! @brief Holds the information about the allocated buffer.
@@ -75,6 +113,10 @@ struct AllocatedBufferInfo {
   LayerBufferFormat format = kFormatInvalid;  // Specifies buffer format for allocated buffer.
   uint32_t size = 0;             //!< Specifies the size of the allocated buffer.
   uint64_t id = 0;               //!< Specifies the Id of the allocated buffer.
+  uint64_t usage = 0;            //!< Specifies usage flags of the allocated buffer.
+  int64_t mem_handle = -1;        //!< Specifies the exported mem handle of an allocated buffer
+                                 //!< to other VMs.mem_handle contains > zero value
+                                 //!< if exported successfully to any VM otherwise -1.
 };
 
 /*! @brief Holds the information about the input/output configuration of an output buffer.
@@ -146,9 +188,14 @@ class BufferAllocator {
                                               AllocatedBufferInfo *allocated_buffer_info) = 0;
 
   /*
-   * Retuns a buffer's layout in terms of number of planes, stride and offset of each plane
-   * Input: AllocatedBufferInfo with a valid aligned width, aligned height, SDM format
-   * Output: stride for each plane, offset of each plane from base, number of planes
+     @brief  Retuns a buffer's layout in terms of number of planes, stride and offset of each plane
+
+     @details This method returns the layout of the given buffer based on its number of planes,
+     stride, and offset of each plane.
+
+     @param[in] AllocatedBufferInfo with a valid aligned width, aligned height, SDM format
+
+     @param[out] stride for each plane, offset of each plane from base, number of planes
    */
   virtual int GetBufferLayout(const AllocatedBufferInfo &buf_info,
                                        uint32_t stride[4], uint32_t offset[4],

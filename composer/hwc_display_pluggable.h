@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_PLUGGABLE_H__
 #define __HWC_DISPLAY_PLUGGABLE_H__
 
@@ -40,28 +47,30 @@ class HWCDisplayPluggable : public HWCDisplay {
  public:
   static int Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id,
-                    int32_t sdm_id, uint32_t primary_width, uint32_t primary_height,
-                    bool use_primary_res, HWCDisplay **hwc_display);
+                    qService::QService *qservice, Display id, int32_t sdm_id,
+                    uint32_t primary_width, uint32_t primary_height, bool use_primary_res,
+                    HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
   virtual int Init();
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
-  virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
   virtual int SetState(bool connected);
   virtual DisplayError Flush();
-  virtual HWC2::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
-  virtual HWC2::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+  virtual HWC3::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
+  virtual HWC3::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                        RenderIntent *out_intents);
-  virtual HWC2::Error SetColorMode(ColorMode mode);
-  virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
-  virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
-  virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
+  virtual HWC3::Error SetColorMode(ColorMode mode);
+  virtual HWC3::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
+  virtual HWC3::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
+  virtual HWC3::Error UpdatePowerMode(PowerMode mode);
+  virtual HWC3::Error PreValidateDisplay(bool *exit_validate);
+  virtual HWC3::Error PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence);
 
  private:
   HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                       HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                      qService::QService *qservice, hwc2_display_t id, int32_t sdm_id);
-  void ApplyScanAdjustment(hwc_rect_t *display_frame);
+                      qService::QService *qservice, Display id, int32_t sdm_id);
+  void ApplyScanAdjustment(Rect *display_frame);
   void GetUnderScanConfig();
   static void GetDownscaleResolution(uint32_t primary_width, uint32_t primary_height,
                                      uint32_t *virtual_width, uint32_t *virtual_height);

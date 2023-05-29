@@ -25,37 +25,8 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __DISPLAY_BASE_H__
@@ -67,23 +38,42 @@
 #include <private/rc_intf.h>
 #include <private/panel_feature_property_intf.h>
 #include <private/panel_feature_factory_intf.h>
+#include <private/demuratn_core_uvm_fact_intf.h>
+#include <private/feature_license_intf.h>
+#include <private/noise_plugin_intf.h>
+#include <private/noise_plugin_dbg.h>
+#include <private/hw_interface.h>
+#include <private/hw_events_interface.h>
 
+#include <limits.h>
 #include <map>
 #include <mutex>
+#include <thread>
+#include <condition_variable>  // NOLINT
 #include <string>
 #include <vector>
+#include <atomic>
 
-#include "hw_interface.h"
 #include "comp_manager.h"
 #include "color_manager.h"
-#include "hw_events_interface.h"
+
+#define GET_PANEL_FEATURE_FACTORY "GetPanelFeatureFactoryIntf"
+#define GET_DEMURATN_FACTORY "GetDemuraTnCoreUvmFactoryIntf"
+#define GET_FEATURE_LICENSE_FACTORY "GetFeatureLicenseFactoryIntf"
 
 namespace sdm {
+
+#define NOISE_PLUGIN_VERSION_MAJOR (1)  // Noise Plugin major version number
+#define NOISE_PLUGIN_VERSION_MINOR (0)  // Noise Plugin minor version number
 
 using std::recursive_mutex;
 using std::lock_guard;
 
-class DisplayBase : public DisplayInterface {
+typedef PanelFeatureFactoryIntf* (*GetPanelFeatureFactory)();
+typedef DemuraTnCoreUvmFactoryIntf* (*GetDemuraTnFactory)();
+typedef FeatureLicenseFactoryIntf* (*GetFeatureLicenseFactory)();
+
+class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
  public:
   DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
@@ -91,12 +81,15 @@ class DisplayBase : public DisplayInterface {
   DisplayBase(int32_t display_id, DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
               CompManager *comp_manager, HWInfoInterface *hw_info_intf);
-  virtual ~DisplayBase() { }
+  virtual ~DisplayBase();
   virtual DisplayError Init();
   virtual DisplayError Deinit();
-  DisplayError Prepare(LayerStack *layer_stack);
-  DisplayError Commit(LayerStack *layer_stack);
+  virtual DisplayError Prepare(LayerStack *layer_stack);
+  virtual DisplayError PrePrepare(LayerStack *layer_stack);
+  virtual DisplayError CommitOrPrepare(LayerStack *layer_stack);
+  virtual DisplayError Commit(LayerStack *layer_stack);
   virtual DisplayError Flush(LayerStack *layer_stack);
+  virtual DisplayError FlushLocked(LayerStack *layer_stack);
   virtual DisplayError GetDisplayState(DisplayState *state);
   virtual DisplayError GetNumVariableInfoConfigs(uint32_t *count);
   virtual DisplayError GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info);
@@ -104,17 +97,22 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError GetRealConfig(uint32_t index, DisplayConfigVariableInfo *variable_info);
   virtual DisplayError GetActiveConfig(uint32_t *index);
   virtual DisplayError GetVSyncState(bool *enabled);
+  virtual DisplayError SetDrawMethod(DisplayDrawMethod draw_method);
   virtual DisplayError SetDisplayState(DisplayState state, bool teardown,
                                        shared_ptr<Fence> *release_fence);
   virtual DisplayError SetActiveConfig(uint32_t index);
   virtual DisplayError SetActiveConfig(DisplayConfigVariableInfo *variable_info) {
     return kErrorNotSupported;
   }
+  virtual DisplayError SetNoisePlugInOverride(bool override_en, int32_t attn, int32_t noise_zpos);
   virtual DisplayError SetMaxMixerStages(uint32_t max_mixer_stages);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending) {
     return kErrorNotSupported;
   }
   virtual DisplayError DisablePartialUpdateOneFrame() {
+    return kErrorNotSupported;
+  }
+  virtual DisplayError DisablePartialUpdateOneFrameInternal() {
     return kErrorNotSupported;
   }
   virtual DisplayError SetDisplayMode(uint32_t mode) {
@@ -130,6 +128,9 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
                                             PPDisplayAPIPayload *out_payload,
                                             PPPendingParams *pending_action);
+  virtual DisplayError SetJitterConfig(uint32_t jitter_type, float value, uint32_t time) {
+    return kErrorNotSupported;
+  }
   virtual DisplayError SetDynamicDSIClock(uint64_t bit_clk_rate) {
     return kErrorNotSupported;
   }
@@ -175,10 +176,15 @@ class DisplayBase : public DisplayInterface {
                                               LayerBufferFormat format,
                                               const ColorMetaData &color_metadata);
   virtual DisplayError HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh);
+  virtual DisplayError CaptureCwb(const LayerBuffer &output_buffer, const CwbConfig &config);
+  virtual DisplayError PostHandleSecureEvent(SecureEvent secure_event) {
+    return kErrorNotSupported;
+  }
   virtual DisplayError SetDisplayDppsAdROI(void *payload) {
     return kErrorNotSupported;
   }
   virtual DisplayError SetQSyncMode(QSyncMode qsync_mode) { return kErrorNotSupported; }
+  virtual void AppendRCMaskData(std::ostringstream &os);
   virtual std::string Dump();
   virtual DisplayError InitializeColorModes();
   virtual DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous) {
@@ -191,9 +197,16 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError GetRefreshRate(uint32_t *refresh_rate) { return kErrorNotSupported; }
-  virtual bool CanSkipValidate();
   virtual DisplayError SetBLScale(uint32_t level) { return kErrorNotSupported; }
-  virtual bool CheckResourceState();
+  DisplayError GetPanelBlMaxLvl(uint32_t *bl_max);
+  DisplayError SetPPConfig(void *payload, size_t size);
+  DisplayError SetDimmingEnable(int int_enabled);
+  DisplayError SetDimmingMinBl(int min_bl);
+  DisplayError RetrieveDemuraTnFiles() {
+    return kErrorNotSupported;
+  }
+  void ScreenRefresh();
+  virtual bool CheckResourceState(bool *res_exhausted);
   virtual bool GameEnhanceSupported();
   virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode) { return kErrorNotSupported; }
   virtual DisplayError colorSamplingOn();
@@ -209,25 +222,85 @@ class DisplayBase : public DisplayInterface {
     return kErrorNotSupported;
   }
   virtual DisplayError IsSupportedOnDisplay(SupportedDisplayFeature feature, uint32_t *supported);
-  virtual DisplayError GetCwbBufferResolution(CwbTapPoint cwb_tappoint, uint32_t *x_pixels,
+  virtual bool IsWriteBackSupportedFormat(const LayerBufferFormat &format);
+  virtual DisplayError GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels,
                                               uint32_t *y_pixels);
   virtual DisplayError NotifyDisplayCalibrationMode(bool in_calibration) {
     return kErrorNotSupported;
   }
+  virtual bool HasDemura() { return false; }
+  virtual DisplayError GetPanelFeatureInfo(PanelFeatureInfo *info);
+  virtual DisplayError GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence);
+  virtual bool IsValidated() {
+    ClientLock lock(disp_mutex_);
+    return validated_ && !needs_validate_;
+  }
+  DisplayError DestroyLayer() {
+    ClientLock lock(disp_mutex_);
+    return kErrorNone;
+  }
+  virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) { return kErrorNotSupported; }
+  virtual void FlushConcurrentWriteback();
+  virtual DisplayError SetAlternateDisplayConfig(uint32_t *alt_config) {
+    return kErrorNotSupported;
+  }
+  virtual DisplayError ForceToneMapUpdate(LayerStack *layer_stack);
+  virtual void EnableLlccDuringAodMode(LayerStack *layer_stack);
+  virtual DisplayError UpdateTransferTime(uint32_t transfer_time) { return kErrorNotSupported; }
+  virtual void NotifyCwbDone(int32_t status, const LayerBuffer& buffer);
+  virtual void Refresh();
+  virtual void OnCwbTeardown(bool sync_teardown);
+  virtual bool HandleCwbTeardown();
+  virtual uint32_t GetAvailableMixerCount();
+  virtual DisplayError SetDemuraState(int state) { return kErrorNotSupported; }
+  virtual DisplayError SetDemuraConfig(int demura_idx) { return kErrorNotSupported; }
+  virtual void ResetDispLayerStack();
 
  protected:
+  struct DisplayMutex {
+    std::recursive_mutex client_mutex;
+    std::condition_variable_any client_cv;
+    std::recursive_mutex worker_mutex;
+    std::condition_variable_any worker_cv;
+    bool worker_busy = false;
+    bool worker_exit = false;
+  };
+
+  class ClientLock {
+   public:
+    explicit ClientLock(DisplayMutex &disp_mutex) : disp_mutex_(disp_mutex) {
+      disp_mutex_.client_mutex.lock();
+      disp_mutex_.worker_mutex.lock();
+      while (disp_mutex_.worker_busy) {
+        disp_mutex_.worker_cv.wait(disp_mutex_.worker_mutex);
+      }
+    }
+
+    ~ClientLock() {
+      disp_mutex_.worker_mutex.unlock();
+      disp_mutex_.client_mutex.unlock();
+    }
+
+    void NotifyWorker() {
+      disp_mutex_.worker_busy = true;
+      disp_mutex_.worker_cv.notify_one();
+    }
+
+   private:
+    DisplayMutex &disp_mutex_;
+  };
+
   const char *kBt2020Pq = "bt2020_pq";
   const char *kBt2020Hlg = "bt2020_hlg";
   const char *kDisplayBt2020 = "display_bt2020";
-  DisplayError BuildLayerStackStats(LayerStack *layer_stack);
+  virtual DisplayError BuildLayerStackStats(LayerStack *layer_stack);
   virtual DisplayError ValidateGPUTargetParams();
   void CommitLayerParams(LayerStack *layer_stack);
-  void PostCommitLayerParams(LayerStack *layer_stack);
+  void PostCommitLayerParams();
   DisplayError ValidateScaling(uint32_t width, uint32_t height);
   DisplayError ValidateDataspace(const ColorMetaData &color_metadata);
   void HwRecovery(const HWRecoveryEvent sdm_event_code);
 
-  const char *GetName(const LayerComposition &composition);
   bool NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *new_mixer_width,
                                  uint32_t *new_mixer_height);
   DisplayError ReconfigureMixer(uint32_t width, uint32_t height);
@@ -248,14 +321,34 @@ class DisplayBase : public DisplayInterface {
   PrimariesTransfer GetBlendSpaceFromColorMode();
   bool IsHdrMode(const AttrVal &attr);
   void InsertBT2020PqHlgModes(const std::string &str_render_intent);
-  DisplayError SetupRC();
+  DisplayError InitRC();
   DisplayError HandlePendingVSyncEnable(const shared_ptr<Fence> &retire_fence);
   DisplayError ResetPendingPowerState(const shared_ptr<Fence> &retire_fence);
   DisplayError GetPendingDisplayState(DisplayState *disp_state);
   void SetPendingPowerState(DisplayState state);
-  DisplayError ConfigureCwb(LayerStack *layer_stack);
+  DisplayError SetupPanelFeatureFactory();
+  void CommitThread();
+  virtual void HandleAsyncCommit();
+  void MMRMEvent(uint32_t clk);
+  void CheckMMRMState();
+  DisplayError SetVSyncStateLocked(bool enable);
+  virtual DisplayError SetUpCommit(LayerStack *layer_stack);
+  DisplayError PerformCommit(HWLayersInfo *hw_layers_info);
+  virtual DisplayError PostCommit(HWLayersInfo *hw_layers_info);
+  bool IsPrimaryDisplayLocked();
+  virtual DisplayError CommitLocked(LayerStack *layer_stack);
+  void ConfigureCwbParams(LayerStack *layer_stack);
+  void ProcessPowerEvent();
+  DisplayError SetHWDetailedEnhancerConfig(void *params);
+  DisplayError NoiseInit();
+  DisplayError HandleNoiseLayer(LayerStack *layer_stack);
+  void PrepareForAsyncTransition();
+  virtual void IdleTimeout() {}
+  std::chrono::system_clock::time_point WaitUntil();
+  virtual void Abort();
 
-  recursive_mutex recursive_mutex_;
+  DisplayMutex disp_mutex_;
+  std::thread commit_thread_;
   int32_t display_id_ = -1;
   DisplayType display_type_;
   DisplayEventHandler *event_handler_ = NULL;
@@ -269,8 +362,12 @@ class DisplayBase : public DisplayInterface {
   bool active_ = false;
   Handle hw_device_ = 0;
   Handle display_comp_ctx_ = 0;
-  HWLayers hw_layers_;
-  bool needs_validate_ = true;
+  DispLayerStack *disp_layer_stack_;
+  static constexpr size_t kDispStackCount = 2;
+  DispLayerStack disp_layer_stacks_[kDispStackCount];
+  std::atomic<bool> clearstack_;
+  uint8_t disp_stack_index_ = 0;
+  bool needs_validate_ = true;  // maintains validation state between Prepare/Commit Cycle
   bool vsync_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
   HWInfoInterface *hw_info_intf_ = NULL;
@@ -281,6 +378,8 @@ class DisplayBase : public DisplayInterface {
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
   bool disable_pu_on_dest_scaler_ = false;
+  bool de_enabled_ = false;
+  bool pu_pending_ = false;
   uint32_t num_color_modes_ = 0;
   std::vector<SDEDisplayMode> color_modes_;
   typedef std::map<std::string, SDEDisplayMode *> ColorModeMap;
@@ -303,6 +402,7 @@ class DisplayBase : public DisplayInterface {
   bool drop_hw_vsync_ = false;
   uint32_t current_refresh_rate_ = 0;
   bool drop_skewed_vsync_ = false;
+  bool disable_llcc_during_aod_ = false;
   bool custom_mixer_resolution_ = false;
   bool vsync_enable_pending_ = false;
   HWPowerState pending_power_state_ = kPowerStateNone;
@@ -311,27 +411,89 @@ class DisplayBase : public DisplayInterface {
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;
+  static int32_t mmrm_floor_clk_vote_;
   SecureEvent secure_event_ = kSecureEventMax;
   bool rc_panel_feature_init_ = false;
   bool spr_enable_ = false;
+  bool spr_bypassed_ = false;
   bool rc_enable_prop_ = false;
+  bool rc_config_enable_ = false;  // Specifies if RC is enabled by RCCore
+  RCLayersInfo rc_info_ = {};  // when rc_config_enable_ is true, this holds RC top/bottom info
   PanelFeatureFactoryIntf *pf_factory_ = nullptr;
   PanelFeaturePropertyIntf *prop_intf_ = nullptr;
+  DemuraTnCoreUvmFactoryIntf *demuratn_factory_ = nullptr;
+  FeatureLicenseFactoryIntf *feature_license_factory_ = nullptr;
   bool first_cycle_ = true;
+  bool registered_hw_events_ = false;
+  bool unified_draw_supported_ = true;  // By default supported, unless disabled by property.
+  bool validated_ = false;  // display validation status based on sideband events driver events etc.
+  shared_ptr<Fence> retire_fence_ = nullptr;
+  DisplayDrawMethod draw_method_ = kDrawDefault;
+  bool noise_disable_prop_ = false;
+  NoiseLayerConfig noise_layer_info_ = {};
+  std::unique_ptr<NoisePlugInIntf> noise_plugin_intf_ = nullptr;
+  NoisePlugInFactoryIntf *noise_plugin_factory_intf_ = nullptr;
+  bool noise_plugin_override_en_ = false;
+  int32_t noise_override_zpos_ = -1;  // holds the overriden zpos/idx, used to mark sde_preferred
+  bool handle_idle_timeout_ = false;
+  bool pending_commit_ = false;
+  uint32_t active_refresh_rate_ = 0;
+  bool disable_cwb_idle_fallback_ = false;
+  bool allow_tonemap_native_ = false;
+  bool avoid_qsync_mode_change_ = false;
+  LayerBuffer cwb_output_buf_ = {};
+  bool cwb_active_ = false;
 
  private:
+  // Max tolerable power-state-change wait-times in milliseconds.
+  static const int kPowerStateTimeout = 5000;
+
   bool StartDisplayPowerReset();
   void EndDisplayPowerReset();
-  void SetRCData(LayerStack *layer_stack);
+  DisplayError PrepareRC(LayerStack *layer_stack);
   DisplayError ValidateCwbConfigInfo(CwbConfig *cwb_config, const LayerBufferFormat &format);
   bool IsValidCwbRoi(const LayerRect &cwb_roi, const LayerRect &full_frame);
+  DisplayError GetNoisePluginParams(LayerStack *layer_stack);
+  DisplayError InsertNoiseLayer(LayerStack *layer_stack);
+  void WaitForCompletion(SyncPoints *sync_points);
+  DisplayError PerformHwCommit(HWLayersInfo *hw_layers_info);
+  void CacheRetireFence();
+  void CacheFrameBuffer();
+  void CacheDisplayComposition();
+  void UpdateFrameBuffer();
+  void CleanupOnError();
+  bool IsValidateNeeded();
+  DisplayError InitBorderLayers();
+  std::vector<LayerRect> GetBorderRects();
+  void GenerateBorderLayers(const std::vector<LayerRect> &border_rects);
+  uint32_t GetMixerCountFromTopology(HWTopology topology);
   unsigned int rc_cached_res_width_ = 0;
   unsigned int rc_cached_res_height_ = 0;
+  unsigned int rc_cached_mixer_width_ = 0;
+  unsigned int rc_cached_mixer_height_ = 0;
+  unsigned int rc_cached_fb_width_ = 0;
+  unsigned int rc_cached_fb_height_ = 0;
   std::unique_ptr<RCIntf> rc_core_ = nullptr;
-  uint64_t rc_pu_flag_status_ = 0;
-  CwbConfig *cwb_config_ = NULL;
-  bool needs_refresh_ = false;
-  bool pending_commit_ = false;
+  bool rc_prepared_ = false;  // Used to avoid calling into RC core b/w Prepare and PrePrepare
+  bool mmrm_updated_ = false;
+  uint32_t mmrm_requested_clk_ = 0;
+  static bool primary_active_;
+  bool draw_method_set_ = false;
+  bool cwb_configured_ = false;
+  bool transition_done_ = false;
+  bool gpu_comp_frame_ = false;
+  uint32_t retire_fence_offset_ = 0;
+  std::mutex power_mutex_;
+  std::condition_variable cv_;
+  LayerBuffer cached_framebuffer_ = {};
+  Layer noise_layer_ = {};
+  DisplayError ConfigureCwbForIdleFallback(LayerStack *layer_stack);
+  bool cwb_fence_wait_ = false;
+  std::vector<Layer> border_layers_;
+  bool windowed_display_ = false;
+  LayerRect window_rect_ = {};
+  bool enable_win_rect_mask_ = false;
+  HWDisplayMode default_panel_mode_ = kModeDefault;
 };
 
 }  // namespace sdm

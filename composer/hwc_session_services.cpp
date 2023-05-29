@@ -27,18 +27,29 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <core/buffer_allocator.h>
 #include <utils/debug.h>
 #include <utils/constants.h>
 #include <sync/sync.h>
 #include <vector>
 #include <string>
+#include <QtiGralloc.h>
+#include <aidlcommonsupport/NativeHandle.h>
 
 #include "hwc_buffer_sync_handler.h"
 #include "hwc_session.h"
 #include "hwc_debugger.h"
 
 #define __CLASS__ "HWCSession"
+
+typedef ::aidl::vendor::qti::hardware::display::config::DisplayType AIDLDisplayType;
 
 namespace sdm {
 
@@ -72,9 +83,30 @@ int MapDisplayType(DispType dpy) {
   return -EINVAL;
 }
 
-bool WaitForResourceNeeded(HWC2::PowerMode prev_mode, HWC2::PowerMode new_mode) {
-  return ((prev_mode == HWC2::PowerMode::Off) &&
-          (new_mode == HWC2::PowerMode::On || new_mode == HWC2::PowerMode::Doze));
+AIDLDisplayType MapDisplayId(int disp_id) {
+  switch (disp_id) {
+    case qdutils::DISPLAY_PRIMARY:
+      return AIDLDisplayType::PRIMARY;
+
+    case qdutils::DISPLAY_EXTERNAL:
+      return AIDLDisplayType::EXTERNAL;
+
+    case qdutils::DISPLAY_VIRTUAL:
+      return AIDLDisplayType::VIRTUAL;
+
+    case qdutils::DISPLAY_BUILTIN_2:
+      return AIDLDisplayType::BUILTIN2;
+
+    default:
+      break;
+  }
+
+  return AIDLDisplayType::INVALID;
+}
+
+bool WaitForResourceNeeded(PowerMode prev_mode, PowerMode new_mode) {
+  return ((prev_mode == PowerMode::OFF) &&
+          (new_mode == PowerMode::ON || new_mode == PowerMode::DOZE));
 }
 
 HWCDisplay::DisplayStatus MapExternalStatus(DisplayConfig::ExternalStatus status) {
@@ -117,8 +149,7 @@ void HWCSession::UnRegisterClientContext(DisplayConfig::ConfigInterface *intf) {
 }
 
 HWCSession::DisplayConfigImpl::DisplayConfigImpl(
-                               std::weak_ptr<DisplayConfig::ConfigCallback> callback,
-                               HWCSession *hwc_session) {
+    std::weak_ptr<DisplayConfig::ConfigCallback> callback, HWCSession *hwc_session) {
   callback_ = callback;
   hwc_session_ = hwc_session;
 }
@@ -165,12 +196,8 @@ int HWCSession::SetDisplayStatus(int disp_id, HWCDisplay::DisplayStatus status) 
   }
 
   if (status == HWCDisplay::kDisplayStatusResume || status == HWCDisplay::kDisplayStatusPause) {
-    hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+    Display active_builtin_disp_id = GetActiveBuiltinDisplay();
     if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays) {
-      {
-        SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
-        hwc_display_[active_builtin_disp_id]->ResetValidation();
-      }
       callbacks_.Refresh(active_builtin_disp_id);
     }
   }
@@ -270,6 +297,23 @@ int HWCSession::SetActiveConfigIndex(int disp_id, uint32_t config) {
   return error;
 }
 
+int HWCSession::SetNoisePlugInOverride(int32_t disp_id, bool override_en, int32_t attn,
+                                       int32_t noise_zpos) {
+  int32_t disp_idx = GetDisplayIndex(disp_id);
+  if (disp_idx == -1) {
+    DLOGE("Invalid display = %d", disp_id);
+    return -EINVAL;
+  }
+
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+  int32_t error = -EINVAL;
+  if (hwc_display_[disp_idx]) {
+    error = hwc_display_[disp_idx]->SetNoisePlugInOverride(override_en, attn, noise_zpos);
+  }
+
+  return error;
+}
+
 int HWCSession::DisplayConfigImpl::SetActiveConfig(DispType dpy, uint32_t config) {
   return hwc_session_->SetActiveConfigIndex(MapDisplayType(dpy), config);
 }
@@ -311,7 +355,7 @@ int HWCSession::DisplayConfigImpl::SetPanelBrightness(uint32_t level) {
   if (level == 0) {
     return INT32(hwc_session_->SetDisplayBrightness(HWC_DISPLAY_PRIMARY, -1.0f));
   } else {
-    return INT32(hwc_session_->SetDisplayBrightness(HWC_DISPLAY_PRIMARY, (level - 1)/254.0f));
+    return INT32(hwc_session_->SetDisplayBrightness(HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f));
   }
 }
 
@@ -319,11 +363,11 @@ int HWCSession::DisplayConfigImpl::GetPanelBrightness(uint32_t *level) {
   float brightness = -1.0f;
   int error = -EINVAL;
 
-  error = hwc_session_->getDisplayBrightness(HWC_DISPLAY_PRIMARY, &brightness);
+  error = INT(hwc_session_->getDisplayBrightness(HWC_DISPLAY_PRIMARY, &brightness));
   if (brightness == -1.0f) {
     *level = 0;
   } else {
-    *level = static_cast<uint32_t>(254.0f*brightness + 1);
+    *level = static_cast<uint32_t>(254.0f * brightness + 1);
   }
 
   return error;
@@ -374,32 +418,33 @@ int HWCSession::ControlPartialUpdate(int disp_id, bool enable) {
     DLOGW("CONTROL_PARTIAL_UPDATE is not applicable for display = %d", disp_idx);
     return -EINVAL;
   }
-
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
-  HWCDisplay *hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
-  if (!hwc_display) {
-    DLOGE("primary display object is not instantiated");
-    return -EINVAL;
-  }
-
-  uint32_t pending = 0;
-  DisplayError hwc_error = hwc_display->ControlPartialUpdate(enable, &pending);
-
-  if (hwc_error == kErrorNone) {
-    if (!pending) {
-      return 0;
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    HWCDisplay *hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
+    if (!hwc_display) {
+      DLOGE("primary display object is not instantiated");
+      return -EINVAL;
     }
-  } else if (hwc_error == kErrorNotSupported) {
-    return 0;
-  } else {
-    return -EINVAL;
+
+    uint32_t pending = 0;
+    DisplayError hwc_error = hwc_display->ControlPartialUpdate(enable, &pending);
+    if (hwc_error == kErrorNone) {
+      if (!pending) {
+        return 0;
+      }
+    } else if (hwc_error == kErrorNotSupported) {
+      return 0;
+    } else {
+      return -EINVAL;
+    }
   }
 
   // Todo(user): Unlock it before sending events to client. It may cause deadlocks in future.
-  callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
-
   // Wait until partial update control is complete
-  int error = locker_[disp_idx].WaitFinite(kCommitDoneTimeoutMs);
+  int error = WaitForCommitDone(HWC_DISPLAY_PRIMARY, kClientPartialUpdate);
+  if (error != 0) {
+    DLOGW("%s Partial update failed with error %d", enable ? "Enable" : "Disable", error);
+  }
 
   return error;
 }
@@ -409,7 +454,7 @@ int HWCSession::DisplayConfigImpl::ControlPartialUpdate(DispType dpy, bool enabl
 }
 
 int HWCSession::ToggleScreenUpdate(bool on) {
-  hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+  Display active_builtin_disp_id = GetActiveBuiltinDisplay();
 
   if (active_builtin_disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("No active displays");
@@ -422,7 +467,7 @@ int HWCSession::ToggleScreenUpdate(bool on) {
     error = hwc_display_[active_builtin_disp_id]->ToggleScreenUpdates(on);
     if (error) {
       DLOGE("Failed to toggle screen updates = %d. Display = %" PRIu64 ", Error = %d", on,
-          active_builtin_disp_id, error);
+            active_builtin_disp_id, error);
     }
   } else {
     DLOGW("Display = %" PRIu64 " is not connected.", active_builtin_disp_id);
@@ -442,6 +487,8 @@ int HWCSession::SetIdleTimeout(uint32_t value) {
   Debug::Get()->GetProperty(IDLE_TIME_INACTIVE_PROP, &inactive_ms);
   if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
     hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(value, inactive_ms);
+    idle_time_inactive_ms_ = inactive_ms;
+    idle_time_active_ms_ = value;
     return 0;
   }
 
@@ -479,8 +526,8 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
     float out_max_average_luminance = 0.0f;
     float out_min_luminance = 0.0f;
     if (hwc_display->GetHdrCapabilities(&out_num_types, nullptr, &out_max_luminance,
-                                        &out_max_average_luminance, &out_min_luminance)
-                                        != HWC2::Error::None) {
+                                        &out_max_average_luminance,
+                                        &out_min_luminance) != HWC3::Error::None) {
       break;
     }
     if (!out_num_types) {
@@ -493,7 +540,7 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
 
     if (hwc_display->GetHdrCapabilities(&out_num_types, caps->supported_hdr_types.data(),
                                         &out_max_luminance, &out_max_average_luminance,
-                                        &out_min_luminance) == HWC2::Error::None) {
+                                        &out_min_luminance) == HWC3::Error::None) {
       error = 0;
     }
   } while (false);
@@ -527,29 +574,6 @@ int HWCSession::DisplayConfigImpl::SetCameraLaunchStatus(uint32_t on) {
   return hwc_session_->SetCameraLaunchStatus(on);
 }
 
-#ifdef DISPLAY_CONFIG_CAMERA_SMOOTH_APIs_1_0
-int HWCSession::DisplayConfigImpl::SetCameraSmoothInfo(CameraSmoothOp op, uint32_t fps) {
-  std::shared_ptr<DisplayConfig::ConfigCallback> callback = hwc_session_->camera_callback_.lock();
-  if (!callback) {
-    return -EAGAIN;
-  }
-
-  callback->NotifyCameraSmoothInfo(op, fps);
-
-  return 0;
-}
-
-int HWCSession::DisplayConfigImpl::ControlCameraSmoothCallback(bool enable) {
-  if (enable) {
-    hwc_session_->camera_callback_ = callback_;
-  } else {
-    hwc_session_->camera_callback_.reset();
-  }
-
-  return 0;
-}
-#endif
-
 int HWCSession::DisplayBWTransactionPending(bool *status) {
   SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
 
@@ -571,46 +595,50 @@ int HWCSession::DisplayConfigImpl::DisplayBWTransactionPending(bool *status) {
 }
 
 int HWCSession::ControlIdlePowerCollapse(bool enable, bool synchronous) {
-  hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+  Display active_builtin_disp_id = GetActiveBuiltinDisplay();
   if (active_builtin_disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("No active displays");
     return -EINVAL;
   }
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
-
-  if (hwc_display_[active_builtin_disp_id]) {
-    if (!enable) {
-      if (!idle_pc_ref_cnt_) {
-        auto err = hwc_display_[active_builtin_disp_id]->ControlIdlePowerCollapse(enable,
-                                                                                  synchronous);
-        if (err != kErrorNone) {
-          return (err == kErrorNotSupported) ? 0 : -EINVAL;
+  bool needs_refresh = false;
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
+    if (hwc_display_[active_builtin_disp_id]) {
+      if (!enable) {
+        if (!idle_pc_ref_cnt_) {
+          auto err =
+              hwc_display_[active_builtin_disp_id]->ControlIdlePowerCollapse(enable, synchronous);
+          if (err != kErrorNone) {
+            return (err == kErrorNotSupported) ? 0 : -EINVAL;
+          }
+          needs_refresh = true;
         }
-        callbacks_.Refresh(active_builtin_disp_id);
-        int error = locker_[active_builtin_disp_id].WaitFinite(kCommitDoneTimeoutMs);
-        if (error == ETIMEDOUT) {
-          DLOGE("Timed out!! Next frame commit done event not received!!");
-          return error;
+        idle_pc_ref_cnt_++;
+      } else if (idle_pc_ref_cnt_ > 0) {
+        if (!(idle_pc_ref_cnt_ - 1)) {
+          auto err =
+              hwc_display_[active_builtin_disp_id]->ControlIdlePowerCollapse(enable, synchronous);
+          if (err != kErrorNone) {
+            return (err == kErrorNotSupported) ? 0 : -EINVAL;
+          }
         }
-        DLOGI("Idle PC disabled!!");
+        idle_pc_ref_cnt_--;
       }
-      idle_pc_ref_cnt_++;
-    } else if (idle_pc_ref_cnt_ > 0) {
-      if (!(idle_pc_ref_cnt_ - 1)) {
-        auto err = hwc_display_[active_builtin_disp_id]->ControlIdlePowerCollapse(enable,
-                                                                                  synchronous);
-        if (err != kErrorNone) {
-          return (err == kErrorNotSupported) ? 0 : -EINVAL;
-        }
-        DLOGI("Idle PC enabled!!");
-      }
-      idle_pc_ref_cnt_--;
+    } else {
+      DLOGW("Display = %d is not connected.", UINT32(active_builtin_disp_id));
+      return -ENODEV;
     }
-    return 0;
+  }
+  if (needs_refresh) {
+    int ret = WaitForCommitDone(active_builtin_disp_id, kClientIdlepowerCollapse);
+    if (ret != 0) {
+      DLOGW("%s Idle PC failed with error %d", enable ? "Enable" : "Disable", ret);
+      return -EINVAL;
+    }
   }
 
-  DLOGW("Display = %d is not connected.", UINT32(active_builtin_disp_id));
-  return -ENODEV;
+  DLOGI("Idle PC %s!!", enable ? "enabled" : "disabled");
+  return 0;
 }
 
 int HWCSession::DisplayConfigImpl::ControlIdlePowerCollapse(bool enable, bool synchronous) {
@@ -636,11 +664,11 @@ int HWCSession::IsWbUbwcSupported(bool *value) {
 
 int32_t HWCSession::getDisplayBrightness(uint32_t display, float *brightness) {
   if (!brightness) {
-    return HWC2_ERROR_BAD_PARAMETER;
+    return INT32(HWC3::Error::BadParameter);
   }
 
   if (display >= HWCCallbacks::kNumDisplays) {
-    return HWC2_ERROR_BAD_DISPLAY;
+    return INT32(HWC3::Error::BadDisplay);
   }
 
   SEQUENCE_WAIT_SCOPE_LOCK(locker_[display]);
@@ -660,11 +688,11 @@ int32_t HWCSession::getDisplayBrightness(uint32_t display, float *brightness) {
 
 int32_t HWCSession::getDisplayMaxBrightness(uint32_t display, uint32_t *max_brightness_level) {
   if (!max_brightness_level) {
-    return HWC2_ERROR_BAD_PARAMETER;
+    return INT32(HWC3::Error::BadParameter);
   }
 
   if (display >= HWCCallbacks::kNumDisplays) {
-    return HWC2_ERROR_BAD_DISPLAY;
+    return INT32(HWC3::Error::BadDisplay);
   }
 
   int32_t error = -EINVAL;
@@ -679,28 +707,95 @@ int32_t HWCSession::getDisplayMaxBrightness(uint32_t display, uint32_t *max_brig
   return error;
 }
 
+int HWCSession::SetCameraSmoothInfo(CameraSmoothOp op, int32_t fps) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyCameraSmoothInfo(op, fps);
+    }
+  }
+
+  return 0;
+}
+
+int HWCSession::NotifyResolutionChange(int32_t disp_id, Attributes &attr) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyResolutionChange(disp_id, attr);
+    }
+  }
+
+  return 0;
+}
+
+int HWCSession::NotifyTUIEventDone(int disp_id, TUIEventType event_type) {
+  int ret = 0;
+  {
+    std::chrono::milliseconds span(2000);
+    std::lock_guard<std::mutex> guard(tui_handler_lock_);
+    ret = (tui_event_handler_future_.wait_for(span) == std::future_status::timeout)
+              ? -ETIMEDOUT
+              : tui_event_handler_future_.get();
+  }
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  AIDLDisplayType disp_type = MapDisplayId(disp_id);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyTUIEventDone(ret, disp_type, event_type);
+    }
+  }
+  return 0;
+}
+
+int HWCSession::RegisterCallbackClient(const std::shared_ptr<IDisplayConfigCallback> &callback,
+                                       int64_t *client_handle) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  callback_clients_.emplace(callback_client_id_, callback);
+  *client_handle = callback_client_id_;
+  callback_client_id_++;
+
+  return 0;
+}
+
+int HWCSession::UnregisterCallbackClient(const int64_t client_handle) {
+  bool removed = false;
+
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto it = callback_clients_.begin(); it != callback_clients_.end();) {
+    if (it->first == client_handle) {
+      it = callback_clients_.erase(it);
+      removed = true;
+    } else {
+      it++;
+    }
+  }
+
+  return removed ? 0 : -EINVAL;
+}
+
 int HWCSession::DisplayConfigImpl::SetDisplayAnimating(uint64_t display_id, bool animating) {
-  return hwc_session_->CallDisplayFunction(display_id, &HWCDisplay::SetDisplayAnimating, animating);
+  return INT(
+      hwc_session_->CallDisplayFunction(display_id, &HWCDisplay::SetDisplayAnimating, animating));
 }
 
 int HWCSession::DisplayConfigImpl::GetWriteBackCapabilities(bool *isWbUbwcSupported) {
   return hwc_session_->IsWbUbwcSupported(isWbUbwcSupported);
 }
 
-int HWCSession::SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start,
-                                    uint32_t h_end, uint32_t v_start, uint32_t v_end,
-                                    uint32_t factor_in, uint32_t factor_out) {
-  return CallDisplayFunction(display_id,
-                             &HWCDisplay::SetDisplayDppsAdROI, h_start, h_end, v_start, v_end,
-                             factor_in, factor_out);
+int HWCSession::SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start, uint32_t h_end,
+                                    uint32_t v_start, uint32_t v_end, uint32_t factor_in,
+                                    uint32_t factor_out) {
+  return INT(CallDisplayFunction(display_id, &HWCDisplay::SetDisplayDppsAdROI, h_start, h_end,
+                                 v_start, v_end, factor_in, factor_out));
 }
 
 int HWCSession::DisplayConfigImpl::SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start,
                                                        uint32_t h_end, uint32_t v_start,
                                                        uint32_t v_end, uint32_t factor_in,
                                                        uint32_t factor_out) {
-  return hwc_session_->SetDisplayDppsAdROI(display_id, h_start, h_end, v_start, v_end,
-                                           factor_in, factor_out);
+  return hwc_session_->SetDisplayDppsAdROI(display_id, h_start, h_end, v_start, v_end, factor_in,
+                                           factor_out);
 }
 
 int HWCSession::DisplayConfigImpl::UpdateVSyncSourceOnPowerModeOff() {
@@ -713,8 +808,7 @@ int HWCSession::DisplayConfigImpl::UpdateVSyncSourceOnPowerModeDoze() {
   return 0;
 }
 
-int HWCSession::DisplayConfigImpl::IsPowerModeOverrideSupported(uint32_t disp_id,
-                                                                bool *supported) {
+int HWCSession::DisplayConfigImpl::IsPowerModeOverrideSupported(uint32_t disp_id, bool *supported) {
   if (!hwc_session_->async_powermode_ || (disp_id > HWCCallbacks::kNumRealDisplays)) {
     *supported = false;
   } else {
@@ -734,16 +828,16 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
     return 0;
   }
   // Added this flag for pixel
-  hwc_session_->async_power_mode_triggered_  = true;
+  hwc_session_->async_power_mode_triggered_ = true;
   // Active builtin display needs revalidation
-  hwc2_display_t active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
-  HWC2::PowerMode previous_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
+  Display active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
+  PowerMode previous_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
 
   DLOGI("disp_id: %d power_mode: %d", disp_id, power_mode);
-  auto mode = static_cast<HWC2::PowerMode>(power_mode);
+  auto mode = static_cast<PowerMode>(power_mode);
 
   HWCDisplay::HWCLayerStack stack = {};
-  hwc2_display_t dummy_disp_id = hwc_session_->map_hwc_display_.at(disp_id);
+  Display dummy_disp_id = hwc_session_->map_hwc_display_.at(disp_id);
 
   // Power state transition start.
   // Acquire the display's power-state transition var read lock.
@@ -756,16 +850,15 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   hwc_session_->hwc_display_[disp_id]->GetLayerStack(&stack);
   hwc_session_->hwc_display_[dummy_disp_id]->SetLayerStack(&stack);
   hwc_session_->hwc_display_[dummy_disp_id]->UpdatePowerMode(
-                                       hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode());
+      hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode());
 
   buffer_handle_t target = 0;
   shared_ptr<Fence> acquire_fence = nullptr;
   int32_t dataspace = 0;
-  hwc_region_t damage = {};
-  hwc_session_->hwc_display_[disp_id]->GetClientTarget(
-                                 target, acquire_fence, dataspace, damage);
-  hwc_session_->hwc_display_[dummy_disp_id]->SetClientTarget(
-                                       target, acquire_fence, dataspace, damage);
+  Region damage = {};
+  hwc_session_->hwc_display_[disp_id]->GetClientTarget(target, acquire_fence, dataspace, damage);
+  hwc_session_->hwc_display_[dummy_disp_id]->SetClientTarget(target, acquire_fence, dataspace,
+                                                             damage);
 
   // Initialize the variable config map of dummy display using map of real display.
   // Pass the real display's last active config index to dummy display.
@@ -774,8 +867,8 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   uint32_t num_configs = 0;
   hwc_session_->hwc_display_[disp_id]->GetConfigInfo(&variable_config_map, &active_config_index,
                                                      &num_configs);
-  hwc_session_->hwc_display_[dummy_disp_id]->SetConfigInfo(variable_config_map,
-                                                           active_config_index, num_configs);
+  hwc_session_->hwc_display_[dummy_disp_id]->SetConfigInfo(variable_config_map, active_config_index,
+                                                           num_configs);
 
   hwc_session_->locker_[dummy_disp_id].Unlock();  // Release the dummy display.
   // Release the display's power-state transition var read lock.
@@ -798,12 +891,11 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   hwc_session_->hwc_display_[disp_id]->SetLayerStack(&stack);
   bool vsync_pending = hwc_session_->hwc_display_[dummy_disp_id]->VsyncEnablePending();
   if (vsync_pending) {
-    hwc_session_->hwc_display_[disp_id]->SetVsyncEnabled(HWC2::Vsync::Enable);
+    hwc_session_->hwc_display_[disp_id]->SetVsyncEnabled(true);
   }
-  hwc_session_->hwc_display_[dummy_disp_id]->GetClientTarget(
-                                       target, acquire_fence, dataspace, damage);
-  hwc_session_->hwc_display_[disp_id]->SetClientTarget(
-                                 target, acquire_fence, dataspace, damage);
+  hwc_session_->hwc_display_[dummy_disp_id]->GetClientTarget(target, acquire_fence, dataspace,
+                                                             damage);
+  hwc_session_->hwc_display_[disp_id]->SetClientTarget(target, acquire_fence, dataspace, damage);
 
   // Read display has got layerstack. Update the fences.
   hwc_session_->hwc_display_[disp_id]->PostPowerMode();
@@ -813,7 +905,7 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   // Release the display's power-state transition var read lock.
   hwc_session_->power_state_[disp_id].Unlock();
 
-  HWC2::PowerMode new_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
+  PowerMode new_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
   if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays &&
       hwc_session_->hwc_display_[disp_id]->IsFirstCommitDone() &&
       WaitForResourceNeeded(previous_mode, new_mode)) {
@@ -867,6 +959,11 @@ int HWCSession::DisplayConfigImpl::SetLayerAsMask(uint32_t disp_id, uint64_t lay
   if (hwc_layer == nullptr) {
     return -EINVAL;
   }
+  // Mask layer flag for A8 will be set in BuildLayerStack
+  if (!hwc_session_->disable_get_screen_decorator_support_) {
+    DLOGV_IF(kTagDisplay, "Full Screen A8 Decoration mask layer enabled!");
+    return -EINVAL;
+  }
 
   hwc_layer->SetLayerAsMask();
 
@@ -889,17 +986,17 @@ int HWCSession::DisplayConfigImpl::GetDebugProperty(const std::string prop_name,
 }
 
 int HWCSession::DisplayConfigImpl::GetActiveBuiltinDisplayAttributes(
-                                                    DisplayConfig::Attributes *attr) {
+    DisplayConfig::Attributes *attr) {
   int error = -EINVAL;
-  hwc2_display_t disp_id = hwc_session_->GetActiveBuiltinDisplay();
+  Display disp_id = hwc_session_->GetActiveBuiltinDisplay();
 
   if (disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("Invalid display = %d", UINT32(disp_id));
   } else {
     if (hwc_session_->hwc_display_[disp_id]) {
       uint32_t config_index = 0;
-      HWC2::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
-      if (ret != HWC2::Error::None) {
+      HWC3::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
+      if (ret != HWC3::Error::None) {
         goto err;
       }
       DisplayConfigVariableInfo var_info;
@@ -929,8 +1026,8 @@ int HWCSession::DisplayConfigImpl::SetPanelLuminanceAttributes(uint32_t disp_id,
   }
 
   // check for out of range luminance values
-  if (pan_min_lum <= 0.0f || pan_min_lum >= 1.0f ||
-      pan_max_lum <= 100.0f || pan_max_lum >= 1000.0f) {
+  if (pan_min_lum <= 0.0f || pan_min_lum >= 1.0f || pan_max_lum <= 100.0f ||
+      pan_max_lum >= 1000.0f) {
     return -EINVAL;
   }
 
@@ -1007,182 +1104,186 @@ int HWCSession::DisplayConfigImpl::SetCWBOutputBuffer(uint32_t disp_id,
                                                       const DisplayConfig::Rect rect,
                                                       bool post_processed,
                                                       const native_handle_t *buffer) {
-  if (!callback_.lock()) {
-    DLOGE("Callback_ has not yet been initialized.");
-    return -1;
+  return -1;
+}
+
+int32_t HWCSession::CWB::PostBuffer(std::shared_ptr<IDisplayConfigCallback> callback,
+                                    const CwbConfig &cwb_config, const native_handle_t *buffer,
+                                    Display display_type, int dpy_index) {
+  HWC3::Error error = HWC3::Error::None;
+  auto &session_map = display_cwb_session_map_[dpy_index];
+  std::shared_ptr<QueueNode> node = nullptr;
+  uint64_t node_handle_id = 0;
+  void *hdl = const_cast<native_handle_t *>(buffer);
+  auto err =
+      gralloc::GetMetaDataValue(hdl, (int64_t)StandardMetadataType::BUFFER_ID, &node_handle_id);
+  if (err != gralloc::Error::NONE || node_handle_id == 0) {
+    error = HWC3::Error::BadLayer;
+    DLOGE("Buffer handle id retrieval failed!");
   }
 
-  if (!buffer) {
-    DLOGE("Buffer is null.");
-    return -1;
-  }
+  if (error == HWC3::Error::None) {
+    node = std::make_shared<QueueNode>(callback, cwb_config, buffer, display_type, node_handle_id);
+    if (node) {
+      // Keep CWB request handling related resources in a requested display context.
+      std::unique_lock<std::mutex> lock(session_map.lock);
 
-  if (disp_id != UINT32(DisplayConfig::DisplayType::kPrimary)) {
-    DLOGE("Only supported for primary display at present.");
-    return -1;
-  }
+      // Iterate over the queue to avoid duplicate node of same buffer, because that
+      // buffer is already present in queue.
+      for (auto &qnode : session_map.queue) {
+        if (qnode->handle_id == node_handle_id) {
+          error = HWC3::Error::BadParameter;
+          DLOGW("CWB Buffer with handle id %lu is already available in Queue for processing!",
+                node_handle_id);
+          break;
+        }
+      }
 
-  // Output buffer dump is not supported, if External or Virtual display is present.
-  int external_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
-  int virtual_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
-  int primary_dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_PRIMARY);
-
-  if (((external_dpy_index != -1) && hwc_session_->hwc_display_[external_dpy_index]) ||
-      ((virtual_dpy_index != -1) && hwc_session_->hwc_display_[virtual_dpy_index])) {
-    DLOGW("Output buffer dump is not supported with External or Virtual display!");
-    return -1;
-  }
-
-  // Mutex scope
-  {
-    SCOPE_LOCK(hwc_session_->locker_[HWC_DISPLAY_PRIMARY]);
-    if (!hwc_session_->hwc_display_[primary_dpy_index]) {
-      DLOGE("Display is not created yet.");
-      return -1;
+      // Ensure that async task runs only until all queued CWB requests have been fulfilled.
+      // If cwb queue is empty, async task has not either started or async task has finished
+      // processing previously queued cwb requests. Start new async task on such a case as
+      // currently running async task will automatically desolve without processing more requests.
+      if (error == HWC3::Error::None) {
+        session_map.queue.push_back(node);
+      }
+    } else {
+      error = HWC3::Error::BadParameter;
+      DLOGE("Unable to allocate node for CWB request(handle id: %lu)!", node_handle_id);
     }
   }
 
-  CwbConfig cwb_config = {};
-  cwb_config.tap_point = static_cast<CwbTapPoint>(post_processed);
-  LayerRect &roi = cwb_config.cwb_roi;
-  roi.left = FLOAT(rect.left);
-  roi.top = FLOAT(rect.top);
-  roi.right = FLOAT(rect.right);
-  roi.bottom = FLOAT(rect.bottom);
+  if (error == HWC3::Error::None) {
+    SCOPE_LOCK(hwc_session_->locker_[dpy_index]);
+    // Get display instance using display type.
+    HWCDisplay *hwc_display = hwc_session_->hwc_display_[dpy_index];
+    if (!hwc_display) {
+      error = HWC3::Error::BadDisplay;
+    } else {
+      // Send CWB request to CWB Manager
+      error = hwc_display->SetReadbackBuffer(buffer, nullptr, cwb_config, kCWBClientExternal);
+    }
+  }
 
-  DLOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f)",
-        cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom);
+  if (error == HWC3::Error::None) {
+    DLOGV_IF(kTagCwb, "Successfully configured CWB buffer(handle id: %lu).", node_handle_id);
+  } else {
+    // Need to close and delete the cloned native handle on CWB request rejection/failure and
+    // if node is created and pushed, then need to remove from queue.
+    native_handle_close(buffer);
+    native_handle_delete(const_cast<native_handle_t *>(buffer));
+    std::unique_lock<std::mutex> lock(session_map.lock);
+    // If current node is pushed in the queue, then need to remove it again on error.
+    if (node && node == session_map.queue.back()) {
+      session_map.queue.pop_back();
+    }
+    return -1;
+  }
 
-  return hwc_session_->cwb_.PostBuffer(callback_, cwb_config, native_handle_clone(buffer));
-}
-
-int32_t HWCSession::CWB::PostBuffer(std::weak_ptr<DisplayConfig::ConfigCallback> callback,
-                                    const CwbConfig &cwb_config, const native_handle_t *buffer) {
-  SCOPE_LOCK(queue_lock_);
-
-  // Ensure that async task runs only until all queued CWB requests have been fulfilled.
-  // If cwb queue is empty, async task has not either started or async task has finished
-  // processing previously queued cwb requests. Start new async task on such a case as
-  // currently running async task will automatically desolve without processing more requests.
-  bool post_future = !queue_.size();
-
-  QueueNode *node = new QueueNode(callback, cwb_config, buffer);
-  queue_.push(node);
-
-  if (post_future) {
+  std::unique_lock<std::mutex> lock(session_map.lock);
+  if (!session_map.async_thread_running && !session_map.queue.empty()) {
+    session_map.async_thread_running = true;
     // No need to do future.get() here for previously running async task. Async method will
     // guarantee to exit after cwb for all queued requests is indeed complete i.e. the respective
     // fences have signaled and client is notified through registered callbacks. This will make
-    // sure that the new async task does not concurrently work with previous task. Let async running
-    // thread dissolve on its own.
-    future_ = std::async(HWCSession::CWB::AsyncTask, this);
+    // sure that the new async task does not concurrently work with previous task. Let async
+    // running thread dissolve on its own.
+    // Check, If thread is not running, then need to re-execute the async thread.
+    session_map.future = std::async(HWCSession::CWB::AsyncTaskToProcessCWBStatus, this, dpy_index);
+  }
+
+  if (node) {
+    node->request_completed = true;
   }
 
   return 0;
 }
 
-void HWCSession::CWB::ProcessRequests() {
-  HWCDisplay *hwc_display = hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY];
-  Locker &locker = hwc_session_->locker_[HWC_DISPLAY_PRIMARY];
+int HWCSession::CWB::OnCWBDone(int dpy_index, int32_t status, uint64_t handle_id) {
+  auto &session_map = display_cwb_session_map_[dpy_index];
 
+  {
+    std::unique_lock<std::mutex> lock(session_map.lock);
+    // No need to notify to the client, if there is no any pending CWB request in queue.
+    if (session_map.queue.empty()) {
+      return -1;
+    }
+
+    for (auto &node : session_map.queue) {
+      if (node->notified_status == kCwbNotifiedNone) {
+        // Need to wait for other notification, when notified handle id does not match with
+        // available first non-notified node buffer handle id in queue.
+        if (node->handle_id == handle_id) {
+          node->notified_status = (status) ? kCwbNotifiedFailure : kCwbNotifiedSuccess;
+          session_map.cv.notify_one();
+          return 0;
+        } else {
+          // Continue to check on not matching handle_id, to update the status of any matching
+          // node, because if notification for particular handle_id skip, then it will not update
+          // again and notification thread will wait for skipped node forever.
+          continue;
+        }
+      }
+    }
+  }
+
+  return -1;
+}
+
+void HWCSession::CWB::AsyncTaskToProcessCWBStatus(CWB *cwb, int dpy_index) {
+  cwb->ProcessCWBStatus(dpy_index);
+}
+
+void HWCSession::CWB::ProcessCWBStatus(int dpy_index) {
+  auto &session_map = display_cwb_session_map_[dpy_index];
   while (true) {
-    QueueNode *node = nullptr;
-    int status = 0;
-
-    // Mutex scope
-    // Just check if there is a next cwb request queued, exit the thread if nothing is pending.
-    // Do not keep mutex locked so that client can freely queue more jobs to the current thread.
+    std::shared_ptr<QueueNode> cwb_node = nullptr;
     {
-      SCOPE_LOCK(queue_lock_);
-      if (!queue_.size()) {
-        DLOGI("CWB buffer is empty. No pending CWB requests found.");
+      std::unique_lock<std::mutex> lock(session_map.lock);
+      // Exit thread in case of no pending CWB request in queue.
+      if (session_map.queue.empty()) {
+        // Update thread exiting status.
+        session_map.async_thread_running = false;
         break;
       }
 
-      node = queue_.front();
+      cwb_node = session_map.queue.front();
+      if (!cwb_node->request_completed) {
+        // Need to continue to recheck until node specific client call completes.
+        continue;
+      } else if (cwb_node->notified_status == kCwbNotifiedNone) {
+        // Wait for the signal for availability of CWB notified node.
+        session_map.cv.wait(lock);
+        if (cwb_node->notified_status == kCwbNotifiedNone) {
+          // If any other node notified before front node, then need to continue to wait
+          // for front node, such that further client notification will be done in sequential
+          // manner.
+          DLOGW("CWB request is notified out of sequence.");
+          continue;
+        }
+      }
+      session_map.queue.pop_front();
     }
 
-    // Configure cwb parameters, trigger refresh, wait for commit, get the release fence and
-    // wait for fence to signal.
-
-    // Mutex scope
-    // Wait for previous commit to finish before configuring next buffer.
-    {
-      SEQUENCE_WAIT_SCOPE_LOCK(locker);
-
-      HWC2::Error error = hwc_display->SetReadbackBuffer(node->buffer, nullptr, node->cwb_config,
-                                                         kCWBClientExternal);
-      if (error != HWC2::Error::None) {
-        DLOGE("CWB buffer could not be set.");
-        status = -1;
-      } else {
-        DLOGI("Successfully configured CWB buffer.");
-      }
-    }
-
-    if (!status) {
-      hwc_session_->callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
-
-      // Mutex scope
-      // Wait for the signal from commit thread to retrieve the CWB release fence
-      {
-        std::unique_lock<std::mutex> lock(mutex_);
-        cv_.wait(lock);
-      }
-
-      shared_ptr<Fence> release_fence = nullptr;
-      // Mutex scope
-      {
-        SCOPE_LOCK(locker);
-        hwc_display->GetReadbackBufferFence(&release_fence);
-      }
-
-      if (release_fence >= 0) {
-        status = Fence::Wait(release_fence);
-      } else {
-        DLOGE("CWB release fence could not be retrieved.");
-        status = -1;
-      }
-    }
-
-    // Notify client about buffer status and erase the node from pending request queue.
-    std::shared_ptr<DisplayConfig::ConfigCallback> callback = node->callback.lock();
-    if (callback) {
-      DLOGI("Notify the client about buffer status %d.", status);
-      callback->NotifyCWBBufferDone(status, node->buffer);
-    }
-
-    native_handle_close(node->buffer);
-    native_handle_delete(const_cast<native_handle_t *>(node->buffer));
-    delete node;
-
-    // Mutex scope
-    // Make sure to exit here, if queue becomes empty after erasing current node from queue,
-    // so that the current async task does not operate concurrently with a new future task.
-    {
-      SCOPE_LOCK(queue_lock_);
-      queue_.pop();
-      DLOGI("Remove current CWB request from the pending request queue.");
-
-      if (!queue_.size()) {
-        DLOGI("No pending cwb requests found in the queue.");
-        break;
-      }
-    }
+    // Notify to client, when notification is received successfully for expected input buffer.
+    NotifyCWBStatus(cwb_node->notified_status, cwb_node);
   }
+  DLOGI("CWB queue is empty. Display: %d", dpy_index);
 }
 
-void HWCSession::CWB::AsyncTask(CWB *cwb) {
-  cwb->ProcessRequests();
-}
-
-void HWCSession::CWB::PresentDisplayDone(hwc2_display_t disp_id) {
-  if (disp_id != HWC_DISPLAY_PRIMARY) {
-    return;
+void HWCSession::CWB::NotifyCWBStatus(int status, std::shared_ptr<QueueNode> cwb_node) {
+  // Notify client about buffer status and erase the node from pending request queue.
+  std::shared_ptr<IDisplayConfigCallback> callback = cwb_node->callback;
+  if (callback) {
+    DLOGI("Notify the client about buffer status %d.", status);
+    callback->notifyCWBBufferDone(status, ::android::makeToAidl(cwb_node->buffer));
   }
 
-  std::unique_lock<std::mutex> lock(mutex_);
-  cv_.notify_one();
+  native_handle_close(cwb_node->buffer);
+  native_handle_delete(const_cast<native_handle_t *>(cwb_node->buffer));
+}
+
+int HWCSession::NotifyCwbDone(int dpy_index, int32_t status, uint64_t handle_id) {
+  return cwb_.OnCWBDone(dpy_index, status, handle_id);
 }
 
 int HWCSession::DisplayConfigImpl::SetQsyncMode(uint32_t disp_id, DisplayConfig::QsyncMode mode) {
@@ -1212,6 +1313,7 @@ int HWCSession::DisplayConfigImpl::SetQsyncMode(uint32_t disp_id, DisplayConfig:
   }
 
   hwc_session_->hwc_display_[disp_id]->SetQSyncMode(qsync_mode);
+  hwc_session_->hwc_display_qsync_[disp_id] = qsync_mode;
   return 0;
 }
 
@@ -1249,21 +1351,20 @@ int HWCSession::DisplayConfigImpl::IsAsyncVDSCreationSupported(bool *supported) 
 int HWCSession::DisplayConfigImpl::CreateVirtualDisplay(uint32_t width, uint32_t height,
                                                         int32_t format) {
   if (!hwc_session_->async_vds_creation_) {
-    return HWC2_ERROR_UNSUPPORTED;
+    return INT(HWC3::Error::Unsupported);
   }
 
   if (!width || !height) {
-    return HWC2_ERROR_BAD_PARAMETER;
+    return INT(HWC3::Error::BadParameter);
   }
 
-  hwc2_display_t active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
-  auto status = hwc_session_->CreateVirtualDisplayObj(width, height, &format,
-                                                      &hwc_session_->virtual_id_);
-  if (status == HWC2::Error::None) {
-    DLOGI("Created virtual display id:%" PRIu64 ", res: %dx%d",
-          hwc_session_->virtual_id_, width, height);
+  Display active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
+  Display virtual_id;
+  auto status = hwc_session_->CreateVirtualDisplayObj(width, height, &format, &virtual_id);
+  if (status == HWC3::Error::None) {
+    DLOGI("[async] Created virtual display id:%" PRIu64 ", res: %dx%d", virtual_id, width, height);
     if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays) {
-      hwc_session_->WaitForResources(true, active_builtin_disp_id, hwc_session_->virtual_id_);
+      hwc_session_->WaitForResources(true, active_builtin_disp_id, virtual_id);
     }
   } else {
     DLOGE("Failed to create virtual display: %s", to_string(status).c_str());
@@ -1273,13 +1374,13 @@ int HWCSession::DisplayConfigImpl::CreateVirtualDisplay(uint32_t width, uint32_t
 }
 
 int HWCSession::DisplayConfigImpl::IsRotatorSupportedFormat(int hal_format, bool ubwc,
-                                                             bool *supported) {
+                                                            bool *supported) {
   if (!hwc_session_->core_intf_) {
     DLOGW("core_intf_ not initialized.");
     *supported = false;
     return -EINVAL;
   }
-  int flag = ubwc ? private_handle_t::PRIV_FLAGS_UBWC_ALIGNED : 0;
+  int flag = ubwc ? qtigralloc::PRIV_FLAGS_UBWC_ALIGNED : 0;
 
   LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(hal_format, flag);
 
@@ -1337,7 +1438,7 @@ int HWCSession::DisplayConfigImpl::GetDisplayHwId(uint32_t disp_id, uint32_t *di
 int HWCSession::DisplayConfigImpl::SendTUIEvent(DispType dpy,
                                                 DisplayConfig::TUIEventType event_type) {
   int disp_id = MapDisplayType(dpy);
-  switch(event_type) {
+  switch (event_type) {
     case DisplayConfig::TUIEventType::kPrepareTUITransition:
       return hwc_session_->TUITransitionPrepare(disp_id);
     case DisplayConfig::TUIEventType::kStartTUITransition:
@@ -1377,13 +1478,13 @@ int HWCSession::DisplayConfigImpl::IsRCSupported(uint32_t disp_id, bool *support
   // the property enables the feature for use.
   int val = false;  // Default value.
   Debug::GetProperty(ENABLE_ROUNDED_CORNER, &val);
-  *supported = val ? true: false;
+  *supported = val ? true : false;
 
   return 0;
 }
 
 int HWCSession::DisplayConfigImpl::IsSupportedConfigSwitch(uint32_t disp_id, uint32_t config,
-                                                         bool *supported) {
+                                                           bool *supported) {
   int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
   if (disp_idx == -1) {
     DLOGE("Invalid display = %d", disp_id);
@@ -1425,9 +1526,12 @@ int HWCSession::DisplayConfigImpl::AllowIdleFallback() {
   uint32_t inactive_ms = 0;
   Debug::GetIdleTimeoutMs(&active_ms, &inactive_ms);
   if (hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]) {
-    DLOGI("enable idle time active_ms:%d inactive_ms:%d",active_ms,inactive_ms);
+    DLOGI("enable idle time active_ms:%d inactive_ms:%d", active_ms, inactive_ms);
     hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(active_ms, inactive_ms);
-    hwc_session_->is_idle_time_up_ = true;
+    hwc_session_->is_client_up_ = true;
+    hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]->MarkClientActive(true);
+    hwc_session_->idle_time_inactive_ms_ = inactive_ms;
+    hwc_session_->idle_time_active_ms_ = active_ms;
     return 0;
   }
 

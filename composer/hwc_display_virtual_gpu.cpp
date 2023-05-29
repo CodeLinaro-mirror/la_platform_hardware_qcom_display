@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -28,45 +28,15 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include "hwc_display_virtual_gpu.h"
 #include "hwc_session.h"
-
-#include <qdMetaData.h>
+#include "QtiGralloc.h"
 
 #define __CLASS__ "HWCDisplayVirtualGPU"
 
@@ -100,15 +70,15 @@ int HWCDisplayVirtualGPU::Deinit() {
   return 0;
 }
 
-HWCDisplayVirtualGPU::HWCDisplayVirtualGPU(CoreInterface *core_intf, HWCBufferAllocator
-                                           *buffer_allocator, HWCCallbacks *callbacks,
-                                           hwc2_display_t id, int32_t sdm_id, uint32_t width,
-                                           uint32_t height, float min_lum, float max_lum) :
-  HWCDisplayVirtual(core_intf, buffer_allocator, callbacks, id, sdm_id, width, height),
-  color_convert_task_(*this) {
-}
+HWCDisplayVirtualGPU::HWCDisplayVirtualGPU(CoreInterface *core_intf,
+                                           HWCBufferAllocator *buffer_allocator,
+                                           HWCCallbacks *callbacks, Display id, int32_t sdm_id,
+                                           uint32_t width, uint32_t height, float min_lum,
+                                           float max_lum)
+    : HWCDisplayVirtual(core_intf, buffer_allocator, callbacks, id, sdm_id, width, height),
+      color_convert_task_(*this) {}
 
-HWC2::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+HWC3::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
   DTRACE_SCOPED();
 
   // Reset previous changes.
@@ -116,19 +86,20 @@ HWC2::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *ou
   layer_requests_.clear();
 
   // Mark all layers to GPU if there is no need to bypass.
+  bool fbt_compatible = true;
   bool needs_gpu_bypass = NeedsGPUBypass() || FreezeScreen();
   for (auto hwc_layer : layer_set_) {
     auto layer = hwc_layer->GetSDMLayer();
     layer->composition = needs_gpu_bypass ? kCompositionSDE : kCompositionGPU;
 
     if (needs_gpu_bypass) {
-      if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Client) {
-       layer_changes_[hwc_layer->GetId()] = HWC2::Composition::Device;
-       layer_requests_[hwc_layer->GetId()] = HWC2::LayerRequest::ClearClientTarget;
+      if (hwc_layer->GetClientRequestedCompositionType() == Composition::CLIENT) {
+        layer_changes_[hwc_layer->GetId()] = Composition::DEVICE;
+        layer_requests_[hwc_layer->GetId()] = DisplayRequest::LayerRequest::CLEAR_CLIENT_TARGET;
       }
     } else {
-      if (hwc_layer->GetClientRequestedCompositionType() != HWC2::Composition::Client) {
-       layer_changes_[hwc_layer->GetId()] = HWC2::Composition::Client;
+      if (hwc_layer->GetClientRequestedCompositionType() != Composition::CLIENT) {
+        layer_changes_[hwc_layer->GetId()] = Composition::CLIENT;
       }
     }
   }
@@ -138,56 +109,63 @@ HWC2::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *ou
   SetClientTargetDataSpace(client_target_dataspace);
 
   *out_num_types = UINT32(layer_changes_.size());
-  *out_num_requests = UINT32(layer_requests_.size());;
+  *out_num_requests = UINT32(layer_requests_.size());
+  ;
   has_client_composition_ = !needs_gpu_bypass;
-  client_target_->ResetValidation();
 
-  validated_ = true;
+  // FBT is compatible if all layers are compatible or gpu is bypassed.
+  fbt_compatible_ = has_client_composition_ && fbt_compatible;
 
-  return ((*out_num_types > 0) ? HWC2::Error::HasChanges : HWC2::Error::None);
+  return ((*out_num_types > 0) ? HWC3::Error::HasChanges : HWC3::Error::None);
 }
 
-HWC2::Error HWCDisplayVirtualGPU::SetOutputBuffer(buffer_handle_t buf,
+HWC3::Error HWCDisplayVirtualGPU::CommitOrPrepare(bool validate_only,
+                                                  shared_ptr<Fence> *out_retire_fence,
+                                                  uint32_t *out_num_types,
+                                                  uint32_t *out_num_requests, bool *needs_commit) {
+  // Perform validate and commit.
+  auto status = Validate(out_num_types, out_num_requests);
+  if (!fbt_compatible_) {
+    *needs_commit = true;
+    return status;
+  }
+
+  return Present(out_retire_fence);
+}
+
+HWC3::Error HWCDisplayVirtualGPU::SetOutputBuffer(buffer_handle_t buf,
                                                   shared_ptr<Fence> release_fence) {
-  HWC2::Error error = HWCDisplayVirtual::SetOutputBuffer(buf, release_fence);
-  if (error != HWC2::Error::None) {
+  HWC3::Error error = HWCDisplayVirtual::SetOutputBuffer(buf, release_fence);
+  if (error != HWC3::Error::None) {
     return error;
   }
 
-  const private_handle_t *hnd = static_cast<const private_handle_t *>(buf);
-  output_buffer_.width = hnd->width;
-  output_buffer_.height = hnd->height;
-  output_buffer_.unaligned_width = width_;
-  output_buffer_.unaligned_height = height_;
+  native_handle_t *hnd = const_cast<native_handle_t *>(buf);
+  buffer_allocator_->GetWidth(hnd, output_buffer_.width);
+  buffer_allocator_->GetHeight(hnd, output_buffer_.height);
+  buffer_allocator_->GetUnalignedWidth(hnd, output_buffer_.unaligned_width);
+  buffer_allocator_->GetUnalignedHeight(hnd, output_buffer_.unaligned_height);
 
   // Update active dimensions.
-  BufferDim_t buffer_dim;
-  if (getMetaData(const_cast<private_handle_t *>(hnd), GET_BUFFER_GEOMETRY, &buffer_dim) == 0) {
-    output_buffer_.unaligned_width = buffer_dim.sliceWidth;
-    output_buffer_.unaligned_height = buffer_dim.sliceHeight;
-    color_convert_task_.PerformTask(ColorConvertTaskCode::kCodeReset, nullptr);
+  if (qtigralloc::getMetadataState(hnd, android::gralloc4::MetadataType_Crop.value)) {
+    int32_t slice_width = 0, slice_height = 0;
+    if (!buffer_allocator_->GetBufferGeometry(hnd, slice_width, slice_height)) {
+      output_buffer_.unaligned_width = slice_width;
+      output_buffer_.unaligned_height = slice_height;
+      color_convert_task_.PerformTask(ColorConvertTaskCode::kCodeReset, nullptr);
+    }
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtualGPU::Present(shared_ptr<Fence> *out_retire_fence) {
+HWC3::Error HWCDisplayVirtualGPU::Present(shared_ptr<Fence> *out_retire_fence) {
   DTRACE_SCOPED();
 
-  auto status = HWC2::Error::None;
-
-  if (!validated_) {
-    return HWC2::Error::NotValidated;
-  }
+  auto status = HWC3::Error::None;
 
   if (!output_buffer_.buffer_id) {
-    return HWC2::Error::NoResources;
-  }
-
-  Layer *sdm_layer = client_target_->GetSDMLayer();
-  LayerBuffer &input_buffer = sdm_layer->input_buffer;
-  if (!input_buffer.buffer_id) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
   if (NeedsGPUBypass()) {
@@ -203,7 +181,7 @@ HWC2::Error HWCDisplayVirtualGPU::Present(shared_ptr<Fence> *out_retire_fence) {
     color_convert_task_.PerformTask(ColorConvertTaskCode::kCodeGetInstance, nullptr);
     if (gl_color_convert_ == nullptr) {
       DLOGE("Failed to get Color Convert Instance");
-      return HWC2::Error::NoResources;
+      return HWC3::Error::NoResources;
     } else {
       DLOGI("Created ColorConvert instance: %p", gl_color_convert_);
     }
@@ -211,8 +189,10 @@ HWC2::Error HWCDisplayVirtualGPU::Present(shared_ptr<Fence> *out_retire_fence) {
 
   ColorConvertBlitContext ctx = {};
 
-  ctx.src_hnd = reinterpret_cast<const private_handle_t *>(input_buffer.buffer_id);
-  ctx.dst_hnd = reinterpret_cast<const private_handle_t *>(output_handle_);
+  Layer *sdm_layer = client_target_->GetSDMLayer();
+  LayerBuffer &input_buffer = sdm_layer->input_buffer;
+  ctx.src_hnd = reinterpret_cast<const native_handle_t *>(input_buffer.buffer_id);
+  ctx.dst_hnd = reinterpret_cast<const native_handle_t *>(output_handle_);
   ctx.dst_rect = {0, 0, FLOAT(output_buffer_.unaligned_width),
                   FLOAT(output_buffer_.unaligned_height)};
   ctx.src_acquire_fence = input_buffer.acquire_fence;
@@ -232,30 +212,26 @@ void HWCDisplayVirtualGPU::OnTask(const ColorConvertTaskCode &task_code,
                                   SyncTask<ColorConvertTaskCode>::TaskContext *task_context) {
   switch (task_code) {
     case ColorConvertTaskCode::kCodeGetInstance: {
-        gl_color_convert_ = GLColorConvert::GetInstance(kTargetYUV, output_buffer_.flags.secure);
-      }
-      break;
+      gl_color_convert_ = GLColorConvert::GetInstance(kTargetYUV, output_buffer_.flags.secure);
+    } break;
     case ColorConvertTaskCode::kCodeBlit: {
-        DTRACE_SCOPED();
-        ColorConvertBlitContext* ctx = reinterpret_cast<ColorConvertBlitContext*>(task_context);
-        gl_color_convert_->Blit(ctx->src_hnd, ctx->dst_hnd, ctx->src_rect, ctx->dst_rect,
-                                ctx->src_acquire_fence, ctx->dst_acquire_fence,
-                                &(ctx->release_fence));
-      }
-      break;
+      DTRACE_SCOPED();
+      ColorConvertBlitContext *ctx = reinterpret_cast<ColorConvertBlitContext *>(task_context);
+      gl_color_convert_->Blit(ctx->src_hnd, ctx->dst_hnd, ctx->src_rect, ctx->dst_rect,
+                              ctx->src_acquire_fence, ctx->dst_acquire_fence,
+                              &(ctx->release_fence));
+    } break;
     case ColorConvertTaskCode::kCodeReset: {
-        DTRACE_SCOPED();
-        if (gl_color_convert_) {
-          gl_color_convert_->Reset();
-        }
+      DTRACE_SCOPED();
+      if (gl_color_convert_) {
+        gl_color_convert_->Reset();
       }
-      break;
+    } break;
     case ColorConvertTaskCode::kCodeDestroyInstance: {
-        if (gl_color_convert_) {
-          GLColorConvert::Destroy(gl_color_convert_);
-        }
+      if (gl_color_convert_) {
+        GLColorConvert::Destroy(gl_color_convert_);
       }
-      break;
+    } break;
   }
 }
 
@@ -280,4 +256,3 @@ bool HWCDisplayVirtualGPU::FreezeScreen() {
 }
 
 }  // namespace sdm
-

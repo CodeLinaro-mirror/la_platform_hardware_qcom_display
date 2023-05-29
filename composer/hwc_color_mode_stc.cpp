@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <sync/sync.h>
 #include <utils/constants.h>
@@ -75,7 +82,7 @@ static RenderIntent GetRenderIntentFromStcIntent(const snapdragoncolor::RenderIn
 
 HWCColorModeStc::HWCColorModeStc(DisplayInterface *display_intf) : HWCColorMode(display_intf) {}
 
-HWC2::Error HWCColorModeStc::Init() {
+HWC3::Error HWCColorModeStc::Init() {
   DisplayError error = display_intf_->GetStcColorModes(&stc_mode_list_);
   if (error != kErrorNone) {
     DLOGW("Failed to get Stc color modes, error %d", error);
@@ -85,13 +92,13 @@ HWC2::Error HWCColorModeStc::Init() {
   }
 
   PopulateColorModes();
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCColorModeStc::DeInit() {
+HWC3::Error HWCColorModeStc::DeInit() {
   stc_mode_list_.list.clear();
   color_mode_map_.clear();
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 void HWCColorModeStc::PopulateColorModes() {
@@ -106,6 +113,9 @@ void HWCColorModeStc::PopulateColorModes() {
   for (uint32_t i = 0; i < stc_mode_list_.list.size(); i++) {
     snapdragoncolor::ColorMode stc_mode = stc_mode_list_.list[i];
     if (stc_mode.intent == snapdragoncolor::kNative) {
+      // Setting Max for native mode gamut and gamma
+      stc_mode.gamut = ColorPrimaries_Max;
+      stc_mode.gamma = Transfer_Max;
       color_mode_map_[ColorMode::NATIVE][RenderIntent::COLORIMETRIC][kSdrType] = stc_mode;
       DLOGI("Color mode NATIVE supported");
     } else {
@@ -120,8 +130,8 @@ void HWCColorModeStc::PopulateColorModes() {
         dynamic_range = kHdrType;
       }
       color_mode_map_[mode][render_intent][dynamic_range] = stc_mode;
-      DLOGI("Add into map: mode %d, render_intent %d, dynamic_range %d",
-            mode, render_intent, dynamic_range);
+      DLOGI("Add into map: mode %d, render_intent %d, dynamic_range %d", mode, render_intent,
+            dynamic_range);
     }
   }
 }
@@ -187,10 +197,10 @@ uint32_t HWCColorModeStc::GetColorModeCount() {
   return std::max(1U, count);
 }
 
-HWC2::Error HWCColorModeStc::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
+HWC3::Error HWCColorModeStc::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
   if (!out_num_modes || !out_modes) {
     DLOGE("Invalid parameters : out_num_modes %pK out_mode %pK", out_num_modes, out_modes);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
   auto it = color_mode_map_.begin();
   *out_num_modes = std::min(*out_num_modes, UINT32(color_mode_map_.size()));
@@ -198,7 +208,7 @@ HWC2::Error HWCColorModeStc::GetColorModes(uint32_t *out_num_modes, ColorMode *o
     out_modes[i] = it->first;
     DLOGI("Color mode = %d is supported", out_modes[i]);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 uint32_t HWCColorModeStc::GetRenderIntentCount(ColorMode mode) {
@@ -207,15 +217,15 @@ uint32_t HWCColorModeStc::GetRenderIntentCount(ColorMode mode) {
   return std::max(1U, count);
 }
 
-HWC2::Error HWCColorModeStc::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+HWC3::Error HWCColorModeStc::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                               RenderIntent *out_intents) {
   if (!out_num_intents || !out_intents) {
     DLOGE("Invalid parameters : out_num_intents %pK out_intents %pK", out_num_intents, out_intents);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
   if (color_mode_map_.find(mode) == color_mode_map_.end()) {
     DLOGE("Color mode = %d is not supported", mode);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
   auto it = color_mode_map_[mode].begin();
   *out_num_intents = std::min(*out_num_intents, UINT32(color_mode_map_[mode].size()));
@@ -223,46 +233,50 @@ HWC2::Error HWCColorModeStc::GetRenderIntents(ColorMode mode, uint32_t *out_num_
     out_intents[i] = it->first;
     DLOGI("Color mode = %d is supported with render intent = %d", mode, out_intents[i]);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCColorModeStc::SetColorTransform(const float *matrix,
+HWC3::Error HWCColorModeStc::SetColorTransform(const float *matrix,
                                                android_color_transform_t hint) {
   if (!matrix) {
     DLOGE("Invalid parameters : matrix %pK", matrix);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
-  auto status = HWC2::Error::None;
+  auto status = HWC3::Error::None;
   double color_matrix[kColorTransformMatrixCount] = {0};
   CopyColorTransformMatrix(matrix, color_matrix);
 
   DisplayError error = display_intf_->SetColorTransform(kColorTransformMatrixCount, color_matrix);
   if (error != kErrorNone) {
     DLOGE("Failed to set Color Transform Matrix");
-    status = HWC2::Error::Unsupported;
+    status = HWC3::Error::Unsupported;
   }
   CopyColorTransformMatrix(matrix, color_matrix_);
   return status;
 }
 
-HWC2::Error HWCColorModeStc::CacheColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
+HWC3::Error HWCColorModeStc::CacheColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
+  if (current_color_mode_ == mode && current_render_intent_ == intent) {
+    return HWC3::Error::None;
+  }
+
   current_color_mode_ = mode;
   current_render_intent_ = intent;
   apply_mode_ = true;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCColorModeStc::ApplyCurrentColorModeWithRenderIntent(bool hdr_present) {
+HWC3::Error HWCColorModeStc::ApplyCurrentColorModeWithRenderIntent(bool hdr_present) {
   DisplayError error = kErrorNone;
 
   if (color_mode_map_.empty()) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   if (!apply_mode_) {
     if ((hdr_present && curr_dynamic_range_ == kHdrType) ||
         (!hdr_present && curr_dynamic_range_ == kSdrType))
-      return HWC2::Error::None;
+      return HWC3::Error::None;
   }
 
   curr_dynamic_range_ = (hdr_present) ? kHdrType : kSdrType;
@@ -273,7 +287,7 @@ HWC2::Error HWCColorModeStc::ApplyCurrentColorModeWithRenderIntent(bool hdr_pres
   if (ret) {
     DLOGW("Cannot find mode for current_color_mode_ %d, current_render_intent_ %d, hdr_present %d",
           current_color_mode_, current_render_intent_, hdr_present);
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   DLOGI(
@@ -285,23 +299,23 @@ HWC2::Error HWCColorModeStc::ApplyCurrentColorModeWithRenderIntent(bool hdr_pres
   if (error != kErrorNone) {
     DLOGE("Failed to apply Stc color mode: gamma %d gamut %d intent %d err %d", mode.gamma,
           mode.gamut, mode.intent, error);
-    return HWC2::Error::Unsupported;
+    return HWC3::Error::Unsupported;
   }
 
   apply_mode_ = false;
 
   DLOGV_IF(kTagQDCM, "Successfully applied mode = %d, intent = %d, range = %d", current_color_mode_,
            current_render_intent_, curr_dynamic_range_);
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCColorModeStc::NotifyDisplayCalibrationMode(bool in_calibration) {
+HWC3::Error HWCColorModeStc::NotifyDisplayCalibrationMode(bool in_calibration) {
   DisplayError error = kErrorNone;
   error = display_intf_->NotifyDisplayCalibrationMode(in_calibration);
   if (error != kErrorNone) {
-    return HWC2::Error::Unsupported;
+    return HWC3::Error::Unsupported;
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 void HWCColorModeStc::Dump(std::ostringstream *os) {

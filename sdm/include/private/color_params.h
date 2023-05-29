@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2020, The Linux Foundataion. All rights reserved.
+/* Copyright (c) 2015-2021, The Linux Foundataion. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -26,6 +26,42 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 */
+
+/*
+ *  Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted (subject to the limitations in the
+ *  disclaimer below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright
+ *        notice, this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above
+ *        copyright notice, this list of conditions and the following
+ *        disclaimer in the documentation and/or other materials provided
+ *        with the distribution.
+ *
+ *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *        contributors may be used to endorse or promote products derived
+ *        from this software without specific prior written permission.
+ *
+ *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #ifndef __COLOR_PARAMS_H__
 #define __COLOR_PARAMS_H__
@@ -138,6 +174,7 @@ enum PPGlobalColorFeatureID {
   kMixerColorFeatureGc,
   kGlobalColorFeaturePaV2,
   kGlobalColorFeatureDither,
+  kGlobalColorFeatureCWBDither,
   kGlobalColorFeatureGamut,
   kGlobalColorFeaturePADither,
   kMaxNumPPFeatures,
@@ -191,6 +228,8 @@ struct PPFeatureVersion {
   static const uint32_t kSDEGamutV4 = 18;
   static const uint32_t kSDEPccV4 = 19;
   static const uint32_t kSDEIgcV40 = 20;
+  static const uint32_t kSDECWBDitherV2 = 21;
+  static const uint32_t kSDEPaV2 = 22;
 
   uint32_t version[kMaxNumPPFeatures];
   PPFeatureVersion() { memset(version, 0, sizeof(version)); }
@@ -200,6 +239,7 @@ struct PPHWAttributes : HWResourceInfo, HWPanelInfo, DisplayConfigVariableInfo {
   char panel_name[256] = "generic_panel";
   PPFeatureVersion version;
   DppsControlInterface *dpps_intf = NULL;
+  uint32_t max_brightness = 0;
 
   void Set(const HWResourceInfo &hw_res, const HWPanelInfo &panel_info,
            const DisplayConfigVariableInfo &attr, const PPFeatureVersion &feature_ver,
@@ -278,6 +318,8 @@ struct PPFrameCaptureInputParams {
   PPRectInfo rect;
   PPPixelFormats out_pix_format;
   uint32_t flags;
+  PPFeatureInfo *dither_payload = nullptr;
+  uint32_t dither_flags = 0x0;
 };
 
 struct PPFrameCaptureData {
@@ -413,6 +455,10 @@ struct SDEPaData {
   uint32_t six_zone_len = 0;
   uint32_t *six_zone_curve_p0 = NULL;
   uint32_t *six_zone_curve_p1 = NULL;
+  uint32_t six_zone_sat_adj_p0 = 0;
+  uint32_t six_zone_sat_adj_p1 = 0;
+  uint32_t *six_zone_curve_p2 = NULL;
+  uint32_t six_zone_sv_enable = 0;
 };
 
 struct SDEIgcLUTData {
@@ -623,13 +669,23 @@ class PPFeaturesConfig {
   inline bool IsDirty() { return dirty_; }
   inline void MarkAsDirty() { dirty_ = true; }
 
+  inline bool IsPuDisable() { return disable_pu_; }
+  inline void MarkPuDisable() { disable_pu_ = true; }
+  inline void MarkPuEnable() { disable_pu_ = false; }
+
+  inline bool IsSwAssetDirty() { return sw_asset_dirty_; }
+  inline void MarkSwAssetDirty() { sw_asset_dirty_ = true; }
+  inline void ClearSwAssertDirty() { sw_asset_dirty_ = false; }
+
  private:
   bool dirty_ = 0;
+  bool disable_pu_ = false;
   Locker locker_;
   PPFeatureInfo *feature_[kMaxNumPPFeatures];  // reference to TFeatureInfo<T>.
   uint32_t next_idx_ = 0;
   PPFrameCaptureData frame_capture_data;
-  PPDETuningCfgData de_tuning_data_;
+  PPDETuningCfgData de_tuning_data_ = {};
+  bool sw_asset_dirty_ = false;
 };
 
 }  // namespace sdm

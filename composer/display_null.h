@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __DISPLAY_NULL_H__
 #define __DISPLAY_NULL_H__
 
@@ -40,11 +47,11 @@ using std::string;
 using std::vector;
 
 #define MAKE_NO_OP(virtual_method_signature) \
-      virtual DisplayError virtual_method_signature { return kErrorNone; }
+  virtual DisplayError virtual_method_signature { return kErrorNone; }
 
 class DisplayNull : public DisplayInterface {
  public:
-  virtual ~DisplayNull() { }
+  virtual ~DisplayNull() {}
   virtual DisplayError Init();
   virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
 
@@ -58,21 +65,34 @@ class DisplayNull : public DisplayInterface {
   virtual DisplayError Prepare(LayerStack *layer_stack);
   virtual bool IsPrimaryDisplay() { return true; }
   virtual bool IsUnderscanSupported() { return true; }
-  virtual void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) { }
+  virtual void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) {}
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data);
-  virtual bool CheckResourceState() { return false; }
+  virtual bool CheckResourceState(bool *res_exhausted) { return false; }
   virtual string Dump() { return ""; }
   virtual bool IsSupportSsppTonemap() { return false; }
-  virtual bool CanSkipValidate() { return true; }
   virtual bool GameEnhanceSupported() { return false; }
+  virtual bool HasDemura() { return false; }
+  virtual void CheckMMRMState() {}
+  virtual bool IsValidated() { return true; }
+  virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) { return kErrorNotSupported; }
+  virtual void FlushConcurrentWriteback() {}
+  virtual void ScreenRefresh() {}
+  virtual bool IsWriteBackSupportedFormat(const LayerBufferFormat &format) { return false; }
+  virtual bool HandleCwbTeardown() { return false; }
+  virtual void Abort(){};
+  virtual uint32_t GetAvailableMixerCount() { return 0; }
 
+  MAKE_NO_OP(CommitOrPrepare(LayerStack *))
+  MAKE_NO_OP(PrePrepare(LayerStack *))
   MAKE_NO_OP(Commit(LayerStack *))
   MAKE_NO_OP(GetDisplayState(DisplayState *))
   MAKE_NO_OP(SetDisplayState(DisplayState, bool, shared_ptr<Fence> *))
   MAKE_NO_OP(SetFrameBufferConfig(const DisplayConfigVariableInfo &))
   MAKE_NO_OP(Flush(LayerStack *))
   MAKE_NO_OP(GetVSyncState(bool *))
+  MAKE_NO_OP(SetDrawMethod(DisplayDrawMethod))
+  MAKE_NO_OP(SetNoisePlugInOverride(bool, int32_t, int32_t))
   MAKE_NO_OP(SetActiveConfig(uint32_t))
   MAKE_NO_OP(SetActiveConfig(DisplayConfigVariableInfo *))
   MAKE_NO_OP(SetMaxMixerStages(uint32_t))
@@ -105,9 +125,9 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(GetDisplayId(int32_t *))
   MAKE_NO_OP(GetDisplayType(DisplayType *))
   MAKE_NO_OP(SetCompositionState(LayerComposition, bool))
-  MAKE_NO_OP(GetClientTargetSupport(uint32_t, uint32_t, LayerBufferFormat,
-                                    const ColorMetaData &))
+  MAKE_NO_OP(GetClientTargetSupport(uint32_t, uint32_t, LayerBufferFormat, const ColorMetaData &))
   MAKE_NO_OP(HandleSecureEvent(SecureEvent, bool *))
+  MAKE_NO_OP(PostHandleSecureEvent(SecureEvent))
   MAKE_NO_OP(SetQSyncMode(QSyncMode))
   MAKE_NO_OP(ControlIdlePowerCollapse(bool, bool))
   MAKE_NO_OP(SetDisplayDppsAdROI(void *))
@@ -117,6 +137,13 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(SetFrameTriggerMode(FrameTriggerMode))
   MAKE_NO_OP(SetPanelLuminanceAttributes(float min_lum, float max_lum))
   MAKE_NO_OP(SetBLScale(uint32_t))
+  MAKE_NO_OP(GetPanelBlMaxLvl(uint32_t *))
+  MAKE_NO_OP(SetPPConfig(void *, size_t))
+  MAKE_NO_OP(SetDimmingEnable(int int_enabled))
+  MAKE_NO_OP(SetDimmingMinBl(int min_bl))
+  MAKE_NO_OP(RetrieveDemuraTnFiles())
+  MAKE_NO_OP(SetDemuraState(int state))
+  MAKE_NO_OP(SetDemuraConfig(int demura_idx))
   MAKE_NO_OP(GetQSyncMode(QSyncMode *))
   MAKE_NO_OP(colorSamplingOn());
   MAKE_NO_OP(colorSamplingOff());
@@ -125,9 +152,16 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(SetStcColorMode(const snapdragoncolor::ColorMode &))
   MAKE_NO_OP(ClearLUTs())
   MAKE_NO_OP(IsSupportedOnDisplay(SupportedDisplayFeature feature, uint32_t *supported))
-  MAKE_NO_OP(GetCwbBufferResolution(CwbTapPoint, uint32_t *, uint32_t *))
+  MAKE_NO_OP(GetCwbBufferResolution(CwbConfig *, uint32_t *, uint32_t *))
   MAKE_NO_OP(NotifyDisplayCalibrationMode(bool))
-  MAKE_NO_OP(TeardownConcurrentWriteback(void))
+  MAKE_NO_OP(GetOutputBufferAcquireFence(shared_ptr<Fence> *))
+  MAKE_NO_OP(DestroyLayer())
+  MAKE_NO_OP(SetAlternateDisplayConfig(uint32_t *))
+  MAKE_NO_OP(ForceToneMapUpdate(LayerStack *layer_stack))
+  MAKE_NO_OP(UpdateTransferTime(uint32_t transfer_time))
+  MAKE_NO_OP(SetJitterConfig(uint32_t, float, uint32_t))
+  MAKE_NO_OP(CaptureCwb(const LayerBuffer &, const CwbConfig &));
+  MAKE_NO_OP(GetPanelFeatureInfo(PanelFeatureInfo *info));
 
  protected:
   DisplayConfigVariableInfo default_variable_config_ = {};
@@ -135,15 +169,15 @@ class DisplayNull : public DisplayInterface {
   // 1920x1080 60fps panel of name Null Display with PnPID QCM
   // Contains many 'don't-care' fields and valid checksum bytes
   const vector<uint8_t> edid_{
-    0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x44, 0x6D, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00,
-    0x1B, 0x10, 0x01, 0x03, 0x80, 0x50, 0x2D, 0x78, 0x0A, 0x0D, 0xC9, 0xA0, 0x57, 0x47, 0x98, 0x27,
-    0x12, 0x48, 0x4C, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x3A, 0x80, 0x18, 0x71, 0x38, 0x2D, 0x40, 0x58, 0x2C,
-    0x45, 0x00, 0x50, 0x1D, 0x74, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x00, 0xFE, 0x00, 0x4E, 0x75, 0x6C,
-    0x6C, 0x20, 0x44, 0x69, 0x73, 0x70, 0x6C, 0x61, 0x79, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD1
-  };
+      0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x44, 0x6D, 0x01, 0x00, 0x01, 0x00, 0x00,
+      0x00, 0x1B, 0x10, 0x01, 0x03, 0x80, 0x50, 0x2D, 0x78, 0x0A, 0x0D, 0xC9, 0xA0, 0x57, 0x47,
+      0x98, 0x27, 0x12, 0x48, 0x4C, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x3A, 0x80, 0x18, 0x71, 0x38,
+      0x2D, 0x40, 0x58, 0x2C, 0x45, 0x00, 0x50, 0x1D, 0x74, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x00,
+      0xFE, 0x00, 0x4E, 0x75, 0x6C, 0x6C, 0x20, 0x44, 0x69, 0x73, 0x70, 0x6C, 0x61, 0x79, 0x0A,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD1};
 };
 
 class DisplayNullExternal : public DisplayNull {

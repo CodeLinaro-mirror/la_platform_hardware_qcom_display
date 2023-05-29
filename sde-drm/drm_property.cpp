@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,10 +27,47 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "drm_property.h"
 
 namespace sde_drm {
 
+// clang-format off
 DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "type") { return DRMProperty::TYPE; }
   if (name == "FB_ID") { return DRMProperty::FB_ID; }
@@ -82,6 +119,7 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "dim_layer_v1") { return DRMProperty::DIM_STAGES_V1; }
   if (name == "idle_time") { return DRMProperty::IDLE_TIME; }
   if (name == "RETIRE_FENCE") { return DRMProperty::RETIRE_FENCE; }
+  if (name == "RETIRE_FENCE_OFFSET") { return DRMProperty::RETIRE_FENCE_OFFSET; }
   if (name == "DST_X") { return DRMProperty::DST_X; }
   if (name == "DST_Y") { return DRMProperty::DST_Y; }
   if (name == "DST_W") { return DRMProperty::DST_W; }
@@ -167,9 +205,46 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "vm_request_state") { return DRMProperty::VM_REQ_STATE; }
   if (name == "dspp_caps") { return DRMProperty::DSPP_CAPABILITIES; }
   if (name == "SDE_SPR_INIT_CFG_V1") { return DRMProperty::SPR_INIT_CFG_V1; }
+  if (name == "SDE_SPR_INIT_CFG_V2") {
+    return DRMProperty::SPR_INIT_CFG_V2;
+  }
+  if (name == "SDE_SPR_UDC_CFG_V2") {
+    return DRMProperty::SPR_UDC_CFG_V2;
+  }
   if (name == "SDE_DSPP_RC_MASK_V1") { return DRMProperty::DSPP_RC_MASK_V1; }
+  if (name == "panel_mode") { return DRMProperty::PANEL_MODE; }
+  if (name == "SDE_DEMURA_INIT_CFG_V1") { return DRMProperty::DEMURA_INIT_CFG_V1; }
+  if (name == "SDE_DEMURA_CFG0_PARAM2") {
+    return DRMProperty::DEMURA_CFG0_PARAM2;
+  }
+  if (name == "DEMURA_PANEL_ID") { return DRMProperty::DEMURA_PANEL_ID; }
+  if (name == "SDE_DEMURA_BOOT_PLANE_V1") { return DRMProperty::DEMURA_BOOT_PLANE_V1; }
+  if (name == "dyn_bit_clk") { return DRMProperty::DYN_BIT_CLK; }
+  if (name == "SDE_PP_CWB_DITHER_V2") { return DRMProperty::SDE_PP_CWB_DITHER_V2; }
+  if (name == "noise_layer_v1") { return DRMProperty::NOISE_LAYER_V1; }
+  if (name == "dsc_mode") { return DRMProperty::DSC_MODE; }
+  if (name == "dimming_bl_lut") { return DRMProperty::DIMMING_BL_LUT; }
+  if (name == "dimming_dyn_ctrl") { return DRMProperty::DIMMING_DYN_CTRL; }
+  if (name == "dimming_min_bl") { return DRMProperty::DIMMING_MIN_BL; }
+  if (name == "dyn_transfer_time") { return DRMProperty::DYN_TRANSFER_TIME; }
+  if (name == "jitter_config") { return DRMProperty::JITTER_CONFIG; }
+  if (name == "transfer_time") { return DRMProperty::TRANSFER_TIME; }
+  if (name == "early_fence_line") { return DRMProperty::EARLY_FENCE_LINE; }
+  if (name == "dnsc_blur") { return DRMProperty::DNSC_BLR; }
+  if (name == "wb_usage_type") { return DRMProperty::WB_USAGE_TYPE; }
+  if (name == "SDE_SSPP_FP16_IGC_V1") { return DRMProperty::SDE_SSPP_FP16_IGC_V1; }
+  if (name == "SDE_SSPP_FP16_GC_V1") { return DRMProperty::SDE_SSPP_FP16_GC_V1; }
+  if (name == "SDE_SSPP_FP16_CSC_V1") { return DRMProperty::SDE_SSPP_FP16_CSC_V1; }
+  if (name == "SDE_SSPP_FP16_UNMULT_V1") { return DRMProperty::SDE_SSPP_FP16_UNMULT_V1; }
+  if (name == "SDE_SSPP_UCSC_UNMULT_V1") { return DRMProperty::SDE_SSPP_UCSC_UNMULT_V1; }
+  if (name == "SDE_SSPP_UCSC_IGC_V1") { return DRMProperty::SDE_SSPP_UCSC_IGC_V1; }
+  if (name == "SDE_SSPP_UCSC_CSC_V1") { return DRMProperty::SDE_SSPP_UCSC_CSC_V1; }
+  if (name == "SDE_SSPP_UCSC_GC_V1") { return DRMProperty::SDE_SSPP_UCSC_GC_V1; }
+  if (name == "SDE_SSPP_UCSC_ALPHA_DITHER_V1") { return DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1; }
+  if (name == "EPT") { return DRMProperty::EPT; }
 
   return DRMProperty::INVALID;
 }
+// clang-format on
 
 }  // namespace sde_drm

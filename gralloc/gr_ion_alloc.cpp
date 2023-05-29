@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
-
+ * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -27,7 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define DEBUG 0
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -43,7 +49,8 @@
 #include <string>
 
 #include "gr_utils.h"
-#include "gralloc_priv.h"
+#include <QtiGrallocPriv.h>
+#include <QtiGrallocDefs.h>
 #include "gr_ion_alloc.h"
 
 namespace gralloc {
@@ -59,6 +66,7 @@ bool IonAlloc::Init() {
     return false;
   }
 
+  enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
   return true;
 }
 
@@ -91,14 +99,14 @@ int IonAlloc::AllocBuffer(AllocData *data) {
   err = ion_alloc_fd(ion_dev_fd_, data->size, data->align, data->heap_id, flags, &fd);
   ATRACE_END();
   if (err) {
-    ALOGE("libion alloc failed ion_fd %d size %d align %d heap_id %x flags %x",
-          ion_dev_fd_, data->size, data->align, data->heap_id, flags);
+    ALOGE("libion alloc failed ion_fd %d size %d align %d heap_id %x flags %x", ion_dev_fd_,
+          data->size, data->align, data->heap_id, flags);
     return err;
   }
 
   data->fd = fd;
   data->ion_handle = fd;  // For new ion api ion_handle does not exists so reusing fd for now
-  ALOGD_IF(DEBUG, "libion: Allocated buffer size:%u fd:%d", data->size, data->fd);
+  ALOGD_IF(enable_logs_, "libion: Allocated buffer size:%u fd:%d", data->size, data->fd);
 
   return 0;
 }
@@ -107,7 +115,7 @@ int IonAlloc::FreeBuffer(void *base, unsigned int size, unsigned int offset, int
                          int /*ion_handle*/) {
   ATRACE_CALL();
   int err = 0;
-  ALOGD_IF(DEBUG, "libion: Freeing buffer base:%p size:%u fd:%d", base, size, fd);
+  ALOGD_IF(enable_logs_, "libion: Freeing buffer base:%p size:%u fd:%d", base, size, fd);
 
   if (base) {
     err = UnmapBuffer(base, size, offset);
@@ -122,7 +130,7 @@ int IonAlloc::ImportBuffer(int fd) {
   return fd;
 }
 
-int IonAlloc::CleanBuffer(void */*base*/, unsigned int /*size*/, unsigned int /*offset*/,
+int IonAlloc::CleanBuffer(void * /*base*/, unsigned int /*size*/, unsigned int /*offset*/,
                           int /*handle*/, int op, int dma_buf_fd) {
   ATRACE_CALL();
   ATRACE_INT("operation id", op);
@@ -165,7 +173,8 @@ int IonAlloc::MapBuffer(void **base, unsigned int size, unsigned int offset, int
     err = -errno;
     ALOGE("ion: Failed to map memory in the client: %s", strerror(errno));
   } else {
-    ALOGD_IF(DEBUG, "ion: Mapped buffer base:%p size:%u offset:%u fd:%d", addr, size, offset, fd);
+    ALOGD_IF(enable_logs_, "ion: Mapped buffer base:%p size:%u offset:%u fd:%d", addr, size, offset,
+             fd);
   }
 
   return err;
@@ -173,7 +182,7 @@ int IonAlloc::MapBuffer(void **base, unsigned int size, unsigned int offset, int
 
 int IonAlloc::UnmapBuffer(void *base, unsigned int size, unsigned int /*offset*/) {
   ATRACE_CALL();
-  ALOGD_IF(DEBUG, "ion: Unmapping buffer  base:%p size:%u", base, size);
+  ALOGD_IF(enable_logs_, "ion: Unmapping buffer  base:%p size:%u", base, size);
 
   int err = 0;
   if (munmap(base, size)) {

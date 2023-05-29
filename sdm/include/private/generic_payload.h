@@ -27,6 +27,13 @@
 *
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GENERIC_PAYLOAD_H__
 #define __GENERIC_PAYLOAD_H__
 
@@ -43,7 +50,7 @@ namespace sdm {
 struct GenericPayload {
  public:
   GenericPayload():
-    type_size(0), payload(nullptr), array_size(0) {}
+    type_size(0), payload(nullptr), array_size(0), release(nullptr) {}
 
   GenericPayload(const GenericPayload &in) {
     type_size = 0;
@@ -66,7 +73,7 @@ struct GenericPayload {
     type_size = sizeof(A);
     array_size = in.array_size;
 
-    if (payload != nullptr) {
+    if (payload != nullptr && release != nullptr) {
       release();
     }
     A* p2 = nullptr;
@@ -136,6 +143,10 @@ struct GenericPayload {
       return -EINVAL;
     }
 
+    if (!sz) {
+      return -EINVAL;
+    }
+
     p = reinterpret_cast<A *>(payload);
     *sz = 0;
     if (p == nullptr && copy_constructed) {
@@ -152,8 +163,40 @@ struct GenericPayload {
     return 0;
   }
 
+  template <typename A>
+  int GetPayload(A *&p, uint32_t *num_elem, uint32_t *type_sz) const {
+    if (!num_elem || !type_sz) {
+      p = nullptr;
+      return -EINVAL;
+    }
+
+    if (sizeof(A) > type_size) {
+      p = nullptr;
+      return -EINVAL;
+    }
+
+    p = reinterpret_cast<A *>(payload);
+    if (p == nullptr && copy_constructed) {
+      display::DebugHandler::Get()->Error(
+          "GenericPayload::%s:Payload was not properly"
+          "copied via CopyPayload",
+          __FUNCTION__);
+      return -ENOMEM;
+    } else if (p == nullptr) {
+      display::DebugHandler::Get()->Error(
+          "GenericPayload::%s:Payload was not properly"
+          "created via CreatePayload",
+          __FUNCTION__);
+      return -ENOMEM;
+    }
+    *num_elem = array_size;
+    *type_sz = type_size;
+
+    return 0;
+  }
+
   void DeletePayload() {
-    if (payload != nullptr) {
+    if (payload != nullptr && release != nullptr) {
       release();
     }
 

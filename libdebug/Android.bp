@@ -1,12 +1,7 @@
-soong_namespace {
-    imports: [
-        "hardware/qcom/display",
-    ],
-}
 cc_library_shared {
 
     name: "libdisplaydebug",
-    defaults: ["qtidisplay_defaults"],
+    defaults: ["qtidisplay_common_defaults"],
     sanitize: {
         integer_overflow: true,
     },
@@ -20,6 +15,5 @@ cc_library_shared {
         "-fno-operator-names",
     ],
     export_include_dirs: ["."],
-    clang: true,
     srcs: ["debug_handler.cpp"],
 }

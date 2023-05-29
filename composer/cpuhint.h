@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2020, The Linux Foundataion. All rights reserved.
+/* Copyright (c) 2015, 2020-2021, The Linux Foundataion. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,38 +27,67 @@
 *
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __CPUHINT_H__
 #define __CPUHINT_H__
 
 #include <core/sdm_types.h>
 #include <utils/sys.h>
+#include <utils/Timers.h>
 
 namespace sdm {
+
+enum PerfHintThreadType {
+  kInvalid = 0,
+  kSurfaceFlinger,
+  kRenderEngine,
+  kHWC,
+};
+
+enum PerfHintStatus {
+  kInactive = 0,
+  kActive,
+  kRenew,
+};
+
+struct LongTermHintInfo {
+  int handle_id = 0;
+  int tid = 0;
+  nsecs_t start_time = 0;
+  PerfHintStatus status = kInactive;
+};
 
 class HWCDebugHandler;
 
 class CPUHint {
  public:
   DisplayError Init(HWCDebugHandler *debug_handler);
-  void Set();
-  void Reset();
-  void ReqHints(int hint);
-  void ReqHintsOffload(int hint, int duration);
+  int ReqHintsOffload(int hint, int tid);
+  int ReqHintRelease();
+  int ReqHint(PerfHintThreadType type, int tid);
+  void ReqEvent(int event);
 
  private:
-  enum { HINT =  0x4501 /* 45-display layer hint, 01-Enable */ };
+  const int kLargeComposition = 0x00001097;
+  const int kHintPassPid = 0x0000109C;  // Inform mpctl about the TID
+  const int kPassPidSuccess = -2;       // Check if mpctl received the TID
+
   bool enabled_ = false;
-  // frames to wait before setting this hint
-  int pre_enable_window_ = 0;
-  int frame_countdown_ = 0;
-  int lock_handle_ = 0;
-  bool lock_acquired_ = false;
   DynLib vendor_ext_lib_;
-  int (*fn_lock_acquire_)(int handle, int duration, int *hints, int num_args) = NULL;
-  int (*fn_lock_release_)(int value) = NULL;
+  int (*fn_perf_hint_acq_rel_offload_)(int handle, int hint, const char *pkg, int duration,
+                                       int type, int num_args, int list[]) = NULL;
   int (*fn_perf_hint_)(int hint, const char *pkg, int duration, int type) = NULL;
-  int (*fn_perf_hint_offload_)(int hint, const char *pkg, int duration, int type,
-                               int numArgs, int *) = NULL;
+  int (*fn_perf_lock_rel_offload_)(int handle) = NULL;
+  void (*fn_perf_event_)(int event_id, const char *pkg, int num_args, int list[]) = NULL;
+  std::mutex tid_lock_;
+
+  LongTermHintInfo large_comp_cycle_{};
 };
 
 }  // namespace sdm

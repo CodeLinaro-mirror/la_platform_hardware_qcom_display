@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "hwc_display_dummy.h"
 #include <utils/debug.h>
 
@@ -36,10 +43,10 @@ namespace sdm {
 
 int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                             HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                            qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                            qService::QService *qservice, Display id, int32_t sdm_id,
                             HWCDisplay **hwc_display) {
   HWCDisplay *hwc_display_dummy = new HWCDisplayDummy(core_intf, buffer_allocator, callbacks,
-                                      event_handler, qservice, id, sdm_id);
+                                                      event_handler, qservice, id, sdm_id);
   *hwc_display = hwc_display_dummy;
   return kErrorNone;
 }
@@ -48,27 +55,26 @@ void HWCDisplayDummy::Destroy(HWCDisplay *hwc_display) {
   delete hwc_display;
 }
 
-HWC2::Error HWCDisplayDummy::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayDummy::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayDummy::Present(shared_ptr<Fence> *out_retire_fence) {
+HWC3::Error HWCDisplayDummy::Present(shared_ptr<Fence> *out_retire_fence) {
   for (auto hwc_layer : layer_set_) {
-    hwc_layer->PushBackReleaseFence(nullptr);
+    hwc_layer->SetReleaseFence(nullptr);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayDummy::SetColorMode(ColorMode mode) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayDummy::SetColorMode(ColorMode mode) {
+  return HWC3::Error::None;
 }
 
 HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                                  HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                                 qService::QService *qservice, hwc2_display_t id,
-                                 int32_t sdm_id) :HWCDisplay(core_intf, buffer_allocator,
-                                 callbacks, event_handler, qservice, kBuiltIn, id, sdm_id,
-                                 DISPLAY_CLASS_BUILTIN) {
+                                 qService::QService *qservice, Display id, int32_t sdm_id)
+    : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kBuiltIn, id,
+                 sdm_id, DISPLAY_CLASS_BUILTIN) {
   DisplayConfigVariableInfo config;
   config.x_pixels = 720;
   config.y_pixels = 1280;
@@ -81,53 +87,48 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   display_intf_ = &display_null_;
 }
 
-HWC2::Error HWCDisplayDummy::GetActiveConfig(hwc2_config_t *out_config) {
+HWC3::Error HWCDisplayDummy::GetActiveConfig(Config *out_config) {
   *out_config = 0;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayDummy::UpdatePowerMode(HWC2::PowerMode mode) {
+HWC3::Error HWCDisplayDummy::UpdatePowerMode(PowerMode mode) {
   current_power_mode_ = mode;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayDummy::SetVsyncEnabled(HWC2::Vsync enabled) {
-  bool state = false;
-  if (enabled == HWC2::Vsync::Enable) {
-    state = true;
-  }
-  vsync_enable_ = state;
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayDummy::SetVsyncEnabled(bool enabled) {
+  vsync_enable_ = enabled;
+  return HWC3::Error::None;
 }
 
 bool HWCDisplayDummy::VsyncEnablePending() {
   return vsync_enable_;
 }
 
-HWC2::Error HWCDisplayDummy::SetClientTarget(buffer_handle_t target,
-                                             shared_ptr<Fence> acquire_fence,
-                                             int32_t dataspace, hwc_region_t damage) {
+HWC3::Error HWCDisplayDummy::SetClientTarget(buffer_handle_t target,
+                                             shared_ptr<Fence> acquire_fence, int32_t dataspace,
+                                             Region damage) {
   client_target_handle_ = target;
   client_acquire_fence_ = acquire_fence;
-  client_dataspace_     = dataspace;
+  client_dataspace_ = dataspace;
   client_damage_region_ = damage;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 void HWCDisplayDummy::SetConfigInfo(
-                      std::map<uint32_t, DisplayConfigVariableInfo>& variable_config_map,
-                      int active_config_index, uint32_t num_configs) {
+    std::map<uint32_t, DisplayConfigVariableInfo> &variable_config_map, int active_config_index,
+    uint32_t num_configs) {
   variable_config_map_ = variable_config_map;
   active_config_index_ = active_config_index;
   num_configs_ = num_configs;
 }
 
-HWC2::Error HWCDisplayDummy::SetActiveConfigWithConstraints(
-    hwc2_config_t config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
+HWC3::Error HWCDisplayDummy::SetActiveConfigWithConstraints(
+    Config config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
     VsyncPeriodChangeTimeline *out_timeline) {
-
   ALOGI("Config change not allowed in async power mode transition");
-  return HWC2::Error::Unsupported;
+  return HWC3::Error::Unsupported;
 }
 
 }  // namespace sdm

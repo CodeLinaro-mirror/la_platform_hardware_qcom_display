@@ -64,6 +64,7 @@ static uint8_t SECURE_ONLY = 1;
 // CWB Capture Modes
 static uint8_t CAPTURE_MIXER_OUT = 0;
 static uint8_t CAPTURE_DSPP_OUT = 1;
+static uint8_t CAPTURE_DEMURA_OUT = 2;
 
 // Idle PC states
 static uint8_t IDLE_PC_STATE_NONE = 0;
@@ -106,6 +107,9 @@ static void PopulateCWbCaptureModes(drmModePropertyRes *prop,
       } else if (enum_name == "capture_pp_out") {
         CAPTURE_DSPP_OUT = prop->enums[i].value;
         tap_points->push_back(DRMCWbCaptureMode::DSPP_OUT);
+      } else if (enum_name == "capture_demura_out") {
+        CAPTURE_DEMURA_OUT = prop->enums[i].value;
+        tap_points->push_back(DRMCWbCaptureMode::DEMURA_OUT);
       }
     }
     capture_modes_populated = true;
@@ -164,6 +168,7 @@ static void PopulateVMRequestStates(drmModePropertyRes *prop) {
 #define __CLASS__ "DRMCrtcManager"
 
 void DRMCrtcManager::Init(drmModeRes *resource) {
+  lock_guard<mutex> lock(lock_);
   for (int i = 0; i < resource->count_crtcs; i++) {
     unique_ptr<DRMCrtc> crtc(new DRMCrtc(fd_, i));
     drmModeCrtc *libdrm_crtc = drmModeGetCrtc(fd_, resource->crtcs[i]);
@@ -177,10 +182,12 @@ void DRMCrtcManager::Init(drmModeRes *resource) {
 }
 
 void DRMCrtcManager::DumpByID(uint32_t id) {
+  lock_guard<mutex> lock(lock_);
   crtc_pool_.at(id)->Dump();
 }
 
 void DRMCrtcManager::DumpAll() {
+  lock_guard<mutex> lock(lock_);
   for (auto &crtc : crtc_pool_) {
     crtc.second->Dump();
   }
@@ -206,6 +213,7 @@ void DRMCrtcManager::Perform(DRMOps code, uint32_t obj_id, drmModeAtomicReq *req
 }
 
 void DRMCrtcManager::SetScalerLUT(const DRMScalerLUTInfo &lut_info) {
+  lock_guard<mutex> lock(lock_);
   // qseed3lite lut is hardcoded in HW. No need to program from sw.
   DRMCrtcInfo info;
   crtc_pool_.begin()->second->GetInfo(&info);
@@ -228,6 +236,7 @@ void DRMCrtcManager::SetScalerLUT(const DRMScalerLUTInfo &lut_info) {
 }
 
 void DRMCrtcManager::UnsetScalerLUT() {
+  lock_guard<mutex> lock(lock_);
   if (dir_lut_blob_id_) {
     drmModeDestroyPropertyBlob(fd_, dir_lut_blob_id_);
     dir_lut_blob_id_ = 0;
@@ -243,6 +252,7 @@ void DRMCrtcManager::UnsetScalerLUT() {
 }
 
 int DRMCrtcManager::GetCrtcInfo(uint32_t crtc_id, DRMCrtcInfo *info) {
+  lock_guard<mutex> lock(lock_);
   if (crtc_id == 0) {
     crtc_pool_.begin()->second->GetInfo(info);
   } else {
@@ -259,6 +269,7 @@ int DRMCrtcManager::GetCrtcInfo(uint32_t crtc_id, DRMCrtcInfo *info) {
 }
 
 void DRMCrtcManager::GetPPInfo(uint32_t crtc_id, DRMPPFeatureInfo *info) {
+  lock_guard<mutex> lock(lock_);
   auto it = crtc_pool_.find(crtc_id);
   if (it == crtc_pool_.end()) {
     DRM_LOGE("Invalid crtc id %d", crtc_id);
@@ -270,6 +281,7 @@ void DRMCrtcManager::GetPPInfo(uint32_t crtc_id, DRMPPFeatureInfo *info) {
 
 int DRMCrtcManager::Reserve(const std::set<uint32_t> &possible_crtc_indices,
                              DRMDisplayToken *token) {
+  lock_guard<mutex> lock(lock_);
   for (auto &item : crtc_pool_) {
     if (item.second->GetStatus() == DRMStatus::FREE) {
       if (possible_crtc_indices.find(item.second->GetIndex()) != possible_crtc_indices.end()) {
@@ -299,6 +311,13 @@ void DRMCrtcManager::PostValidate(uint32_t crtc_id, bool success) {
 void DRMCrtcManager::PostCommit(uint32_t crtc_id, bool success) {
   lock_guard<mutex> lock(lock_);
   crtc_pool_.at(crtc_id)->PostCommit(success);
+}
+
+void DRMCrtcManager::GetCrtcList(std::vector<uint32_t> *crtc_ids) {
+  lock_guard<mutex> lock(lock_);
+  for (auto &crtc : crtc_pool_) {
+    crtc_ids->emplace_back(crtc.first);
+  }
 }
 
 // ==============================================================================================//
@@ -332,6 +351,10 @@ void DRMCrtc::ParseProperties() {
       DRM_LOGD("DRMProperty %s missing from global property mapping", info->name);
       drmModeFreeProperty(info);
       continue;
+    }
+
+    if (prop_enum == DRMProperty::NOISE_LAYER_V1) {
+      crtc_info_.has_noise_layer = true;
     }
 
     if (prop_enum == DRMProperty::SECURITY_LEVEL) {
@@ -427,6 +450,10 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
   string ubwc_version = "UBWC version=";
   string spr = "spr=";
   string rc_total_mem_size = "rc_mem_size=";
+  string demura_count = "demura_count=";
+  string dspp_count = "dspp_count=";
+  string skip_inline_rot_threshold="skip_inline_rot_threshold=";
+  string dsc_block_count = "dsc_block_count=";
 
   while (std::getline(stream, line)) {
     if (line.find(max_blendstages) != string::npos) {
@@ -483,7 +510,8 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
     } else if (line.find(comp_ratio_nrt) != string::npos) {
       ParseCompRatio(line.substr(comp_ratio_nrt.length()), false);
     } else if (line.find(hw_version) != string::npos) {
-      crtc_info_.hw_version = std::stoi(string(line, hw_version.length()));
+      crtc_info_.hw_version =
+        static_cast<uint32_t>(std::stoull(string(line, hw_version.length())));
     } else if (line.find(solidfill_stages) != string::npos) {
       crtc_info_.max_solidfill_stages =  std::stoi(string(line, solidfill_stages.length()));
     } else if (line.find(dest_scaler_count) != string::npos) {
@@ -547,6 +575,15 @@ void DRMCrtc::ParseCapabilities(uint64_t blob_id) {
       crtc_info_.has_spr = std::stoi(string(line, spr.length())) == -1 ? false: true;
     } else if (line.find(rc_total_mem_size) != string::npos) {
       crtc_info_.rc_total_mem_size = std::stoi(string(line, rc_total_mem_size.length()));
+    } else if (line.find(demura_count) != string::npos) {
+      crtc_info_.demura_count = std::stoi(string(line, demura_count.length()));
+    } else if (line.find(dspp_count) != string::npos) {
+      crtc_info_.dspp_count = std::stoi(string(line, dspp_count.length()));
+    } else if (line.find(skip_inline_rot_threshold) != string::npos) {
+      crtc_info_.skip_inline_rot_threshold =
+        std::stoi(string(line, skip_inline_rot_threshold.length()));
+    } else if (line.find(dsc_block_count) != string::npos) {
+      crtc_info_.dsc_block_count = std::stoi(string(line, dsc_block_count.length()));
     }
   }
   drmModeFreePropertyBlob(blob);
@@ -752,6 +789,12 @@ void DRMCrtc::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       SetSolidfillStages(req, obj_id, solid_fills);
     } break;
 
+    case DRMOps::CRTC_SET_NOISELAYER_CONFIG: {
+      uint64_t data = va_arg(args, uint64_t);
+      const DRMNoiseLayerConfig *noise_cfg = reinterpret_cast<DRMNoiseLayerConfig *>(data);
+      SetNoiseLayerConfig(req, obj_id, noise_cfg);
+    } break;
+
     case DRMOps::CRTC_SET_IDLE_TIMEOUT: {
       uint32_t timeout_ms = va_arg(args, uint32_t);
       AddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::IDLE_TIME),
@@ -774,6 +817,8 @@ void DRMCrtc::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       uint32_t cwb_capture_mode = CAPTURE_MIXER_OUT;
       if (capture_mode == (int)DRMCWbCaptureMode::DSPP_OUT) {
         cwb_capture_mode = CAPTURE_DSPP_OUT;
+      } else if (capture_mode == (int)DRMCWbCaptureMode::DEMURA_OUT) {
+        cwb_capture_mode = CAPTURE_DEMURA_OUT;
       }
       uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::CAPTURE_MODE);
       AddProperty(req, obj_id, prop_id, cwb_capture_mode, true /* cache */, tmp_prop_val_map_);
@@ -906,6 +951,23 @@ void DRMCrtc::SetSolidfillStages(drmModeAtomicReq *req, uint32_t obj_id,
 #endif
 }
 
+void DRMCrtc::SetNoiseLayerConfig(drmModeAtomicReq *req, uint32_t obj_id,
+                                 const DRMNoiseLayerConfig *noise_cfg) {
+  drm_msm_noise_layer_cfg *cfg = nullptr;
+  drm_noise_layer_v1_ = {};
+  if (noise_cfg->enable) {
+    drm_noise_layer_v1_.flags = noise_cfg->temporal_en ? DRM_NOISE_TEMPORAL_FLAG : 0;
+    drm_noise_layer_v1_.zposn = noise_cfg->zpos_noise;
+    drm_noise_layer_v1_.zposattn = noise_cfg->zpos_attn;
+    drm_noise_layer_v1_.strength = noise_cfg->noise_strength;
+    drm_noise_layer_v1_.attn_factor = noise_cfg->attn_factor;
+    drm_noise_layer_v1_.alpha_noise = noise_cfg->alpha_noise;
+    cfg = &drm_noise_layer_v1_;
+  }
+  AddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::NOISE_LAYER_V1),
+              reinterpret_cast<uint64_t>(cfg), false /* cache */, tmp_prop_val_map_);
+}
+
 void DRMCrtc::Dump() {
   DRM_LOGE("id: %d\tbuffer_id: %d\tpos:(%d, %d)\tsize:(%dx%d)\n", drm_crtc_->crtc_id,
            drm_crtc_->buffer_id, drm_crtc_->x, drm_crtc_->y, drm_crtc_->width, drm_crtc_->height);
@@ -963,6 +1025,10 @@ void DRMCrtc::ClearVotesCache() {
   tmp_prop_val_map_.erase(prop_mgr_.GetPropertyId(DRMProperty::LLCC_IB));
   tmp_prop_val_map_.erase(prop_mgr_.GetPropertyId(DRMProperty::DRAM_AB));
   tmp_prop_val_map_.erase(prop_mgr_.GetPropertyId(DRMProperty::DRAM_IB));
+}
+
+uint32_t DRMCrtcManager::GetCrtcCount() {
+  return crtc_pool_.size();
 }
 
 }  // namespace sde_drm

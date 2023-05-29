@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DEBUGGER_H__
 #define __HWC_DEBUGGER_H__
 
@@ -45,8 +52,8 @@ using display::DebugHandler;
 class HWCDebugHandler : public DebugHandler {
  public:
   HWCDebugHandler();
-  static inline DebugHandler* Get() { return &debug_handler_; }
-  static const char* DumpDir() { return "/data/vendor/display"; }
+  static inline DebugHandler *Get() { return &debug_handler_; }
+  static const char *DumpDir() { return "/data/vendor/display"; }
 
   static void DebugAll(bool enable, int verbose_level);
   static void DebugResources(bool enable, int verbose_level);
@@ -59,7 +66,9 @@ class HWCDebugHandler : public DebugHandler {
   static void DebugClient(bool enable, int verbose_level);
   static void DebugQos(bool enable, int verbose_level);
   static void DebugDisplay(bool enable, int verbose_level);
-  static int  GetIdleTimeoutMs();
+  static int GetIdleTimeoutMs();
+  static void DebugIWE(bool enable, int verbose_level);
+  static void DebugWbUsage(bool enable, int verbose_level);
 
   virtual void Error(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
   virtual void Warning(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -81,4 +90,3 @@ class HWCDebugHandler : public DebugHandler {
 }  // namespace sdm
 
 #endif  // __HWC_DEBUGGER_H__
-

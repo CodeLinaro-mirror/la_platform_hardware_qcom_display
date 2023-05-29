@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -51,12 +58,12 @@ using std::array;
 
 int HWCDisplayPluggableTest::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                                    qService::QService *qservice, hwc2_display_t id,
-                                    int32_t sdm_id, uint32_t panel_bpp, uint32_t pattern_type,
+                                    qService::QService *qservice, Display id, int32_t sdm_id,
+                                    uint32_t panel_bpp, uint32_t pattern_type,
                                     HWCDisplay **hwc_display) {
-  HWCDisplay *hwc_pluggable_test = new HWCDisplayPluggableTest(core_intf, buffer_allocator,
-                                                               callbacks, event_handler, qservice,
-                                                               id, sdm_id, panel_bpp, pattern_type);
+  HWCDisplay *hwc_pluggable_test =
+      new HWCDisplayPluggableTest(core_intf, buffer_allocator, callbacks, event_handler, qservice,
+                                  id, sdm_id, panel_bpp, pattern_type);
 
   int status = hwc_pluggable_test->Init();
   if (status) {
@@ -79,17 +86,14 @@ void HWCDisplayPluggableTest::Destroy(HWCDisplay *hwc_display) {
   delete hwc_display;
 }
 
-HWCDisplayPluggableTest::HWCDisplayPluggableTest(CoreInterface *core_intf,
-                                                 HWCBufferAllocator *buffer_allocator,
-                                                 HWCCallbacks *callbacks,
-                                                 HWCDisplayEventHandler *event_handler,
-                                                 qService::QService *qservice, hwc2_display_t id,
-                                                 int32_t sdm_id, uint32_t panel_bpp,
-                                                 uint32_t pattern_type)
-  : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kPluggable, id,
-               sdm_id, DISPLAY_CLASS_PLUGGABLE),
-    panel_bpp_(panel_bpp), pattern_type_(pattern_type) {
-}
+HWCDisplayPluggableTest::HWCDisplayPluggableTest(
+    CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator, HWCCallbacks *callbacks,
+    HWCDisplayEventHandler *event_handler, qService::QService *qservice, Display id, int32_t sdm_id,
+    uint32_t panel_bpp, uint32_t pattern_type)
+    : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kPluggable, id,
+                 sdm_id, DISPLAY_CLASS_PLUGGABLE),
+      panel_bpp_(panel_bpp),
+      pattern_type_(pattern_type) {}
 
 int HWCDisplayPluggableTest::Init() {
   uint32_t pluggable_width = 0;
@@ -97,7 +101,7 @@ int HWCDisplayPluggableTest::Init() {
 
   int status = HWCDisplay::Init();
   if (status) {
-      DLOGE("HWCDisplayPluggableTest::Init  status = %d ", status);
+    DLOGE("HWCDisplayPluggableTest::Init  status = %d ", status);
     return status;
   }
 
@@ -128,17 +132,16 @@ int HWCDisplayPluggableTest::Deinit() {
   return HWCDisplay::Deinit();
 }
 
-
-HWC2::Error HWCDisplayPluggableTest::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggableTest::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  auto status = HWC3::Error::None;
   if (active_secure_sessions_[kSecureDisplay] || display_paused_) {
     MarkLayersForGPUBypass();
     return status;
   }
 
   if (layer_set_.empty()) {
-      flush_ = true;
-      return status;
+    flush_ = true;
+    return status;
   }
 
   if (shutdown_pending_) {
@@ -158,11 +161,11 @@ HWC2::Error HWCDisplayPluggableTest::Validate(uint32_t *out_num_types, uint32_t 
 
   MarkLayersForGPUBypass();
 
-  return  status;
+  return status;
 }
 
-HWC2::Error HWCDisplayPluggableTest::Present(shared_ptr<Fence> *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggableTest::Present(shared_ptr<Fence> *out_retire_fence) {
+  auto status = HWC3::Error::None;
 
   if (active_secure_sessions_[kSecureDisplay]) {
     return status;
@@ -170,7 +173,6 @@ HWC2::Error HWCDisplayPluggableTest::Present(shared_ptr<Fence> *out_retire_fence
 
   if (display_paused_) {
     DisplayError error = display_intf_->Flush(&layer_stack_);
-    validated_ = false;
     if (error != kErrorNone) {
       DLOGE("Flush failed. Error = %d", error);
     }
@@ -190,14 +192,14 @@ HWC2::Error HWCDisplayPluggableTest::Present(shared_ptr<Fence> *out_retire_fence
       flush_on_error_ = true;
     } else if (error == kErrorShutDown) {
       shutdown_pending_ = true;
-      status = HWC2::Error::Unsupported;
+      status = HWC3::Error::Unsupported;
     } else if (error == kErrorNotValidated) {
-      status = HWC2::Error::NotValidated;
+      status = HWC3::Error::NotValidated;
     } else if (error != kErrorPermission) {
       DLOGE("Commit failed. Error = %d", error);
-        // To prevent surfaceflinger infinite wait, flush the previous frame during Commit()
-        // so that previous buffer and fences are released, and override the error.
-        flush_ = true;
+      // To prevent surfaceflinger infinite wait, flush the previous frame during Commit()
+      // so that previous buffer and fences are released, and override the error.
+      flush_ = true;
     }
   }
   PostCommit(out_retire_fence);
@@ -219,8 +221,8 @@ void HWCDisplayPluggableTest::DumpInputBuffer() {
   string format_str = GetFormatString(buffer_info_.buffer_config.format);
 
   char *buffer = reinterpret_cast<char *>(mmap(NULL, buffer_info_.alloc_buffer_info.size,
-                                                PROT_READ|PROT_WRITE, MAP_SHARED,
-                                                buffer_info_.alloc_buffer_info.fd, 0));
+                                               PROT_READ | PROT_WRITE, MAP_SHARED,
+                                               buffer_info_.alloc_buffer_info.fd, 0));
   if (buffer == MAP_FAILED) {
     DLOGW("mmap failed. err = %d", errno);
     return;
@@ -324,8 +326,8 @@ void HWCDisplayPluggableTest::CalcCRC(uint32_t color_val, std::bitset<16> *crc_d
 
 int HWCDisplayPluggableTest::FillBuffer() {
   uint8_t *buffer = reinterpret_cast<uint8_t *>(mmap(NULL, buffer_info_.alloc_buffer_info.size,
-                                                PROT_READ|PROT_WRITE, MAP_SHARED,
-                                                buffer_info_.alloc_buffer_info.fd, 0));
+                                                     PROT_READ | PROT_WRITE, MAP_SHARED,
+                                                     buffer_info_.alloc_buffer_info.fd, 0));
   if (buffer == MAP_FAILED) {
     DLOGE("mmap failed. err = %d", errno);
     return -EFAULT;
@@ -356,23 +358,23 @@ int HWCDisplayPluggableTest::FillBuffer() {
 
 int HWCDisplayPluggableTest::GetStride(LayerBufferFormat format, uint32_t width, uint32_t *stride) {
   switch (format) {
-  case kFormatRGBA8888:
-  case kFormatRGBA1010102:
-    *stride = width * 4;
-    break;
-  case kFormatRGB888:
-    *stride = width * 3;
-    break;
-  default:
-    DLOGW("Unsupported format type %d", format);
-    return -EINVAL;
+    case kFormatRGBA8888:
+    case kFormatRGBA1010102:
+      *stride = width * 4;
+      break;
+    case kFormatRGB888:
+      *stride = width * 3;
+      break;
+    default:
+      DLOGW("Unsupported format type %d", format);
+      return -EINVAL;
   }
 
   return 0;
 }
 
 void HWCDisplayPluggableTest::PixelCopy(uint32_t red, uint32_t green, uint32_t blue, uint32_t alpha,
-                                       uint8_t **buffer) {
+                                        uint8_t **buffer) {
   LayerBufferFormat format = buffer_info_.buffer_config.format;
 
   switch (format) {
@@ -577,14 +579,14 @@ void HWCDisplayPluggableTest::GenerateColorSquare(uint8_t *buffer) {
   }
 
   array<array<uint32_t, 3>, 8> colors = {{
-    {{max_color_val, max_color_val, max_color_val}},  // White Color
-    {{max_color_val, max_color_val, min_color_val}},  // Yellow Color
-    {{min_color_val, max_color_val, max_color_val}},  // Cyan Color
-    {{min_color_val, max_color_val, min_color_val}},  // Green Color
-    {{max_color_val, min_color_val, max_color_val}},  // Megenta Color
-    {{max_color_val, min_color_val, min_color_val}},  // Red Color
-    {{min_color_val, min_color_val, max_color_val}},  // Blue Color
-    {{min_color_val, min_color_val, min_color_val}},  // Black Color
+      {{max_color_val, max_color_val, max_color_val}},  // White Color
+      {{max_color_val, max_color_val, min_color_val}},  // Yellow Color
+      {{min_color_val, max_color_val, max_color_val}},  // Cyan Color
+      {{min_color_val, max_color_val, min_color_val}},  // Green Color
+      {{max_color_val, min_color_val, max_color_val}},  // Megenta Color
+      {{max_color_val, min_color_val, min_color_val}},  // Red Color
+      {{min_color_val, min_color_val, max_color_val}},  // Blue Color
+      {{min_color_val, min_color_val, min_color_val}},  // Black Color
   }};
 
   GetStride(format, aligned_width, &buffer_stride);
@@ -722,8 +724,8 @@ int HWCDisplayPluggableTest::DestroyLayerStack() {
   return 0;
 }
 
-HWC2::Error HWCDisplayPluggableTest::PostCommit(shared_ptr<Fence> *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggableTest::PostCommit(shared_ptr<Fence> *out_retire_fence) {
+  auto status = HWC3::Error::None;
   // Do no call flush on errors, if a successful buffer is never submitted.
   if (flush_ && flush_on_error_) {
     display_intf_->Flush(&layer_stack_);
@@ -734,4 +736,3 @@ HWC2::Error HWCDisplayPluggableTest::PostCommit(shared_ptr<Fence> *out_retire_fe
 }
 
 }  // namespace sdm
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,12 +31,11 @@
 #define __RC_INTF_H__
 
 #include <core/display_interface.h>
+
+#include <private/generic_intf.h>
+#include <private/generic_payload.h>
+
 #include <string>
-
-#include "generic_intf.h"
-#include "generic_payload.h"
-
-#define SDE_HW_PU_USECASE 0x1000
 
 namespace sdm {
 
@@ -46,6 +45,10 @@ struct RCInputConfig {
   uint32_t display_xres = 0;
   uint32_t display_yres = 0;
   uint32_t max_mem_size = 0;
+  uint32_t mixer_width = 0;
+  uint32_t mixer_height = 0;
+  uint32_t fb_width = 0;
+  uint32_t fb_height = 0;
 };
 
 struct RCOutputConfig {
@@ -53,6 +56,7 @@ struct RCOutputConfig {
   int32_t top_height = 0;
   int32_t bottom_width = 0;
   int32_t bottom_height = 0;
+  bool rc_needs_full_roi = false;
 };
 
 // These value is to get the status of the mask
@@ -69,7 +73,7 @@ enum RCMaskStackStatus {
 
 struct RCMaskCfgState {
   RCMaskStackStatus rc_mask_state = kStatusIgnore;
-  bool rc_pu_full_roi = false;
+  bool rc_pu_full_roi = false;  // Unused, as driver is handling PU
 };
 
 // RC specific params as enum
@@ -80,12 +84,17 @@ enum RCFeatureParams {
   kRCFeatureDisplayYRes,
   kRCFeatureResetHW,
   kRCFeatureQueryDspp,
+  kRCFeatureMixerWidth,
+  kRCFeatureMixerHeight,
+  kRCFeatureFbWidth,
+  kRCFeatureFbHeight,
   kRCFeatureParamMax,
 };
 
 // RC specific ops as enum
 enum RCFeatureOps {
   kRCFeaturePrepare,
+  kRCFeaturePostPrepare,
   kRCFeatureCommit,
   kRCFeatureOpsMax,
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <vector>
 #include <string>
 
@@ -37,7 +44,7 @@
 namespace sdm {
 
 GLuint GLCommon::LoadProgram(int vertex_entries, const char **vertex, int fragment_entries,
-                           const char **fragment) {
+                             const char **fragment) {
   GLuint prog_id = glCreateProgram();
 
   int vert_id = glCreateShader(GL_VERTEX_SHADER);
@@ -67,15 +74,15 @@ GLuint GLCommon::LoadProgram(int vertex_entries, const char **vertex, int fragme
 
 void GLCommon::DumpShaderLog(int shader) {
   int success = 0;
-  GLchar infoLog[512];
+  GLchar info_log[512];
   GL(glGetShaderiv(shader, GL_COMPILE_STATUS, &success));
   if (!success) {
-    glGetShaderInfoLog(shader, 512, NULL, infoLog);
-    DLOGI("Shader Failed to compile: %s\n", infoLog);
+    glGetShaderInfoLog(shader, 512, NULL, info_log);
+    DLOGI("Shader Failed to compile: %s\n", info_log);
   }
 }
 
-void GLCommon::MakeCurrent(const GLContext* ctx) {
+void GLCommon::MakeCurrent(const GLContext *ctx) {
   DTRACE_SCOPED();
   EGL(eglMakeCurrent(ctx->egl_display, ctx->egl_surface, ctx->egl_surface, ctx->egl_context));
 }
@@ -90,7 +97,7 @@ void GLCommon::DeleteProgram(uint32_t id) {
   GL(glDeleteProgram(id));
 }
 
-void GLCommon::SetSourceBuffer(const private_handle_t *src_hnd) {
+void GLCommon::SetSourceBuffer(const native_handle_t *src_hnd) {
   DTRACE_SCOPED();
   EGLImageBuffer *src_buffer = image_wrapper_.wrap(reinterpret_cast<const void *>(src_hnd));
 
@@ -100,7 +107,7 @@ void GLCommon::SetSourceBuffer(const private_handle_t *src_hnd) {
   }
 }
 
-void GLCommon::SetDestinationBuffer(const private_handle_t *dst_hnd) {
+void GLCommon::SetDestinationBuffer(const native_handle_t *dst_hnd) {
   DTRACE_SCOPED();
   EGLImageBuffer *dst_buffer = image_wrapper_.wrap(reinterpret_cast<const void *>(dst_hnd));
 
@@ -114,13 +121,13 @@ int GLCommon::WaitOnInputFence(const std::vector<shared_ptr<Fence>> &in_fences) 
 
   shared_ptr<Fence> in_fence = Fence::Merge(in_fences, true /* ignore signaled*/);
   if (in_fence == nullptr) {
-   return 0;
+    return 0;
   }
 
   int fd = Fence::Dup(in_fence);
   EGLint attribs[] = {EGL_SYNC_NATIVE_FENCE_FD_ANDROID, fd, EGL_NONE};
-  EGLSyncKHR sync = eglCreateSyncKHR(eglGetCurrentDisplay(), EGL_SYNC_NATIVE_FENCE_ANDROID,
-                                     attribs);
+  EGLSyncKHR sync =
+      eglCreateSyncKHR(eglGetCurrentDisplay(), EGL_SYNC_NATIVE_FENCE_ANDROID, attribs);
 
   if (sync == EGL_NO_SYNC_KHR) {
     DLOGE("Failed to create sync from source fd: %s", Fence::GetStr(in_fence).c_str());
@@ -159,7 +166,7 @@ int GLCommon::CreateOutputFence(shared_ptr<Fence> *out_fence) {
   return status;
 }
 
-void GLCommon::DestroyContext(GLContext* ctx) {
+void GLCommon::DestroyContext(GLContext *ctx) {
   DTRACE_SCOPED();
 
   // Clear egl image buffers.
@@ -195,4 +202,3 @@ void GLCommon::SetViewport(const GLRect &dst_rect) {
 }
 
 }  // namespace sdm
-

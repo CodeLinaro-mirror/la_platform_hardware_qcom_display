@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,6 +27,13 @@
  *
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __COLOR_MANAGER_H__
 #define __COLOR_MANAGER_H__
 
@@ -37,13 +44,13 @@
 #include <private/snapdragon_color_intf.h>
 #include <utils/sys.h>
 #include <utils/debug.h>
+#include <private/hw_interface.h>
 #include <array>
 #include <vector>
 #include <map>
 #include <string>
 #include <mutex>
 
-#include "hw_interface.h"
 
 namespace sdm {
 
@@ -119,7 +126,8 @@ class ColorManagerProxy {
   static ColorManagerProxy *CreateColorManagerProxy(DisplayType type, HWInterface *hw_intf,
                                                     const HWDisplayAttributes &attribute,
                                                     const HWPanelInfo &panel_info,
-                                                    DppsControlInterface *dpps_intf);
+                                                    DppsControlInterface *dpps_intf,
+                                                    DisplayInterface *disp_intf);
 
   /* need reverse the effect of CreateColorManagerProxy. */
   ~ColorManagerProxy();
@@ -140,13 +148,22 @@ class ColorManagerProxy {
   DisplayError ColorMgrSetModeWithRenderIntent(int32_t color_mode_id,
                                                const PrimariesTransfer &blend_space,
                                                uint32_t intent);
-  DisplayError Validate(HWLayers *hw_layers);
+  DisplayError Validate(DispLayerStack *disp_layer_stack);
   bool IsSupportStcTonemap();
   bool GameEnhanceSupported();
   DisplayError ColorMgrGetStcModes(ColorModeList *mode_list);
   DisplayError ColorMgrSetStcMode(const ColorMode &color_mode);
-  DisplayError PrePrepare(HWLayers *hw_layers);
+  DisplayError Prepare();
+  bool IsValidateNeeded();
+
+  /* ConfigureCWBDither can get/release dither setting base on bool variable free_data
+   * if free_data is false to get dither setting needs to be applied.
+   * if free_data is true to release the dither setting that has been applied.
+   */
+  DisplayError ConfigureCWBDither(CwbConfig *cwb_cfg, bool free_data);
   DisplayError NotifyDisplayCalibrationMode(bool in_calibration);
+  DisplayError ColorMgrSetLtmPccConfig(void* pcc_input, size_t size);
+  DisplayError ColorMgrSetSprIntf(std::shared_ptr<SPRIntf> spr_intf);
 
  protected:
   ColorManagerProxy() {}
@@ -165,12 +182,13 @@ class ColorManagerProxy {
                                         PPFeaturesConfig *out_data);
   typedef std::map<std::string, ConvertProc> ConvertTable;
 
-  bool NeedHwAssetsUpdate();
+  bool NeedAssetsUpdate();
   DisplayError UpdateModeHwassets(int32_t mode_id, snapdragoncolor::ColorMode color_mode,
                                   bool valid_meta_data, const ColorMetaData &meta_data);
   DisplayError ConvertToPPFeatures(const HwConfigOutputParams &params, PPFeaturesConfig *out_data);
   void DumpColorMetaData(const ColorMetaData &color_metadata);
   bool HasNativeModeSupport();
+  DisplayError ApplySwAssets();
 
   int32_t display_id_;
   DisplayType device_type_;

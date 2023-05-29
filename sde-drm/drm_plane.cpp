@@ -36,18 +36,17 @@
 * modification, are permitted (subject to the limitations in the
 * disclaimer below) provided that the following conditions are met:
 *
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
+* * Redistributions of source code must retain the above copyright
+* notice, this list of conditions and the following disclaimer.
 *
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
+* * Redistributions in binary form must reproduce the above
+* copyright notice, this list of conditions and the following
+* disclaimer in the documentation and/or other materials provided
+* with the distribution.
 *
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the
-*      names of its contributors may be used to endorse or promote
-*      products derived from this software without specific prior
-*      written permission.
+* * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+* contributors may be used to endorse or promote products derived
+* from this software without specific prior written permission.
 *
 * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
 * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
@@ -93,6 +92,7 @@ using std::map;
 using std::string;
 using std::map;
 using std::pair;
+using std::make_pair;
 using std::vector;
 using std::unique_ptr;
 using std::tuple;
@@ -169,6 +169,53 @@ static struct sde_drm_csc_v1 csc_10bit_convert[kCscTypeMax] = {
     { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
     { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
   },
+  [kCscYuv2RgbDolbyVisionP5] = {
+    {
+      0x100000000, 0x0, 0x0,
+      0x0, 0x100000000, 0x0,
+      0x0, 0x0, 0x100000000,
+    },
+    { 0x0, 0x0, 0x0,},
+    { 0x0, 0x0, 0x0,},
+    { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
+    { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
+  },
+  [kCscYuv2RgbDCIP3FR] = {
+    {
+      0x100000000, 0x0, 0x194800000,
+      0x100000000, 0x7fd2800000, 0x7f8a800000,
+      0x100000000, 0x1dc800000, 0x0,
+    },
+    { 0x0, 0xfe00, 0xfe00,},
+    { 0x0, 0x0, 0x0, },
+    { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
+    { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
+  },
+};
+
+static struct drm_msm_fp16_csc csc_fp16_convert[kFP16CscTypeMax] = {
+  [kFP16CscSrgb2Dcip3] = {
+      0x0,  // flags -- currently unused
+      FP16_CSC_CFG0_PARAM_LEN,
+      {
+        0x3A94, 0x31AE, 0x0, 0x0,
+        0x2840, 0x3BBC, 0x0, 0x0,
+        0x2460, 0x2CA2, 0x3B49, 0x0,
+      },
+      FP16_CSC_CFG1_PARAM_LEN,
+      {0xB333, 0x3CE6, 0XA962, 0x3C2B, 0xAE49, 0x3C65, 0x0, 0x3C00,}
+  },
+  [kFP16CscSrgb2Bt2020] = {
+      0x0,  // flags -- currently unused
+      FP16_CSC_CFG0_PARAM_LEN,
+      {
+        0x3905, 0x3545, 0x2988, 0x0,
+        0x2C6D, 0x3B58, 0x21D8, 0x0,
+        0x2434, 0x2DA3, 0x3B2A, 0x0,
+      },
+      FP16_CSC_CFG1_PARAM_LEN,
+      {0xD527, 0x5A7D, 0XCC26, 0x586D, 0xCB6C, 0x585D, 0x0, 0x57D0,}
+  },
 };
 
 static uint8_t REFLECT_X = 0;
@@ -186,6 +233,28 @@ static uint8_t SECURE_DIR_TRANSLATION = 3;
 static uint8_t MULTIRECT_NONE = 0;
 static uint8_t MULTIRECT_PARALLEL = 1;
 static uint8_t MULTIRECT_SERIAL = 2;
+
+// Blend Type
+static uint8_t UNDEFINED = 0;
+static uint8_t OPAQUE = 1;
+static uint8_t PREMULTIPLIED = 2;
+static uint8_t COVERAGE = 3;
+static uint8_t SKIP_BLENDING = 4;
+
+// UCSC IGC modes
+static uint8_t UCSC_IGC_DISABLE = 0;
+static uint8_t UCSC_IGC_SRGB = 1;
+static uint8_t UCSC_IGC_REC709 = 2;
+static uint8_t UCSC_IGC_GAMMA2_2 = 3;
+static uint8_t UCSC_IGC_HLG = 4;
+static uint8_t UCSC_IGC_PQ = 5;
+
+// UCSC GC modes
+static uint8_t UCSC_GC_DISABLE = 0;
+static uint8_t UCSC_GC_SRGB = 1;
+static uint8_t UCSC_GC_PQ = 2;
+static uint8_t UCSC_GC_GAMMA2_2 = 3;
+static uint8_t UCSC_GC_HLG = 4;
 
 static void SetRect(DRMRect &source, drm_clip_rect *target) {
   target->x1 = uint16_t(source.left);
@@ -241,7 +310,8 @@ static InlineRotationVersion PopulateInlineRotationVersion(uint32_t ver) {
     case 0x0000: return InlineRotationVersion::kInlineRotationNone;
     case 0x0001:
     case 0x0100: return InlineRotationVersion::kInlineRotationV1;
-    case 0x0200: return InlineRotationVersion::kInlineRotationV2;
+    case 0x0200:
+    case 0x0201: return InlineRotationVersion::kInlineRotationV2;
     default: return InlineRotationVersion::kInlineRotationNone;
   }
 }
@@ -252,6 +322,9 @@ static QSEEDStepVersion PopulateQseedStepVersion(uint32_t hw_ver) {
     case 0x1004: return QSEEDStepVersion::V4;
     case 0x2004: return QSEEDStepVersion::V3LITE_V4;
     case 0x3000: return QSEEDStepVersion::V3LITE_V5;
+    case 0x3001: return QSEEDStepVersion::V3LITE_V7;
+    case 0x3002: return QSEEDStepVersion::V3LITE_V8;
+    case 0x3003: return QSEEDStepVersion::V3LITE_V9;
     // default value. also corresponds to (hw_ver == 0x1002)
     default: return QSEEDStepVersion::V2;
   }
@@ -271,6 +344,27 @@ static void PopulateMultiRectModes(drmModePropertyRes *prop) {
       }
     }
     multirect_modes_populated = true;
+  }
+}
+
+static void PopulateBlendType(drmModePropertyRes *prop) {
+  static bool blend_type_populated = false;
+  if (!blend_type_populated) {
+    for (auto i = 0; i < prop->count_enums; i++) {
+      string enum_name(prop->enums[i].name);
+      if (enum_name == "not_defined") {
+        UNDEFINED = prop->enums[i].value;
+      } else if (enum_name == "opaque") {
+        OPAQUE = prop->enums[i].value;
+      } else if (enum_name == "premultiplied") {
+        PREMULTIPLIED = prop->enums[i].value;
+      } else if (enum_name == "coverage") {
+        COVERAGE = prop->enums[i].value;
+      } else if (enum_name == "skip_blending") {
+        SKIP_BLENDING = prop->enums[i].value;
+      }
+    }
+    blend_type_populated = true;
   }
 }
 
@@ -312,15 +406,69 @@ static bool GetDRMonemapLutTypeFromPPFeatureID(DRMPPFeatureID id, DRMTonemapLutT
   return true;
 }
 
+static void PopulateUcscIgcMode(drmModePropertyRes *prop) {
+  static bool ucsc_igc_populated = false;
+  if (!ucsc_igc_populated) {
+    for (auto i = 0; i < prop->count_enums; i++) {
+      string enum_name(prop->enums[i].name);
+      if (enum_name == "disable") {
+        UCSC_IGC_DISABLE = prop->enums[i].value;
+      } else if (enum_name == "srgb") {
+        UCSC_IGC_SRGB = prop->enums[i].value;
+      } else if (enum_name == "rec709") {
+        UCSC_IGC_REC709 = prop->enums[i].value;
+      } else if (enum_name == "gamma2_2") {
+        UCSC_IGC_GAMMA2_2 = prop->enums[i].value;
+      } else if (enum_name == "hlg") {
+        UCSC_IGC_HLG = prop->enums[i].value;
+      } else if (enum_name == "pq") {
+        UCSC_IGC_PQ = prop->enums[i].value;
+      } else {
+        DRM_LOGE("Unknown IGC mode - %s", enum_name.c_str());
+      }
+    }
+    ucsc_igc_populated = true;
+  }
+}
+
+static void PopulateUcscGcMode(drmModePropertyRes *prop) {
+  static bool ucsc_gc_populated = false;
+  if (!ucsc_gc_populated) {
+    for (auto i = 0; i < prop->count_enums; i++) {
+      string enum_name(prop->enums[i].name);
+      if (enum_name == "disable") {
+        UCSC_GC_DISABLE = prop->enums[i].value;
+      } else if (enum_name == "srgb") {
+        UCSC_GC_SRGB = prop->enums[i].value;
+      } else if (enum_name == "pq") {
+        UCSC_GC_PQ = prop->enums[i].value;
+      } else if (enum_name == "gamma2_2") {
+        UCSC_GC_GAMMA2_2 = prop->enums[i].value;
+      } else if (enum_name == "hlg") {
+        UCSC_GC_HLG = prop->enums[i].value;
+      } else {
+        DRM_LOGE("Unknown GC mode - %s", enum_name.c_str());
+      }
+    }
+    ucsc_gc_populated = true;
+  }
+}
+
 DRMPlaneManager::DRMPlaneManager(int fd) : fd_(fd) {}
 
 void DRMPlaneManager::Init() {
+  lock_guard<mutex> lock(lock_);
   drmModePlaneRes *resource = drmModeGetPlaneResources(fd_);
   if (!resource) {
     return;
   }
 
+  const uint32_t yield_on_count = 5;
   for (uint32_t i = 0; i < resource->count_planes; i++) {
+    if (!(i % yield_on_count)) {
+      sched_yield();
+    }
+
     // The enumeration order itself is the priority from high to low
     unique_ptr<DRMPlane> plane(new DRMPlane(fd_, i));
     drmModePlane *libdrm_plane = drmModeGetPlane(fd_, resource->planes[i]);
@@ -336,6 +484,7 @@ void DRMPlaneManager::Init() {
 }
 
 void DRMPlaneManager::DumpByID(uint32_t id) {
+  lock_guard<mutex> lock(lock_);
   plane_pool_.at(id)->Dump();
 }
 
@@ -357,13 +506,23 @@ void DRMPlaneManager::Perform(DRMOps code, uint32_t obj_id, drmModeAtomicReq *re
   it->second->Perform(code, req, args);
 }
 
+void DRMPlaneManager::Perform(DRMOps code, drmModeAtomicReq *req, uint32_t obj_id, ...) {
+  lock_guard<mutex> lock(lock_);
+  va_list args;
+  va_start(args, obj_id);
+  Perform(code, obj_id, req, args);
+  va_end(args);
+}
+
 void DRMPlaneManager::DumpAll() {
+  lock_guard<mutex> lock(lock_);
   for (uint32_t i = 0; i < plane_pool_.size(); i++) {
     plane_pool_[i]->Dump();
   }
 }
 
 void DRMPlaneManager::GetPlanesInfo(DRMPlanesInfo *info) {
+  lock_guard<mutex> lock(lock_);
   for (auto &plane : plane_pool_) {
     info->push_back(std::make_pair(plane.first, plane.second->GetPlaneTypeInfo()));
   }
@@ -388,6 +547,7 @@ void DRMPlaneManager::UnsetUnusedResources(uint32_t crtc_id, bool is_commit, drm
 }
 
 void DRMPlaneManager::RetainPlanes(uint32_t crtc_id) {
+  lock_guard<mutex> lock(lock_);
   for (auto &plane : plane_pool_) {
     uint32_t assigned_crtc = 0;
     plane.second->GetAssignedCrtc(&assigned_crtc);
@@ -416,6 +576,7 @@ void DRMPlaneManager::PostCommit(uint32_t crtc_id, bool success) {
 }
 
 void DRMPlaneManager::SetScalerLUT(const DRMScalerLUTInfo &lut_info) {
+  lock_guard<mutex> lock(lock_);
   if (lut_info.dir_lut_size) {
     drmModeCreatePropertyBlob(fd_, reinterpret_cast<void *>(lut_info.dir_lut),
                               lut_info.dir_lut_size, &dir_lut_blob_id_);
@@ -431,6 +592,7 @@ void DRMPlaneManager::SetScalerLUT(const DRMScalerLUTInfo &lut_info) {
 }
 
 void DRMPlaneManager::UnsetScalerLUT() {
+  lock_guard<mutex> lock(lock_);
   if (dir_lut_blob_id_) {
     drmModeDestroyPropertyBlob(fd_, dir_lut_blob_id_);
     dir_lut_blob_id_ = 0;
@@ -445,6 +607,16 @@ void DRMPlaneManager::UnsetScalerLUT() {
   }
 }
 
+void DRMPlaneManager::ResetCache(drmModeAtomicReq *req, uint32_t crtc_id) {
+  lock_guard<mutex> lock(lock_);
+  for (auto &plane : plane_pool_) {
+    uint32_t assigned_crtc = 0;
+    plane.second->GetAssignedCrtc(&assigned_crtc);
+    if (assigned_crtc == crtc_id) {
+      plane.second->ResetCache(req);
+    }
+  }
+}
 
 void DRMPlaneManager::ResetPlanesLUT(drmModeAtomicReq *req) {
   lock_guard<mutex> lock(lock_);
@@ -453,15 +625,49 @@ void DRMPlaneManager::ResetPlanesLUT(drmModeAtomicReq *req) {
   }
 }
 
-void DRMPlaneManager::ResetCache(drmModeAtomicReq *req, uint32_t crtc_id) {
+void DRMPlaneManager::MapPlaneToCrtc(std::map<uint32_t, uint32_t> *plane_to_crtc) {
   lock_guard<mutex> lock(lock_);
+
+  if (!plane_to_crtc) {
+    DLOGE("Map is NULL! Not expected.");
+    return;
+  }
+
+  plane_to_crtc->clear();
+
   for (auto &plane : plane_pool_) {
-    uint32_t assigned_crtc = 0;
-    plane.second->GetAssignedCrtc(&assigned_crtc);
-#ifndef TRUSTED_VM
-    if (assigned_crtc == crtc_id)
-#endif
-      plane.second->ResetCache(req);
+    uint32_t crtc_id = 0;
+    plane.second->GetCrtc(&crtc_id);
+    if (crtc_id)
+      plane_to_crtc->insert(make_pair(plane.first, crtc_id));
+  }
+}
+
+void DRMPlaneManager::GetPlaneIdsFromDescriptions(FetchResourceList &descriptions,
+                                                  std::vector<uint32_t> *plane_ids) {
+  lock_guard<mutex> lock(lock_);
+  for (auto &desc : descriptions) {
+    const string &type_str = std::get<0>(desc);
+    DRMPlaneType type = DRMPlaneType::MAX;
+    if (type_str == "DMA") {
+      type = DRMPlaneType::DMA;
+    } else {
+      continue;
+    }
+    const int32_t &idx = std::get<1>(desc);
+    const int8_t &rect = std::get<2>(desc);
+    for (auto &p : plane_pool_) {
+      DRMPlaneType plane_type;
+      p.second->GetType(&plane_type);
+      uint8_t plane_idx;
+      p.second->GetIndex(&plane_idx);
+      uint8_t plane_rect;
+      p.second->GetRect(&plane_rect);
+      if (plane_idx == idx && plane_rect == rect && plane_type == type) {
+        plane_ids->emplace_back(p.first);
+        break;
+      }
+    }
   }
 }
 
@@ -532,6 +738,8 @@ void DRMPlane::GetTypeInfo(const PropertyMap &prop_map) {
   string true_inline_dwnscale_rt_numerator = "true_inline_dwnscale_rt_numerator=";
   string true_inline_dwnscale_rt_denominator = "true_inline_dwnscale_rt_denominator=";
   string true_inline_max_height = "true_inline_max_height=";
+  string pipe_idx = "pipe_idx=";
+  string demura_block = "demura_block=";
 
   while (std::getline(stream, line)) {
     if (line.find(inline_rot_pixel_formats) != string::npos) {
@@ -575,7 +783,12 @@ void DRMPlane::GetTypeInfo(const PropertyMap &prop_map) {
         true_inline_dwnscale_rt_denominator.length()));
     } else if (line.find(true_inline_max_height) != string::npos) {
       info->max_rotation_linewidth = std::stoi(line.erase(0, true_inline_max_height.length()));
+    }  else if (line.find(pipe_idx) != string::npos) {
+      info->pipe_idx = std::stoi(line.erase(0, pipe_idx.length()));
+    }  else if (line.find(demura_block) != string::npos) {
+      info->demura_block_capability = std::stoi(line.erase(0, demura_block.length()));
     }
+
   }
 
 // TODO(user): Get max_scaler_linewidth and non_scaler_linewidth from driver
@@ -624,6 +837,12 @@ void DRMPlane::ParseProperties() {
     } else if (prop_enum == DRMProperty::MULTIRECT_MODE) {
       PopulateMultiRectModes(info);
       plane_type_info_.multirect_prop_present = true;
+    } else if (prop_enum == DRMProperty::BLEND_OP) {
+      PopulateBlendType(info);
+    } else if (prop_enum == DRMProperty::SDE_SSPP_UCSC_IGC_V1) {
+      PopulateUcscIgcMode(info);
+    } else if (prop_enum == DRMProperty::SDE_SSPP_UCSC_GC_V1) {
+      PopulateUcscGcMode(info);
     }
 
     prop_mgr_.SetPropertyId(prop_enum, info->prop_id);
@@ -664,6 +883,36 @@ void DRMPlane::ParseProperties() {
         (uint32_t)prop_enum <= (uint32_t)DRMProperty::SDE_VIG_3D_LUT_GAMUT_V6) {
       plane_type_info_.tonemap_lut_version_map[DRMTonemapLutType::VIG_3D_GAMUT] =
           ((uint32_t)prop_enum - (uint32_t)DRMProperty::SDE_VIG_3D_LUT_GAMUT_V5 + 5);
+    }
+
+    if ((uint32_t)prop_enum >= (uint32_t)DRMProperty::SDE_SSPP_UCSC_UNMULT_V1 &&
+        (uint32_t)prop_enum <= (uint32_t)DRMProperty::SDE_SSPP_UCSC_UNMULT_V1) {
+      plane_type_info_.ucsc_block_version_map[DRMUcscBlockType::UCSC_UNMULT] =
+          ((uint32_t)prop_enum - (uint32_t)DRMProperty::SDE_SSPP_UCSC_UNMULT_V1 + 1);
+    }
+
+    if ((uint32_t)prop_enum >= (uint32_t)DRMProperty::SDE_SSPP_UCSC_IGC_V1 &&
+        (uint32_t)prop_enum <= (uint32_t)DRMProperty::SDE_SSPP_UCSC_IGC_V1) {
+      plane_type_info_.ucsc_block_version_map[DRMUcscBlockType::UCSC_IGC] =
+          ((uint32_t)prop_enum - (uint32_t)DRMProperty::SDE_SSPP_UCSC_IGC_V1 + 1);
+    }
+
+    if ((uint32_t)prop_enum >= (uint32_t)DRMProperty::SDE_SSPP_UCSC_CSC_V1 &&
+        (uint32_t)prop_enum <= (uint32_t)DRMProperty::SDE_SSPP_UCSC_CSC_V1) {
+      plane_type_info_.ucsc_block_version_map[DRMUcscBlockType::UCSC_CSC] =
+          ((uint32_t)prop_enum - (uint32_t)DRMProperty::SDE_SSPP_UCSC_CSC_V1 + 1);
+    }
+
+    if ((uint32_t)prop_enum >= (uint32_t)DRMProperty::SDE_SSPP_UCSC_GC_V1 &&
+        (uint32_t)prop_enum <= (uint32_t)DRMProperty::SDE_SSPP_UCSC_GC_V1) {
+      plane_type_info_.ucsc_block_version_map[DRMUcscBlockType::UCSC_GC] =
+          ((uint32_t)prop_enum - (uint32_t)DRMProperty::SDE_SSPP_UCSC_GC_V1 + 1);
+    }
+
+    if ((uint32_t)prop_enum >= (uint32_t)DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1 &&
+        (uint32_t)prop_enum <= (uint32_t)DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1) {
+      plane_type_info_.ucsc_block_version_map[DRMUcscBlockType::UCSC_ALPHA_DITHER] =
+          ((uint32_t)prop_enum - (uint32_t)DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1 + 1);
     }
   }
 
@@ -756,6 +1005,143 @@ bool DRMPlane::SetCscConfig(drmModeAtomicReq *req, DRMCscType csc_type) {
   return true;
 }
 
+bool DRMPlane::SetFp16CscConfig(drmModeAtomicReq *req, DRMFp16CscType csc_type) {
+  if (csc_type > kFP16CscTypeMax) {
+    return false;
+  }
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_FP16_CSC_V1);
+  if (!prop_id) {
+    return false;
+  }
+
+  if (csc_type == kFP16CscTypeMax) {
+// Since logic for setting FP16 properties is in SetupAtomic, adding optimization for setting and
+// resetting blob properties leads to AddProperty being called in Validate and ignored during
+// Commit call. This invalidates the current FP16 test cases, and to avoid this we need to add
+// SDM_VIRTUAL_DRIVER checks in both SetFp16CscConfig and SetFp16GcConfig
+#ifndef SDM_VIRTUAL_DRIVER
+    if (!fp16_csc_blob_id_) {
+      return true;
+    }
+#endif
+    UnsetFp16CscConfig();
+    AddProperty(req, drm_plane_->plane_id, prop_id, 0, false /* cache */, tmp_prop_val_map_);
+  } else {
+#ifndef SDM_VIRTUAL_DRIVER
+    if (csc_type == fp16_csc_type_) {
+      return true;
+    }
+#endif
+    UnsetFp16CscConfig();
+    drmModeCreatePropertyBlob(fd_, reinterpret_cast<void *>(&csc_fp16_convert[csc_type]),
+                              sizeof(drm_msm_fp16_csc), &fp16_csc_blob_id_);
+    AddProperty(req, drm_plane_->plane_id, prop_id, fp16_csc_blob_id_, false /* cache */,
+                tmp_prop_val_map_);
+  }
+  fp16_csc_type_ = csc_type;
+
+  return true;
+}
+
+bool DRMPlane::SetFp16IgcConfig(drmModeAtomicReq *req, uint32_t igc_en) {
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_FP16_IGC_V1);
+  if (!prop_id) {
+    return false;
+  }
+
+  AddProperty(req, drm_plane_->plane_id, prop_id, igc_en, false /* cache */, tmp_prop_val_map_);
+
+  return true;
+}
+
+bool DRMPlane::SetFp16UnmultConfig(drmModeAtomicReq *req, uint32_t unmult_en) {
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_FP16_UNMULT_V1);
+  if (!prop_id) {
+    return false;
+  }
+
+  AddProperty(req, drm_plane_->plane_id, prop_id, unmult_en, false /* cache */, tmp_prop_val_map_);
+
+  return true;
+}
+
+bool DRMPlane::SetFp16GcConfig(drmModeAtomicReq *req, drm_msm_fp16_gc *fp16_gc_config) {
+  auto prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_FP16_GC_V1);
+  if (!prop_id) {
+    return false;
+  }
+
+
+  if (fp16_gc_config->mode == FP16_GC_MODE_INVALID) {
+#ifndef SDM_VIRTUAL_DRIVER
+    if (!fp16_gc_blob_id_) {
+      return true;
+    }
+#endif
+    UnsetFp16GcConfig();
+    AddProperty(req, drm_plane_->plane_id, prop_id, 0, false /* cache */, tmp_prop_val_map_);
+  } else {
+#ifndef SDM_VIRTUAL_DRIVER
+    if (fp16_gc_config->mode == fp16_gc_config_.mode &&
+        fp16_gc_config->flags == fp16_gc_config_.flags) {
+      return true;
+    }
+#endif
+    UnsetFp16GcConfig();
+    drmModeCreatePropertyBlob(fd_, reinterpret_cast<void *>(fp16_gc_config),
+                              sizeof(drm_msm_fp16_gc), &fp16_gc_blob_id_);
+    AddProperty(req, drm_plane_->plane_id, prop_id, fp16_gc_blob_id_, false /* cache */,
+                tmp_prop_val_map_);
+  }
+  fp16_gc_config_.mode = fp16_gc_config->mode;
+  fp16_gc_config_.flags = fp16_gc_config->flags;
+
+  return true;
+}
+
+void DRMPlane::UnsetFp16CscConfig() {
+  if (fp16_csc_blob_id_) {
+    drmModeDestroyPropertyBlob(fd_, fp16_csc_blob_id_);
+    fp16_csc_blob_id_ = 0;
+  }
+}
+
+void DRMPlane::UnsetFp16GcConfig() {
+  if (fp16_gc_blob_id_) {
+    drmModeDestroyPropertyBlob(fd_, fp16_gc_blob_id_);
+    fp16_gc_blob_id_ = 0;
+  }
+}
+
+#ifdef UCSC_SUPPORTED
+void DRMPlane::SetUcscCscConfig(drmModeAtomicReq *req, drm_msm_ucsc_csc *ucsc_csc_config) {
+  uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_UCSC_CSC_V1);
+  if (!prop_id) {
+    return;
+  }
+
+  UnsetUcscCscConfig();
+
+  if (ucsc_csc_config == nullptr) {
+    AddProperty(req, drm_plane_->plane_id, prop_id, 0, false /* cache */, tmp_prop_val_map_);
+    DRM_LOGD("Plane %d: Resetting UCSC CSC", drm_plane_->plane_id);
+  } else {
+    drmModeCreatePropertyBlob(fd_, reinterpret_cast<void *>(ucsc_csc_config),
+                              sizeof(drm_msm_ucsc_csc), &ucsc_csc_blob_id_);
+    AddProperty(req, drm_plane_->plane_id, prop_id, ucsc_csc_blob_id_, false /* cache */,
+                tmp_prop_val_map_);
+    DRM_LOGD("Plane %d: Setting UCSC CSC", drm_plane_->plane_id);
+  }
+}
+
+void DRMPlane::UnsetUcscCscConfig() {
+  if (ucsc_csc_blob_id_) {
+    drmModeDestroyPropertyBlob(fd_, ucsc_csc_blob_id_);
+    ucsc_csc_blob_id_ = 0;
+  }
+}
+#endif
+
 bool DRMPlane::SetScalerConfig(drmModeAtomicReq *req, uint64_t handle) {
   if (plane_type_info_.type != DRMPlaneType::VIG) {
     return false;
@@ -796,9 +1182,12 @@ void DRMPlane::SetDecimation(drmModeAtomicReq *req, uint32_t prop_id, uint32_t p
   DRM_LOGD("Plane %d: Setting decimation %d", drm_plane_->plane_id, prop_value);
 }
 
-void DRMPlane::PostValidate(uint32_t crtc_id, bool /*success*/) {
+void DRMPlane::PostValidate(uint32_t crtc_id, bool success) {
   if (requested_crtc_id_ == crtc_id) {
     SetRequestedCrtc(0);
+    if (!success) {
+      ResetColorLUTs(true, nullptr);
+    }
     tmp_prop_val_map_ = committed_prop_val_map_;
   }
 }
@@ -915,10 +1304,32 @@ void DRMPlane::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
     } break;
 
     case DRMOps::PLANE_SET_BLEND_TYPE: {
-      uint32_t blending = va_arg(args, uint32_t);
+      DRMBlendType blending = va_arg(args, DRMBlendType);
+      uint32_t blend_type = UNDEFINED;
+      switch (blending) {
+        case DRMBlendType::OPAQUE:
+          blend_type = OPAQUE;
+          break;
+        case DRMBlendType::PREMULTIPLIED:
+          blend_type = PREMULTIPLIED;
+          break;
+        case DRMBlendType::COVERAGE:
+          blend_type = COVERAGE;
+          break;
+        case DRMBlendType::SKIP_BLENDING:
+          blend_type = SKIP_BLENDING;
+          break;
+        case DRMBlendType::UNDEFINED:
+          blend_type = UNDEFINED;
+          break;
+        default:
+          DRM_LOGE("Invalid blend type %d to set on plane %d", blending, obj_id);
+          break;
+      }
+
       prop_id = prop_mgr_.GetPropertyId(DRMProperty::BLEND_OP);
-      AddProperty(req, obj_id, prop_id, blending, true /* cache */, tmp_prop_val_map_);
-      DRM_LOGV("Plane %d: Setting blending %d", obj_id, blending);
+      AddProperty(req, obj_id, prop_id, blend_type, true /* cache */, tmp_prop_val_map_);
+      DRM_LOGV("Plane %d: Setting blending %d", obj_id, blend_type);
     } break;
 
     case DRMOps::PLANE_SET_H_DECIMATION: {
@@ -1037,6 +1448,129 @@ void DRMPlane::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       }
     } break;
 
+    case DRMOps::PLANE_SET_FP16_CSC_CONFIG: {
+      uint32_t config = va_arg(args, uint32_t);
+      SetFp16CscConfig(req, (DRMFp16CscType)config);
+    } break;
+
+    case DRMOps::PLANE_SET_FP16_GC_CONFIG: {
+      drm_msm_fp16_gc *config = va_arg(args, drm_msm_fp16_gc *);
+      if (config) {
+        SetFp16GcConfig(req, config);
+      }
+    } break;
+
+    case DRMOps::PLANE_SET_FP16_IGC_CONFIG: {
+      uint32_t config = va_arg(args, uint32_t);
+      SetFp16IgcConfig(req, config);
+    } break;
+
+    case DRMOps::PLANE_SET_FP16_UNMULT_CONFIG: {
+      uint32_t config = va_arg(args, uint32_t);
+      SetFp16UnmultConfig(req, config);
+    } break;
+
+#ifdef UCSC_SUPPORTED
+    case DRMOps::PLANE_SET_UCSC_UNMULT_CONFIG: {
+      prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_UCSC_UNMULT_V1);
+      if (!prop_id) {
+        return;
+      }
+
+      uint32_t ucsc_unmult = va_arg(args, uint32_t);
+      AddProperty(req, obj_id, prop_id, ucsc_unmult, true /* cache */, tmp_prop_val_map_);
+      DRM_LOGD("Plane %d: %s UCSC UNMULT", obj_id, ucsc_unmult ? "Setting" : "Resetting");
+    } break;
+
+    case DRMOps::PLANE_SET_UCSC_IGC_CONFIG: {
+      prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_UCSC_IGC_V1);
+      if (!prop_id) {
+        return;
+      }
+
+      DRMUcscIgcMode ucsc_igc = va_arg(args, DRMUcscIgcMode);
+      uint32_t igc = UCSC_IGC_DISABLE;
+      switch (ucsc_igc) {
+        case DRMUcscIgcMode::UCSC_IGC_MODE_SRGB:
+          igc = UCSC_IGC_SRGB;
+          break;
+        case DRMUcscIgcMode::UCSC_IGC_MODE_REC709:
+          igc = UCSC_IGC_REC709;
+          break;
+        case DRMUcscIgcMode::UCSC_IGC_MODE_GAMMA2_2:
+          igc = UCSC_IGC_GAMMA2_2;
+          break;
+        case DRMUcscIgcMode::UCSC_IGC_MODE_HLG:
+          igc = UCSC_IGC_HLG;
+          break;
+        case DRMUcscIgcMode::UCSC_IGC_MODE_PQ:
+          igc = UCSC_IGC_PQ;
+          break;
+        case DRMUcscIgcMode::UCSC_IGC_MODE_DISABLE:
+          igc = UCSC_IGC_DISABLE;
+          break;
+        default:
+          DRM_LOGE("Invalid igc mode %d to set on plane %d", ucsc_igc, obj_id);
+          break;
+      }
+
+      AddProperty(req, obj_id, prop_id, igc, true /* cache */, tmp_prop_val_map_);
+      DRM_LOGD("Plane %d: %s UCSC IGC - %d", obj_id,
+               (igc == UCSC_IGC_DISABLE) ? "Resetting" : "Setting", igc);
+    } break;
+
+    case DRMOps::PLANE_SET_UCSC_CSC_CONFIG: {
+      drm_msm_ucsc_csc *ucsc_csc = va_arg(args, drm_msm_ucsc_csc *);
+      SetUcscCscConfig(req, ucsc_csc);
+    } break;
+
+    case DRMOps::PLANE_SET_UCSC_GC_CONFIG: {
+      prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_UCSC_GC_V1);
+      if (!prop_id) {
+        return;
+      }
+
+      DRMUcscGcMode ucsc_gc = va_arg(args, DRMUcscGcMode);
+      uint32_t gc = UCSC_GC_DISABLE;
+      switch (ucsc_gc) {
+        case DRMUcscGcMode::UCSC_GC_MODE_SRGB:
+          gc = UCSC_GC_SRGB;
+          break;
+        case DRMUcscGcMode::UCSC_GC_MODE_PQ:
+          gc = UCSC_GC_PQ;
+          break;
+        case DRMUcscGcMode::UCSC_GC_MODE_GAMMA2_2:
+          gc = UCSC_GC_GAMMA2_2;
+          break;
+        case DRMUcscGcMode::UCSC_GC_MODE_HLG:
+          gc = UCSC_GC_HLG;
+          break;
+        case DRMUcscGcMode::UCSC_GC_MODE_DISABLE:
+          gc = UCSC_GC_DISABLE;
+          break;
+        default:
+          DRM_LOGE("Invalid gc mode %d to set on plane %d", ucsc_gc, obj_id);
+          break;
+      }
+
+      AddProperty(req, obj_id, prop_id, gc, true /* cache */, tmp_prop_val_map_);
+      DRM_LOGD("Plane %d: %s UCSC GC - %d", obj_id,
+               (gc == UCSC_GC_DISABLE) ? "Resetting" : "Setting", gc);
+    } break;
+
+    case DRMOps::PLANE_SET_UCSC_ALPHA_DITHER_CONFIG: {
+      prop_id = prop_mgr_.GetPropertyId(DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1);
+      if (!prop_id) {
+        return;
+      }
+
+      uint32_t ucsc_alpha_dither = va_arg(args, uint32_t);
+      AddProperty(req, obj_id, prop_id, ucsc_alpha_dither, true /* cache */, tmp_prop_val_map_);
+      DRM_LOGD("Plane %d: %s UCSC ALPHA DITHER", obj_id,
+               ucsc_alpha_dither ? "Setting" : "Resetting");
+    } break;
+#endif
+
     default:
       DRM_LOGE("Invalid opcode %d for DRM Plane %d", code, obj_id);
   }
@@ -1138,6 +1672,13 @@ void DRMPlane::Unset(bool is_commit, drmModeAtomicReq *req) {
   }
   ResetColorLUTs(is_commit, req);
 
+  // Reset FP16 properties
+  PerformWrapper(DRMOps::PLANE_SET_FP16_CSC_CONFIG, req, kFP16CscTypeMax);
+  PerformWrapper(DRMOps::PLANE_SET_FP16_IGC_CONFIG, req, 0);
+  PerformWrapper(DRMOps::PLANE_SET_FP16_UNMULT_CONFIG, req, 0);
+  drm_msm_fp16_gc fp16_gc_config = {.flags = 0, .mode = FP16_GC_MODE_INVALID};
+  PerformWrapper(DRMOps::PLANE_SET_FP16_GC_CONFIG, req, &fp16_gc_config);
+
   tmp_prop_val_map_.clear();
   committed_prop_val_map_.clear();
 }
@@ -1165,18 +1706,18 @@ bool DRMPlane::SetDgmCscConfig(drmModeAtomicReq *req, uint64_t handle) {
   return false;
 }
 
-void DRMPlane::ResetColorLUTs(bool is_commit, drmModeAtomicReq *req) {
+void DRMPlane::ResetColorLUTs(bool update_state, drmModeAtomicReq *req) {
   // Reset the color luts if they were set and update the state only if its a Commit as Unset
   // is called in Validate as well.
   for (int i = 0; i <= (int32_t)(DRMTonemapLutType::VIG_3D_GAMUT); i++) {
     auto itr = plane_type_info_.tonemap_lut_version_map.find(static_cast<DRMTonemapLutType>(i));
     if (itr != plane_type_info_.tonemap_lut_version_map.end()) {
-      ResetColorLUTState(static_cast<DRMTonemapLutType>(i), is_commit, req);
+      ResetColorLUTState(static_cast<DRMTonemapLutType>(i), update_state, req);
     }
   }
 }
 
-void DRMPlane::ResetColorLUTState(DRMTonemapLutType lut_type, bool is_commit,
+void DRMPlane::ResetColorLUTState(DRMTonemapLutType lut_type, bool update_state,
                                   drmModeAtomicReq *req) {
   DRMPlaneLutState *lut_state = nullptr;
   DRMPPFeatureID feature_id = {};
@@ -1221,14 +1762,16 @@ void DRMPlane::ResetColorLUTState(DRMTonemapLutType lut_type, bool is_commit,
     return;
   }
 
-  if (is_commit) {
+  if (update_state) {
     DRM_LOGD("Plane %d Clearing %s Lut, moving from (%d) -> (%d)", drm_plane_->plane_id,
               GetColorLutString(lut_type), *lut_state, target_state);
 
     *lut_state = target_state;
   }
 
-  ResetColorLUT(feature_id, req);
+  if (req) {
+    ResetColorLUT(feature_id, req);
+  }
 }
 
 void DRMPlane::ResetColorLUT(DRMPPFeatureID id, drmModeAtomicReq *req) {
@@ -1239,49 +1782,13 @@ void DRMPlane::ResetColorLUT(DRMPPFeatureID id, drmModeAtomicReq *req) {
   pp_mgr_->SetPPFeature(req, drm_plane_->plane_id, pp_feature_info);
 }
 
-
 void DRMPlane::ResetCache(drmModeAtomicReq *req) {
   tmp_prop_val_map_.clear();
   committed_prop_val_map_.clear();
-
-#ifdef TRUSTED_VM
-  for (int i = 0; i <= (int32_t)(DRMTonemapLutType::VIG_3D_GAMUT); i++) {
-    auto itr = plane_type_info_.tonemap_lut_version_map.find(static_cast<DRMTonemapLutType>(i));
-    if (itr != plane_type_info_.tonemap_lut_version_map.end()) {
-      DRMPlaneLutState *lut_state = nullptr;
-      DRMPPFeatureID feature_id = {};
-      switch (static_cast<DRMTonemapLutType>(i)) {
-        case DRMTonemapLutType::DMA_1D_GC:
-          lut_state = &dgm_1d_lut_gc_state_;
-          feature_id = kFeatureDgmGc;
-          break;
-        case DRMTonemapLutType::DMA_1D_IGC:
-          lut_state = &dgm_1d_lut_igc_state_;
-          feature_id = kFeatureDgmIgc;
-          break;
-        case DRMTonemapLutType::VIG_1D_IGC:
-          lut_state = &vig_1d_lut_igc_state_;
-          feature_id = kFeatureVigIgc;
-          break;
-        case DRMTonemapLutType::VIG_3D_GAMUT:
-          lut_state = &vig_3d_lut_gamut_state_;
-          feature_id = kFeatureVigGamut;
-          break;
-        default:
-          DLOGE("Invalid lut type = %d", i);
-          return;
-      }
-
-      *lut_state = kDirty;
-      ResetColorLUT(feature_id, req);
-    }
-  }
-#endif
 }
 
 void DRMPlane::ResetPlanesLUT(drmModeAtomicReq *req) {
-  tmp_prop_val_map_.clear();
-  committed_prop_val_map_.clear();
+  ResetCache(req);
 
   for (int i = 0; i <= (int32_t)(DRMTonemapLutType::VIG_3D_GAMUT); i++) {
     auto itr = plane_type_info_.tonemap_lut_version_map.find(static_cast<DRMTonemapLutType>(i));

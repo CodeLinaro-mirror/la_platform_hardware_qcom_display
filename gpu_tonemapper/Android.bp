@@ -1,5 +1,6 @@
 cc_library_shared {
     name: "libgpu_tonemapper",
+    defaults: ["qtidisplay_defaults"],
     sanitize: {
         integer_overflow: true,
     },
@@ -11,7 +12,7 @@ cc_library_shared {
         "libGLESv2",
         "libGLESv3",
         "libgrallocutils",
-        "libqdMetaData",
+        "libhidlbase",
         "libui",
         "libutils",
         "liblog",

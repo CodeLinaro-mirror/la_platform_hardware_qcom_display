@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -22,16 +22,22 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/constants.h>
 #include <utils/debug.h>
+#include <private/hw_interface.h>
+#include <private/hw_info_interface.h>
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "display_pluggable.h"
-#include "hw_info_interface.h"
-#include "hw_interface.h"
 
 #define __CLASS__ "DisplayPluggable"
 
@@ -50,7 +56,7 @@ DisplayPluggable::DisplayPluggable(int32_t display_id, DisplayEventHandler *even
                 buffer_allocator, comp_manager, hw_info_intf) {}
 
 DisplayError DisplayPluggable::Init() {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  ClientLock lock(disp_mutex_);
 
   DisplayError error = HWInterface::Create(display_id_, kPluggable, hw_info_intf_,
                                            buffer_allocator_, &hw_intf_);
@@ -87,7 +93,7 @@ DisplayError DisplayPluggable::Init() {
 
   error = DisplayBase::Init();
   if (error == kErrorResources) {
-    DLOGI("Reattempting display creation for Pluggable %d", display_id_);
+    DLOGI("Reattempting display creation for Pluggable display %d-%d", display_id_, display_type_);
     uint32_t default_mode_index = 0;
     error = hw_intf_->GetDefaultConfig(&default_mode_index);
     if (error == kErrorNone) {
@@ -105,12 +111,16 @@ DisplayError DisplayPluggable::Init() {
   GetScanSupport();
   underscan_supported_ = (scan_support_ == kScanAlwaysUnderscanned) || (scan_support_ == kScanBoth);
 
+  event_list_ = {HWEvent::VSYNC, HWEvent::EXIT, HWEvent::CEC_READ_MESSAGE,
+                 HWEvent::HW_RECOVERY, HWEvent::POWER_EVENT};
+
   error = HWEventsInterface::Create(display_id_, kPluggable, this, event_list_, hw_intf_,
                                     &hw_events_intf_);
   if (error != kErrorNone) {
     DisplayBase::Deinit();
     HWInterface::Destroy(hw_intf_);
-    DLOGE("Failed to create hardware events interface. Error = %d", error);
+    DLOGE("Failed to create hardware events interface. Error = %d for display %d-%d", error,
+          display_id_, display_type_);
   }
 
   InitializeColorModes();
@@ -121,12 +131,22 @@ DisplayError DisplayPluggable::Init() {
 }
 
 DisplayError DisplayPluggable::Prepare(LayerStack *layer_stack) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DTRACE_SCOPED();
+  ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
   uint32_t new_mixer_width = 0;
   uint32_t new_mixer_height = 0;
   uint32_t display_width = display_attributes_.x_pixels;
   uint32_t display_height = display_attributes_.y_pixels;
+
+  error = PrePrepare(layer_stack);
+  if (error == kErrorNone) {
+    return error;
+  }
+
+  if (error == kErrorNeedsLutRegen && (ForceToneMapUpdate(layer_stack) == kErrorNone)) {
+    return kErrorNone;
+  }
 
   if (NeedsMixerReconfiguration(layer_stack, &new_mixer_width, &new_mixer_height)) {
     error = ReconfigureMixer(new_mixer_width, new_mixer_height);
@@ -135,15 +155,12 @@ DisplayError DisplayPluggable::Prepare(LayerStack *layer_stack) {
     }
   }
 
-  // Clean hw layers for reuse.
-  hw_layers_ = HWLayers();
-
   return DisplayBase::Prepare(layer_stack);
 }
 
 DisplayError DisplayPluggable::GetRefreshRateRange(uint32_t *min_refresh_rate,
                                                    uint32_t *max_refresh_rate) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
 
   if (hw_panel_info_.min_fps && hw_panel_info_.max_fps) {
@@ -158,7 +175,7 @@ DisplayError DisplayPluggable::GetRefreshRateRange(uint32_t *min_refresh_rate,
 
 DisplayError DisplayPluggable::SetRefreshRate(uint32_t refresh_rate, bool final_rate,
                                               bool idle_screen) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  ClientLock lock(disp_mutex_);
 
   if (!active_) {
     return kErrorPermission;
@@ -176,7 +193,7 @@ DisplayError DisplayPluggable::SetRefreshRate(uint32_t refresh_rate, bool final_
 }
 
 bool DisplayPluggable::IsUnderscanSupported() {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  ClientLock lock(disp_mutex_);
   return underscan_supported_;
 }
 
@@ -276,8 +293,13 @@ DisplayError DisplayPluggable::InitializeColorModes() {
     color_mode_attr_map_.insert(std::make_pair(kSrgb, var));
 
     // native mode
-    color_modes_cs_.push_back(pt);
+    pt.primaries = ColorPrimaries_Max;
+    pt.transfer = Transfer_Max;
     var.clear();
+    var.push_back(std::make_pair(kColorGamutAttribute, kNative));
+    var.push_back(std::make_pair(kGammaTransferAttribute, kNative));
+    var.push_back(std::make_pair(kRenderIntentAttribute, "0"));
+    color_modes_cs_.push_back(pt);
     color_mode_attr_map_.insert(std::make_pair("hal_native", var));
   }
 
@@ -334,7 +356,10 @@ void DisplayPluggable::InitializeColorModesFromColorspace() {
 static PrimariesTransfer GetBlendSpaceFromAttributes(const std::string &color_gamut,
                                                      const std::string &transfer) {
   PrimariesTransfer blend_space_ = {};
-  if (color_gamut == kBt2020) {
+  if (color_gamut == kNative) {  // Native mode is identified by Max
+    blend_space_.primaries = ColorPrimaries_Max;
+    blend_space_.transfer = Transfer_Max;
+  } else if (color_gamut == kBt2020) {
     blend_space_.primaries = ColorPrimaries_BT2020;
     if (transfer == kHlg) {
       blend_space_.transfer = Transfer_HLG;
@@ -350,8 +375,8 @@ static PrimariesTransfer GetBlendSpaceFromAttributes(const std::string &color_ga
     blend_space_.primaries = ColorPrimaries_BT709_5;
     blend_space_.transfer = Transfer_sRGB;
   } else {
-    DLOGW("Failed to Get blend space color_gamut = %s transfer = %s", color_gamut.c_str(),
-          transfer.c_str());
+    DLOGW("Failed to Get blend space color_gamut = %s transfer = %s",
+          color_gamut.c_str(), transfer.c_str());
   }
   DLOGI("Blend Space Primaries = %d Transfer = %d", blend_space_.primaries, blend_space_.transfer);
 
@@ -361,7 +386,8 @@ static PrimariesTransfer GetBlendSpaceFromAttributes(const std::string &color_ga
 DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
   auto current_color_attr_ = color_mode_attr_map_.find(color_mode);
   if (current_color_attr_ == color_mode_attr_map_.end()) {
-    DLOGE("Failed to get the color mode = %s", color_mode.c_str());
+    DLOGE("Failed to get the color mode for display %d-%d = %s", display_id_,
+          display_type_, color_mode.c_str());
     return kErrorNone;
   }
   AttrVal attr = current_color_attr_->second;
@@ -381,12 +407,14 @@ DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
   PrimariesTransfer blend_space = GetBlendSpaceFromAttributes(color_gamut, transfer);
   error = comp_manager_->SetBlendSpace(display_comp_ctx_, blend_space);
   if (error != kErrorNone) {
-    DLOGE("Failed Set blend space, error = %d display_type_ = %d", error, display_type_);
+    DLOGE("Failed Set blend space, error = %d for display %d-%d", error,
+          display_id_, display_type_);
   }
 
   error = hw_intf_->SetBlendSpace(blend_space);
   if (error != kErrorNone) {
-    DLOGE("Failed to pass blend space, error = %d display_type_ = %d", error, display_type_);
+    DLOGE("Failed to pass blend space, error = %d for display %d-%d", error,
+    display_id_, display_type_);
   }
 
   current_color_mode_ = color_mode;
@@ -395,7 +423,7 @@ DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
 }
 
 DisplayError DisplayPluggable::GetColorModeCount(uint32_t *mode_count) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  ClientLock lock(disp_mutex_);
   if (!mode_count) {
     return kErrorParameters;
   }
@@ -408,7 +436,7 @@ DisplayError DisplayPluggable::GetColorModeCount(uint32_t *mode_count) {
 
 DisplayError DisplayPluggable::GetColorModes(uint32_t *mode_count,
                                              std::vector<std::string> *color_modes) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  ClientLock lock(disp_mutex_);
   if (!mode_count || !color_modes) {
     return kErrorParameters;
   }
@@ -422,14 +450,15 @@ DisplayError DisplayPluggable::GetColorModes(uint32_t *mode_count,
 }
 
 DisplayError DisplayPluggable::GetColorModeAttr(const std::string &color_mode, AttrVal *attr) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  ClientLock lock(disp_mutex_);
   if (!attr) {
     return kErrorParameters;
   }
 
   auto it = color_mode_attr_map_.find(color_mode);
   if (it == color_mode_attr_map_.end()) {
-    DLOGI("Mode %s has no attribute", color_mode.c_str());
+    DLOGI("Mode %s has no attribute for display %d-%d", color_mode.c_str(), display_id_,
+          display_type_);
     return kErrorNotSupported;
   }
   *attr = it->second;
@@ -453,11 +482,23 @@ void DisplayPluggable::UpdateColorModes() {
 }
 
 DisplayError DisplayPluggable::colorSamplingOn() {
-    return kErrorNone;
+  return kErrorNone;
 }
 
 DisplayError DisplayPluggable::colorSamplingOff() {
-    return kErrorNone;
+  return kErrorNone;
+}
+
+void DisplayPluggable::MMRMEvent(uint32_t clk) {
+  // Stub for future support
+  return;
+}
+
+void DisplayPluggable::HandlePowerEvent() {
+  return ProcessPowerEvent();
+}
+
+void DisplayPluggable::HandleVmReleaseEvent() {
 }
 
 }  // namespace sdm

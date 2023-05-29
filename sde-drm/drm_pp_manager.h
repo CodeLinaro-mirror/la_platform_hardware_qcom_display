@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019, 2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -35,13 +35,16 @@
 #include "drm_interface.h"
 #include "drm_property.h"
 
+#define NUM_CACHED_BLOB_ID 2
+
 namespace sde_drm {
 
 struct DRMPPPropInfo {
   DRMProperty prop_enum;
   uint32_t version = std::numeric_limits<uint32_t>::max();
   uint32_t prop_id;
-  uint32_t blob_id;
+  uint32_t blob_id[NUM_CACHED_BLOB_ID];
+  uint32_t blob_id_index;
 };
 
 class DRMPPManager {
@@ -56,6 +59,9 @@ class DRMPPManager {
  private:
   int SetPPBlobProperty(drmModeAtomicReq *req, uint32_t obj_id, struct DRMPPPropInfo *prop_info,
                         DRMPPFeatureInfo &feature);
+  int SetPPRangeProperty(drmModeAtomicReq *req, uint32_t obj_id, struct DRMPPPropInfo *prop_info,
+                        DRMPPFeatureInfo &feature);
+  void SetPPEvent(uint32_t obj_id, DRMPPFeatureInfo &feature);
 
   int fd_ = -1;
   uint32_t object_type_ = std::numeric_limits<uint32_t>::max();

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
- * Copyright (C) 2012-2014, 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (C) 2012-2014, 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Not a Contribution, Apache license notifications and license are
  * retained for attribution purposes only.
@@ -18,6 +18,42 @@
  * limitations under the License.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #ifndef ANDROID_IQSERVICE_H
 #define ANDROID_IQSERVICE_H
 
@@ -33,6 +69,7 @@
 
 namespace qService {
 // ----------------------------------------------------------------------------
+// clang-format off
 
 class IQService : public android::IInterface
 {
@@ -40,8 +77,8 @@ public:
     DECLARE_META_INTERFACE(QService);
     enum {
       COMMAND_LIST_START = android::IBinder::FIRST_CALL_TRANSACTION,
-      GET_PANEL_BRIGHTNESS = 2,                // Provides ability to set the panel brightness
-      SET_PANEL_BRIGHTNESS = 3,                // Provides ability to get the panel brightness
+      GET_PANEL_BRIGHTNESS = 2,                // Provides ability to get the panel brightness
+      SET_PANEL_BRIGHTNESS = 3,                // Provides ability to set the panel brightness
       CONNECT_HWC_CLIENT = 4,                  // Connect to qservice
       SCREEN_REFRESH = 5,                      // Refresh screen through SF invalidate
       GET_DISPLAY_VISIBLE_REGION = 11,         // Get the visibleRegion for dpy
@@ -81,7 +118,16 @@ public:
       SET_COLOR_SAMPLING_ENABLED = 49,         // Toggle the collection of display color stats
       SET_VSYNC_STATE = 50,                    // Enable/disable Vsync
       NOTIFY_TUI_TRANSITION = 51,              // Notify TUI transition prepare/start/stop
-      GET_DISPLAY_PORT_ID = 52,                        // Get the port id for a given display
+      GET_DISPLAY_PORT_ID = 52,                // Get the port id for a given display
+      SET_NOISE_PLUGIN_OVERRIDE = 53,          // Override NoisePlugIn parameters
+      SET_DIMMING_ENABLE = 54,                 // Set display dimming enablement
+      SET_DIMMING_MIN_BL = 55,                 // Set display dimming minimal backlight value
+      DUMP_CODE_COVERAGE = 56,                 // Dump the code coverage data for userspace projects
+      UPDATE_TRANSFER_TIME = 57,               // Update transfer time
+      SET_JITTER_CONFIG = 58,                  // Watchdog TE Jitter Configuration
+      RETRIEVE_DEMURATN_FILES = 59,            // Retrieve DemuraTn files from TVM
+      SET_DEMURA_STATE = 60,                   // Enable/disable demura feature
+      SET_DEMURA_CONFIG = 61,                  // Set the demura configuration index
       COMMAND_LIST_END = 400,
     };
 
@@ -102,7 +148,9 @@ public:
         DEBUG_SCALAR,
         DEBUG_CLIENT,
         DEBUG_DISPLAY,
-        DEBUG_MAX_VAL = DEBUG_DISPLAY, // Used to check each bit of the debug command paramater.
+        DEBUG_IWE,
+        DEBUG_WB_USAGE,
+        DEBUG_MAX_VAL = DEBUG_WB_USAGE, // Used to check each bit of the debug command paramater.
         // Update DEBUG_MAX_VAL when adding new debug tag.
     };
 
@@ -150,6 +198,7 @@ public:
 };
 
 // ----------------------------------------------------------------------------
+// clang-format on
 }; // namespace qService
 
 #endif // ANDROID_IQSERVICE_H

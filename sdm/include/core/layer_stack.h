@@ -22,6 +22,42 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 /*! @file layer_stack.h
   @brief File for display layer stack structure which represents a drawing buffer.
 
@@ -40,6 +76,8 @@
 #include <unordered_map>
 #include <memory>
 #include <bitset>
+#include <string>
+#include <tuple>
 
 #include "layer_buffer.h"
 #include "sdm_types.h"
@@ -62,6 +100,9 @@ enum LayerBlending {
   kBlendingCoverage,        //!< Pixel color is expressed using straight alpha in color tuples. If
                             //!< plane alpha is less than 0xff, apply modulation as well.
                             //!<   pixel.rgb = src.rgb x src.a + dest.rgb x (1 - src.a)
+
+  kBlendingSkip,            //!< Used only to denote layer should not be staged for blending, but
+                            //!< still requires fetch resources for a different HW block
 };
 
 /*! @brief This enum represents display layer composition types.
@@ -83,6 +124,8 @@ enum LayerComposition {
 
   kCompositionStitch,       //!< This layer will be drawn onto the target buffer by GPU. No blend
                             //!< required.
+
+  kCompositionDemura,       //!< This layer will be applied by Demura HW. No blend required.
 
   kCompositionSDE,          //!< This layer will be composed by SDE. It must not be composed by
                             //!< GPU or Blit.
@@ -111,6 +154,10 @@ enum LayerComposition {
 
   kCompositionStitchTarget,  //!< This layer will hold result of composition for layers marked fo
                              //!< Blit composition.
+
+  kCompositionCWBTarget,     //!< This layer will hold result of composition for layers marked for
+                             //!< CWB composition in case of Idle fallback.
+  kCompositionIWE,           //!< This layer will hold the result of first pass composition.
 };
 
 enum LayerUpdate {
@@ -120,7 +167,25 @@ enum LayerUpdate {
   kSurfaceInvalidate,
   kClientCompRequest,
   kColorTransformUpdate,
+  kContentMetadata,
   kLayerUpdateMax,
+};
+
+enum GeometryChanges {
+  kNone = 0x000,
+  kBlendMode = 0x001,
+  kDataspace = 0x002,
+  kDisplayFrame = 0x004,
+  kPlaneAlpha = 0x008,
+  kSourceCrop = 0x010,
+  kTransform = 0x020,
+  kZOrder = 0x040,
+  kAdded = 0x080,
+  kRemoved = 0x100,
+  kBufferGeometry = 0x200,
+  kColorTransform = 0x400,
+  kLayerBrightness = 0x800,
+  kDefault = 0xFFFF,
 };
 
 /*! @brief This structure defines rotation and flip values for a display layer.
@@ -168,18 +233,53 @@ struct LayerFlags {
                               //!< is a cursor
                               //!< Display Device may handle this layer using HWCursor
 
-      uint32_t single_buffer : 1;  //!< This flag shall be set by client to indicate that the layer
-                                   //!< uses only a single buffer that will not be swapped out
+      uint32_t single_buffer : 1;
+                              //!< This flag shall be set by client to indicate that the layer
+                              //!< uses only a single buffer that will not be swapped out
 
-      uint32_t color_transform : 1;  //!< This flag will be set by SDM when the layer
-                                     //!< has a custom matrix
+      uint32_t color_transform : 1;
+                              //!< This flag will be set by SDM when the layer has a custom matrix
 
-      uint32_t is_game : 1;  //!< This flag shall be set by client to indicate that this layer
-                             //!< is a game layer.
+      uint32_t is_game : 1;   //!< This flag shall be set by client to indicate that this layer
+                              //!< is a game layer.
 
-      uint32_t sde_preferred : 1;  //! This flag shall be set by client to indicate that this layer
-                                   //! will be composed by display device, layer with this flag
-                                   //! will have highest priority. To be used by OEMs only.
+      uint32_t sde_preferred : 1;
+                              //! This flag shall be set by client to indicate that this layer
+                              //! will be composed by display device, layer with this flag
+                              //! will have highest priority. To be used by OEMs only.
+
+      uint32_t is_demura : 1;
+                              //!< This flag shall be set to indicate that this layer
+                              //!< is a demura correction layer
+
+      uint32_t compatible : 1;
+                              //!< This flag shall be set by client to indicate that this layer
+                              //!< can be composed into the gpu target buffer that is passed along
+                              //!< with the current draw cycle.
+
+      uint32_t is_noise : 1;  //!< This flag shall be set by SDM to indicate this layer as noise
+
+      uint32_t is_cwb : 1;    //!< This flag shall be set by SDM to indicate that this layer is
+                              //!< CWB output layer
+
+      uint32_t reserved1 : 1;
+                              //!< This flag is reserved(1) for private usage
+      uint32_t reserved2 : 1;
+                              //!< This flag is reserved(2) for private usage
+      uint32_t reserved3 : 1;
+                              //!< This flag is reserved(3) for private usage
+      uint32_t reserved4 : 1;
+                              //!< This flag is reserved(4) for private usage
+      uint32_t has_metadata_refresh_rate : 1;
+                              //!< This flag is used to mark if layer uses metadata refresh rate
+      uint32_t skip_iwe : 1;
+                              //!< This flag shall be set to indicate that this layer
+                              //!< is handled by IWE for two phase composition.
+      // clang-format off
+      uint32_t front_buffer : 1;
+                              //!< This flag shall be set by client to indicate that the layer
+                              //!< is used for front-buffer rendering
+      // clang-format on
     };
 
     uint32_t flags = 0;       //!< For initialization purpose only.
@@ -204,10 +304,12 @@ struct LayerRequestFlags {
                                    //!< source tone map.
       uint32_t rc: 1;  //!< This flag will be set by SDM when the layer is drawn by RC HW.
       uint32_t update_format: 1;   //!< This flag will be set by SDM when layer format is updated
-                                   //!< The buffer format is mentioned in the LayerRequest Format
-      uint32_t update_color_metadata: 1;   //!< This flag will be set by SDM when layer color
-                                           //!< metadata is updated. The color metadata is
-                                           //!< mentioned in the LayerRequest Format
+                                   //!< The buffer format is mentioned in LayerRequest
+      uint32_t update_color_metadata: 1;  //!< This flag will be set by SDM when layer color
+                                          //!< metadata is updated. The color metadata is
+                                          //!< mentioned in LayerRequest
+      uint32_t external_tone_map : 1;  //!< This flag will be set by SDM when the layer needs to be
+                                       //!< processed for external tone mapping
     };
     uint32_t request_flags = 0;  //!< For initialization purpose only.
                                  //!< Shall not be refered directly.
@@ -223,16 +325,13 @@ struct LayerRequestFlags {
 */
 struct LayerRequest {
   LayerRequestFlags flags;  // Flags associated with this request
-  LayerBufferFormat format = kFormatRGBA8888;  // Requested format - Used with tone_map and
-                                               // update_format flags
+  LayerBufferFormat format = kFormatRGBA8888;  // Requested format
   ColorMetaData color_metadata = { .colorPrimaries = ColorPrimaries_BT709_5,
                                    .range = Range_Full,
                                    .transfer = Transfer_sRGB };
                                   // Requested color metadata
-  uint32_t width = 0;   // Requested unaligned width.
-                        // Used with tone_map flag
+  uint32_t width = 0;  // Requested unaligned width.
   uint32_t height = 0;  // Requested unalighed height
-                        // Used with tone_map flag
 };
 
 /*! @brief This structure defines flags associated with a layer stack. The 1-bit flag can be set to
@@ -275,45 +374,49 @@ struct LayerStackFlags {
 
       uint32_t post_processed_output : 1;  //!< If output_buffer should contain post processed
                                            //!< output. This flag is set to 1 for DSPP tap point
-                                           //!< and 0 for LM tap point.
+                                           //!< and 0 for LM tap point. This flag is set to 1 for
+                                           //!< Demura tap point also, but then SDM must use
+                                           //!< cwb_config.tap_point (in LayerStack) only for
+                                           //!< recognizing the tappoint.
 
       uint32_t hdr_present : 1;  //!< Set if stack has HDR content
 
-      uint32_t fast_path : 1;    //!< Preference for fast/slow path draw-cycle, set by client.
-
       uint32_t mask_present : 1;  //!< Set if layer stack has mask layers.
 
-      uint32_t config_changed : 1;  //!< This flag indicates Display config must be validated.
+      uint32_t advance_fb_present : 1;  //!< Set if layer stack has next frame buffer set.
+
+      uint32_t layer_id_support : 1;  //! This flag shall be set by Client to indicate that it has
+                                      //! set the unique Layer Id on each SDM Layer, which will
+                                      //! persist across draw cycles until the layer gets removed.
+
+      uint32_t stitch_present : 1;  //!< This flag shall be set to true to indicate stack has stitch
+
+      uint32_t demura_present : 1;  //!< This flag shall be set to true to indicate stack has demura
+
+      uint32_t noise_present : 1;  //!< Set if stack has noise layer
+
+      uint32_t reserved1 : 1;  //!< This flag is reserved(1) for private usage
+
+      uint32_t reserved2 : 1;  //!< This flag is reserved(2) for private usage
+
+      uint32_t reserved3 : 1;  //!< This flag is reserved(3) for private usage
+
+      uint32_t reserved4 : 1;  //!< This flag is reserved(4) for private usage
 
       uint32_t scaling_rgb_layer_present : 1;  //!< This flag indicates scaling rgb layer presence
+
+      bool use_metadata_refresh_rate : 1;
+
+      uint32_t iwe_present : 1;  //!< This flag shall be set to true to indicate stack has iwe layer
+
+      bool default_strategy: 1;  //!< This flag indicates the default strategy usage.
+
+      uint32_t front_buffer_layer_present : 1;  //!< Set if stack has front buffer layer.
     };
 
     uint32_t flags = 0;               //!< For initialization purpose only.
                                       //!< Client shall not refer it directly.
   };
-};
-
-/*! @brief This structure defines a rectanglular area inside a display layer.
-
-  @sa LayerRectArray
-*/
-struct LayerRect {
-  float left   = 0.0f;   //!< Left-most pixel coordinate.
-  float top    = 0.0f;   //!< Top-most pixel coordinate.
-  float right  = 0.0f;   //!< Right-most pixel coordinate.
-  float bottom = 0.0f;   //!< Bottom-most pixel coordinate.
-
-  LayerRect() = default;
-
-  LayerRect(float l, float t, float r, float b) : left(l), top(t), right(r), bottom(b) { }
-
-  bool operator==(const LayerRect& rect) const {
-    return left == rect.left && right == rect.right && top == rect.top && bottom == rect.bottom;
-  }
-
-  bool operator!=(const LayerRect& rect) const {
-    return !operator==(rect);
-  }
 };
 
 /*! @brief This structure defines an array of display layer rectangles.
@@ -423,6 +526,15 @@ struct Layer {
                                                               0.0, 0.0, 1.0, 0.0,
                                                               0.0, 0.0, 0.0, 1.0 };
   std::bitset<kLayerUpdateMax> update_mask = 0;
+
+  uint32_t geometry_changes = GeometryChanges::kDefault;
+
+  uint64_t layer_id = 0;                           //!< A Unique Layer Id which will persist across
+                                                   //!< frames until layer gets removed from stack,
+                                                   //!< if LayerStackFlag layer_id_support is True.
+
+  std::string layer_name = "";                     //!< Layer full name
+  float layer_brightness = 1.0;                    //!< Layer brightness
 };
 
 /*! @brief This structure defines the color space + transfer of a given layer.
@@ -439,30 +551,22 @@ struct PrimariesTransfer {
   }
 };
 
-/*! @brief This enum represents the Tappoints for CWB that are supported by the hardware. */
-enum CwbTapPoint {
-  kLmTapPoint,      // This is set by client to use Layer Mixer output for CWB.
-  kDsppTapPoint,    // This is set by client to use DSPP output for CWB.
-};
-
-/*! @brief This structure defines the configuration variables needed to perform CWB.
-
-  @sa LayerStack
-*/
-struct CwbConfig {
-  bool pu_as_cwb_roi = false;                        //!< Whether to include the PU ROI generated
-                                                     //!< from app layers in CWB ROI.
-  LayerRect cwb_roi = {};                            //!< Client specified ROI rect for CWB.
-  LayerRect cwb_full_rect = {};                      //!< Same as Output buffer Rect (unaligned).
-  CwbTapPoint tap_point = CwbTapPoint::kLmTapPoint;  //!< Client specified tap point for CWB.
-};
-
 /*! @brief This structure defines a layer stack that contains layers which need to be composed and
   rendered onto the target.
 
   @sa DisplayInterface::Prepare
   @sa DisplayInterface::Commit
 */
+
+struct LayerStackRequestFlags {
+  union {
+    struct {
+      uint32_t trigger_refresh : 1;
+    };
+    uint32_t request_flags = 0;  //!< For initialization purpose only.
+                                 //!< Shall not be refered directly.
+  };
+};
 
 struct LayerStack {
   std::vector<Layer *> layers = {};    //!< Vector of layer pointers.
@@ -490,11 +594,23 @@ struct LayerStack {
   bool block_on_fb = true;             //!< Indicates if there is a need to block
                                        //!< on GPU composed o/p.
 
+  bool needs_validate = false;         //!< Change in mode/colospace/fps etc
+  bool solid_fill_enabled = false;
+  bool tonemapper_active  = false;
   CwbConfig *cwb_config = NULL;        //!< Struct that contains the original CWB configuration
                                        //!< provided by CWB client.
+  int32_t cwb_id = -1;                 //!< Populate writeback connector ID allocated for CWB.
+  bool validate_only = false;
+  bool client_incompatible = false;    //!< Flag to disable async commit when client target is
+                                       //!< not compatible.
+
+  LayerStackRequestFlags request_flags;  //!< request flags on this LayerStack by SDM.
+
+  uint32_t force_refresh_rate = 0;
+
+  uint64_t expected_present_time = 0;  //!< Expected Present timestamp for current frame.
 };
 
 }  // namespace sdm
 
 #endif  // __LAYER_STACK_H__
-

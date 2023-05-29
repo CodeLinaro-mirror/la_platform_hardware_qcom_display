@@ -22,23 +22,33 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DISPLAY_BUILTIN_H__
 #define __DISPLAY_BUILTIN_H__
 
 #include <sys/time.h>
+#include <sys/stat.h>
 
 #include <core/dpps_interface.h>
 #include <core/ipc_interface.h>
 #include <private/extension_interface.h>
 #include <private/spr_intf.h>
+#include <private/demuratn_core_uvm_fact_intf.h>
+#include <private/feature_license_intf.h>
 #include <private/panel_feature_property_intf.h>
 #include <private/panel_feature_factory_intf.h>
+#include <private/hw_events_interface.h>
 #include <string>
 #include <vector>
 
 #include "display_base.h"
 #include "drm_interface.h"
-#include "hw_events_interface.h"
 
 namespace sdm {
 
@@ -82,8 +92,6 @@ struct DeferFpsConfig {
   }
 };
 
-typedef PanelFeatureFactoryIntf* (*GetPanelFeatureFactoryIntfType)();
-
 class DppsInfo {
  public:
   void Init(DppsPropIntf *intf, const std::string &panel_name);
@@ -98,6 +106,33 @@ class DppsInfo {
   static std::vector<int32_t> display_id_;
   std::mutex lock_;
   DppsInterface *(*GetDppsInterface)() = NULL;
+
+  void Deinit_nolock();
+};
+
+class DisplayIPCVmCallbackImpl : public IPCVmCallbackIntf {
+ public:
+  DisplayIPCVmCallbackImpl(BufferAllocator *buffer_allocator,
+                               std::shared_ptr<IPCIntf> ipc_intf,
+                               uint64_t panel_id, uint32_t width, uint32_t height);
+  void Init();
+  void Deinit();
+  void OnServerReady();
+  void OnServerExit();
+  void ExportHFCBuffer();
+  void FreeExportBuffer();
+  virtual ~DisplayIPCVmCallbackImpl() {}
+
+ private:
+  BufferAllocator *buffer_allocator_ {};
+  int *cb_hnd_out_ = nullptr;
+  std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
+  BufferInfo buffer_info_hfc_ = {};
+  uint64_t panel_id_ = 0;
+  bool server_ready_ = false;
+  uint32_t hfc_buffer_width_ = 0;
+  uint32_t hfc_buffer_height_ = 0;
+  recursive_mutex cb_mutex_;
 };
 
 class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
@@ -113,9 +148,9 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError Init() override;
   DisplayError Deinit() override;
   DisplayError Prepare(LayerStack *layer_stack) override;
-  DisplayError Commit(LayerStack *layer_stack) override;
   DisplayError ControlPartialUpdate(bool enable, uint32_t *pending) override;
   DisplayError DisablePartialUpdateOneFrame() override;
+  DisplayError DisablePartialUpdateOneFrameInternal() override;
   DisplayError SetDisplayState(DisplayState state, bool teardown,
                                shared_ptr<Fence> *release_fence) override;
   void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) override;
@@ -131,6 +166,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError SetDisplayDppsAdROI(void *payload) override;
   DisplayError SetQSyncMode(QSyncMode qsync_mode) override;
   DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous) override;
+  DisplayError SetJitterConfig(uint32_t jitter_type, float value, uint32_t time) override;
   DisplayError SetDynamicDSIClock(uint64_t bit_clk_rate) override;
   DisplayError GetDynamicDSIClock(uint64_t *bit_clk_rate) override;
   DisplayError GetSupportedDSIClock(std::vector<uint64_t> *bitclk_rates) override;
@@ -142,8 +178,26 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError GetStcColorModes(snapdragoncolor::ColorModeList *mode_list) override;
   DisplayError SetStcColorMode(const snapdragoncolor::ColorMode &color_mode) override;
   DisplayError NotifyDisplayCalibrationMode(bool in_calibration) override;
+  bool HasDemura() override { return demura_intended_; }
   std::string Dump() override;
   DisplayError GetConfig(DisplayConfigFixedInfo *fixed_info) override;
+  DisplayError PrePrepare(LayerStack *layer_stack) override;
+  DisplayError SetAlternateDisplayConfig(uint32_t *alt_config) override;
+  DisplayError HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh) override;
+  DisplayError PostHandleSecureEvent(SecureEvent secure_event) override;
+  void InitCWBBuffer();
+  void AppendCWBLayer(LayerStack *layer_stack);
+  uint32_t GetUpdatingAppLayersCount(LayerStack *layer_stack);
+  DisplayError ChangeFps();
+  uint32_t GetUpdatingLayersCount();
+  uint32_t GetOptimalRefreshRate(bool one_updating_layer);
+  uint32_t CalculateMetaDataRefreshRate();
+  uint32_t SanitizeRefreshRate(uint32_t req_refresh_rate, uint32_t max_refresh_rate,
+                               uint32_t min_refresh_rate);
+  DisplayError UpdateTransferTime(uint32_t transfer_time) override;
+  DisplayError RetrieveDemuraTnFiles() override;
+  DisplayError SetDemuraState(int state) override;
+  DisplayError SetDemuraConfig(int demura_idx) override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;
@@ -154,16 +208,22 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   void PingPongTimeout() override;
   void PanelDead() override;
   void HwRecovery(const HWRecoveryEvent sdm_event_code) override;
+  void MMRMEvent(uint32_t clk) override;
   DisplayError ClearLUTs() override;
   void Histogram(int histogram_fd, uint32_t blob_id) override;
   void HandleBacklightEvent(float brightness_level) override;
-  DisplayError TeardownConcurrentWriteback(void) override;
+  void HandlePowerEvent() override;
+  void HandleVmReleaseEvent() override;
 
   // Implement the DppsPropIntf
   DisplayError DppsProcessOps(enum DppsOps op, void *payload, size_t size) override;
   DisplayError SetActiveConfig(uint32_t index) override;
   DisplayError ReconfigureDisplay() override;
   DisplayError CreatePanelfeatures();
+  DisplayError CommitLocked(LayerStack *layer_stack) override;
+  DisplayError SetUpCommit(LayerStack *layer_stack) override;
+  DisplayError PostCommit(HWLayersInfo *hw_layers_info) override;
+  DisplayError GetQsyncFps(uint32_t *qsync_fps) override;
 
  private:
   bool CanCompareFrameROI(LayerStack *layer_stack);
@@ -173,28 +233,42 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   void SetDeferredFpsConfig();
   void GetFpsConfig(HWDisplayAttributes *display_attributes, HWPanelInfo *panel_info);
   PrimariesTransfer GetBlendSpaceFromStcColorMode(const snapdragoncolor::ColorMode &color_mode);
-  DisplayError SetupPanelfeatures();
   DisplayError SetupSPR();
   DisplayError SetupDemura();
+  DisplayError SetupDemuraLayer();
+  DisplayError SetupDemuraTn();
+  DisplayError EnableDemuraTn(bool enable);
+  DisplayError SetupDemuraT0AndTn();
+  DisplayError BuildLayerStackStats(LayerStack *layer_stack) override;
   void UpdateDisplayModeParams();
-  void HandleQsyncPostCommit(LayerStack *layer_stack);
+  void HandleQsyncPostCommit();
   void UpdateQsyncMode();
   void SetVsyncStatus(bool enable);
   void SendBacklight();
   void SendDisplayConfigs();
   bool CanLowerFps(bool idle_screen);
+  int SetDemuraIntfStatus(bool enable, int current_idx = kDemuraDefaultIdx);
+  DisplayError HandleSPR();
+  void CacheFrameROI();
+  void PreCommit(LayerStack *layer_stack);
+  DisplayError ControlPartialUpdateLocked(bool enable, uint32_t *pending);
+  DisplayError SetDppsFeatureLocked(void *payload, size_t size);
+  DisplayError HandleDemuraLayer(LayerStack *layer_stack);
+  void NotifyDppsHdrPresent(LayerStack *layer_stack);
+  bool IdleFallbackLowerFps(bool idle_screen);
+  void HandleUpdateTransferTime(QSyncMode mode);
 
   const uint32_t kPuTimeOutMs = 1000;
   std::vector<HWEvent> event_list_;
   bool avr_prop_disabled_ = false;
   bool switch_to_cmd_ = false;
-  bool handle_idle_timeout_ = false;
   bool commit_event_enabled_ = false;
   bool reset_panel_ = false;
   bool panel_feature_init_ = false;
   bool disable_dyn_fps_ = false;
   DppsInfo dpps_info_ = {};
-  FrameTriggerMode trigger_mode_debug_ = kFrameTriggerMax;
+  // Posted Start is default mode
+  FrameTriggerMode trigger_mode_debug_ = kFrameTriggerPostedStart;
   float level_remainder_ = 0.0f;
   float cached_brightness_ = 0.0f;
   bool pending_brightness_ = false;
@@ -203,7 +277,6 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   LayerRect right_frame_roi_ = {};
   Locker dpps_pu_lock_;
   bool dpps_pu_nofiy_pending_ = false;
-  shared_ptr<Fence> previous_retire_fence_ = nullptr;
   enum class SamplingState { Off, On } samplingState = SamplingState::Off;
   DisplayError setColorSamplingState(SamplingState state);
 
@@ -212,13 +285,10 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   sde_drm::DppsFeaturePayload histogramIRQ;
   void initColorSamplingState();
   DeferFpsConfig deferred_config_ = {};
-
   snapdragoncolor::ColorMode current_color_mode_ = {};
   snapdragoncolor::ColorModeList stc_color_modes_ = {};
 
-  std::shared_ptr<SPRIntf> spr_;
-  GetPanelFeatureFactoryIntfType GetPanelFeatureFactoryIntfFunc_ = nullptr;
-  int spr_prop_value_ = 0;
+  std::shared_ptr<SPRIntf> spr_ = nullptr;
   bool needs_validate_on_pu_enable_ = false;
   bool enable_qsync_idle_ = false;
   bool pending_vsync_enable_ = false;
@@ -227,6 +297,26 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   bool enhance_idle_time_ = false;
   int idle_time_ms_ = 0;
   struct timespec idle_timer_start_;
+  std::shared_ptr<DemuraIntf> demura_ = nullptr;
+  bool demuratn_enabled_ = false;
+  std::shared_ptr<DemuraTnCoreUvmIntf> demuratn_ = nullptr;
+  uint64_t panel_id_;
+  Layer demura_layer_ = {};
+  bool demura_intended_ = false;
+  bool demura_dynamic_enabled_ = true;
+  int demura_current_idx_ = -1;
+  bool enable_dpps_dyn_fps_ = false;
+  HWDisplayMode last_panel_mode_ = kModeDefault;
+  bool hdr_present_ = false;
+  bool qsync_enabled_ = false;
+  uint32_t hfc_buffer_width_ = 0;
+  uint32_t hfc_buffer_height_ = 0;
+  int hfc_buffer_fd_ = -1;
+  uint32_t hfc_buffer_size_ = 0;
+  DisplayIPCVmCallbackImpl *vm_cb_intf_ = nullptr;
+  Layer cwb_layer_ = {};
+  bool lower_fps_ = false;
+  bool cwb_buffer_initialized_ = false;
 };
 
 }  // namespace sdm

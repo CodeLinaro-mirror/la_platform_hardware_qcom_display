@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "hwc_display_virtual_factory.h"
 #include "hwc_display_virtual_dpu.h"
 #include "hwc_display_virtual_gpu.h"
@@ -36,9 +43,9 @@
 namespace sdm {
 
 int HWCVirtualDisplayFactory::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                              HWCCallbacks *callbacks, hwc2_display_t id, int32_t sdm_id,
-                              uint32_t width, uint32_t height, int32_t *format,
-                              float min_lum, float max_lum, HWCDisplay **hwc_display) {
+                                     HWCCallbacks *callbacks, Display id, int32_t sdm_id,
+                                     uint32_t width, uint32_t height, int32_t *format,
+                                     float min_lum, float max_lum, HWCDisplay **hwc_display) {
   int supported_virtual_displays = 0;
   DisplayError error = core_intf->GetMaxDisplaysSupported(kVirtual, &supported_virtual_displays);
   if (error != kErrorNone) {

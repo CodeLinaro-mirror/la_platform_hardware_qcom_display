@@ -23,35 +23,10 @@
 */
 
 /*
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted (subject to the limitations in the
-disclaimer below) provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-    * Neither the name of Qualcomm Innovation Center, Inc. nor the
-      names of its contributors may be used to endorse or promote
-      products derived from this software without specific prior
-      written permission.
-
-NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
-INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
-THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
-USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 /*! @file display_interface.h
@@ -133,6 +108,7 @@ enum DetailEnhancerOverrideFlags {
   kOverrideDEThrHigh           = 0x100,   // Specifies user defined DE high threshold
   kOverrideDEFilterConfig      = 0x200,   // Specifies user defined scaling filter config
   kOverrideDEBlend             = 0x400,   // Specifies user defined DE blend.
+  kOverrideDELpfBlend          = 0x800,   // Specifies user defined DE LPF blend.
   kOverrideDEMax               = 0xFFFFFFFF,
 };
 
@@ -193,9 +169,9 @@ enum DisplayEvent {
   kIdlePowerCollapse,       // Event triggered by Idle Power Collapse.
   kPanelDeadEvent,          // Event triggered by ESD.
   kDisplayPowerResetEvent,  // Event triggered by Hardware Recovery.
-  kInvalidateDisplay,       // Event triggered by DrawCycle thread to Invalidate display.
   kSyncInvalidateDisplay,   // Event triggered by Non-DrawCycle threads to Invalidate display.
   kPostIdleTimeout,         // Event triggered after entering idle.
+  kVmReleaseDone,           // Event triggered after releasing the mdp hw to secondary vm.
 };
 
 /*! @brief This enum represents the secure events received by Display HAL. */
@@ -223,6 +199,41 @@ enum QSyncMode {
   kQsyncModeOneShotContinuous,  // This is set by client to enable qsync only for every commit.
 };
 
+/*! @brief This enum represents different operating modes to submit a draw cycle to display.
+
+  @sa DisplayInterface::SetDrawMethod
+*/
+enum DisplayDrawMethod {
+  kDrawDefault,               //!< Prepare & Commit are performed in separate calls.
+                              //!< Release fences returned through commit in this method will
+                              //!< signal when the buffers submitted along with current draw
+                              //!< cycle are consumed by the display.
+                              //!< Retire fence returned through commit in this method will
+                              //!< signal when the current composed buffers begin to display
+                              //!< on panel.
+
+  kDrawUnified,               //!< Prepare & Commit are unified. A separate Commit is performed
+                              //!< in case unified draw cycle is not doable.
+                              //!< Release fences returned through commit in this method will
+                              //!< signal when the buffers submitted in the previous draw cycle
+                              //!< are consumed by the display. If a new layer is submitted,
+                              //!< the release fence will be set to -1.
+                              //!< Retire fence returned through commit in this method will
+                              //!< signal when the current composed buffers begin to display
+                              //!< on panel.
+
+  kDrawUnifiedWithGPUTarget,  //!< Prepare & Commit are unified. A deterministic gpu target
+                              //!< buffer is passed with layer stack. A separate Commit is
+                              //!< performed in case unified draw cycle is not doable.
+                              //!< Release fences returned through commit in this method will
+                              //!< signal when the buffers submitted in the previous draw cycle
+                              //!< are consumed by the display. If a new layer is submitted,
+                              //!< the release fence will be set to -1.
+                              //!< Retire fence returned through commit in this method will
+                              //!< signal when the current composed buffers begin to display
+                              //!< on panel.
+};
+
 /*! @brief This structure defines configuration for display dpps ad4 region of interest. */
 struct DisplayDppsAd4RoiCfg {
   uint32_t h_start;     //!< start in hotizontal direction
@@ -247,18 +258,20 @@ enum FrameTriggerMode {
   @sa DisplayInterface::SetConfig
 */
 struct DisplayConfigFixedInfo {
-  bool underscan = false;              //!< If display support CE underscan.
-  bool secure = false;                 //!< If this display is capable of handling secure content.
-  bool is_cmdmode = false;             //!< If panel is command mode panel.
-  bool hdr_supported = false;          //!< If HDR10 is supported.
-  bool hdr_plus_supported = false;     //!< If HDR10+ is supported.
-  bool hdr_metadata_type_one = false;  //!< Metadata type one obtained from HDR sink
-  uint32_t hdr_eotf = 0;               //!< Electro optical transfer function
-  float max_luminance = 0.0f;          //!< From Panel's peak luminance
-  float average_luminance = 0.0f;      //!< From Panel's average luminance
-  float min_luminance = 0.0f;          //!< From Panel's blackness level
-  bool partial_update = false;         //!< If display supports Partial Update.
-  bool readback_supported = false;     //!< If display supports buffer readback.
+  bool underscan = false;               //!< If display support CE underscan.
+  bool secure = false;                  //!< If this display is capable of handling secure content.
+  bool is_cmdmode = false;              //!< If panel is command mode panel.
+  bool hdr_supported = false;           //!< If HDR10 is supported.
+  bool hdr_plus_supported = false;      //!< If HDR10+ is supported.
+  bool dolby_vision_supported = false;  //!< If Dolby Vision is supported.
+  bool hdr_metadata_type_one = false;   //!< Metadata type one obtained from HDR sink
+  uint32_t hdr_eotf = 0;                //!< Electro optical transfer function
+  float max_luminance = 0.0f;           //!< From Panel's peak luminance
+  float average_luminance = 0.0f;       //!< From Panel's average luminance
+  float min_luminance = 0.0f;           //!< From Panel's blackness level
+  bool partial_update = false;          //!< If display supports Partial Update.
+  bool readback_supported = false;      //!< If display supports buffer readback.
+  bool supports_unified_draw = false;   //!< If display support unified drawing methods.
 };
 
 /*! @brief This structure defines configuration for variable properties of a display device.
@@ -269,14 +282,17 @@ struct DisplayConfigFixedInfo {
 struct DisplayConfigGroupInfo {
   uint32_t x_pixels = 0;          //!< Total number of pixels in X-direction on the display panel.
   uint32_t y_pixels = 0;          //!< Total number of pixels in Y-direction on the display panel.
+  uint32_t h_total = 0;           //!< Total width of panel (hActive + hFP + hBP + hPulseWidth)
+  uint32_t v_total = 0;           //!< Total height of panel (vActive + vFP + vBP + vPulseWidth)
   float x_dpi = 0.0f;             //!< Dots per inch in X-direction.
   float y_dpi = 0.0f;             //!< Dots per inch in Y-direction.
   bool is_yuv = false;            //!< If the display output is in YUV format.
   bool smart_panel = false;       //!< If the display config has smart panel.
 
   bool operator==(const DisplayConfigGroupInfo& info) const {
-    return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) && (x_dpi == info.x_dpi) &&
-            (y_dpi == info.y_dpi) && (is_yuv == info.is_yuv) && (smart_panel == info.smart_panel));
+    return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) &&
+            (x_dpi == info.x_dpi) && (y_dpi == info.y_dpi) && (is_yuv == info.is_yuv) &&
+            (smart_panel == info.smart_panel));
   }
 };
 
@@ -285,7 +301,8 @@ struct DisplayConfigVariableInfo : public DisplayConfigGroupInfo {
   uint32_t vsync_period_ns = 0;   //!< VSync period in nanoseconds.
 
   bool operator==(const DisplayConfigVariableInfo& info) const {
-    return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) && (x_dpi == info.x_dpi) &&
+    return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) &&
+            (h_total == info.h_total) && (v_total == info.v_total) && (x_dpi == info.x_dpi) &&
             (y_dpi == info.y_dpi) && (fps == info.fps) && (vsync_period_ns == info.vsync_period_ns)
             && (is_yuv == info.is_yuv) && (smart_panel == info.smart_panel));
   }
@@ -323,6 +340,10 @@ struct DisplayDetailEnhancerData {
                                       // Y/RGB filter configuration
   uint32_t de_blend = 0;              // DE Unsharp Mask blend between High and Low frequencies
   DeContentType content_type = kContentTypeUnknown;  // Specifies content type
+  bool de_lpf_en = false;
+  uint32_t de_lpf_h;                  // Weight for DE Unsharp Mask LPF-High
+  uint32_t de_lpf_m;                  // Weight for DE Unsharp Mask LPF-Mid
+  uint32_t de_lpf_l;                  // Weight for DE Unsharp Mask LPF-Low
 };
 
 /*! @brief This enum represents the supported display features that needs to be queried
@@ -332,8 +353,31 @@ struct DisplayDetailEnhancerData {
 enum SupportedDisplayFeature {
   kSupportedModeSwitch,
   kDestinationScalar,
+  kCwbDemuraTapPoint,
   kCwbCrop,
   kDedicatedCwb,
+};
+
+/*! @brief This struct stores the state of Qsync
+
+  @sa DisplayInterface::QsyncEventData
+*/
+struct QsyncEventData {
+  bool enabled = false;
+  uint32_t refresh_rate = 0;
+  uint32_t qsync_refresh_rate = 0;
+};
+
+/*! @brief This struct stores the panel feature info
+
+  @sa DisplayInterface::PanelFeatureInfo
+*/
+struct PanelFeatureInfo {
+  bool spr_enable = false;
+  bool spr_bypassed = false;
+  uint32_t display_width = 0;
+  uint32_t display_height = 0;
+  std::string panel_name;
 };
 
 /*! @brief Display device event handler implemented by the client.
@@ -390,6 +434,15 @@ class DisplayEventHandler {
   /*! @brief Event handler for events received by Display HAL. */
   virtual DisplayError HandleEvent(DisplayEvent event) = 0;
 
+  /*! @brief Event handler for MMRM. */
+  virtual void MMRMEvent(bool restricted) = 0;
+
+  /*! @brief Event handler for sending status of Qsync */
+  virtual DisplayError HandleQsyncState(const QsyncEventData &event_data) { return kErrorNone; }
+
+  /*! @brief Event handler to notify CWB Done */
+  virtual void NotifyCwbDone(int32_t status, const LayerBuffer& buffer) { }
+
  protected:
   virtual ~DisplayEventHandler() { }
 };
@@ -430,6 +483,37 @@ class DisplayInterface {
     @sa Commit
   */
   virtual DisplayError Prepare(LayerStack *layer_stack) = 0;
+
+  /*! @brief Method to try to perform prepare and commit in one go.
+
+    @details Client shall send all layers associated with a frame targeted for current display
+    using this method and check the layers which can be handled completely in display manager.
+
+    Client shall mark composition type for one of the layer as kCompositionGPUTarget; the GPU
+    composed output would be rendered at the specified layer if some of the layers are not handled
+    by SDM.
+
+    Display manager will set each layer as kCompositionGPU or kCompositionSDE upon return. Client
+    shall render all the layers marked as kCompositionGPU using GPU.
+
+    This method must be followed by Commit() if the unified draw cycle could not be performed.
+
+    This method shall be called only once for each frame.
+
+    In the event of an error as well, this call will cause any fences returned in the previous call
+    to Commit() to eventually become signaled, so the client's wait on fences can be released to
+    prevent deadlocks.
+
+    In case of a virtual display, an explict call is needed to retrieve buffer output fences. Fences
+    will be set to -1 in the layer stack when this call is returned.
+
+    @param[in] layer_stack \link LayerStack \endlink
+
+    @return \link DisplayError \endlink
+
+    @sa Commit
+  */
+  virtual DisplayError CommitOrPrepare(LayerStack *layer_stack) = 0;
 
   /*! @brief Method to commit layers of a frame submitted in a former call to Prepare().
 
@@ -530,6 +614,14 @@ class DisplayInterface {
   */
   virtual DisplayError GetVSyncState(bool *enabled) = 0;
 
+  /*! @brief Method to set draw method for display device. This call is allowed only once.
+
+    @param[in] draw_method \link DisplayDrawMethod \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetDrawMethod(DisplayDrawMethod draw_method) = 0;
+
   /*! @brief Method to set current state of the display device.
 
     @param[in] state \link DisplayState \endlink
@@ -559,6 +651,17 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError SetActiveConfig(uint32_t index) = 0;
+
+  /*! @brief Method to override NoisePlugIn parameters of the display device.
+
+    @param[in] override_en enable flag for toggling override on/off.
+    @param[in] attn output attenuation factor.
+    @param[in] noise_zpos z-order position of noise layer.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetNoisePlugInOverride(bool override_en, int32_t attn,
+                                              int32_t noise_zpos) = 0;
 
   /*! @brief Method to set VSync event state. Default event state is disabled.
 
@@ -606,7 +709,7 @@ class DisplayInterface {
 
     @return \link void \endlink
   */
-  virtual DisplayError GetCwbBufferResolution(CwbTapPoint cwb_tappoint, uint32_t *x_pixels,
+  virtual DisplayError GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels,
                                               uint32_t *y_pixels) = 0;
 
   /*! @brief Method to set the mode of the primary display.
@@ -953,6 +1056,16 @@ class DisplayInterface {
   */
   virtual DisplayError SetDynamicDSIClock(uint64_t bit_clk_rate) = 0;
 
+  /*! @brief Method to set Jitter configuration.
+
+    @param[in] jitter_type Jitter type; 0 - None, 1 - Instantaneous jitter, 2 - Long term jitter.
+    @param[in] value Max jitter value in percentage (0-10%).
+    @param[in] time Jitter time (for LTJ).
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetJitterConfig(uint32_t jitter_type, float value, uint32_t time) = 0;
+
   /*! @brief Method to get the current DSI clock rate
 
     @param[out] bit_clk_rate DSI bit clock rate in HZ
@@ -994,12 +1107,6 @@ class DisplayInterface {
   */
   virtual DisplayError SetPanelLuminanceAttributes(float min_lum, float max_lum) = 0;
 
-  /*! @brief Method to query if there is a need to validate.
-
-      @return \link boolean \endlink
-  */
-  virtual bool CanSkipValidate() = 0;
-
   /*! @brief Method to set display backlight scale ratio.
 
     @param[in] backlight scale ratio.
@@ -1008,11 +1115,34 @@ class DisplayInterface {
   */
   virtual DisplayError SetBLScale(uint32_t level) = 0;
 
+  /*! @brief Method to get panel backlight max level.
+
+    @param[in] panel backlight max level.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetPanelBlMaxLvl(uint32_t *max_level) = 0;
+
+  /*! @brief Method to enable/disable or config PP event/feature.
+
+    @param[in] payload of PP event/feature
+    @param[in] size of the payload.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetPPConfig(void *payload, size_t size) = 0;
+
+  /*! @brief Method to trigger a screen refresh and mark needs validate.
+
+    @return \link void \endlink
+  */
+  virtual void ScreenRefresh() = 0;
+
   /*! @brief Method to check if the Default resources are freed for display
 
     @return \link bool \endlink
   */
-  virtual bool CheckResourceState() = 0;
+  virtual bool CheckResourceState(bool *res_exhausted) = 0;
 
   /*! @brief Method to check if game enhance feature is supported for display
 
@@ -1051,6 +1181,14 @@ class DisplayInterface {
   virtual DisplayError IsSupportedOnDisplay(SupportedDisplayFeature feature,
                                             uint32_t *supported) = 0;
 
+  /*! @brief Method to check whether writeback supports requested color format or not.
+
+    @param[in] \link LayerBufferFormat \endlink
+
+    @return \link bool \endlink
+  */
+  virtual bool IsWriteBackSupportedFormat(const LayerBufferFormat &format) = 0;
+
   /*! @brief Method to clear scaler LUTs.
 
     @return \link DisplayError \endlink
@@ -1065,7 +1203,150 @@ class DisplayInterface {
   */
   virtual DisplayError NotifyDisplayCalibrationMode(bool in_calibration) = 0;
 
-  virtual DisplayError TeardownConcurrentWriteback(void) = 0;
+  /*! @brief Method to check if display has Demura requirement
+
+    @return \link bool \endlink
+  */
+  virtual bool HasDemura() = 0;
+
+  /*! @brief Method to retrieve output buffer acquire fence.
+
+    @param[out] output buffer acquire fence.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence) = 0;
+
+  /*! @brief Method to get validation state.
+
+    @return \link bool \endlink
+  */
+  virtual bool IsValidated() = 0;
+
+  /*! @brief Method to destroy layer.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError DestroyLayer() = 0;
+
+  /*! @brief Method to Get the qsync fps from connector node
+
+    @param[out] value of qsync fps
+
+    @return \link void \endlink
+  */
+  virtual DisplayError GetQsyncFps(uint32_t *qsync_fps) = 0;
+  /*! @brief Method to get the alternate config with same fps and different compression mode.
+
+    @param[out] pointer to config value
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetAlternateDisplayConfig(uint32_t *alt_config) = 0;
+
+  /*! @brief Method to flush CWB
+
+    @return \link void \endlink
+  */
+  virtual void FlushConcurrentWriteback() = 0;
+
+  /*! @brief Method to force tone mapping LUT update for an existing display layer stack
+
+    @param[inout] layer_stack \link LayerStack \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError ForceToneMapUpdate(LayerStack *layer_stack) = 0;
+
+  /*! @brief Method to enable/disable display dimming feature.
+
+    @param[in] enable or disable
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetDimmingEnable(int int_enabled) = 0;
+
+  /*! @brief Method to set minimal backlight value for display dimming feature.
+
+    @param[in] minimal backlight value
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetDimmingMinBl(int min_bl) = 0;
+
+  /*! @brief Method to retrieve demuratn feature files from TVM.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError RetrieveDemuraTnFiles() = 0;
+
+  /*! @brief Method to handle secure events after the successful transition.
+
+    @param[in] secure_event \link SecureEvent \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError PostHandleSecureEvent(SecureEvent secure_event) = 0;
+
+  /*! @brief Method to set a new transfer time
+
+    @param[in] transfer_time to set
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError UpdateTransferTime(uint32_t transfer_time) = 0;
+
+  /*! @brief Method to handle CWB requests on the display
+
+    @param[in] output_buffer \link LayerBuffer \endlink
+
+    @param[in] config \link CwbConfig \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError CaptureCwb(const LayerBuffer &output_buffer, const CwbConfig &config) = 0;
+
+  /*! @brief Method to handle CWB teardown on the display
+
+    @return \link DisplayError \endlink
+  */
+  virtual bool HandleCwbTeardown() = 0;
+
+  /*! @brief Method to Get the panel feature info
+
+    @param[out] panel feature info
+
+    @return \link void \endlink
+  */
+  virtual DisplayError GetPanelFeatureInfo(PanelFeatureInfo *info) = 0;
+
+  /*! @brief Method to Abort DP connection
+
+    @return \link void \endlink
+  */
+  virtual void Abort() = 0;
+
+  /*! @brief Method to Get the free mixer count
+
+    @return \link free mixer count \endlink
+  */
+  virtual uint32_t GetAvailableMixerCount() = 0;
+
+  /*! @brief Method to enable/disable for demura feature.
+
+   @param[in] enable or disable
+
+   @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetDemuraState(int state) = 0;
+
+  /*! @brief Method to set config for demura feature.
+
+   @param[in] demura_idx : demura config index
+
+   @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetDemuraConfig(int demura_idx) = 0;
 
  protected:
   virtual ~DisplayInterface() { }
@@ -1074,4 +1355,3 @@ class DisplayInterface {
 }  // namespace sdm
 
 #endif  // __DISPLAY_INTERFACE_H__
-

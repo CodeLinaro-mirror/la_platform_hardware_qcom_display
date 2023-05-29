@@ -27,40 +27,11 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 #
-
 # Changes from Qualcomm Innovation Center are provided under the following license:
 #
-# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted (subject to the limitations in the
-# disclaimer below) provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above
-#      copyright notice, this list of conditions and the following
-#      disclaimer in the documentation and/or other materials provided
-#      with the distribution.
-#
-#    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-#      contributors may be used to endorse or promote products derived
-#      from this software without specific prior written permission.
-#
-# NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-# GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-# HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-# IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-# IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
 
 target=`getprop ro.board.platform`
 if [ -f /sys/devices/soc0/soc_id ]; then
@@ -69,14 +40,100 @@ else
     soc_hwid=`cat /sys/devices/system/soc/soc0/id`
 fi
 
-if [ -f /sys/devices/soc0/platform_subtype_id ]; then
-    subtype_id=`cat /sys/devices/soc0/platform_subtype_id`
-fi
-
-# Enable camera smooth for all targets
-setprop vendor.display.enable_camera_smooth 1
-
 case "$target" in
+    "pineapple")
+    #SOC ID for Pineapple is 557
+    case "$soc_hwid" in
+      557)
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.target.version 4
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_latch_media_content 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop debug.sf.enable_hwc_vds 0
+        setprop vendor.display.timed_render_enable 1
+        setprop vendor.gralloc.hw_supports_ubwcp 1
+        ;;
+    esac
+    ;;
+    "kalama")
+    #SOC ID for Kalama is 519
+    case "$soc_hwid" in
+      519)
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.display.target.version 4
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_latch_media_content 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.timed_render_enable 1
+        setprop debug.sf.disable_client_composition_cache 0
+        setprop vendor.gralloc.hw_supports_ubwcp 0
+        ;;
+    esac
+    ;;
+    "taro")
+    #Set property to differentiate Waipio
+    #SOC ID for Waipio is 457
+    #SOC ID for Cape MSM is 530
+    #SOC ID for Cape APQ is 531
+    #SOC ID for Cape 4g is 540
+    case "$soc_hwid" in
+        457)
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.target.version 3
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        ;;
+        530|531|540)
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.target.version 2
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        ;;
+        506|547)
+        # Set property for Diwali
+        # SOC ID for Diwali is 506
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.target.version 2
+        setprop vendor.display.enable_qsync_idle 1
+        ;;
+    esac
+    ;;
     "lahaina")
     #Set property to differentiate Lahaina & Shima
     #SOC ID for Lahaina is 415, Lahaina P is 439, Lahaina-ATP is 456
@@ -87,12 +144,6 @@ case "$target" in
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_allow_idle_fallback 1
-        # Set property for HHG
-		case "$subtype_id" in
-			1|2)
-				setprop vendor.display.disable_system_load_check 1
-			;;
-		esac
         ;;
         450)
         # Set property for shima
@@ -102,48 +153,19 @@ case "$target" in
         setprop vendor.display.enable_qsync_idle 1
         setprop vendor.display.enable_allow_idle_fallback 1
         ;;
-        # SOC ID for Yupik is 475, Yupik P is 499, Faroe is 515
-        # SOC ID for Kodiak IOT 497, Kodiak IOT with modem 498
-        475|497|498|499|515)
+        475)
         # Set property for Yupik
-        setprop vendor.display.target.version 2
         setprop vendor.display.enable_posted_start_dyn 2
-        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
-        setprop vendor.display.enable_qsync_idle 1
-        setprop vendor.display.enable_allow_idle_fallback 1
-        setprop vendor.display.enable_rounded_corner 1
-        setprop vendor.display.disable_rounded_corner_thread 0
-        setprop vendor.display.enable_rc_support 1
-        setprop vendor.display.enable_hdr10_gpu_target 1
         ;;
     esac
     ;;
     "holi")
-    #Set property to differentiate Holi & Blair
-    #SOC ID for Holi is 454 and for Blair is 507
-    case "$soc_hwid" in
-        454)
-        # Set property for holi
-        setprop vendor.display.target.version 2
-        setprop vendor.display.disable_offline_rotator 0
-        setprop vendor.display.disable_rotator_ubwc 1
-        setprop vendor.display.enable_perf_hint_large_comp_cycle 0
-        setprop vendor.display.enable_posted_start_dyn 1
-        setprop vendor.display.enable_allow_idle_fallback 1
-        setprop vendor.display.enable_rc_support 1
-        ;;
-        507|565|578)
-        # Set property for blair
-        # SOC ID for blair APQ is 565
-        # SOC Id for Blair Lite is 578
-        setprop vendor.display.target.version 3
-        setprop vendor.display.disable_offline_rotator 0
-        setprop vendor.display.disable_rotator_ubwc 1
-        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
-        setprop vendor.display.enable_posted_start_dyn 1
-        setprop vendor.display.enable_allow_idle_fallback 1
-        setprop vendor.display.enable_rc_support 1
-        setprop vendor.display.enable_async_powermode 1
-        ;;
-    esac
+    # Set property for holi
+    setprop vendor.display.target.version 2
+    setprop vendor.display.disable_offline_rotator 0
+    setprop vendor.display.disable_rotator_ubwc 1
+    setprop vendor.display.enable_perf_hint_large_comp_cycle 0
+    setprop vendor.display.enable_posted_start_dyn 1
+    setprop vendor.display.enable_allow_idle_fallback 1
+    ;;
 esac

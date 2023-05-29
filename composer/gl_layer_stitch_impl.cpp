@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <vector>
 
 #include "gl_layer_stitch_impl.h"
@@ -35,44 +42,38 @@
 
 namespace sdm {
 
-const float kFullScreenVertices[] = {
-  -1.0f,  3.0f,
-  -1.0f, -1.0f,
-  3.0f, -1.0f
-};
+const float kFullScreenVertices[] = {-1.0f, 3.0f, -1.0f, -1.0f, 3.0f, -1.0f};
 
-const float kFullScreenTexCoords[] = {
-  0.0f, 2.0f,
-  0.0f, 0.0f,
-  2.0f, 0.0f
-};
+const float kFullScreenTexCoords[] = {0.0f, 2.0f, 0.0f, 0.0f, 2.0f, 0.0f};
 
-const char *kVertexShader1 = ""
-  "#version 300 es                                                       \n"
-  "precision highp float;                                                \n"
-  "layout(location = 0) in vec2 in_pos;                                  \n"
-  "layout(location = 1) in vec2 in_uv;                                   \n"
-  "                                                                      \n"
-  "out vec2 uv;                                                          \n"
-  "                                                                      \n"
-  "void main()                                                           \n"
-  "{                                                                     \n"
-  "    gl_Position = vec4(in_pos, 0.0, 1.0);                             \n"
-  "    uv = in_uv;                                                       \n"
-  "}                                                                     \n";
+const char *kVertexShader1 =
+    ""
+    "#version 300 es                                                       \n"
+    "precision highp float;                                                \n"
+    "layout(location = 0) in vec2 in_pos;                                  \n"
+    "layout(location = 1) in vec2 in_uv;                                   \n"
+    "                                                                      \n"
+    "out vec2 uv;                                                          \n"
+    "                                                                      \n"
+    "void main()                                                           \n"
+    "{                                                                     \n"
+    "    gl_Position = vec4(in_pos, 0.0, 1.0);                             \n"
+    "    uv = in_uv;                                                       \n"
+    "}                                                                     \n";
 
-const char *kConvertRenderRGBShader = ""
-  "precision highp float;                                                \n"
-  "                                                                      \n"
-  "layout(binding = 0) uniform sampler2D u_sTexture;                     \n"
-  "                                                                      \n"
-  "in vec2 uv;                                                           \n"
-  "out vec4 color;                                                       \n"
-  "                                                                      \n"
-  "void main()                                                           \n"
-  "{                                                                     \n"
-  "    color = texture(u_sTexture, uv);                                  \n"
-  "}                                                                     \n";
+const char *kConvertRenderRGBShader =
+    ""
+    "precision highp float;                                                \n"
+    "                                                                      \n"
+    "layout(binding = 0) uniform sampler2D u_sTexture;                     \n"
+    "                                                                      \n"
+    "in vec2 uv;                                                           \n"
+    "out vec4 color;                                                       \n"
+    "                                                                      \n"
+    "void main()                                                           \n"
+    "{                                                                     \n"
+    "    color = texture(u_sTexture, uv);                                  \n"
+    "}                                                                     \n";
 
 static bool IsValid(const GLRect &rect) {
   return ((rect.right - rect.left) && (rect.bottom - rect.top));
@@ -87,34 +88,35 @@ int GLLayerStitchImpl::CreateContext(bool secure) {
 
   // Get attributes corresponing to render target.
   // Describes Framebuffer attributes like buffer depth, color space etc;
-  EGLConfig eglConfig;
-  int numConfig = 0;
-  EGLint eglConfigAttribList[] = {EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-                                  EGL_RED_SIZE,     8,
-                                  EGL_GREEN_SIZE,   8,
-                                  EGL_BLUE_SIZE,    8,
-                                  EGL_ALPHA_SIZE,   8,
-                                  EGL_NONE};
-  EGL(eglChooseConfig(ctx_.egl_display, eglConfigAttribList, &eglConfig, 1, &numConfig));
+  EGLConfig egl_config = nullptr;
+  int num_config = 0;
+  EGLint egl_config_attrib_list[] = {EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+                                     EGL_RED_SIZE,     8,
+                                     EGL_GREEN_SIZE,   8,
+                                     EGL_BLUE_SIZE,    8,
+                                     EGL_ALPHA_SIZE,   8,
+                                     EGL_NONE};
+  EGL(eglChooseConfig(ctx_.egl_display, egl_config_attrib_list, &egl_config, 1, &num_config));
 
   // When GPU runs in protected context it can read from
   //  - Protected sources
   //  - UnProtected source
   // and writes into Protected buffer.
   // VS in UnProtected context it can read/write happen from/to Unprotected sources.
-  EGLint egl_contextAttribList[] = {EGL_CONTEXT_CLIENT_VERSION, 3,
-                                    secure ? EGL_PROTECTED_CONTENT_EXT : EGL_NONE,
-                                    secure ? EGL_TRUE : EGL_NONE,
-                                    EGL_NONE};
-  ctx_.egl_context = eglCreateContext(ctx_.egl_display, eglConfig, NULL, egl_contextAttribList);
+  EGLint egl_context_attrib_list[] = {EGL_CONTEXT_CLIENT_VERSION, 3,
+                                      secure ? EGL_PROTECTED_CONTENT_EXT : EGL_NONE,
+                                      secure ? EGL_TRUE : EGL_NONE, EGL_NONE};
+  ctx_.egl_context = eglCreateContext(ctx_.egl_display, egl_config, NULL, egl_context_attrib_list);
 
   // eglCreatePbufferSurface creates an off-screen pixel buffer surface and returns its handle
-  EGLint egl_surfaceAttribList[] = {EGL_WIDTH, 1,
-                                    EGL_HEIGHT, 1,
-                                    secure ? EGL_PROTECTED_CONTENT_EXT : EGL_NONE,
-                                    secure ? EGL_TRUE : EGL_NONE,
-                                    EGL_NONE};
-  ctx_.egl_surface = eglCreatePbufferSurface(ctx_.egl_display, eglConfig, egl_surfaceAttribList);
+  EGLint egl_surface_attrib_list[] = {EGL_WIDTH,
+                                      1,
+                                      EGL_HEIGHT,
+                                      1,
+                                      secure ? EGL_PROTECTED_CONTENT_EXT : EGL_NONE,
+                                      secure ? EGL_TRUE : EGL_NONE,
+                                      EGL_NONE};
+  ctx_.egl_surface = eglCreatePbufferSurface(ctx_.egl_display, egl_config, egl_surface_attrib_list);
 
   // eglMakeCurrent attaches rendering context to rendering surface.
   MakeCurrent(&ctx_);
@@ -122,7 +124,7 @@ int GLLayerStitchImpl::CreateContext(bool secure) {
   DLOGI("Created context = %p", (void *)(&ctx_.egl_context));
 
   // Load Vertex and Fragment shaders.
-  const char *fragment_shaders[2] = { };
+  const char *fragment_shaders[2] = {};
   int count = 0;
   const char *version = "#version 300 es\n";
 
@@ -228,9 +230,6 @@ void GLLayerStitchImpl::InitContext() {
 
 GLLayerStitchImpl::~GLLayerStitchImpl() {}
 
-GLLayerStitchImpl::GLLayerStitchImpl(bool secure) {
-  secure_ = secure;
-}
+GLLayerStitchImpl::GLLayerStitchImpl(bool secure) : secure_(secure) {}
 
 }  // namespace sdm
-

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2018, 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018, 2020-2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -22,21 +22,65 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __CORE_IMPL_H__
 #define __CORE_IMPL_H__
 
 #include <core/core_interface.h>
 #include <private/extension_interface.h>
 #include <private/color_interface.h>
+#include <private/panel_feature_factory_intf.h>
+#include <private/utils_factory_intf.h>
+#include <private/hw_interface.h>
 #include <utils/locker.h>
 #include <utils/sys.h>
 
-#include "hw_interface.h"
+#include <memory>
+#include <vector>
+#include <utility>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
 #include "comp_manager.h"
 
 #define SET_REVISION(major, minor) ((major << 8) | minor)
+#define GET_PANEL_FEATURE_FACTORY "GetPanelFeatureFactoryIntf"
 
 namespace sdm {
+
+typedef PanelFeatureFactoryIntf* (*GetPanelFeatureFactory)();
+typedef UtilsFactoryIntf* (*GetUtilsFactory)();
+
+class CoreIPCVmCallbackImpl : public IPCVmCallbackIntf {
+ public:
+  CoreIPCVmCallbackImpl(std::shared_ptr<IPCIntf> ipc_intf, HWInfoInterface *hw_info_intf);
+  void Init();
+  void OnServerReady();
+  void OnServerExit();
+  void Deinit();
+  void OnServerReadyThread();
+  virtual ~CoreIPCVmCallbackImpl() {}
+
+ private:
+  int SendPanelBootParams();
+  int cb_hnd_out_ = 0;
+  std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
+  HWInfoInterface *hw_info_intf_ = nullptr;
+  bool server_ready_ = false;
+  bool server_thread_exit_ = false;
+
+  std::thread server_thread_;
+  std::mutex server_thread_lock_;
+  std::condition_variable server_thread_ready_cv_;
+  std::condition_variable server_thread_cv_;
+};
 
 class CoreImpl : public CoreInterface {
  public:
@@ -63,8 +107,17 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info);
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format);
+  virtual DisplayError ReserveDemuraResources();
+  virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id);
+#ifdef PROFILE_COVERAGE_DATA
+  virtual DisplayError DumpCodeCoverage();
+#endif
 
  protected:
+  void InitializeSDMUtils();
+  void ReleaseDemuraResources();
+  void OverRideDemuraPanelIds(std::vector<uint64_t> *panel_ids);
+
   Locker locker_;
   BufferAllocator *buffer_allocator_ = NULL;
   HWResourceInfo hw_resource_;
@@ -74,9 +127,17 @@ class CoreImpl : public CoreInterface {
   ExtensionInterface *extension_intf_ = NULL;
   CreateExtensionInterface create_extension_intf_ = NULL;
   DestroyExtensionInterface destroy_extension_intf_ = NULL;
+  PanelFeatureFactoryIntf *panel_feature_factory_intf_ = NULL;
+  UtilsFactoryIntf *sdm_utils_factory_intf_ = NULL;
   SocketHandler *socket_handler_ = NULL;
   HWDisplaysInfo hw_displays_info_ = {};
   std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
+  CoreIPCVmCallbackImpl* vm_cb_intf_ = nullptr;
+  std::vector<uint64_t> *panel_ids_;
+  std::shared_ptr<DemuraParserManagerIntf> pm_intf_ = nullptr;
+  bool reserve_done_  = false;
+  char *raw_mapped_buffer_ = nullptr;
+  std::vector<uint32_t> demura_display_ids_;
 };
 
 }  // namespace sdm

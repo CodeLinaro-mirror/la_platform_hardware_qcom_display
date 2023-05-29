@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_COLOR_MODE_STC_H__
 #define __HWC_COLOR_MODE_STC_H__
 
@@ -42,19 +49,19 @@ class HWCColorModeStc : public HWCColorMode {
  public:
   explicit HWCColorModeStc(DisplayInterface *display_intf);
   ~HWCColorModeStc() {}
-  HWC2::Error Init();
-  HWC2::Error DeInit();
+  HWC3::Error Init();
+  HWC3::Error DeInit();
   void Dump(std::ostringstream *os);
   uint32_t GetColorModeCount();
   uint32_t GetRenderIntentCount(ColorMode mode);
-  HWC2::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
-  HWC2::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+  HWC3::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
+  HWC3::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                RenderIntent *out_intents);
-  HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
-  HWC2::Error ApplyCurrentColorModeWithRenderIntent(bool hdr_present);
-  HWC2::Error CacheColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
+  HWC3::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
+  HWC3::Error ApplyCurrentColorModeWithRenderIntent(bool hdr_present);
+  HWC3::Error CacheColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
   ColorMode GetCurrentColorMode() { return current_color_mode_; }
-  HWC2::Error NotifyDisplayCalibrationMode(bool in_calibration);
+  HWC3::Error NotifyDisplayCalibrationMode(bool in_calibration);
 
  private:
   snapdragoncolor::ColorModeList stc_mode_list_;

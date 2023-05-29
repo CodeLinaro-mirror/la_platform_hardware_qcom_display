@@ -25,6 +25,40 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*     * Redistributions of source code must retain the above copyright
+*       notice, this list of conditions and the following disclaimer.
+*
+*     * Redistributions in binary form must reproduce the above
+*       copyright notice, this list of conditions and the following
+*       disclaimer in the documentation and/or other materials provided
+*       with the distribution.
+*
+*     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*       contributors may be used to endorse or promote products derived
+*       from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <fcntl.h>
@@ -58,7 +92,7 @@ int getDisplayVisibleRegion(int dpy, hwc_rect_t &rect) {
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
     inParcel.writeInt32(dpy);
-    if(binder != NULL) {
+    if(binder != nullptr) {
         err = binder->dispatch(IQService::GET_DISPLAY_VISIBLE_REGION,
                 &inParcel, &outParcel);
     }
@@ -74,10 +108,6 @@ int getDisplayVisibleRegion(int dpy, hwc_rect_t &rect) {
     return err;
 }
 
-int setViewFrame(int /* dpy */, int /* l */, int /* t */, int /* r */, int /* b */) {
-    return FAILED_TRANSACTION;
-}
-
 int setSecondaryDisplayStatus(int dpy, uint32_t status) {
     status_t err = (status_t) FAILED_TRANSACTION;
     sp<IQService> binder = getBinder();
@@ -85,7 +115,7 @@ int setSecondaryDisplayStatus(int dpy, uint32_t status) {
     inParcel.writeInt32(dpy);
     inParcel.writeInt32(status);
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         err = binder->dispatch(IQService::SET_SECONDARY_DISPLAY_STATUS,
                 &inParcel, &outParcel);
     }
@@ -103,7 +133,7 @@ int configureDynRefreshRate(uint32_t op, uint32_t refreshRate) {
     inParcel.writeInt32(op);
     inParcel.writeInt32(refreshRate);
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         err = binder->dispatch(IQService::CONFIGURE_DYN_REFRESH_RATE,
                                &inParcel, &outParcel);
     }
@@ -117,7 +147,7 @@ int configureDynRefreshRate(uint32_t op, uint32_t refreshRate) {
 int getConfigCount(int /*dpy*/) {
     int numConfigs = -1;
     sp<IQService> binder = getBinder();
-    if(binder != NULL) {
+    if(binder != nullptr) {
         Parcel inParcel, outParcel;
         inParcel.writeInt32(DISPLAY_PRIMARY);
         status_t err = binder->dispatch(IQService::GET_CONFIG_COUNT,
@@ -135,7 +165,7 @@ int getConfigCount(int /*dpy*/) {
 int getActiveConfig(int dpy) {
     int configIndex = -1;
     sp<IQService> binder = getBinder();
-    if(binder != NULL) {
+    if(binder != nullptr) {
         Parcel inParcel, outParcel;
         inParcel.writeInt32(dpy);
         status_t err = binder->dispatch(IQService::GET_ACTIVE_CONFIG,
@@ -154,7 +184,7 @@ int getActiveConfig(int dpy) {
 int setActiveConfig(int configIndex, int /*dpy*/) {
     status_t err = (status_t) FAILED_TRANSACTION;
     sp<IQService> binder = getBinder();
-    if(binder != NULL) {
+    if(binder != nullptr) {
         Parcel inParcel, outParcel;
         inParcel.writeInt32(configIndex);
         inParcel.writeInt32(DISPLAY_PRIMARY);
@@ -173,7 +203,7 @@ int setActiveConfig(int configIndex, int /*dpy*/) {
 DisplayAttributes getDisplayAttributes(int configIndex, int dpy) {
     DisplayAttributes dpyattr = {};
     sp<IQService> binder = getBinder();
-    if(binder != NULL) {
+    if(binder != nullptr) {
         Parcel inParcel, outParcel;
         inParcel.writeInt32(configIndex);
         inParcel.writeInt32(dpy);
@@ -200,7 +230,7 @@ DisplayAttributes getDisplayAttributes(int configIndex, int dpy) {
 int setPanelMode(int mode) {
     status_t err = (status_t) FAILED_TRANSACTION;
     sp<IQService> binder = getBinder();
-    if(binder != NULL) {
+    if(binder != nullptr) {
         Parcel inParcel, outParcel;
         inParcel.writeInt32(mode);
         err = binder->dispatch(IQService::SET_DISPLAY_MODE,
@@ -220,7 +250,7 @@ int setPanelBrightness(int level) {
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         inParcel.writeInt32(level);
         status_t err = binder->dispatch(IQService::SET_PANEL_BRIGHTNESS,
                 &inParcel, &outParcel);
@@ -236,7 +266,7 @@ int getPanelBrightness() {
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         status_t err = binder->dispatch(IQService::GET_PANEL_BRIGHTNESS,
                 &inParcel, &outParcel);
         if(!err) {
@@ -255,7 +285,7 @@ int setDsiClk(int dpy, uint64_t bitClk) {
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         inParcel.writeInt32(dpy);
         inParcel.writeUint64(bitClk);
         status_t err = binder->dispatch(IQService::SET_DSI_CLK, &inParcel, &outParcel);
@@ -271,7 +301,7 @@ uint64_t getDsiClk(int dpy) {
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         inParcel.writeInt32(dpy);
         status_t err = binder->dispatch(IQService::GET_DSI_CLK, &inParcel, &outParcel);
         if(!err) {
@@ -287,7 +317,7 @@ int getSupportedBitClk(int dpy, std::vector<uint64_t>& bit_rates) {
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         inParcel.writeInt32(dpy);
         status_t err = binder->dispatch(IQService::GET_SUPPORTED_DSI_CLK, &inParcel, &outParcel);
         if(err) {
@@ -309,7 +339,7 @@ int setPanelLuminanceAttributes(int dpy, float min_lum, float max_lum) {
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         inParcel.writeInt32(dpy);
         inParcel.writeFloat(min_lum);
         inParcel.writeFloat(max_lum);
@@ -328,7 +358,7 @@ int GetDisplayPortId(int dpy, int *port_id) {
     status_t err = (status_t) FAILED_TRANSACTION;
     sp<IQService> binder = getBinder();
     Parcel inParcel, outParcel;
-    if(binder != NULL && binder.get() != NULL) {
+    if(binder != nullptr && binder.get() != nullptr) {
         inParcel.writeInt32(dpy);
         err = binder->dispatch(IQService::GET_DISPLAY_PORT_ID, &inParcel, &outParcel);
         if(err) {
@@ -352,7 +382,7 @@ extern "C" int minHdcpEncryptionLevelChanged(int dpy, int min_enc_level) {
     inParcel.writeInt32(dpy);
     inParcel.writeInt32(min_enc_level);
 
-    if(binder != NULL) {
+    if(binder != nullptr) {
         err = binder->dispatch(IQService::MIN_HDCP_ENCRYPTION_LEVEL_CHANGED,
                 &inParcel, &outParcel);
     }
@@ -375,7 +405,7 @@ extern "C" int refreshScreen(int dpy) {
 extern "C" int controlPartialUpdate(int dpy, int mode) {
     status_t err = (status_t) FAILED_TRANSACTION;
     sp<IQService> binder = getBinder();
-    if(binder != NULL) {
+    if(binder != nullptr) {
         Parcel inParcel, outParcel;
         inParcel.writeInt32(dpy);
         inParcel.writeInt32(mode);
@@ -394,12 +424,12 @@ extern "C" int controlPartialUpdate(int dpy, int mode) {
 extern "C" int waitForComposerInit() {
     int status = false;
     sp<IQService> binder = getBinder();
-    if (binder == NULL) {
+    if (binder == nullptr) {
         sleep(2);
         binder = getBinder();
     }
 
-    if (binder != NULL) {
+    if (binder != nullptr) {
         Parcel inParcel, outParcel;
         binder->dispatch(IQService::GET_COMPOSER_STATUS, &inParcel, &outParcel);
         status = !!outParcel.readInt32();
@@ -416,7 +446,7 @@ extern "C" int waitForComposerInit() {
 extern "C" int waitForComposerInitPerf() {
     int status = false;
     sp<IQService> binder = getBinder();
-    if (binder != NULL) {
+    if (binder != nullptr) {
         Parcel inParcel, outParcel;
         binder->dispatch(IQService::GET_COMPOSER_STATUS, &inParcel, &outParcel);
         status = !!outParcel.readInt32();

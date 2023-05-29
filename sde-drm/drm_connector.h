@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -24,6 +24,42 @@
 * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
@@ -57,6 +93,7 @@ class DRMConnector {
   DRMStatus GetStatus() { return status_; }
   int GetInfo(DRMConnectorInfo *info);
   void GetType(uint32_t *conn_type) { *conn_type = drm_connector_->connector_type; }
+  void GetEncoder(uint32_t *encoder_id) { *encoder_id = drm_connector_->encoder_id; }
   void Perform(DRMOps code, drmModeAtomicReq *req, va_list args);
   int IsConnected() { return (DRM_MODE_CONNECTED == drm_connector_->connection); }
   int GetPossibleEncoders(std::set<uint32_t> *possible_encoders);
@@ -70,6 +107,7 @@ class DRMConnector {
   void ParseModeProperties(uint64_t blob_id, DRMConnectorInfo *info);
   void ParseCapabilities(uint64_t blob_id, drm_msm_ext_hdr_properties *hdr_info);
   void ParseCapabilities(uint64_t blob_id, std::vector<uint8_t> *edid);
+  void ParseCapabilities(uint64_t blob_id, uint64_t *panel_id);
   void SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_roi,
               DRMRect *conn_rois);
 
@@ -79,6 +117,7 @@ class DRMConnector {
   bool skip_connector_reload_ = false; //  Usually set to true for new TV/pluggable displays.
   DRMStatus status_ = DRMStatus::FREE;
   std::unique_ptr<DRMPPManager> pp_mgr_{};
+  DRMJitterConfig jitter_cfg_ = {};
 #ifdef SDE_MAX_ROI_V1
   sde_drm_roi_v1 roi_v1_ {};
 #endif
@@ -99,6 +138,8 @@ class DRMConnectorManager {
   int GetConnectorInfo(uint32_t conn_id, DRMConnectorInfo *info);
   void GetConnectorList(std::vector<uint32_t> *conn_ids);
   int GetPossibleEncoders(uint32_t connector_id, std::set<uint32_t> *possible_encoders);
+  int GetPreferredModeLMCounts(std::map<uint32_t, uint8_t> *lm_counts);
+  void MapEncoderToConnector(std::map<uint32_t, uint32_t> *encoder_to_connector);
   ~DRMConnectorManager() {}
 
  private:

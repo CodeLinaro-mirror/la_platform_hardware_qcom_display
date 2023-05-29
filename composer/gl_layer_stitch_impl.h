@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GL_LAYER_STITCH_IMPL_H__
 #define __GL_LAYER_STITCH_IMPL_H__
 
@@ -43,10 +50,12 @@ class GLLayerStitchImpl : public GLLayerStitch, public GLCommon {
  public:
   explicit GLLayerStitchImpl(bool secure);
   virtual ~GLLayerStitchImpl();
-  virtual int Blit(const std::vector<StitchParams> &stitch_params, shared_ptr<Fence> *release_fence);
+  virtual int Blit(const std::vector<StitchParams> &stitch_params,
+                   shared_ptr<Fence> *release_fence);
   virtual int CreateContext(bool secure);
   virtual int Init();
   virtual int Deinit();
+
  private:
   bool secure_ = false;
   GLContext ctx_;

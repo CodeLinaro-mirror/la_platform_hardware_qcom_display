@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -46,6 +46,7 @@ namespace snapdragoncolor {
 const std::string kPbGamut = "PostBlendGamut";
 const std::string kPbIgc = "PostBlendIGC";
 const std::string kPbGC = "PostBlendGC";
+const std::string kPbCWBDither = "PostBlendCWBDither";
 
 //<! Mode attribute to indicate HDR present
 const std::string kPbHdrBlob = "PostBlendHdrBlob";
@@ -89,6 +90,15 @@ enum ScProperty {
   //<! SetProperty - For client to notify connected/disconneced QDCM tool.
   //<! Payload - bool
   kNotifyDisplayCalibrationMode,
+  //<! SetProperty - For client to set PCC config from LTM block.
+  //<! Payload - struct pcc_coeff_data
+  kSetLtmPccConfig,
+  //<! GetProperty - For client to query global dither hw asset.
+  //<! Payload - HwConfigOutputParams
+  kGetGlobalDitherHwConfig,
+  //<! SetProperty - Property to pass the display interface to STC manager.
+  //<! Payload - struct DisplayInterface*
+  kDisplayIntf,
   //<! Max value of public properties
   kPropertyMax = 511,
   //<! Custom Properties

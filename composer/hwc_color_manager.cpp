@@ -27,15 +27,20 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <dlfcn.h>
 #include <cutils/sockets.h>
 #include <cutils/native_handle.h>
 #include <sync/sync.h>
 #include <utils/String16.h>
 #include <binder/Parcel.h>
-#include <gralloc_priv.h>
-#include <hardware/hwcomposer.h>
-#include <hardware/hwcomposer_defs.h>
+#include <QtiGralloc.h>
 #include <QService.h>
 
 #include <utils/constants.h>
@@ -95,7 +100,7 @@ void HWCColorManager::MarshallStructIntoParcel(const PPDisplayAPIPayload &data,
     out_parcel->write(data.payload, data.size);
 }
 
-HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator * buffer_allocator) {
+HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator *buffer_allocator) {
   HWCColorManager *color_mgr = new HWCColorManager(buffer_allocator);
 
   if (color_mgr) {
@@ -120,7 +125,7 @@ HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator * buffer
     if (diag_client_lib.Open(QDCM_DIAG_CLIENT_LIBRARY_NAME)) {
       if (!diag_client_lib.Sym(INIT_QDCM_DIAG_CLIENT_NAME,
                                reinterpret_cast<void **>(&color_mgr->qdcm_diag_init_)) ||
-        !diag_client_lib.Sym(DEINIT_QDCM_DIAG_CLIENT_NAME,
+          !diag_client_lib.Sym(DEINIT_QDCM_DIAG_CLIENT_NAME,
                                reinterpret_cast<void **>(&color_mgr->qdcm_diag_deinit_))) {
         DLOGE("Fail to retrieve = %s from %s", INIT_QDCM_DIAG_CLIENT_NAME,
               QDCM_DIAG_CLIENT_LIBRARY_NAME);
@@ -142,12 +147,10 @@ HWCColorManager *HWCColorManager::CreateColorManager(HWCBufferAllocator * buffer
   return color_mgr;
 }
 
-HWCColorManager::HWCColorManager(HWCBufferAllocator *buffer_allocator) :
-    buffer_allocator_(buffer_allocator) {
-}
+HWCColorManager::HWCColorManager(HWCBufferAllocator *buffer_allocator)
+    : buffer_allocator_(buffer_allocator) {}
 
-HWCColorManager::~HWCColorManager() {
-}
+HWCColorManager::~HWCColorManager() {}
 
 void HWCColorManager::DestroyColorManager() {
   if (qdcm_mode_mgr_) {
@@ -187,10 +190,10 @@ int HWCColorManager::SetSolidFill(const void *params, bool enable, HWCDisplay *h
     solid_fill_params_ = PPColorFillParams();
   }
 
-  if (solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.b_bitdepth
-    || solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.g_bitdepth) {
+  if (solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.b_bitdepth ||
+      solid_fill_params_.color.r_bitdepth != solid_fill_params_.color.g_bitdepth) {
     DLOGE("invalid bit depth r %d g %d b %d", solid_fill_params_.color.r_bitdepth,
-        solid_fill_params_.color.g_bitdepth, solid_fill_params_.color.b_bitdepth);
+          solid_fill_params_.color.g_bitdepth, solid_fill_params_.color.b_bitdepth);
     return -EINVAL;
   }
 
@@ -202,9 +205,10 @@ int HWCColorManager::SetSolidFill(const void *params, bool enable, HWCDisplay *h
 
   if (enable) {
     LayerRect solid_fill_rect = {
-      FLOAT(solid_fill_params_.rect.x), FLOAT(solid_fill_params_.rect.y),
-      FLOAT(solid_fill_params_.rect.x) + FLOAT(solid_fill_params_.rect.width),
-      FLOAT(solid_fill_params_.rect.y) + FLOAT(solid_fill_params_.rect.height),
+        FLOAT(solid_fill_params_.rect.x),
+        FLOAT(solid_fill_params_.rect.y),
+        FLOAT(solid_fill_params_.rect.x) + FLOAT(solid_fill_params_.rect.width),
+        FLOAT(solid_fill_params_.rect.y) + FLOAT(solid_fill_params_.rect.height),
     };
 
     hwc_display->Perform(HWCDisplayBuiltIn::SET_QDCM_SOLID_FILL_INFO, &solid_fill_color);
@@ -232,6 +236,7 @@ int HWCColorManager::SetFrameCapture(void *params, bool enable, HWCDisplay *hwc_
     CwbTapPoint cwb_tappoint = CwbTapPoint::kLmTapPoint;
     // frame_capture_data->input_params.flags == 0x0 => DSPP tappoint
     // frame_capture_data->input_params.flags == 0x1 => LM tappoint
+    // frame_capture_data->input_params.flags == 0x2 => DEMURA tappoint
     switch (frame_capture_data->input_params.flags) {
       case 0x0:  // DSPP mode
         cwb_tappoint = CwbTapPoint::kDsppTapPoint;
@@ -239,11 +244,24 @@ int HWCColorManager::SetFrameCapture(void *params, bool enable, HWCDisplay *hwc_
       case 0x1:  // Layer mixer mode
         cwb_tappoint = CwbTapPoint::kLmTapPoint;
         break;
+      case 0x2:  // Demura mode
+        cwb_tappoint = CwbTapPoint::kDemuraTapPoint;
+        break;
       default:
         DLOGE("Tapppoint %d NOT supported.", frame_capture_data->input_params.flags);
         return -EFAULT;
     }
-    ret = hwc_display->GetCwbBufferResolution(cwb_tappoint, &buffer_info.buffer_config.width,
+
+    CwbConfig cwb_config = {};
+    cwb_config.tap_point = cwb_tappoint;
+    cwb_config.cwb_roi.left = FLOAT(frame_capture_data->input_params.rect.x);
+    cwb_config.cwb_roi.top = FLOAT(frame_capture_data->input_params.rect.y);
+    cwb_config.cwb_roi.right =
+        cwb_config.cwb_roi.left + FLOAT(frame_capture_data->input_params.rect.width);
+    cwb_config.cwb_roi.bottom =
+        cwb_config.cwb_roi.top + FLOAT(frame_capture_data->input_params.rect.height);
+
+    ret = hwc_display->GetCwbBufferResolution(&cwb_config, &buffer_info.buffer_config.width,
                                               &buffer_info.buffer_config.height);
     if (ret != 0) {
       DLOGE("Buffer Resolution setting failed. ret: %d", ret);
@@ -283,15 +301,6 @@ int HWCColorManager::SetFrameCapture(void *params, bool enable, HWCDisplay *hwc_
         frame_capture_data->buffer_size = buffer_info.alloc_buffer_info.size;
       }
 
-      CwbConfig cwb_config = {};
-      cwb_config.tap_point = cwb_tappoint;
-      cwb_config.cwb_roi.left = FLOAT(frame_capture_data->input_params.rect.x);
-      cwb_config.cwb_roi.top = FLOAT(frame_capture_data->input_params.rect.y);
-      cwb_config.cwb_roi.right =
-          cwb_config.cwb_roi.left + FLOAT(frame_capture_data->input_params.rect.width);
-      cwb_config.cwb_roi.bottom =
-          cwb_config.cwb_roi.top + FLOAT(frame_capture_data->input_params.rect.height);
-
       ret = hwc_display->FrameCaptureAsync(buffer_info, cwb_config);
       if (ret < 0) {
         DLOGE("FrameCaptureAsync failed. ret = %d", ret);
@@ -305,6 +314,14 @@ int HWCColorManager::SetFrameCapture(void *params, bool enable, HWCDisplay *hwc_
           DLOGE("munmap failed. err = %d", errno);
         }
       }
+
+      if (frame_capture_data->input_params.dither_payload) {
+        DLOGV_IF(kTagQDCM, "free cwb dither data");
+        delete frame_capture_data->input_params.dither_payload;
+        frame_capture_data->input_params.dither_payload = nullptr;
+      }
+      frame_capture_data->input_params.dither_flags = 0x0;
+
       if (buffer_allocator_ != NULL) {
         std::memset(frame_capture_data, 0x00, sizeof(PPFrameCaptureData));
         ret = buffer_allocator_->FreeBuffer(&buffer_info);
