@@ -20,6 +20,11 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __EXTENSION_INTERFACE_H__
@@ -40,7 +45,7 @@ namespace sdm {
 #define DESTROY_EXTENSION_INTERFACE_NAME "DestroyExtensionInterface"
 
 #define EXTENSION_REVISION_MAJOR (2)
-#define EXTENSION_REVISION_MINOR (0)
+#define EXTENSION_REVISION_MINOR (1)
 
 #define EXTENSION_VERSION_TAG ((uint16_t) ((EXTENSION_REVISION_MAJOR << 8) \
                                           | EXTENSION_REVISION_MINOR))
