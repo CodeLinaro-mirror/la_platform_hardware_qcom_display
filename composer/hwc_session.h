@@ -572,6 +572,7 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   void PerformQsyncCallback(Display display);
   bool isSmartPanelConfig(uint32_t disp_id, uint32_t config_id);
   void PerformIdleStatusCallback(Display display);
+  bool IsHWDisplayConnected(Display client_id);
 
   CoreInterface *core_intf_ = nullptr;
   HWCDisplay *hwc_display_[HWCCallbacks::kNumDisplays] = {nullptr};
