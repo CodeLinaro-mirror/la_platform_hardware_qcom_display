@@ -800,6 +800,13 @@ void HWCDisplay::BuildLayerStack() {
       }
     }
 
+    // VTS case failure with solid layer dimming due to no support on pipe
+    // TODO(user): Remove this when we add support for solid_fill in pipe
+    if (layer->flags.solid_fill && layer->layer_brightness != 1.0f) {
+      layer->flags.skip = true;
+      layer->flags.solid_fill = false;
+    }
+
     if (layer->flags.skip) {
       layer_stack_.flags.skip_present = true;
     }
