@@ -1335,7 +1335,7 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, SyncPoints *syn
 }
 
 void HWDeviceDRM::SetQOSData(const HWQosData &qos_data) {
-  if (!qos_data.valid || first_cycle_) {
+  if (!qos_data.valid) {
     return;
   }
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_CLK, token_.crtc_id, qos_data.clock_hz);
