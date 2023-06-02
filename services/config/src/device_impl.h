@@ -26,6 +26,9 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #ifndef __DEVICE_IMPL_H__
 #define __DEVICE_IMPL_H__
@@ -126,6 +129,12 @@ class DeviceImpl : public IDisplayConfig, public android::hardware::hidl_death_r
     void ParseIsSupportedConfigSwitch(const ByteStream &input_params, perform_cb _hidl_cb);
     void ParseGetDisplayType(const ByteStream &input_params, perform_cb _hidl_cb);
     void ParseAllowIdleFallback(perform_cb _hidl_cb);
+    void ParseTunnellingInit(perform_cb _hidl_cb);
+    void ParsequeueTunnelledBuffer(uint64_t clientHandle, const ByteStream &input_params,
+                                   const HandleStream &input_handles, perform_cb _hidl_cb);
+    void ParsedequeueTunnelledBuffer(uint64_t clientHandle, const ByteStream &input_params,
+                                     const HandleStream &input_handles,perform_cb _hidl_cb);
+    void ParsetunnellingDeinit(perform_cb _hidl_cb);
 
    private:
     ConfigInterface *intf_ = nullptr;

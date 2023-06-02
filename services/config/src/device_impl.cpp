@@ -26,6 +26,9 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #include <string>
 #include <vector>
@@ -856,6 +859,40 @@ void DeviceImpl::DeviceClientContext::ParseAllowIdleFallback(perform_cb _hidl_cb
   _hidl_cb(error, {}, {});
 }
 
+void DeviceImpl::DeviceClientContext::ParseTunnellingInit(perform_cb _hidl_cb) {
+  int32_t error = intf_->tunnellingInit();
+  _hidl_cb(error, {}, {});
+}
+
+void DeviceImpl::DeviceClientContext::ParsequeueTunnelledBuffer(uint64_t clientHandle,
+                                                                const ByteStream &input_params,
+                                                                const HandleStream &input_handles,
+                                                                perform_cb _hidl_cb) {
+  const uint8_t *data = input_params.data();
+  const native_handle fence =   reinterpret_cast<const native_handle& >(data);
+  const hidl_handle buffer = input_handles[0];
+
+  int32_t error = intf_->queueTunnelledBuffer(buffer.getNativeHandle(),&fence);
+  _hidl_cb(error, {}, {});
+}
+
+void DeviceImpl::DeviceClientContext::ParsedequeueTunnelledBuffer(uint64_t clientHandle,
+                                                                  const ByteStream &input_params,
+                                                                  const HandleStream &input_handles,
+                                                                  perform_cb _hidl_cb) {
+  const uint8_t *data = input_params.data();
+  const native_handle fence =   reinterpret_cast<const native_handle&>(data);
+  const hidl_handle buffer = input_handles[0];
+
+  int32_t error = intf_->dequeueTunnelledBuffer(buffer.getNativeHandle(),&fence);
+  _hidl_cb(error, {}, {});
+}
+
+void DeviceImpl::DeviceClientContext::ParsetunnellingDeinit(perform_cb _hidl_cb) {
+  int32_t error = intf_->tunnellingDeinit();
+  _hidl_cb(error, {}, {});
+}
+
 Return<void> DeviceImpl::perform(uint64_t client_handle, uint32_t op_code,
                                  const ByteStream &input_params, const HandleStream &input_handles,
                                  perform_cb _hidl_cb) {
@@ -1030,6 +1067,18 @@ Return<void> DeviceImpl::perform(uint64_t client_handle, uint32_t op_code,
     case kDummyOpcode:
       _hidl_cb(-EINVAL, {}, {});
       break;
+    case kTunnelingInit:
+      client->ParseTunnellingInit(_hidl_cb);
+      break;
+    case  kQueueTunneledBuffer:
+     client->ParsequeueTunnelledBuffer(client_handle, input_params, input_handles, _hidl_cb);
+      break;
+    case kDequeueTunneledBuffer:
+       client->ParsedequeueTunnelledBuffer(client_handle, input_params,input_handles, _hidl_cb);
+       break;
+    case kTunnellingDeinit:
+       client->ParsetunnellingDeinit(_hidl_cb);
+       break;
     default:
       _hidl_cb(-EINVAL, {}, {});
       break;

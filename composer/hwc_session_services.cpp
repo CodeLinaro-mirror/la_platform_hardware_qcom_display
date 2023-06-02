@@ -509,6 +509,193 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
   return error;
 }
 
+int HWCSession::DisplayConfigImpl::tunnellingInit() {
+  char property[PROPERTY_VALUE_MAX] = {0};
+  property_get(ENABLE_TUNNELLING, property, "0");
+  if (!(strncmp(property, "0", PROPERTY_VALUE_MAX))) {
+     DLOGE("Tunnelling property not set. Exiting tunnellingInit!\n");
+     return EINVAL;
+  }
+
+  hwc_session_->tunneling_enabled_ = true;
+  return 0;
+}
+
+int HWCSession::DisplayConfigImpl::dequeueTunnelledBuffer(const native_handle_t* buffer,
+                                                          const native_handle_t*
+                                                          release_fence_handle) {
+  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[hwc_session_->tunneled_display_id_]);
+  native_handle_t* handle = nullptr;
+  if ((hwc_session_->tunneling_enabled_) == false) {
+    DLOGE("Tunneling not enabled\n");
+  }
+
+  DTRACE_SCOPED();
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = buffer;
+  if (!buffer_handle) {
+    DLOGE("Invalid native handle");
+  }
+
+  uint64_t buffer_id = ((private_handle_t *)buffer)->id;
+  if ((hwc_session_->tunneling_map_buffer_native_handle_.find(buffer_id)) !=
+      (hwc_session_->tunneling_map_buffer_native_handle_.end())) {
+    native_handle = hwc_session_->tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = hwc_session_->buffer_allocator_.ImportBuffer(buffer);
+    if (native_handle == nullptr) {
+    }
+    hwc_session_->tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id]
+                                                      = native_handle;
+  }
+  private_handle_t *private_handle = (private_handle_t *)native_handle;
+  if(private_handle == nullptr) {
+  }
+
+  if (hwc_session_->tunneling_map_buffer_release_fence_.find(private_handle->id) ==
+      hwc_session_->tunneling_map_buffer_release_fence_.end()) {
+  }
+
+  int32_t release_fence = hwc_session_->tunneling_map_buffer_release_fence_[private_handle->id];
+
+  NATIVE_HANDLE_DECLARE_STORAGE(fenceStorage, 1, 0);
+  if (release_fence >= 0) {
+    hwc_session_->tunneled_layer_rf_ = release_fence;
+    release_fence_handle = (native_handle_t*)&release_fence;
+  }
+
+  DLOGV("dequeueTunnelledBuffer successful.\n");
+
+  return 0;
+}
+
+int HWCSession::DisplayConfigImpl::queueTunnelledBuffer(const native_handle_t* buffer,
+                                                 const native_handle_t* acquire_fence) {
+  if ((hwc_session_->tunneling_enabled_) == false) {
+    DLOGW("Tunneling not enabled\n");
+    return EINVAL;
+  }
+
+  HWCDisplay *hwc_display = hwc_session_->hwc_display_[hwc_session_->tunneled_display_id_];
+  if (!hwc_display) {
+    DLOGE("Primary Display is not connected. Exiting queueTunnelledBuffer\n");
+    return EINVAL;
+  }
+
+  if (hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = hwc_display->GetHWCTunnelledLayer();
+    if (hwc_session_->tunneled_layer_ != -1) {
+      hwc_session_->SetLayerIsTunneled(hwc_session_->tunneled_display_id_,
+                                       hwc_session_->tunneled_layer_, true);
+    }
+  }
+
+  int32_t error = -EINVAL;
+
+  DTRACE_SCOPED();
+
+  bool tunneled_layer_present = false;
+  hwc_session_->IsTunnelledLayerPresent(hwc_session_->tunneled_display_id_,
+                                        &tunneled_layer_present);
+  if (tunneled_layer_present == false || hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return EINVAL;
+  }
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = buffer;
+  if (!buffer_handle) {
+    DLOGE("Invalid native handle");
+    return EINVAL;
+  }
+
+  uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
+  if (hwc_session_->tunneling_map_buffer_native_handle_.find(buffer_id) !=
+      hwc_session_->tunneling_map_buffer_native_handle_.end()) {
+    native_handle = hwc_session_->tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = hwc_session_->buffer_allocator_.ImportBuffer(buffer_handle);
+    if (native_handle == nullptr) {
+      return EINVAL;
+    }
+    hwc_session_->tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id]
+                                                     = native_handle;
+  }
+
+  uint32_t types_count = 0;
+  uint32_t reqs_count = 0;
+  const native_handle_t* native_fence_handle = acquire_fence;
+  int acquire_fence_fd = -1;
+  // if native_fence_handle is NULL, acquire fence fd is considered -1
+  if (native_fence_handle) {
+     acquire_fence_fd = dup(native_fence_handle->data[0]);
+  }
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[hwc_session_->tunneled_display_id_]);
+  }
+  error = hwc_session_->SetLayerBuffer(hwc_session_->tunneled_display_id_,
+                                       hwc_session_->tunneled_layer_, native_handle,
+                                       acquire_fence_fd);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerBuffer failed! Exiting queueTunnelledBuffer.\n");
+    hwc_session_->tunneled_layer_ = -1;
+    return error;
+  }
+
+  if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
+    error = hwc_session_->ValidateDisplay(hwc_session_->tunneled_display_id_, &types_count,
+                                          &reqs_count);
+    if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
+      DLOGE("ValidateDisplay failed! Exiting queueTunnelledBuffer.\n");
+      hwc_session_->tunneled_layer_ = -1;
+      return error;
+    }
+  }
+  hwc_session_->IsTunnelledLayerPresent(hwc_session_->tunneled_display_id_,
+                                        &tunneled_layer_present);
+  if (tunneled_layer_present == false || hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return EINVAL;
+  }
+
+  int presentfence = 0;
+  error = hwc_session_->PresentDisplay(hwc_session_->tunneled_display_id_, &presentfence);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("PresentDisplay failed! Exiting queueTunnelledBuffer.\n");
+    hwc_session_->tunneled_layer_ = -1;
+    return error;
+  }
+  close(presentfence);
+  auto hwc_layer = hwc_display->GetHWCLayer(hwc_session_->tunneled_layer_);
+  if (hwc_layer == nullptr) {
+    DLOGE("Unable to fetch corresponding hwc_layer for tunneled layer");
+    hwc_session_->tunneled_layer_ = -1;
+    return EINVAL;
+  }
+  int release_fence = hwc_layer->PopBackReleaseFence();
+  close(hwc_session_->tunneled_layer_rf_);
+  hwc_session_->tunneling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id]
+                                                   = release_fence;
+
+  DLOGV("queueTunnelledBuffer successful.\n");
+  return 0;
+}
+
+int HWCSession::DisplayConfigImpl::tunnellingDeinit() {
+  hwc_session_->tunneling_enabled_ = false;
+  for (auto i : hwc_session_->tunneling_map_buffer_native_handle_) {
+    native_handle_close(i.second);
+  }
+  for (auto i : hwc_session_->tunneling_map_buffer_release_fence_) {
+    close(i.second);
+  }
+  hwc_session_->tunneling_map_buffer_native_handle_.clear();
+  hwc_session_->tunneling_map_buffer_release_fence_.clear();
+  return 0;
+}
 
 int HWCSession::SetCameraLaunchStatus(uint32_t on) {
   if (null_display_mode_) {

@@ -317,8 +317,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
                                     int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
                                     uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
   int32_t SetDisplayElapseTime(hwc2_display_t display, uint64_t time);
-
-
+  int32_t dequeueTunnelledBuffer(const native_handle_t* buffer,
+                                 const native_handle_t* release_fence_handle);
+  int32_t queueTunnelledBuffer(const native_handle_t* buffer,
+                               const native_handle_t* acquire_fence);
   virtual int RegisterClientContext(std::shared_ptr<DisplayConfig::ConfigCallback> callback,
                                     DisplayConfig::ConfigInterface **intf);
   virtual void UnRegisterClientContext(DisplayConfig::ConfigInterface *intf);
@@ -421,6 +423,12 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     virtual int IsSmartPanelConfig(uint32_t disp_id, uint32_t config_id, bool *is_smart);
     virtual int IsRotatorSupportedFormat(int hal_format, bool ubwc, bool *supported);
     virtual int ControlQsyncCallback(bool enable);
+    virtual int tunnellingInit();
+    virtual int dequeueTunnelledBuffer(const native_handle_t* buffer_handle,
+                                       const native_handle_t* release_fence_handle);
+    virtual int queueTunnelledBuffer(const native_handle_t* buffer_handle,
+                                     const native_handle_t* acquire_fence_handle);
+    virtual int tunnellingDeinit();
 
     std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
     HWCSession *hwc_session_ = nullptr;
@@ -584,6 +592,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t disable_mask_layer_hint_ = 0;
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
+  bool tunneling_enabled_ = false;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
   CWB cwb_;
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
@@ -599,6 +608,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int display_reboot_strategy_ = kRebootStrategyDefault;
   bool null_display_active_ = false;
   static int null_display_mode_;
+  hwc2_layer_t tunneled_layer_ = -1;
+  int tunneled_layer_rf_ = -1; // tunneled layer's release fence
+  int tunneled_display_id_ = HWC_DISPLAY_PRIMARY;
 };
 }  // namespace sdm
 
