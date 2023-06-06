@@ -971,11 +971,11 @@ struct Resolution {
 
 class FrameBufferObject : public LayerBufferObject {
  public:
-  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format,
-                             uint32_t width, uint32_t height, bool shallow = false);
+  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format, uint32_t width,
+                             uint32_t height, bool shallow = false, bool secure = false);
   ~FrameBufferObject();
   uint32_t GetFbId();
-  bool IsEqual(LayerBufferFormat format, uint32_t width, uint32_t height);
+  bool IsEqual(LayerBufferFormat format, uint32_t width, uint32_t height, bool secure);
 
  private:
   uint32_t fb_id_;
@@ -983,6 +983,7 @@ class FrameBufferObject : public LayerBufferObject {
   uint32_t width_;
   uint32_t height_;
   bool shallow_;
+  bool secure_;
 };
 
 /* Downscale Blur flags */
