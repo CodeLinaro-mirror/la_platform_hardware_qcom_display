@@ -141,6 +141,8 @@ class DisplayConfigAIDL : public BnDisplayConfig {
     ScopedAStatus configureCacV2(int32_t dispId, const CacV2Config& config, bool enable);
     ScopedAStatus configureCacV2PerEye(int32_t dispId, const CacV2Config& leftConfig,
                                        const CacV2Config& rightConfig, bool enable);
+    ScopedAStatus configureCacV2ExtPerEye(int32_t dispId, const CacV2ConfigExt& leftConfig,
+                                          const CacV2ConfigExt& rightConfig, bool enable);
 
   private:
     sdm::HWCSession *hwc_session_;
