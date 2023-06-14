@@ -21,3 +21,6 @@ libqservice_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"qdqservice\"
 libqservice_la_CPPFLAGS = $(AM_CPPFLAGS)
 libqservice_la_LIBADD = -lcutils -llog -lbinder
 libqservice_la_LDFLAGS = -shared -avoid-version
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libqservice.pc
