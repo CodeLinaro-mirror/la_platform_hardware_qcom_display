@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <stdio.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -1137,7 +1144,7 @@ DisplayError DisplayBase::SetVSyncState(bool enable) {
       error = hw_events_intf_->SetEventState(HWEvent::VSYNC, enable);
     }
     if (error == kErrorNone) {
-      vsync_enable_ = enable;
+      vsync_enable_ = pflip_enable_ = enable;
     }
   }
 

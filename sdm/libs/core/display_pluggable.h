@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DISPLAY_PLUGGABLE_H__
 #define __DISPLAY_PLUGGABLE_H__
 
@@ -61,6 +68,9 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
   // Implement the HWEventHandlers
   virtual DisplayError VSync(int64_t timestamp);
   virtual DisplayError Blank(bool blank) { return kErrorNone; }
+  virtual DisplayError PFlip(int fd, unsigned int sequence,
+                             unsigned int tv_sec, unsigned int tv_usec,
+                             void *data);
   virtual void IdleTimeout() {}
   virtual void ThermalEvent(int64_t thermal_level) {}
   virtual void CECMessage(char *message);

@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #define __STDC_FORMAT_MACROS
 
 #include <ctype.h>
@@ -1471,7 +1478,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
   SetupAtomic(hw_layers, false /* validate */);
 
-  int ret = drm_atomic_intf_->Commit(synchronous_commit_, false /* retain_planes*/);
+  int ret = drm_atomic_intf_->Commit(synchronous_commit_, false /* retain_planes*/, pflip_user_data_);
   int release_fence = INT(release_fence_);
   int retire_fence = INT(retire_fence_);
   if (ret) {
@@ -1733,6 +1740,11 @@ DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
 
 DisplayError HWDeviceDRM::SetVSyncState(bool enable) {
   return kErrorNotSupported;
+}
+
+void HWDeviceDRM::SetPageFlipState(bool enable, void *user_data) {
+  enable_pflip_event_ = enable;
+  pflip_user_data_ = user_data;
 }
 
 void HWDeviceDRM::SetIdleTimeoutMs(uint32_t timeout_ms) {
@@ -2121,7 +2133,7 @@ void HWDeviceDRM::AddDimLayerIfNeeded() {
 DisplayError HWDeviceDRM::NullCommit(bool synchronous, bool retain_planes) {
   DTRACE_SCOPED();
   AddDimLayerIfNeeded();
-  int ret = drm_atomic_intf_->Commit(synchronous , retain_planes);
+  int ret = drm_atomic_intf_->Commit(synchronous , retain_planes, pflip_user_data_);
   if (ret) {
     DLOGE("failed with error %d", ret);
     return kErrorHardware;

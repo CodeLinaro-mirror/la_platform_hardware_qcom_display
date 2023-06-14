@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <map>
@@ -123,6 +130,8 @@ DisplayError DisplayPluggable::Init() {
     DisplayBase::Deinit();
     HWInterface::Destroy(hw_intf_);
     DLOGE("Failed to create hardware events interface. Error = %d", error);
+  } else {
+    hw_intf_->SetPageFlipState(true, (void *)hw_events_intf_);
   }
 
   InitializeColorModes();
@@ -316,6 +325,18 @@ DisplayError DisplayPluggable::VSync(int64_t timestamp) {
     DisplayEventVSync vsync;
     vsync.timestamp = timestamp;
     event_handler_->VSync(vsync);
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayPluggable::PFlip(int fd,
+                                unsigned int sequence,
+                                unsigned int tv_sec,
+                                unsigned int tv_usec,
+                                void *data) {
+  if (pflip_enable_) {
+    event_handler_->PFlip(fd, sequence, tv_sec, tv_usec, data);
   }
 
   return kErrorNone;

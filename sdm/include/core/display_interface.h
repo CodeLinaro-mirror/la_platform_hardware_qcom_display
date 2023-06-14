@@ -30,6 +30,14 @@
   the target device. Each display device represents a unique display target which may be either a
   physical panel or an output buffer..
 */
+
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DISPLAY_INTERFACE_H__
 #define __DISPLAY_INTERFACE_H__
 
@@ -269,6 +277,26 @@ class DisplayEventHandler {
     @sa DisplayInterface::SetDisplayState
   */
   virtual DisplayError VSync(const DisplayEventVSync &vsync) = 0;
+
+  /*! @brief Page Flip event handler.
+
+    @details This event is dispatched on every vertical synchronization.
+    The event is disabled by default.
+
+    @param[in] fd \link int \endlink
+    @param[in] sequence (frame) \link unsigned int \endlink
+    @param[in] tv_sec \link unsigned int \endlink
+    @param[in] tv_usec \link unsigned int \endlink
+    @param[in] data \link void* \endlink
+
+    @return \link DisplayError \endlink
+
+    @sa DisplayInterface::GetVSyncState
+    @sa DisplayInterface::SetVSyncState
+  */
+  virtual DisplayError PFlip(int fd, unsigned int sequence,
+                             unsigned int tv_sec, unsigned int tv_usec,
+                             void *data) = 0;
 
   /*! @brief Event handler for Refresh event.
 
