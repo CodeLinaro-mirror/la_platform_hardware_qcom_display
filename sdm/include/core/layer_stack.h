@@ -20,6 +20,11 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 /*! @file layer_stack.h
@@ -175,6 +180,8 @@ struct LayerFlags {
 
       uint32_t is_game : 1;  //!< This flag shall be set by client to indicate that this layer
                              //!< is a game layer.
+
+      uint32_t is_tunnel : 1;
     };
 
     uint32_t flags = 0;       //!< For initialization purpose only.

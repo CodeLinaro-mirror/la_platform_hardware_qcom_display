@@ -758,9 +758,12 @@ void HWCDisplay::BuildLayerStack() {
       if (handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED_PI) {
         layer->input_buffer.flags.ubwc_pi = true;
       }
-      if (tunnelling_enable_ && tunnelled_layer_== -1 &&
-          (handle->flags & private_handle_t::PRIV_FLAGS_CAMERA_WRITE)) {
-        tunnelled_layer_ = hwc_layer->GetId();
+      if (tunnelling_enable_ && (handle->flags & private_handle_t::PRIV_FLAGS_CAMERA_WRITE)) {
+        if (tunnelled_layer_== -1) {
+          tunnelled_layer_ = hwc_layer->GetId();
+        }
+        layer->flags.is_tunnel = 1;
+        layer->flags.skip = false;
       }
     }
 
@@ -918,7 +921,7 @@ HWC2::Error HWCDisplay::SetLayerIsTunneled(hwc2_layer_t layer_id, bool tunneled)
   }
   const auto layer = map_layer->second;
   layer->SetTunneled(tunneled);
-  this->SetTunneledLayer(true);
+  this->SetTunneledLayer(tunneled);
   return HWC2::Error::None;
 }
 
