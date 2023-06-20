@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -294,6 +294,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   pthread_mutex_t wb_lock_ = {};
   bool exit_wb_thread_ = false;
   pthread_t wb_kickoff_thread_{};
+  bool enable_kernel_wb_cac_ = false;
 };
 
 }  // namespace sdm

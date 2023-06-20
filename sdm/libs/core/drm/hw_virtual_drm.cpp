@@ -29,7 +29,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -93,6 +93,15 @@ HWVirtualDRM::HWVirtualDRM(int32_t display_id, BufferSyncHandler *buffer_sync_ha
   HWDeviceDRM::device_name_ = "Virtual";
   HWDeviceDRM::disp_type_ = DRMDisplayType::VIRTUAL;
   HWDeviceDRM::display_id_ = display_id;
+
+  Debug::GetProperty(ENABLE_KERNEL_WB_CAC, &enable_kernel_wb_cac_);
+}
+
+DisplayError HWVirtualDRM::Deinit() {
+  if (enable_kernel_wb_cac_) {
+    SetWBCacCommit(sde_drm::DRMWbCacCommitConfig::WB_CAC_COMMIT_DISABLE);
+  }
+  return HWDeviceDRM::Deinit();
 }
 
 void HWVirtualDRM::ConfigureWbConnectorFbId(uint32_t fb_id) {
@@ -216,12 +225,23 @@ DisplayError HWVirtualDRM::Commit(HWLayers *hw_layers) {
   } else {
     SetFrameTrigger(kFrameTriggerDefault);
   }
+
+  LayerRect &frame_split = hw_layers->info.stack->frame_split;
+  if (IsValid(frame_split) && enable_kernel_wb_cac_) {
+    if (frame_split.left == 0 && frame_split.top == 0) {
+      SetWBCacCommit(sde_drm::DRMWbCacCommitConfig::WB_CAC_COMMIT_LEFT);
+    } else {
+      SetWBCacCommit(sde_drm::DRMWbCacCommitConfig::WB_CAC_COMMIT_RIGHT);
+    }
+  }
+  if (IsValid(frame_split) && !enable_kernel_wb_cac_) {
+    SetWBCacCommit(sde_drm::DRMWbCacCommitConfig::WB_CAC_COMMIT_DEFAULT);
+  }
   err = HWDeviceDRM::AtomicCommit(hw_layers);
   if (err != kErrorNone) {
     DLOGE("Atomic commit failed for crtc_id %d conn_id %d", token_.crtc_id, token_.conn_id);
   }
   // Close the WB retire fence in CAC mode
-  LayerRect &frame_split = hw_layers->info.stack->frame_split;
   // frame_Split is hint for CAC mode, close retire fence
   if (IsValid(frame_split) || enable_cac_) {
     LayerStack *stack = hw_layers->info.stack;
@@ -348,6 +368,16 @@ DisplayError HWVirtualDRM::GetDisplayIdentificationData(uint8_t *out_port, uint3
 
   return kErrorNone;
 }
+
+DisplayError HWVirtualDRM::SetWBCacCommit(sde_drm::DRMWbCacCommitConfig config) {
+  int ret = drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_WB_CAC, token_.conn_id, config);
+  if (ret) {
+    DLOGE("Failed to perform CONNECTOR_SET_WB_CAC, config %d, ret %d", config, ret);
+    return kErrorUndefined;
+  }
+  return kErrorNone;
+}
+
 
 }  // namespace sdm
 

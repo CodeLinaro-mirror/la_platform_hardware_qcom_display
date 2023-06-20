@@ -29,7 +29,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -97,7 +97,8 @@ class HWVirtualDRM : public HWDeviceDRM {
   }
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data);
-
+  virtual DisplayError Deinit();
+  virtual DisplayError SetWBCacCommit(sde_drm::DRMWbCacCommitConfig config);
  private:
   void ConfigureWbConnectorFbId(uint32_t fb_id);
   void ConfigureWbConnectorDestRect(HWLayers *hw_layers);
@@ -105,6 +106,8 @@ class HWVirtualDRM : public HWDeviceDRM {
   void InitializeConfigs();
   DisplayError SetWbConfigs(const HWDisplayAttributes &display_attributes);
   void GetModeIndex(const HWDisplayAttributes &display_attributes, int *mode_index);
+
+  int enable_kernel_wb_cac_ = 0;
 };
 
 }  // namespace sdm

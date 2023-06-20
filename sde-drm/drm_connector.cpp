@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -126,6 +126,11 @@ static uint8_t DRM_MODE_COLORIMETRY_BT2020_RGB         = 9;
 static uint8_t DRM_MODE_COLORIMETRY_BT2020_YCC         = 10;
 static uint8_t DRM_MODE_COLORIMETRY_DCI_P3_RGB_D65     = 11;
 static uint8_t DRM_MODE_COLORIMETRY_DCI_P3_RGB_THEATER = 12;
+
+static uint8_t DRM_COMMIT_WB_CAC_DEFAULT = 0;
+static uint8_t DRM_COMMIT_WB_CAC_LEFT = 1;
+static uint8_t DRM_COMMIT_WB_CAC_RIGHT = 2;
+static uint8_t DRM_COMMIT_WB_CAC_DISABLE = 3;
 
 static void PopulatePowerModes(drmModePropertyRes *prop) {
   for (auto i = 0; i < prop->count_enums; i++) {
@@ -1014,6 +1019,43 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
                  obj_id, prop_id, skew_vsync_val, ret, strerror(ret));
       } else {
         DRM_LOGD("Connector %d: Setting skew vsync %d", obj_id, skew_vsync_val);
+      }
+    } break;
+
+    case DRMOps::CONNECTOR_SET_WB_CAC: {
+      if (!prop_mgr_.IsPropertyAvailable(DRMProperty::WB_CAC)) {
+        return;
+      }
+      int drm_wb_cac_commit_config = va_arg(args, int);
+      DRMWbCacCommitConfig config = static_cast<DRMWbCacCommitConfig>(drm_wb_cac_commit_config);
+      int32_t wb_cac_commit = -1;
+      switch (config) {
+        case (DRMWbCacCommitConfig::WB_CAC_COMMIT_DEFAULT):
+          wb_cac_commit = DRM_COMMIT_WB_CAC_DEFAULT;
+          break;
+        case (DRMWbCacCommitConfig::WB_CAC_COMMIT_LEFT):
+          wb_cac_commit = DRM_COMMIT_WB_CAC_LEFT;
+          break;
+        case (DRMWbCacCommitConfig::WB_CAC_COMMIT_RIGHT):
+          wb_cac_commit = DRM_COMMIT_WB_CAC_RIGHT;
+          break;
+        case (DRMWbCacCommitConfig::WB_CAC_COMMIT_DISABLE):
+          wb_cac_commit = DRM_COMMIT_WB_CAC_DISABLE;
+          break;
+        default:
+          DRM_LOGE("Invalid wb commit config %d to set on connector %d",
+                   drm_wb_cac_commit_config, obj_id);
+          break;
+      }
+      if (wb_cac_commit > 0) {
+        uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::WB_CAC);
+        int ret = drmModeAtomicAddProperty(req, obj_id, prop_id, wb_cac_commit);
+        if (ret < 0) {
+          DRM_LOGE("AtomicAddProperty failed obj_id 0x%x, prop_id %d mode %d ret %d, error =%s",
+                   obj_id, prop_id, wb_cac_commit, ret, strerror(ret));
+        } else {
+          DRM_LOGD("Connector %d: Setting wb cac %d", obj_id, wb_cac_commit);
+        }
       }
     } break;
 

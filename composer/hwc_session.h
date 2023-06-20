@@ -572,6 +572,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
   int32_t enable_wb_cac_ = 0;
+  int32_t enable_kernel_wb_cac_ = 0;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
   CWB cwb_;
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;

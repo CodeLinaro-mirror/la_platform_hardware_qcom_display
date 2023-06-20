@@ -29,7 +29,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -456,6 +456,12 @@ enum struct DRMOps {
    *      uint32_t - skew-vsync value
    */
   CONNECTOR_SET_SKEW_VSYNC,
+  /*
+   * Op: Sets wb-cac commit
+   * Arg: uint32_t - Connector ID
+   *      uint32_t - wb_cac commit type: default-0, left-1, right-2 and disable-3
+   */
+  CONNECTOR_SET_WB_CAC,
 };
 
 enum struct DRMRotation {
@@ -954,6 +960,13 @@ enum struct DRMColorspace {
   BT2020_YCC,
   DCI_P3_RGB_D65,
   DCI_P3_RGB_THEATER,
+};
+
+enum struct DRMWbCacCommitConfig {
+  WB_CAC_COMMIT_DEFAULT = 0,
+  WB_CAC_COMMIT_LEFT,
+  WB_CAC_COMMIT_RIGHT,
+  WB_CAC_COMMIT_DISABLE,
 };
 
 /* DRM Atomic Request Property Set.
