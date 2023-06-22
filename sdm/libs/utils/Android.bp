@@ -17,6 +17,7 @@ cc_library_shared {
         "fence.cpp",
         "formats.cpp",
         "utils.cpp",
+        "cpu_instructions.cpp",
     ],
 
     shared_libs: ["libdisplaydebug"],
