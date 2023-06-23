@@ -299,7 +299,7 @@ int HWCSession::Init() {
   if (status) {
     DLOGE("Creating the Primary display...failed!");
     // De-initialize
-    DestroyDisplay(&map_info_primary_);
+    DestroyDisplayLocked(&map_info_primary_);
     if (color_mgr_) {
       color_mgr_->DestroyColorManager();
     }
@@ -363,18 +363,18 @@ int HWCSession::Deinit() {
   HpdDeinit();
 
   // Destroy all connected displays
-  DestroyDisplayLocked(&map_info_primary_);
+  DestroyDisplay(&map_info_primary_);
 
   for (auto &map_info : map_info_builtin_) {
-    DestroyDisplayLocked(&map_info);
+    DestroyDisplay(&map_info);
   }
 
   for (auto &map_info : map_info_pluggable_) {
-    DestroyDisplayLocked(&map_info);
+    DestroyDisplay(&map_info);
   }
 
   for (auto &map_info : map_info_virtual_) {
-    DestroyDisplayLocked(&map_info);
+    DestroyDisplay(&map_info);
   }
 
   if (color_mgr_) {
@@ -631,7 +631,7 @@ HWC3::Error HWCSession::DestroyVirtualDisplay(Display display) {
   for (auto &map_info : map_info_virtual_) {
     if (map_info.client_id == display) {
       DLOGI("Destroying virtual display id:%" PRIu64, display);
-      DestroyDisplayLocked(&map_info);
+      DestroyDisplay(&map_info);
       break;
     }
   }
@@ -3352,7 +3352,7 @@ int HWCSession::HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info) {
         is_valid_pluggable_display = true;
         hwc_display->Abort();
       }
-      DestroyDisplayLocked(&map_info);
+      DestroyDisplay(&map_info);
       if (enable_primary_reconfig_req_ && is_valid_pluggable_display) {
         Display active_builtin_id = GetActiveBuiltinDisplay();
         if (active_builtin_id < HWCCallbacks::kNumDisplays) {
@@ -3372,43 +3372,47 @@ int HWCSession::HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info) {
   return 0;
 }
 
-void HWCSession::DestroyDisplayLocked(DisplayMapInfo *map_info) {
-  switch (map_info->disp_type) {
-    case kPluggable:
-      DLOGI("Notify hotplug display disconnected: client id = %d", UINT32(map_info->client_id));
-      callbacks_.Hotplug(map_info->client_id, false);
-      SetPowerMode(map_info->client_id, static_cast<int32_t>(PowerMode::OFF));
-      DestroyPluggableDisplayLocked(map_info);
-      break;
-    default:
-      DestroyNonPluggableDisplayLocked(map_info);
-      break;
-  }
-}
-
 void HWCSession::DestroyDisplay(DisplayMapInfo *map_info) {
   switch (map_info->disp_type) {
-    case kPluggable:
+    case kPluggable: {
       DLOGI("Notify hotplug display disconnected: client id = %d", UINT32(map_info->client_id));
       callbacks_.Hotplug(map_info->client_id, false);
+
+      // Wait until all commands are flushed.
+      std::lock_guard<std::mutex> hwc_lock(command_seq_mutex_);
+
       SetPowerMode(map_info->client_id, static_cast<int32_t>(PowerMode::OFF));
       DestroyPluggableDisplay(map_info);
       break;
+    }
     default:
       DestroyNonPluggableDisplay(map_info);
       break;
   }
 }
 
-void HWCSession::DestroyPluggableDisplayLocked(DisplayMapInfo *map_info) {
-  // Wait until all commands are flushed.
-  std::lock_guard<std::mutex> hwc_lock(command_seq_mutex_);
-  SCOPE_LOCK(locker_[map_info->client_id]);
-
-  DestroyPluggableDisplay(map_info);
+void HWCSession::DestroyDisplayLocked(DisplayMapInfo *map_info) {
+  switch (map_info->disp_type) {
+    case kPluggable: {
+      DLOGI("Notify hotplug display disconnected: client id = %d", UINT32(map_info->client_id));
+      callbacks_.Hotplug(map_info->client_id, false);
+      SetPowerMode(map_info->client_id, static_cast<int32_t>(PowerMode::OFF));
+      DestroyPluggableDisplayLocked(map_info);
+      break;
+    }
+    default:
+      DestroyNonPluggableDisplayLocked(map_info);
+      break;
+  }
 }
 
 void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
+  SCOPE_LOCK(locker_[map_info->client_id]);
+
+  DestroyPluggableDisplayLocked(map_info);
+}
+
+void HWCSession::DestroyPluggableDisplayLocked(DisplayMapInfo *map_info) {
   Display client_id = map_info->client_id;
 
   {
@@ -3447,13 +3451,13 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
   }
 }
 
-void HWCSession::DestroyNonPluggableDisplayLocked(DisplayMapInfo *map_info) {
+void HWCSession::DestroyNonPluggableDisplay(DisplayMapInfo *map_info) {
   SCOPE_LOCK(locker_[map_info->client_id]);
 
-  DestroyNonPluggableDisplay(map_info);
+  DestroyNonPluggableDisplayLocked(map_info);
 }
 
-void HWCSession::DestroyNonPluggableDisplay(DisplayMapInfo *map_info) {
+void HWCSession::DestroyNonPluggableDisplayLocked(DisplayMapInfo *map_info) {
   Display client_id = map_info->client_id;
 
   auto &hwc_display = hwc_display_[client_id];
