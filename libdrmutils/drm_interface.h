@@ -603,6 +603,7 @@ enum struct QSEEDVersion {
   V1,
   V2,
   V3,
+  V3LITE,
 };
 
 /* QSEED3 Step version */
