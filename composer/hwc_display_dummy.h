@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HWC_DISPLAY_DUMMY_H__
 #define __HWC_DISPLAY_DUMMY_H__
 
@@ -44,7 +50,7 @@ class HWCDisplayDummy : public HWCDisplay {
   static void Destroy(HWCDisplay *hwc_display);
   virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
   virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
-  virtual HWC2::Error GetActiveConfig(hwc2_config_t *out_config);
+  virtual HWC2::Error GetActiveConfig(bool get_real_config, hwc2_config_t *out_config);
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
   virtual HWC2::Error SetColorMode(ColorMode mode);
   virtual HWC2::Error SetVsyncEnabled(HWC2::Vsync enabled);

@@ -19,43 +19,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -310,7 +274,7 @@ class HWCDisplay : public DisplayEventHandler {
               { HWCDisplay::throttling_refresh_rate_ = newRefreshRate; }
   virtual int SetNoisePlugInOverride(bool override_en, int32_t attn, int32_t noise_zpos);
   virtual int SetActiveDisplayConfig(uint32_t config);
-  virtual int GetActiveDisplayConfig(uint32_t *config);
+  virtual int GetActiveDisplayConfig(bool get_real_config, uint32_t *config);
   virtual int GetDisplayConfigCount(uint32_t *count);
   virtual int GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes);
@@ -353,7 +317,7 @@ class HWCDisplay : public DisplayEventHandler {
 
   // HWC2 APIs
   virtual HWC2::Error AcceptDisplayChanges(void);
-  virtual HWC2::Error GetActiveConfig(hwc2_config_t *out_config);
+  virtual HWC2::Error GetActiveConfig(bool get_real_config, hwc2_config_t *out_config);
   virtual HWC2::Error SetActiveConfig(hwc2_config_t config);
   virtual HWC2::Error SetPanelLuminanceAttributes(float min_lum, float max_lum) {
     return HWC2::Error::Unsupported;
@@ -480,7 +444,7 @@ class HWCDisplay : public DisplayEventHandler {
       int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
       uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
 
-  virtual HWC2::Error GetDisplayVsyncPeriod(VsyncPeriodNanos *vsync_period);
+  virtual HWC2::Error GetDisplayVsyncPeriod(bool get_real_config, VsyncPeriodNanos *vsync_period);
   virtual HWC2::Error SetActiveConfigWithConstraints(
       hwc2_config_t config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
       VsyncPeriodChangeTimeline *out_timeline);
@@ -558,7 +522,7 @@ class HWCDisplay : public DisplayEventHandler {
   int32_t SetClientTargetDataSpace(int32_t dataspace);
   int SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels);
   int32_t GetDisplayConfigGroup(hwc2_config_t config);
-  HWC2::Error GetVsyncPeriodByActiveConfig(VsyncPeriodNanos *vsync_period);
+  HWC2::Error GetVsyncPeriodByActiveConfig(bool get_real_config, VsyncPeriodNanos *vsync_period);
   bool GetTransientVsyncPeriod(VsyncPeriodNanos *vsync_period);
   std::tuple<int64_t, int64_t> RequestActiveConfigChange(hwc2_config_t config,
                                                          VsyncPeriodNanos current_vsync_period,
@@ -572,7 +536,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool AllowSeamless(hwc2_config_t request_config);
   void SetVsyncsApplyRateChange(uint32_t vsyncs) { vsyncs_to_apply_rate_change_ = vsyncs; }
   HWC2::Error SubmitDisplayConfig(hwc2_config_t config);
-  HWC2::Error GetCachedActiveConfig(hwc2_config_t *config);
+  HWC2::Error GetCachedActiveConfig(bool get_real_config, hwc2_config_t *config);
   void SetActiveConfigIndex(int active_config_index);
   HWC2::Error PostPrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests);
   HWC2::Error HandlePrepareError(DisplayError error);
@@ -692,6 +656,13 @@ class HWCDisplay : public DisplayEventHandler {
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
   void WaitOnPreviousFence();
+  bool IsPanelConfig(uint32_t x, uint32_t y);
+  void PopulateHWCExtendedDisplayResolution();
+  DisplayError GetHWCActiveConfig(bool get_real_config, hwc2_config_t *config_index);
+  bool IsVirtualConfig(hwc2_config_t config);
+  HWC2::Error SetFBForExtendedResolution(hwc2_config_t config,
+                                         hwc2_config_t *real_config_for_fps_switch);
+
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
@@ -707,6 +678,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool draw_method_set_ = false;
   bool validate_done_ = false;
   bool client_target_3_1_set_ = false;
+  bool virtual_config_fps_switch_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

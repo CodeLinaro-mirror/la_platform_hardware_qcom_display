@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <cutils/properties.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -617,7 +623,7 @@ int HWCDisplayPluggableTest::InitLayer(Layer *layer) {
   uint32_t active_config = 0;
   DisplayConfigVariableInfo var_info = {};
 
-  GetActiveDisplayConfig(&active_config);
+  GetActiveDisplayConfig(false,&active_config);
 
   GetDisplayAttributesForConfig(INT32(active_config), &var_info);
 

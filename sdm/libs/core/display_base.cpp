@@ -3023,8 +3023,9 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   uint32_t fb_height = client_ctx_.fb_config.y_pixels;
   uint32_t display_width = client_ctx_.display_attributes.x_pixels;
   uint32_t display_height = client_ctx_.display_attributes.y_pixels;
+  bool xr_variant = IsXRVariant();
 
-  if (HasConcurrentWriteback() && layer_stack->output_buffer) {
+  if (xr_variant || (HasConcurrentWriteback() && layer_stack->output_buffer)) {
     DLOGV_IF(kTagDisplay, "Found concurrent writeback, configure LM width:%d height:%d",
              fb_width, fb_height);
     *new_mixer_width = fb_width;
