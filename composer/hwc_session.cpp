@@ -620,7 +620,7 @@ uint32_t HWCSession::GetMaxVirtualDisplayCount() {
 }
 
 HWC3::Error HWCSession::GetActiveConfig(Display display, Config *out_config) {
-  return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, out_config);
+  return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, false, out_config);
 }
 
 HWC3::Error HWCSession::GetChangedCompositionTypes(Display display, uint32_t *out_num_elements,
@@ -3276,9 +3276,9 @@ int HWCSession::DisconnectPluggableDisplays(DisplayMapInfo &map_info) {
     if (active_builtin_id < HWCCallbacks::kNumDisplays) {
       SCOPE_LOCK(locker_[active_builtin_id]);
       Config current_config = 0, new_config = 0;
-      hwc_display_[active_builtin_id]->GetActiveConfig(&current_config);
+      hwc_display_[active_builtin_id]->GetActiveConfig(false, &current_config);
       hwc_display_[active_builtin_id]->SetAlternateDisplayConfig(false);
-      hwc_display_[active_builtin_id]->GetActiveConfig(&new_config);
+      hwc_display_[active_builtin_id]->GetActiveConfig(false, &new_config);
 
       if (new_config != current_config) {
         NotifyDisplayAttributes(active_builtin_id, new_config);
@@ -3996,14 +3996,14 @@ HWC3::Error HWCSession::WaitForResources(bool wait_for_resources, Display active
         SCOPE_LOCK(locker_[active_builtin_id]);
         if (hwc_display_[active_builtin_id]) {
           Config current_config = 0, new_config = 0;
-          hwc_display_[active_builtin_id]->GetActiveConfig(&current_config);
+          hwc_display_[active_builtin_id]->GetActiveConfig(false, &current_config);
           int status = INT32(hwc_display_[active_builtin_id]->SetAlternateDisplayConfig(true));
           if (status) {
             DLOGE("Active built-in %" PRIu64 " cannot switch to lower resource configuration",
                   active_builtin_id);
             return HWC3::Error::Unsupported;
           }
-          hwc_display_[active_builtin_id]->GetActiveConfig(&new_config);
+          hwc_display_[active_builtin_id]->GetActiveConfig(false, &new_config);
 
           // In case of config change, notify client with the new configuration
           if (new_config != current_config) {
@@ -4061,7 +4061,7 @@ HWC3::Error HWCSession::GetDisplayVsyncPeriod(Display disp, VsyncPeriodNanos *vs
     return HWC3::Error::BadParameter;
   }
 
-  return CallDisplayFunction(disp, &HWCDisplay::GetDisplayVsyncPeriod, vsync_period);
+  return CallDisplayFunction(disp, &HWCDisplay::GetDisplayVsyncPeriod, false, vsync_period);
 }
 
 HWC3::Error HWCSession::SetActiveConfigWithConstraints(
@@ -4115,7 +4115,7 @@ int HWCSession::WaitForCommitDone(Display display, int client_id) {
     retire_fence_[display] = nullptr;
     if (hwc_display_[display]) {
       uint32_t config = 0;
-      hwc_display_[display]->GetActiveDisplayConfig(&config);
+      hwc_display_[display]->GetActiveDisplayConfig(false, &config);
       DisplayConfigVariableInfo display_attributes = {};
       hwc_display_[display]->GetDisplayAttributesForConfig(config, &display_attributes);
       timeout_ms = kNumDrawCycles * (display_attributes.vsync_period_ns / kDenomNstoMs);
@@ -4294,7 +4294,7 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
         return -EINVAL;
       }
       uint32_t config = 0;
-      hwc_display_[target_display]->GetActiveDisplayConfig(&config);
+      hwc_display_[target_display]->GetActiveDisplayConfig(false, &config);
       DisplayConfigVariableInfo display_attributes = {};
       hwc_display_[target_display]->GetDisplayAttributesForConfig(config, &display_attributes);
       timeout_ms = kNumDrawCycles * (display_attributes.vsync_period_ns / kDenomNstoMs);

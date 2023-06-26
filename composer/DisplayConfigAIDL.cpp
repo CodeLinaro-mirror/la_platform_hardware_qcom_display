@@ -456,7 +456,7 @@ ScopedAStatus DisplayConfigAIDL::getActiveBuiltinDisplayAttributes(Attributes *a
   } else {
     if (hwc_session_->hwc_display_[disp_id]) {
       uint32_t config_index = 0;
-      Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
+      Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(false, &config_index);
       if (ret != Error::None) {
         return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
       }

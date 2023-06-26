@@ -265,7 +265,7 @@ class HWCDisplay : public DisplayEventHandler {
   }
   virtual int SetNoisePlugInOverride(bool override_en, int32_t attn, int32_t noise_zpos);
   virtual int SetActiveDisplayConfig(uint32_t config);
-  virtual int GetActiveDisplayConfig(uint32_t *config);
+  virtual int GetActiveDisplayConfig(bool get_real_config, uint32_t *config);
   virtual int GetDisplayConfigCount(uint32_t *count);
   virtual int GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes);
@@ -303,7 +303,7 @@ class HWCDisplay : public DisplayEventHandler {
 
   // HWC3 APIs
   virtual HWC3::Error AcceptDisplayChanges(void);
-  virtual HWC3::Error GetActiveConfig(Config *out_config);
+  virtual HWC3::Error GetActiveConfig(bool get_real_config, Config *out_config);
   virtual HWC3::Error SetActiveConfig(Config config);
   virtual HWC3::Error SetPanelLuminanceAttributes(float min_lum, float max_lum) {
     return HWC3::Error::Unsupported;
@@ -406,7 +406,7 @@ class HWCDisplay : public DisplayEventHandler {
       int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
       uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
 
-  virtual HWC3::Error GetDisplayVsyncPeriod(VsyncPeriodNanos *vsync_period);
+  virtual HWC3::Error GetDisplayVsyncPeriod(bool get_real_config, VsyncPeriodNanos *vsync_period);
   virtual HWC3::Error SetActiveConfigWithConstraints(
       Config config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
       VsyncPeriodChangeTimeline *out_timeline);
@@ -476,7 +476,7 @@ class HWCDisplay : public DisplayEventHandler {
   int32_t SetClientTargetDataSpace(int32_t dataspace);
   int SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels);
   int32_t GetDisplayConfigGroup(hwc2_config_t variable_config);
-  HWC3::Error GetVsyncPeriodByActiveConfig(VsyncPeriodNanos *vsync_period);
+  HWC3::Error GetVsyncPeriodByActiveConfig(bool get_real_config, VsyncPeriodNanos *vsync_period);
   bool GetTransientVsyncPeriod(VsyncPeriodNanos *vsync_period);
   std::tuple<int64_t, int64_t> RequestActiveConfigChange(Config config,
                                                          VsyncPeriodNanos current_vsync_period,
@@ -490,7 +490,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool AllowSeamless(Config request_config);
   void SetVsyncsApplyRateChange(uint32_t vsyncs) { vsyncs_to_apply_rate_change_ = vsyncs; }
   HWC3::Error SubmitDisplayConfig(Config config);
-  HWC3::Error GetCachedActiveConfig(Config *config);
+  HWC3::Error GetCachedActiveConfig(bool get_real_config, Config *config);
   void SetActiveConfigIndex(int active_config_index);
   HWC3::Error PostPrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests);
   HWC3::Error HandlePrepareError(DisplayError error);
@@ -606,6 +606,13 @@ class HWCDisplay : public DisplayEventHandler {
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
   void WaitOnPreviousFence();
+  bool IsPanelConfig(uint32_t x, uint32_t y);
+  void PopulateHWCExtendedDisplayResolution();
+  DisplayError GetHWCActiveConfig(bool get_real_config, hwc2_config_t *config_index);
+  bool IsVirtualConfig(hwc2_config_t config);
+  HWC3::Error SetFBForExtendedResolution(hwc2_config_t config,
+                                         hwc2_config_t *real_config_for_fps_switch);
+
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
@@ -621,6 +628,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool client_target_3_1_set_ = false;
   bool is_client_up_ = false;
   uint64_t expected_present_time_ = 0;  // Expected Present time for current frame
+  bool virtual_config_fps_switch_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

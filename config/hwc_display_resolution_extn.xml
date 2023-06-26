@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<!--
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
+-->
+<Target name="anorak">
+  <PanelResolution width="7104" height="3840">
+    <ScalingFactor x="1.5" y="1.5"/>
+    <ScalingFactor x="2" y="2"/>
+    <ScalingFactor x="2.5" y="2.5"/>
+  </PanelResolution>
+  <PanelResolution width="5088" height="2544">
+    <ScalingFactor x="1.5" y="1.5"/>
+    <ScalingFactor x="2" y="2"/>
+    <ScalingFactor x="2.5" y="2.5"/>
+  </PanelResolution>
+</Target>

@@ -180,7 +180,7 @@ int HWCDisplayBuiltIn::Init() {
   }
 
   uint32_t config_index = 0;
-  GetActiveDisplayConfig(&config_index);
+  GetActiveDisplayConfig(false, &config_index);
   DisplayConfigVariableInfo attr = {};
   GetDisplayAttributesForConfig(INT(config_index), &attr);
   active_refresh_rate_ = attr.fps;
@@ -1168,7 +1168,7 @@ bool HWCDisplayBuiltIn::IsSmartPanelConfig(uint32_t config_id) {
 bool HWCDisplayBuiltIn::HasSmartPanelConfig(void) {
   if (!enable_poms_during_doze_) {
     uint32_t config = 0;
-    GetActiveDisplayConfig(&config);
+    GetActiveDisplayConfig(false, &config);
     return IsSmartPanelConfig(config);
   }
 

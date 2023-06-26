@@ -669,7 +669,10 @@ DisplayError DPUCoreMux::UnsetScaleLutConfig() {
 
 DisplayError DPUCoreMux::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
   for (auto hw_intf : hw_intf_) {
-    DisplayError error = hw_intf.second->SetMixerAttributes(mixer_attributes);
+    HWMixerAttributes dpu_mixer = mixer_attributes;
+    dpu_mixer.width = dpu_mixer.width / hw_intf_.size();
+
+    DisplayError error = hw_intf.second->SetMixerAttributes(dpu_mixer);
     if (error != kErrorNone) {
       return error;
     }

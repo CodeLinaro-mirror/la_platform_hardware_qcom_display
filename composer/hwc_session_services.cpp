@@ -268,7 +268,7 @@ int HWCSession::GetActiveConfigIndex(int disp_id, uint32_t *config) {
   SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
 
   if (hwc_display_[disp_idx]) {
-    return hwc_display_[disp_idx]->GetActiveDisplayConfig(config);
+    return hwc_display_[disp_idx]->GetActiveDisplayConfig(false, config);
   }
 
   return -EINVAL;
@@ -884,7 +884,7 @@ int HWCSession::DisplayConfigImpl::GetActiveBuiltinDisplayAttributes(
   } else {
     if (hwc_session_->hwc_display_[disp_id]) {
       uint32_t config_index = 0;
-      HWC3::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
+      HWC3::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(false, &config_index);
       if (ret != HWC3::Error::None) {
         goto err;
       }
