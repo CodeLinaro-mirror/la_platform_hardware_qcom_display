@@ -66,6 +66,7 @@ const std::string kDemuraFeatureParamPanelId = "PanelId";
 const std::string kDemuraFeatureParamPendingReconfig = "PendingReconfig";
 const std::string kDemuraFeatureParamSprPattern = "SprPattern";
 const std::string kDemuraFeatureParamConfigIdx = "ConfigIdx";
+const std::string kDemuraFeatureParamNeedScreenRefresh = "NeedScreenRefresh";
 
 using DemuraIntf = GenericIntf<const std::string&, const std::string&, GenericPayload>;
 }  // namespace sdm

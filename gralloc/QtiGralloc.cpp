@@ -332,6 +332,10 @@ MetadataType getMetadataType(uint32_t in) {
       return MetadataType_ColorSpace;
     case QTI_YUV_PLANE_INFO:
       return MetadataType_YuvPlaneInfo;
+#ifdef QTI_HEAP_NAME
+    case QTI_HEAP_NAME:
+      return MetadataType_HeapName;
+#endif
 #ifdef QTI_BUFFER_PERMISSION
     case QTI_BUFFER_PERMISSION:
       return MetadataType_BufferPermission;
@@ -478,6 +482,12 @@ Error get(void *buffer, uint32_t type, void *param) {
     case QTI_YUV_PLANE_INFO:
       err = decodeYUVPlaneInfoMetadata(bytestream, reinterpret_cast<qti_ycbcr *>(param));
       break;
+#ifdef QTI_HEAP_NAME
+    case QTI_HEAP_NAME:
+      err = static_cast<Error>(android::gralloc4::decodeString(
+          qtigralloc::MetadataType_HeapName, bytestream, reinterpret_cast<std::string *>(param)));
+      break;
+#endif
 #ifdef QTI_BUFFER_PERMISSION
     case QTI_BUFFER_PERMISSION:
       err = decodeBufferPermission(bytestream, reinterpret_cast<BufferPermission*>(param));

@@ -50,6 +50,7 @@ using aidl::android::hardware::graphics::composer3::Composition;
 using aidl::android::hardware::graphics::composer3::DisplayRequest;
 using aidl::android::hardware::graphics::composer3::FormatColorComponent;
 using aidl::android::hardware::graphics::composer3::IComposerClient;
+using aidl::android::hardware::graphics::composer3::OverlayProperties;
 using aidl::android::hardware::graphics::composer3::PowerMode;
 using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeTimeline;
 

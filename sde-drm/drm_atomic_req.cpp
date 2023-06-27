@@ -128,11 +128,7 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::PLANE_SET_UCSC_IGC_CONFIG:
     case DRMOps::PLANE_SET_UCSC_CSC_CONFIG:
     case DRMOps::PLANE_SET_UCSC_GC_CONFIG:
-    case DRMOps::PLANE_SET_UCSC_ALPHA_DITHER_CONFIG:
-    case DRMOps::PLANES_SET_PREFILL_SIZE:
-    case DRMOps::PLANES_SET_PREFILL_TIME:
-    case DRMOps::PLANES_SET_SYS_CACHE_TYPE:
-    case DRMOps::PLANES_BUFFER_MODE: {
+    case DRMOps::PLANE_SET_UCSC_ALPHA_DITHER_CONFIG: {
       drm_mgr_->GetPlaneMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
     } break;
     case DRMOps::CRTC_SET_POST_PROC:
@@ -188,7 +184,8 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::CONNECTOR_DNSC_BLR:
     case DRMOps::CONNECTOR_WB_USAGE_TYPE:
     case DRMOps::CONNECTOR_SET_CACHE_STATE:
-    case DRMOps::CONNECTOR_SET_EPT: {
+    case DRMOps::CONNECTOR_SET_EPT:
+    case DRMOps::CONNECTOR_SET_BPP_MODE: {
       drm_mgr_->GetConnectorMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
     } break;
     case DRMOps::DPPS_CACHE_FEATURE: {

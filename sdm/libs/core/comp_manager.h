@@ -139,6 +139,7 @@ class CompManager : public CwbCallback {
   uint32_t GetActiveDisplayCount();
   void SetDisplayLayerStack(Handle display_ctx, DispLayerStack *disp_layer_stack);
   void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map);
+  bool IsDisplayHWAvailable();
 
  private:
   static const int kMaxThermalLevel = 3;

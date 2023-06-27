@@ -213,6 +213,7 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   }
   if (name == "SDE_DSPP_RC_MASK_V1") { return DRMProperty::DSPP_RC_MASK_V1; }
   if (name == "panel_mode") { return DRMProperty::PANEL_MODE; }
+  if (name == "bpp_mode") { return DRMProperty::BPP_MODE; }
   if (name == "SDE_DEMURA_INIT_CFG_V1") { return DRMProperty::DEMURA_INIT_CFG_V1; }
   if (name == "SDE_DEMURA_CFG0_PARAM2") {
     return DRMProperty::DEMURA_CFG0_PARAM2;
@@ -242,10 +243,6 @@ DRMProperty DRMPropertyManager::GetPropertyEnum(const std::string &name) const {
   if (name == "SDE_SSPP_UCSC_GC_V1") { return DRMProperty::SDE_SSPP_UCSC_GC_V1; }
   if (name == "SDE_SSPP_UCSC_ALPHA_DITHER_V1") { return DRMProperty::SDE_SSPP_UCSC_ALPHA_DITHER_V1; }
   if (name == "EPT") { return DRMProperty::EPT; }
-  if (name == "prefill_size") { return DRMProperty::PREFILL_SIZE; }
-  if (name == "prefill_time") { return DRMProperty::PREFILL_TIME; }
-  if (name == "syscache_type") { return DRMProperty::SYS_CACHE_TYPE; }
-  if (name == "buffer_mode") { return DRMProperty::BUFFER_MODE; }
 
   return DRMProperty::INVALID;
 }

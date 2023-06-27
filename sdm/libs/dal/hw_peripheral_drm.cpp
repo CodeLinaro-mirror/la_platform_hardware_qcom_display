@@ -233,6 +233,31 @@ DisplayError HWPeripheralDRM::SetDisplayMode(const HWDisplayMode hw_display_mode
   return kErrorNone;
 }
 
+DisplayError HWPeripheralDRM::SetBppMode(uint32_t bpp) {
+
+  if (bpp != static_cast<uint32_t>(kBppMode24) && bpp != static_cast<uint32_t>(kBppMode30)) {
+    DLOGE("Invalid bpp mode parameter");
+    return kErrorParameters;
+  }
+
+  if (bpp == connector_info_.modes[current_mode_index_].curr_bpp_mode) {
+    DLOGE("Same as current bpp mode");
+    return kErrorParameters;
+  }
+
+  //Check whether the sub_modes in current mode support the bpp mode
+  sde_drm::DRMModeInfo current_mode = connector_info_.modes[current_mode_index_];
+  for (uint32_t submode_idx = 0; submode_idx < current_mode.sub_modes.size(); submode_idx++) {
+    if (bpp == current_mode.sub_modes[submode_idx].bpp_mode) {
+      bpp_mode_changed_ = bpp;
+      return kErrorNone;
+    }
+  }
+
+  DLOGE("current display mode dont't support switch to bpp: %d", bpp);
+  return kErrorNotSupported;
+}
+
 DisplayError HWPeripheralDRM::UpdateTransferTime(uint32_t transfer_time) {
   DisplayError error = HWDeviceDRM::UpdateTransferTime(transfer_time);
 

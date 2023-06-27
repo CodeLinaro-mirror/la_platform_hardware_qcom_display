@@ -147,6 +147,7 @@ class ResourceDefault : public ResourceInterface {
   virtual DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
   virtual void HandleTUITransition(Handle display_ctx, bool tui_active);
   virtual void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map) { return; }
+  virtual bool IsDisplayHWAvailable() { return true; }
 
  private:
   enum PipeOwner {

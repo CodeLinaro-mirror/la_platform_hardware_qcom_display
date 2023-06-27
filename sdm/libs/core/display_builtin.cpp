@@ -218,7 +218,6 @@ DisplayError DisplayBuiltIn::Init() {
 }
 
 DisplayError DisplayBuiltIn::Deinit() {
-  dpps_info_.Deinit();
   {
     ClientLock lock(disp_mutex_);
 
@@ -242,6 +241,7 @@ DisplayError DisplayBuiltIn::Deinit() {
     }
     demura_dynamic_enabled_ = true;
   }
+  dpps_info_.Deinit();
   return DisplayBase::Deinit();
 }
 
@@ -945,6 +945,27 @@ DisplayError DisplayBuiltIn::RetrieveDemuraTnFiles() {
   return kErrorNone;
 }
 
+DisplayError DisplayBuiltIn::SetDisplayStateForDemuraTn(DisplayState state) {
+  int ret = 0;
+  DisplayState *disp_state = nullptr;
+  GenericPayload pl;
+
+  ret = pl.CreatePayload<DisplayState>(disp_state);
+  if (ret) {
+    DLOGE("failed to create the payload. Error:%d", ret);
+    return kErrorUndefined;
+  }
+  *disp_state = state;
+
+  ret = demuratn_->SetParameter(kDemuraTnCoreUvmParamDisplayState, pl);
+  if (ret) {
+    DLOGE("SetParameter for DisplayState failed ret %d", ret);
+    return kErrorUndefined;
+  }
+
+  return kErrorNone;
+}
+
 DisplayError DisplayBuiltIn::SetUpCommit(LayerStack *layer_stack) {
   DTRACE_SCOPED();
   last_panel_mode_ = hw_panel_info_.mode;
@@ -1004,7 +1025,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
     dpps_pu_nofiy_pending_ = false;
     dpps_pu_lock_.Broadcast();
   }
-  dpps_info_.Init(this, hw_panel_info_.panel_name);
+  dpps_info_.Init(this, hw_panel_info_.panel_name, this);
 
   if (demuratn_)
     EnableDemuraTn(true);
@@ -1121,6 +1142,10 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
     SetDemuraIntfStatus(true, demura_current_idx_);
   }
 
+  if (demuratn_ && demuratn_enabled_) {
+    SetDisplayStateForDemuraTn(state);
+  }
+
   return kErrorNone;
 }
 
@@ -1220,6 +1245,31 @@ DisplayError DisplayBuiltIn::SetPanelBrightness(float brightness) {
     comp_manager_->SetBacklightLevel(display_comp_ctx_, level);
     DLOGI_IF(kTagDisplay, "Setting brightness to level %d (%f percent)", level,
              brightness * 100);
+
+    if (demura_intended_ && demura_dynamic_enabled_) {
+      if (!demura_) {
+        DLOGE("demura_ is nullptr");
+        return kErrorParameters;
+      }
+
+      GenericPayload pl;
+      int32_t *need_screen_refresh = nullptr;
+      int rc = 0;
+      if ((rc = pl.CreatePayload<int32_t>(need_screen_refresh))) {
+        DLOGE("Failed to create payload for need_screen_refresh, error = %d", rc);
+        return kErrorParameters;
+      }
+
+      rc = demura_->GetParameter(kDemuraFeatureParamNeedScreenRefresh, &pl);
+      if (rc) {
+        DLOGE("Failed to get need screen refresh, error %d", rc);
+        return kErrorParameters;
+      }
+
+      if (*need_screen_refresh) {
+        event_handler_->Refresh();
+      }
+    }
   } else if (err == kErrorDeferred) {
     // TODO(user): I8508d64a55c3b30239c6ed2886df391407d22f25 causes mismatch between perceived
     // power state and actual panel power state. Requires a rework. Below check will set up
@@ -1230,6 +1280,24 @@ DisplayError DisplayBuiltIn::SetPanelBrightness(float brightness) {
   }
 
   return err;
+}
+
+DisplayError DisplayBuiltIn::SetBppMode(uint32_t bpp) {
+  {
+    ClientLock lock(disp_mutex_);
+
+    DisplayError error = hw_intf_->SetBppMode(bpp);
+    if (error != kErrorNone) {
+      DLOGW("Retaining current panel bpp mode on display %d-%d. Requested = 0x%x",
+            display_id_, display_type_, bpp);
+      return error;
+    }
+    DisplayBase::ReconfigureDisplay();
+  }
+
+  event_handler_->Refresh();
+
+  return kErrorNone;
 }
 
 DisplayError DisplayBuiltIn::GetRefreshRateRange(uint32_t *min_refresh_rate,
@@ -1942,12 +2010,13 @@ std::string DisplayBuiltIn::Dump() {
 DppsInterface* DppsInfo::dpps_intf_ = NULL;
 std::vector<int32_t> DppsInfo::display_id_ = {};
 
-void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
+void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
+                    DisplayInterface *display_intf) {
   std::lock_guard<std::mutex> guard(lock_);
   int error = 0;
 
-  if (!intf) {
-    DLOGE("Invalid intf is null");
+  if (!intf || !display_intf) {
+    DLOGE("Invalid intf %pK display_intf %pK", intf, display_intf);
     return;
   }
 
@@ -1982,7 +2051,7 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
       goto exit;
     }
   }
-  error = dpps_intf_->Init(intf, panel_name);
+  error = dpps_intf_->Init(intf, panel_name, display_intf);
   if (error) {
     DLOGE("DPPS Interface init failure with err %d", error);
     goto exit;
@@ -3167,6 +3236,9 @@ DisplayError DisplayBuiltIn::SetDemuraConfig(int demura_idx) {
   demura_current_idx_ = demura_idx;
   DLOGV("Demura config updated to config index %d", demura_idx);
   event_handler_->Refresh();
+
+  // disable partial update for one frame
+  DisablePartialUpdateOneFrame();
 
   return kErrorNone;
 }

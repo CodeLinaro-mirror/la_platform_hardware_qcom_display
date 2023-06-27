@@ -126,6 +126,9 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   virtual DisplayError SetPanelBrightness(float brightness) {
     return kErrorNotSupported;
   }
+  virtual DisplayError SetBppMode(uint32_t bpp) {
+    return kErrorNotSupported;
+  }
   virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
   virtual DisplayError ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
                                             PPDisplayAPIPayload *out_payload,

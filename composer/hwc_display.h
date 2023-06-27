@@ -41,7 +41,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "display_null.h"
 #include "histogram_collector.h"
 #include "hwc_buffer_allocator.h"
 #include "hwc_callbacks.h"
@@ -273,7 +272,6 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int GetSupportedDisplayRefreshRates(std::vector<uint32_t> *supported_refresh_rates);
   bool IsModeSwitchAllowed(uint32_t config);
 
-  virtual int SetState(bool connected) { return kErrorNotSupported; }
   virtual DisplayError Flush() { return kErrorNotSupported; }
 
   uint32_t GetMaxRefreshRate() { return max_refresh_rate_; }
@@ -333,6 +331,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual DisplayError SetJitterConfig(uint32_t jitter_type, float value, uint32_t time) {
     return kErrorNotSupported;
   }
+  virtual DisplayError SetBppMode(uint32_t bpp) { return kErrorNotSupported; }
   virtual DisplayError SetDynamicDSIClock(uint64_t bitclk) { return kErrorNotSupported; }
   virtual DisplayError GetDynamicDSIClock(uint64_t *bitclk) { return kErrorNotSupported; }
   virtual DisplayError GetSupportedDSIClock(std::vector<uint64_t> *bitclk) {
@@ -362,7 +361,6 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC3::Error SetCursorPosition(LayerId layer, int x, int y);
   virtual HWC3::Error SetVsyncEnabled(bool enabled);
   virtual HWC3::Error SetPowerMode(PowerMode mode, bool teardown);
-  virtual HWC3::Error UpdatePowerMode(PowerMode mode) { return HWC3::Error::None; }
   virtual HWC3::Error CreateLayer(LayerId *out_layer_id);
   virtual HWC3::Error DestroyLayer(LayerId layer_id);
   virtual HWC3::Error SetLayerZOrder(LayerId layer_id, uint32_t z);
@@ -608,7 +606,6 @@ class HWCDisplay : public DisplayEventHandler {
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
-  int null_display_mode_ = 0;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
   shared_ptr<Fence> release_fence_ = nullptr;
   Config pending_config_index_ = 0;
@@ -616,7 +613,6 @@ class HWCDisplay : public DisplayEventHandler {
   Config pending_first_commit_config_index_ = 0;
   bool game_supported_ = false;
   uint64_t elapse_timestamp_ = 0;
-  int async_power_mode_ = 0;
   bool draw_method_set_ = false;
   bool validate_done_ = false;
   bool client_target_3_1_set_ = false;

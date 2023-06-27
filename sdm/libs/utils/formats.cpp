@@ -52,7 +52,6 @@ bool IsUBWCFormat(LayerBufferFormat format) {
   case kFormatYCbCr420TP10Ubwc:
   case kFormatYCbCr420P010Ubwc:
   case kFormatRGBA16161616FUbwc:
-  case kFormatC8Ubwc:
     return true;
   default:
     return false;
@@ -144,8 +143,6 @@ const char *GetFormatString(const LayerBufferFormat &format) {
   case kFormatRGBA8888Ubwc:             return "RGBA_8888_UBWC";
   case kFormatRGBX8888Ubwc:             return "RGBX_8888_UBWC";
   case kFormatBGR565Ubwc:               return "BGR_565_UBWC";
-  case kFormatC8Ubwc:                   return "C8_UBWC_FSC";
-  case kFormatC8Fsc:                    return "C8_FSC";
   case kFormatYCbCr420Planar:           return "Y_CB_CR_420";
   case kFormatYCrCb420Planar:           return "Y_CR_CB_420";
   case kFormatYCrCb420PlanarStride16:   return "Y_CR_CB_420_STRIDE16";
@@ -254,8 +251,6 @@ float GetBufferFormatBpp(LayerBufferFormat format) {
     case kFormatYCbCr420SPVenusTile:
       return 1.5f;
     case kFormatA8:
-    case kFormatC8Fsc:
-    case kFormatC8Ubwc:
       return 1.0f;
     default:
       return 0.0f;

@@ -465,6 +465,7 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
     }
   }
 
+#ifndef TRUSTED_VM
   GetFeatureLicenseFactory get_feature_license_factory_ptr = nullptr;
   if (!feature_impl_lib.Sym(GET_FEATURE_LICENSE_FACTORY,
                             reinterpret_cast<void **>(&get_feature_license_factory_ptr))) {
@@ -477,6 +478,7 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
     DLOGE("Failed to create FeatureLicenseFactory");
     return kErrorResources;
   }
+#endif
 
   DLOGI("Setup pf factory and prop intf for Panel Features");
   return kErrorNone;
@@ -1665,11 +1667,8 @@ DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
 
   CacheFrameBuffer();
 
-  // TODO: Need to clean up and add generic logic
-  if (!display_attributes_.fsc_panel) {
-    for (auto &hw_layer : disp_layer_stack_->info.hw_layers) {
-      CloseFd(&hw_layer.input_buffer.planes[0].fd);
-    }
+  for (auto &hw_layer : disp_layer_stack_->info.hw_layers) {
+    CloseFd(&hw_layer.input_buffer.planes[0].fd);
   }
 
   first_cycle_ = false;
@@ -3207,11 +3206,6 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
     return;
   }
 
-  if (display_attributes_.fsc_panel) {
-    DLOGW("fsd panel, no need to update buffers fds");
-    return;
-  }
-
   // Copy the acquire fence from clients layers  to HWLayers
   uint32_t hw_layers_count = UINT32(disp_layer_stack_->info.hw_layers.size());
 
@@ -4249,9 +4243,11 @@ DisplayError DisplayBase::SetDimmingMinBl(int min_bl) {
 
 /* this func is called by DC dimming feature only after PCC updates */
 void DisplayBase::ScreenRefresh() {
-  ClientLock lock(disp_mutex_);
-  /* do not skip validate */
-  validated_ = false;
+  {
+    ClientLock lock(disp_mutex_);
+    /* do not skip validate */
+    validated_ = false;
+  }
   event_handler_->Refresh();
 }
 
@@ -4266,6 +4262,8 @@ DisplayError DisplayBase::GetPanelFeatureInfo(PanelFeatureInfo *info) {
   info->display_width = display_attributes_.x_pixels;
   info->display_height = display_attributes_.y_pixels;
   info->panel_name = std::string(hw_panel_info_.panel_name);
+  info->fps = display_attributes_.fps;
+
   return kErrorNone;
 }
 
@@ -4331,6 +4329,11 @@ DisplayError DisplayBase::CaptureCwb(const LayerBuffer &output_buffer, const Cwb
   ClientLock lock(disp_mutex_);
 
   if (!hw_resource_info_.has_concurrent_writeback) {
+    return kErrorNotSupported;
+  }
+
+  if (mixer_attributes_.split_type == kQuadSplit) {
+    DLOGW("CWB doesn't support Quad Split for display %d-%d.", display_id_, display_type_);
     return kErrorNotSupported;
   }
 

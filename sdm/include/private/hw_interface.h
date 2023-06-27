@@ -147,6 +147,7 @@ class HWInterface {
   virtual DisplayError SetVSyncState(bool enable) = 0;
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms) = 0;
   virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode) = 0;
+  virtual DisplayError SetBppMode(uint32_t bpp) = 0;
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate) = 0;
   virtual DisplayError SetPanelBrightness(int level) = 0;
   virtual DisplayError GetHWScanInfo(HWScanInfo *scan_info) = 0;

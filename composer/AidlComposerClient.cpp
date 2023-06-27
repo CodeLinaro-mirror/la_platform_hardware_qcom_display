@@ -306,6 +306,7 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     hwc_session_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
       aidl_return->push_back(DisplayCapability::DOZE);
+      aidl_return->push_back(DisplayCapability::SUSPEND);
       aidl_return->push_back(DisplayCapability::BRIGHTNESS);
     } else {
       aidl_return->push_back(DisplayCapability::BRIGHTNESS);
@@ -432,7 +433,8 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 }
 
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
-  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+  auto error = hwc_session_->GetOverlaySupport(aidl_return);
+  return TO_BINDER_STATUS(INT32(error));
 }
 
 ScopedAStatus AidlComposerClient::getHdrConversionCapabilities(

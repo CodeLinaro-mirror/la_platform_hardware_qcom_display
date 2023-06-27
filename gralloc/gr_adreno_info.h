@@ -31,7 +31,9 @@
 #ifndef __GR_ADRENO_INFO_H__
 #define __GR_ADRENO_INFO_H__
 
+#ifndef QMAA
 #include <display/media/mmm_color_fmt.h>
+#endif
 
 #include "gr_utils.h"
 

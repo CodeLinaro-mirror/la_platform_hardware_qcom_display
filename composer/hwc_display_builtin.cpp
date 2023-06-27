@@ -1099,16 +1099,21 @@ HWC3::Error HWCDisplayBuiltIn::GetPanelMaxBrightness(uint32_t *max_brightness_le
   return HWC3::Error::None;
 }
 
+DisplayError HWCDisplayBuiltIn::SetBppMode(uint32_t bpp) {
+  DisplayError error = kErrorNotSupported;
+
+  if (display_intf_) {
+      error = display_intf_->SetBppMode(bpp);
+  }
+
+  return error;
+}
+
 HWC3::Error HWCDisplayBuiltIn::SetBLScale(uint32_t level) {
   DisplayError ret = display_intf_->SetBLScale(level);
   if (ret != kErrorNone) {
     return HWC3::Error::NoResources;
   }
-  return HWC3::Error::None;
-}
-
-HWC3::Error HWCDisplayBuiltIn::UpdatePowerMode(PowerMode mode) {
-  current_power_mode_ = mode;
   return HWC3::Error::None;
 }
 
@@ -1610,11 +1615,15 @@ void HWCDisplayBuiltIn::HandleLargeCompositionHint(bool release) {
       }
     }
 
-    // For long term large composition hint, release the acquired handle after a consecutive number
-    // of basic frames to avoid resending hints in animation launch use cases and others.
-    num_basic_frames_++;
+    // For long term large composition hint, release the acquired handle after 100 milliseconds
+    // to avoid resending hints in animation launch use cases and others.
+    if (hint_release_start_time_ == 0) {
+      hint_release_start_time_ = systemTime(SYSTEM_TIME_MONOTONIC);
+    }
 
-    if (num_basic_frames_ >= active_refresh_rate_) {
+    nsecs_t current_time = systemTime(SYSTEM_TIME_MONOTONIC);
+    if (nanoseconds_to_milliseconds(current_time - hint_release_start_time_) >=
+        elapse_time_threshold_) {
       cpu_hint_->ReqHintRelease();
     }
     return;
@@ -1629,7 +1638,8 @@ void HWCDisplayBuiltIn::HandleLargeCompositionHint(bool release) {
     cpu_hint_->ReqHintsOffload(kPerfHintLargeCompCycle, 0);
   }
 
-  num_basic_frames_ = 0;
+  // Reset time when large composition hint is active
+  hint_release_start_time_ = 0;
 }
 
 void HWCDisplayBuiltIn::ReqPerfHintRelease() {

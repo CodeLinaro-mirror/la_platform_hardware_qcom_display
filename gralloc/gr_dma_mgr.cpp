@@ -276,12 +276,14 @@ bool DmaManager::CSFEnabled() {
   return false;
 }
 
-void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_heap_name,
-                             std::vector<std::string> *dma_vm_names, unsigned int *alloc_type,
-                             unsigned int * /* dmaflags */, unsigned int *alloc_size) {
+void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format,
+                             std::string *dma_heap_name, std::vector<std::string> *dma_vm_names,
+                             unsigned int *alloc_type, unsigned int * /* dmaflags */,
+                             unsigned int *alloc_size) {
   // Query Camera Security Framework in order to allocate from legacy/non-legacy heap
   GetCSFVersion();
   std::string heap_name = "qcom,system";
+
   unsigned int type = 0;
   if (usage & GRALLOC_USAGE_PROTECTED) {
     if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
@@ -344,6 +346,11 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_
       ALOGI("gralloc::sns_direct_data with adsp_heap");
       heap_name = "qcom,adsp";
     }
+  }
+
+  if (IsUBwcPEnabled(format, usage)) {
+    heap_name = "qcom,ubwcp";
+    ALOGI("UBWCP enabled:%d heap_name:%s", IsUBwcPEnabled(format, usage), heap_name.c_str());
   }
 
   *alloc_type = type;

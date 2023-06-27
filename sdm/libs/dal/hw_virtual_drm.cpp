@@ -234,10 +234,13 @@ DisplayError HWVirtualDRM::Commit(HWLayersInfo *hw_layers_info) {
   ConfigureWbConnectorSecureMode(output_buffer->flags.secure);
   ConfigureDNSC(hw_layers_info);
   ConfigureWbConnectorDestRect(hw_layers_info->iwe_enabled);
-
+  // Reset the ROI which may have been previously set by CWB. Need revisit when ROI enabled on
+  // virtual.
+  ResetROI();
   err = HWDeviceDRM::AtomicCommit(hw_layers_info);
   if (err != kErrorNone) {
-    DLOGE("Atomic commit failed for crtc_id %d conn_id %d", token_.crtc_id, token_.conn_id);
+    DLOGE("Atomic commit failed for crtc_id %d conn_id %d encoder_id %d", token_.crtc_id,
+          token_.conn_id, token_.encoder_id);
   }
 
   // Retire fence marks WB done event.

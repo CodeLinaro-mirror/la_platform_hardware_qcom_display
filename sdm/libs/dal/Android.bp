@@ -12,7 +12,6 @@ cc_library_shared {
         "-fno-operator-names",
         "-Wno-unused-parameter",
         "-DLOG_TAG=\"SDM\"",
-        "-Wno-unicode-whitespace",
     ],
     shared_libs: [
         "libdisplaydebug",

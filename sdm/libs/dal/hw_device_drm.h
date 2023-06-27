@@ -117,8 +117,6 @@ class HWDeviceDRM : public HWInterface {
   }
 
  protected:
-  const int kEarlyPrefil = 40;
-
   // From HWInterface
   virtual DisplayError GetDisplayId(int32_t *display_id);
   virtual DisplayError GetActiveConfig(uint32_t *active_config);
@@ -150,6 +148,7 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError SetVSyncState(bool enable);
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
   virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);
+  virtual DisplayError SetBppMode(uint32_t bpp);
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
   virtual DisplayError SetPanelBrightness(int level) { return kErrorNotSupported; }
   virtual DisplayError GetHWScanInfo(HWScanInfo *scan_info);
@@ -225,7 +224,6 @@ class HWDeviceDRM : public HWInterface {
   static const int kMaxStringLength = 1024;
   static const int kNumPhysicalDisplays = 2;
   static const int kMaxSysfsCommandLength = 12;
-  static const int kPixelThroughput = 3;
 
   DisplayError SetFormat(const LayerBufferFormat &source, uint32_t *target);
   DisplayError SetStride(HWDeviceType device_type, LayerBufferFormat format, uint32_t width,
@@ -349,6 +347,7 @@ class HWDeviceDRM : public HWInterface {
   uint32_t vrefresh_ = 0;
   uint32_t panel_mode_changed_ = 0;
   uint32_t panel_compression_changed_ = 0;
+  uint32_t bpp_mode_changed_ = 0;
   bool reset_output_fence_offset_ = false;
   uint64_t bit_clk_rate_ = 0;
   bool update_mode_ = false;
@@ -377,7 +376,6 @@ class HWDeviceDRM : public HWInterface {
 
  private:
   void GetCWBCapabilities();
-  void UpdateDisplayAttributesForFSC(HWDisplayAttributes *display_attributes);
 
   std::string interface_str_ = "DSI";
   bool resolution_switch_enabled_ = false;

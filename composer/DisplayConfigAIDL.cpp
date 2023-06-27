@@ -98,17 +98,6 @@ sdm::HWCDisplay::DisplayStatus MapExternalStatus(ExternalStatus status) {
   return sdm::HWCDisplay::kDisplayStatusInvalid;
 }
 
-int DisplayConfigAIDL::IsPowerModeOverrideSupported(uint32_t disp_id, bool *supported) {
-  if (!hwc_session_->async_powermode_ || (disp_id > sdm::HWCCallbacks::kNumRealDisplays)) {
-    ALOGW("%s: Power mode override is not supported on display:%d", __FUNCTION__, disp_id);
-    *supported = false;
-  } else {
-    *supported = true;
-  }
-
-  return 0;
-}
-
 bool WaitForResourceNeeded(sdm::PowerMode prev_mode, sdm::PowerMode new_mode) {
   return ((prev_mode == sdm::PowerMode::OFF) &&
           (new_mode == sdm::PowerMode::ON || new_mode == sdm::PowerMode::DOZE));
@@ -378,82 +367,12 @@ ScopedAStatus DisplayConfigAIDL::updateVSyncSourceOnPowerModeDoze() {
 }
 
 ScopedAStatus DisplayConfigAIDL::setPowerMode(int disp_id, PowerMode power_mode) {
-  SCOPE_LOCK(hwc_session_->display_config_locker_);
-
-  bool supported = false;
-  IsPowerModeOverrideSupported(disp_id, &supported);
-  if (!supported) {
-    ALOGW("%s: Set power mode:%d on display:%d is not supported", __FUNCTION__, power_mode,
-          disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
-  }
-
-  // Active builtin display needs revalidation
-  Display active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
-  sdm::PowerMode previous_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
-
-  ALOGI("%s: disp_id: %d power_mode: %d", __FUNCTION__, disp_id, power_mode);
-  sdm::HWCDisplay::HWCLayerStack stack = {};
-  Display dummy_disp_id = hwc_session_->map_hwc_display_.at(disp_id);
-
-  // Power state transition start.
-  // Acquire the display's power-state transition var read lock.
-  hwc_session_->power_state_[disp_id].Lock();
-  hwc_session_->power_state_transition_[disp_id] = true;
-  hwc_session_->locker_[disp_id].Lock();        // Lock the real display.
-  hwc_session_->locker_[dummy_disp_id].Lock();  // Lock the corresponding dummy display.
-
-  // Place the real display's layer-stack on the dummy display.
-  hwc_session_->hwc_display_[disp_id]->GetLayerStack(&stack);
-  hwc_session_->hwc_display_[dummy_disp_id]->SetLayerStack(&stack);
-  hwc_session_->hwc_display_[dummy_disp_id]->UpdatePowerMode(
-      hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode());
-
-  hwc_session_->locker_[dummy_disp_id].Unlock();  // Release the dummy display.
-  // Release the display's power-state transition var read lock.
-  hwc_session_->power_state_[disp_id].Unlock();
-
-  // From now, till power-state transition ends, for operations that need to be non-blocking, do
-  // those operations on the dummy display.
-
-  // Perform the actual [synchronous] power-state change.
-  hwc_session_->hwc_display_[disp_id]->SetPowerMode(static_cast<sdm::PowerMode>(power_mode),
-                                                    false /* teardown */);
-
-  // Power state transition end.
-  // Acquire the display's power-state transition var read lock.
-  hwc_session_->power_state_[disp_id].Lock();
-  hwc_session_->power_state_transition_[disp_id] = false;
-  hwc_session_->locker_[dummy_disp_id].Lock();  // Lock the dummy display.
-
-  // Retrieve the real display's layer-stack from the dummy display.
-  hwc_session_->hwc_display_[dummy_disp_id]->GetLayerStack(&stack);
-  hwc_session_->hwc_display_[disp_id]->SetLayerStack(&stack);
-  // Read display has got layerstack. Update the fences.
-  hwc_session_->hwc_display_[disp_id]->PostPowerMode();
-
-  hwc_session_->locker_[dummy_disp_id].Unlock();  // Release the dummy display.
-  hwc_session_->locker_[disp_id].Unlock();        // Release the real display.
-  // Release the display's power-state transition var read lock.
-  hwc_session_->power_state_[disp_id].Unlock();
-
-  sdm::PowerMode new_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
-  if (active_builtin_disp_id < sdm::HWCCallbacks::kNumRealDisplays &&
-      hwc_session_->hwc_display_[disp_id]->IsFirstCommitDone() &&
-      WaitForResourceNeeded(previous_mode, new_mode)) {
-    hwc_session_->WaitForResources(true, active_builtin_disp_id, disp_id);
-  }
-
-  return ScopedAStatus::ok();
+  // This API is deprecated
+  return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
 }
 
 ScopedAStatus DisplayConfigAIDL::isPowerModeOverrideSupported(int disp_id, bool *supported) {
-  if (!hwc_session_->async_powermode_ || (disp_id > sdm::HWCCallbacks::kNumRealDisplays)) {
-    *supported = false;
-  } else {
-    *supported = true;
-  }
-
+  *supported = false;
   return ScopedAStatus::ok();
 }
 

@@ -11,6 +11,7 @@ soong_config_module_type {
         "var3",
         "llvmcov",
         "smmu_proxy",
+        "ubwcp_headers",
     ],
     properties: [
         "cflags",
@@ -86,6 +87,17 @@ qtidisplay_cc_defaults {
 }
 
 qtidisplay_cc_defaults {
+    name: "qtidisplay_libubwcp_header_defaults",
+    soong_config_variables: {
+        ubwcp_headers: {
+            header_libs: [
+                "libubwcp_headers",
+            ]
+        }
+    }
+}
+
+qtidisplay_cc_defaults {
     name: "qtidisplay_common_defaults",
     cflags: [
         "-Wno-missing-field-initializers",
@@ -130,6 +142,9 @@ qtidisplay_cc_defaults {
         },
         smmu_proxy: {
             cflags: ["-DTARGET_USES_SMMU_PROXY"],
+        },
+        ubwcp_headers: {
+            cflags: ["-DTARGET_USES_UBWCP"],
         },
         var3 : {
             enabled: false,

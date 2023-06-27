@@ -197,6 +197,12 @@ enum HWTopology {
   kPPSplit,
 };
 
+enum HWBppMode {
+  kBppModeNone = 0,
+  kBppMode24 = 0x1,
+  kBppMode30 = 0x2,
+};
+
 enum HWMixerSplit {
   kNoSplit,
   kDualSplit,
@@ -530,34 +536,31 @@ struct HWPanelInfo {
   uint32_t supported_colorspaces = 0;  // supported_colorspaces for DP displays.
   uint32_t qsync_fps = 0;              // Min qsync fps
   bool has_cwb_crop = false;           // CWB Crop support
-  bool fsc_panel = false;              // fsd_panel
-  uint32_t num_fsc_fields = 0;         // number of fields supported in fsc panel
+
 
   bool operator !=(const HWPanelInfo &panel_info) {
-    return (
-        (port != panel_info.port) || (mode != panel_info.mode) ||
-        (partial_update != panel_info.partial_update) || (left_align != panel_info.left_align) ||
-        (width_align != panel_info.width_align) || (top_align != panel_info.top_align) ||
-        (height_align != panel_info.height_align) || (min_roi_width != panel_info.min_roi_width) ||
-        (min_roi_height != panel_info.min_roi_height) ||
-        (needs_roi_merge != panel_info.needs_roi_merge) ||
-        (dynamic_fps != panel_info.dynamic_fps) || (min_fps != panel_info.min_fps) ||
-        (dfps_porch_mode != panel_info.dfps_porch_mode) ||
-        (ping_pong_split != panel_info.ping_pong_split) || (max_fps != panel_info.max_fps) ||
-        (is_primary_panel != panel_info.is_primary_panel) ||
-        (split_info != panel_info.split_info) || (left_roi_count != panel_info.left_roi_count) ||
-        (right_roi_count != panel_info.right_roi_count) ||
-        (transfer_time_us != panel_info.transfer_time_us) ||
-        (transfer_time_us_min != panel_info.transfer_time_us_min) ||
-        (transfer_time_us_max != panel_info.transfer_time_us_max) ||
-        (allowed_mode_switch != panel_info.allowed_mode_switch) ||
-        (panel_mode_caps != panel_info.panel_mode_caps) ||
-        (qsync_support != panel_info.qsync_support) ||
-        (dyn_bitclk_support != panel_info.dyn_bitclk_support) ||
-        (bitclk_rates != panel_info.bitclk_rates) ||
-        (supported_colorspaces != panel_info.supported_colorspaces) ||
-        (qsync_fps != panel_info.qsync_fps) || (has_cwb_crop != panel_info.has_cwb_crop) ||
-        (fsc_panel != panel_info.fsc_panel) || (num_fsc_fields != panel_info.num_fsc_fields));
+    return ((port != panel_info.port) || (mode != panel_info.mode) ||
+            (partial_update != panel_info.partial_update) ||
+            (left_align != panel_info.left_align) || (width_align != panel_info.width_align) ||
+            (top_align != panel_info.top_align) || (height_align != panel_info.height_align) ||
+            (min_roi_width != panel_info.min_roi_width) ||
+            (min_roi_height != panel_info.min_roi_height) ||
+            (needs_roi_merge != panel_info.needs_roi_merge) ||
+            (dynamic_fps != panel_info.dynamic_fps) || (min_fps != panel_info.min_fps) ||
+            (dfps_porch_mode != panel_info.dfps_porch_mode) ||
+            (ping_pong_split != panel_info.ping_pong_split) ||
+            (max_fps != panel_info.max_fps) || (is_primary_panel != panel_info.is_primary_panel) ||
+            (split_info != panel_info.split_info) ||
+            (left_roi_count != panel_info.left_roi_count) ||
+            (right_roi_count != panel_info.right_roi_count) ||
+            (transfer_time_us != panel_info.transfer_time_us) ||
+            (transfer_time_us_min != panel_info.transfer_time_us_min) ||
+            (transfer_time_us_max != panel_info.transfer_time_us_max) ||
+            (allowed_mode_switch != panel_info.allowed_mode_switch) ||
+            (panel_mode_caps != panel_info.panel_mode_caps) ||
+            (qsync_support != panel_info.qsync_support) ||
+            (dyn_bitclk_support != panel_info.dyn_bitclk_support) ||
+            (bitclk_rates != panel_info.bitclk_rates));
   }
 
   bool operator ==(const HWPanelInfo &panel_info) {
@@ -1058,11 +1061,11 @@ struct Resolution {
 
 class FrameBufferObject : public LayerBufferObject {
  public:
-  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format,
-                             uint32_t width, uint32_t height, bool shallow = false);
+  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format, uint32_t width,
+                             uint32_t height, bool shallow = false, bool secure = false);
   ~FrameBufferObject();
   uint32_t GetFbId();
-  bool IsEqual(LayerBufferFormat format, uint32_t width, uint32_t height);
+  bool IsEqual(LayerBufferFormat format, uint32_t width, uint32_t height, bool secure);
 
  private:
   uint32_t fb_id_;
@@ -1070,6 +1073,7 @@ class FrameBufferObject : public LayerBufferObject {
   uint32_t width_;
   uint32_t height_;
   bool shallow_;
+  bool secure_;
 };
 
 /* Downscale Blur flags */

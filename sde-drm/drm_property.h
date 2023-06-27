@@ -211,6 +211,7 @@ enum struct DRMProperty {
   SPR_INIT_CFG_V1,
   DSPP_RC_MASK_V1,
   PANEL_MODE,
+  BPP_MODE,
   DEMURA_INIT_CFG_V1,
   DEMURA_PANEL_ID,
   DEMURA_BOOT_PLANE_V1,
@@ -240,10 +241,6 @@ enum struct DRMProperty {
   SPR_INIT_CFG_V2,
   SPR_UDC_CFG_V2,
   EPT,
-  PREFILL_SIZE,
-  PREFILL_TIME,
-  SYS_CACHE_TYPE,
-  BUFFER_MODE,
 
   // Insert above
   MAX

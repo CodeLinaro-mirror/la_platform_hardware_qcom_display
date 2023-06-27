@@ -293,6 +293,9 @@ class QtiMapper : public IQtiMapper {
 #ifdef QTI_CUSTOM_CONTENT_METADATA
       {qtigralloc::MetadataType_CustomContentMetadata, "Custom content metadata", true, true},
 #endif
+#ifdef QTI_HEAP_NAME
+      {qtigralloc::MetadataType_HeapName, "Heap name", true, false},
+#endif
   };
 };
 

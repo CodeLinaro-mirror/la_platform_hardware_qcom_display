@@ -156,7 +156,8 @@ SOONG_CONFIG_NAMESPACES += qtidisplay
 SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            gralloc4 displayconfig_enabled \
                            default var1 var2 var3 llvmcov  \
-                           smmu_proxy
+                           composer_version smmu_proxy \
+                           ubwcp_headers \
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -170,6 +171,12 @@ SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
+SOONG_CONFIG_qtidisplay_ubwcp_headers := true
+SOONG_CONFIG_qtidisplay_composer_version := v2
+ifeq ($(TARGET_USES_COMPOSER3),true)
+    SOONG_CONFIG_qtidisplay_composer_version := v3
+    $(warning "Using composer3")
+endif
 
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
     SOONG_CONFIG_qtidisplay_smmu_proxy := true
@@ -180,14 +187,18 @@ ifeq ($(call is-vendor-board-platform,QCOM),true)
     SOONG_CONFIG_qtidisplay_displayconfig_enabled := true
 endif
 
-# Techpack values
 
+ifeq ($(TARGET_BOARD_PLATFORM), kalama)
+    SOONG_CONFIG_qtidisplay_ubwcp_headers := false
+endif
+
+# Techpack values
 ifeq ($(TARGET_IS_HEADLESS), true)
     # TODO: QMAA prebuilts
     PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/qmaa
     SOONG_CONFIG_qtidisplay_headless := true
     SOONG_CONFIG_qtidisplay_default := false
-	SOONG_CONFIG_qtidisplay_composer_version := qmaa
+    SOONG_CONFIG_qtidisplay_composer_version := qmaa
 else
     #Packages that should not be installed in QMAA are enabled here.
     PRODUCT_PACKAGES += libdrmutils

@@ -128,6 +128,7 @@ public:
       RETRIEVE_DEMURATN_FILES = 59,            // Retrieve DemuraTn files from TVM
       SET_DEMURA_STATE = 60,                   // Enable/disable demura feature
       SET_DEMURA_CONFIG = 61,                  // Set the demura configuration index
+      SET_BPP_MODE = 62,                       // Set Panel bpp to 24bpp or 30bpp
       COMMAND_LIST_END = 400,
     };
 

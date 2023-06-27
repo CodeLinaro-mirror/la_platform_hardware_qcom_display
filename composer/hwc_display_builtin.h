@@ -108,6 +108,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual DisplayError SetDetailEnhancerConfig(const DisplayDetailEnhancerData &de_data);
   virtual DisplayError SetHWDetailedEnhancerConfig(void *params);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending);
+  virtual DisplayError SetBppMode(uint32_t bpp);
   virtual HWC3::Error SetQSyncMode(QSyncMode qsync_mode);
   virtual DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous);
   virtual HWC3::Error SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end, uint32_t v_start,
@@ -123,7 +124,6 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual HWC3::Error GetPanelMaxBrightness(uint32_t *max_brightness_level);
   virtual HWC3::Error SetFrameTriggerMode(uint32_t mode);
   virtual HWC3::Error SetBLScale(uint32_t level);
-  virtual HWC3::Error UpdatePowerMode(PowerMode mode);
   virtual HWC3::Error SetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
                                       int32_t dataspace, Region damage);
   virtual bool IsSmartPanelConfig(uint32_t config_id);
@@ -230,8 +230,9 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
 
   // Long term large composition hint
   int hwc_tid_ = 0;
-  uint32_t num_basic_frames_ = 0;
   uint32_t large_comp_hint_threshold_ = 0;
+  nsecs_t hint_release_start_time_ = 0;
+  nsecs_t elapse_time_threshold_ = 100;  // Time is in milliseconds
 };
 
 }  // namespace sdm

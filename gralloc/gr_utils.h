@@ -31,7 +31,7 @@
 /*
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -230,6 +230,11 @@ bool IsTileRendered(int format);
 bool IsOnlyGpuUsage(uint64_t usage);
 bool IsUBwcPISupported(int format, uint64_t usage);
 bool IsUBwcEnabled(int format, uint64_t usage);
+bool IsUBwcPEnabled(int format, uint64_t usage);
+bool IsUBwcPFormat(int format);
+void GetYuvUBwcPWidthAndHeight(int width, int height, int format, unsigned int *aligned_w,
+                               unsigned int *aligned_h);
+unsigned int GetLinearSizeUBWCP(const BufferInfo &);
 bool IsCameraCustomFormat(int format, uint64_t usage);
 void GetYuvUBwcWidthAndHeight(int width, int height, int format, unsigned int *aligned_w,
                               unsigned int *aligned_h);
@@ -258,6 +263,7 @@ int GetCustomFormatFlags(int format, uint64_t usage, int *custom_format, uint64_
 int GetBufferType(int inputFormat);
 bool IsGPUFlagSupported(uint64_t usage);
 bool HasAlphaComponent(int32_t format);
+bool isTargetSupportUBwcP();
 
 void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
                   uint64_t *drm_format_modifier);

@@ -94,7 +94,7 @@ struct DeferFpsConfig {
 
 class DppsInfo {
  public:
-  void Init(DppsPropIntf *intf, const std::string &panel_name);
+  void Init(DppsPropIntf *intf, const std::string &panel_name, DisplayInterface *display_intf);
   void Deinit();
   void DppsNotifyOps(enum DppsNotifyOps op, void *payload, size_t size);
   bool disable_pu_ = false;
@@ -164,6 +164,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError GetPanelMaxBrightness(uint32_t *max_brightness_level) override;
   DisplayError GetRefreshRate(uint32_t *refresh_rate) override;
   DisplayError SetDisplayDppsAdROI(void *payload) override;
+  DisplayError SetBppMode(uint32_t bpp) override;
   DisplayError SetQSyncMode(QSyncMode qsync_mode) override;
   DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous) override;
   DisplayError SetJitterConfig(uint32_t jitter_type, float value, uint32_t time) override;
@@ -239,6 +240,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError SetupDemuraTn();
   DisplayError EnableDemuraTn(bool enable);
   DisplayError SetupDemuraT0AndTn();
+  DisplayError SetDisplayStateForDemuraTn(DisplayState state);
   DisplayError BuildLayerStackStats(LayerStack *layer_stack) override;
   void UpdateDisplayModeParams();
   void HandleQsyncPostCommit();

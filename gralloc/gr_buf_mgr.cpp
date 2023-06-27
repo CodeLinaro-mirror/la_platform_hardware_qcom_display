@@ -18,7 +18,7 @@
  */
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -43,6 +43,7 @@
 #include "gr_utils.h"
 #include "qd_utils.h"
 #include "color_extensions.h"
+#include "gr_ubwcp_utils.h"
 
 static bool enable_logs = false;
 
@@ -209,8 +210,10 @@ static Error getYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr y
       unsigned int alignment = 4096;
       uint64_t field_base;
       height = (height + 1) >> 1;
+      #ifndef QMAA
       uv_stride = MMM_COLOR_FMT_UV_STRIDE(MMM_COLOR_FMT_NV12_UBWC, INT(width));
       uv_height = MMM_COLOR_FMT_UV_SCANLINES(MMM_COLOR_FMT_NV12_UBWC, INT(height));
+      #endif
       uv_size = ALIGN((uv_stride * uv_height), alignment);
       field_base = hnd->base + plane_info[1].offset + uv_size;
       memset(ycbcr[1].reserved, 0, sizeof(ycbcr[1].reserved));
@@ -286,6 +289,7 @@ void BufferManager::SetGrallocDebugProperties(gralloc::GrallocProperties props) 
 
 Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
   auto hnd = buf->handle;
+  unsigned int size = hnd->size;
   ALOGD_IF(enable_logs, "FreeBuffer handle:%p", hnd);
 
   if (private_handle_t::validate(hnd) != 0) {
@@ -295,7 +299,10 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
 
   auto meta_size = GetMetaDataSize(hnd->reserved_size, buf->custom_content_md_size);
 
-  if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset, hnd->fd,
+  if (hnd->ubwcp_format)
+    size = hnd->linear_size;
+
+  if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base), size, hnd->offset, hnd->fd,
                              buf->ion_handle_main) != 0) {
     return Error::BAD_BUFFER;
   }
@@ -409,11 +416,17 @@ std::shared_ptr<BufferManager::Buffer> BufferManager::GetBufferFromHandleLocked(
 
 Error BufferManager::MapBuffer(private_handle_t const *handle) {
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
+  unsigned int size = hnd->size;
   ALOGD_IF(enable_logs, "Map buffer handle:%p id: %" PRIu64, hnd, hnd->id);
 
   hnd->base = 0;
-  if (allocator_->MapBuffer(reinterpret_cast<void **>(&hnd->base), hnd->size, hnd->offset,
-                            hnd->fd) != 0) {
+  UbwcpUtils::GetInstance()->ConfigUBWCPAttributes(handle);
+
+  if (hnd->ubwcp_format)
+    size = hnd->linear_size;
+
+  if (allocator_->MapBuffer(reinterpret_cast<void **>(&hnd->base), size, hnd->offset, hnd->fd) !=
+      0) {
     return Error::BAD_BUFFER;
   }
   return Error::NONE;
@@ -714,6 +727,12 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   metadata->crop.left = 0;
   metadata->crop.right = hnd->width;
   metadata->crop.bottom = hnd->height;
+
+#ifdef QTI_HEAP_NAME
+  auto heap_name_length = std::min(data.heap_name.size(), size_t(MAX_NAME_LEN - 1));
+  heap_name_length = data.heap_name.copy(metadata->heapName, heap_name_length);
+  metadata->heapName[heap_name_length] = '\0';
+#endif
 
   UnmapAndReset(hnd);
 
@@ -1407,6 +1426,16 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
                                       buf->custom_content_md_size, out);
       break;
 #endif
+#ifdef QTI_HEAP_NAME
+    case QTI_HEAP_NAME:
+      if (metadata_ptr != nullptr) {
+        std::string heap_name(reinterpret_cast<char *>(metadata_ptr));
+        android::gralloc4::encodeString(qtigralloc::MetadataType_HeapName, heap_name, out);
+      } else {
+        return Error::BAD_VALUE;
+      }
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -1456,6 +1485,9 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     case QTI_PRIVATE_FLAGS:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
     case QTI_ALIGNED_HEIGHT_IN_PIXELS:
+#ifdef QTI_HEAP_NAME
+    case QTI_HEAP_NAME:
+#endif
 #ifdef QTI_CUSTOM_DIMENSIONS_STRIDE
     case QTI_CUSTOM_DIMENSIONS_STRIDE:
 #endif

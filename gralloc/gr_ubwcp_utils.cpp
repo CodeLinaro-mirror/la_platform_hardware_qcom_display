@@ -31,14 +31,16 @@ UbwcpUtils::UbwcpUtils() {
   if (libUbwcpUtils_) {
     *reinterpret_cast<void **>(&LINK_UBWCPLib_create_session) =
         ::dlsym(libUbwcpUtils_, "UBWCPLib_create_session");
+    *reinterpret_cast<void **>(&LINK_UBWCPLib_destroy_session) =
+        ::dlsym(libUbwcpUtils_, "UBWCPLib_destroy_session");
+#ifdef TARGET_USES_UBWCP
     *reinterpret_cast<void **>(&LINK_UBWCPLib_get_stride_alignment) =
         ::dlsym(libUbwcpUtils_, "UBWCPLib_get_stride_alignment");
     *reinterpret_cast<void **>(&LINK_UBWCPLib_validate_stride) =
         ::dlsym(libUbwcpUtils_, "UBWCPLib_validate_stride");
     *reinterpret_cast<void **>(&LINK_UBWCPLib_set_buf_attrs) =
         ::dlsym(libUbwcpUtils_, "UBWCPLib_set_buf_attrs");
-    *reinterpret_cast<void **>(&LINK_UBWCPLib_destroy_session) =
-        ::dlsym(libUbwcpUtils_, "UBWCPLib_destroy_session");
+#endif
   } else {
     ALOGW("Failed to load libubwcp.so");
   }
@@ -49,7 +51,7 @@ UbwcpUtils::~UbwcpUtils() {
     ::dlclose(libUbwcpUtils_);
   }
 }
-
+#ifdef TARGET_USES_UBWCP
 UBWCPLib_Image_Format UbwcpUtils::GetUbwcpPixelFormat(int hal_format) {
   switch (hal_format) {
     case HAL_PIXEL_FORMAT_RGBA_8888:
@@ -94,15 +96,16 @@ bool UbwcpUtils::IsStrideAligned(int hal_format, int width) {
   return ret;
 }
 
+#endif
+
 void UbwcpUtils::ConfigUBWCPAttributes(private_handle_t const *handle) {
+#ifdef TARGET_USES_UBWCP
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   int ret = 0;
   BufferInfo info(hnd->unaligned_width, hnd->unaligned_height, hnd->format,
                   hnd->usage | GRALLOC_USAGE_PRIVATE_NO_UBWC_P);
 
-  // this will be added in subsequent patches
-  //if (IsUBwcPEnabled(hnd->format, hnd->usage))
-  {
+  if (IsUBwcPEnabled(hnd->format, hnd->usage)) {
     void *session;
     hnd->ubwcp_format = true;
     size_t planar_padding;
@@ -154,6 +157,6 @@ void UbwcpUtils::ConfigUBWCPAttributes(private_handle_t const *handle) {
 
     LINK_UBWCPLib_destroy_session(session);
   }
+#endif
 }
-
 }  // namespace gralloc

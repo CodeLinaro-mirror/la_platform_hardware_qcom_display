@@ -1,8 +1,6 @@
 /*
 * Copyright (c) 2014 - 2016, 2018, 2020-2021 The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
 *    * Redistributions of source code must retain the above copyright notice, this list of
@@ -103,7 +101,9 @@ class CoreImpl : public CoreInterface {
                                      DisplayInterface **intf);
   virtual DisplayError CreateDisplay(int32_t display_id, DisplayEventHandler *event_handler,
                                      DisplayInterface **intf);
+  virtual DisplayError CreateNullDisplay(DisplayInterface **intf);
   virtual DisplayError DestroyDisplay(DisplayInterface *intf);
+  virtual DisplayError DestroyNullDisplay(DisplayInterface *intf);
   virtual DisplayError SetMaxBandwidthMode(HWBwModes mode);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info);
@@ -119,6 +119,8 @@ class CoreImpl : public CoreInterface {
   void InitializeSDMUtils();
   void ReleaseDemuraResources();
   void OverRideDemuraPanelIds(std::vector<uint64_t> *panel_ids);
+  DisplayError CreateNullDisplayLocked(DisplayInterface **intf);
+  DisplayError HandleNullDisplay();
 
   Locker locker_;
   BufferAllocator *buffer_allocator_ = NULL;
@@ -137,9 +139,10 @@ class CoreImpl : public CoreInterface {
   CoreIPCVmCallbackImpl* vm_cb_intf_ = nullptr;
   std::vector<uint64_t> *panel_ids_;
   std::shared_ptr<DemuraParserManagerIntf> pm_intf_ = nullptr;
-  bool reserve_done_  = false;
+  bool reserve_done_ = false;
   char *raw_mapped_buffer_ = nullptr;
   std::vector<uint32_t> demura_display_ids_;
+  bool enable_null_display_ = false;
 };
 
 }  // namespace sdm
