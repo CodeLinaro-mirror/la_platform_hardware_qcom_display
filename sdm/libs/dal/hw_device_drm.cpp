@@ -334,6 +334,8 @@ HWDeviceDRM::Registry::Registry(BufferAllocator *buffer_allocator) :
 
 void HWDeviceDRM::Registry::Register(HWLayersInfo *hw_layers_info) {
   uint32_t hw_layer_count = UINT32(hw_layers_info->hw_layers.size());
+  int err = 0;
+  bool fb_modified = false;
 
   for (uint32_t i = 0; i < hw_layer_count; i++) {
     Layer &layer = hw_layers_info->hw_layers.at(i);
@@ -351,7 +353,13 @@ void HWDeviceDRM::Registry::Register(HWLayersInfo *hw_layers_info) {
       input_buffer.width *= 2;
       input_buffer.height /= 2;
     }
-    MapBufferToFbId(&layer, input_buffer);
+    int ret = MapBufferToFbId(&layer, input_buffer, &fb_modified);
+    if (!err) {
+      err = ret;
+      if (fb_modified) {
+        hw_layers_info->updates_mask.set(kUpdateFBObject);
+      }
+    }
   }
 }
 
@@ -385,9 +393,10 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id
   return ret;
 }
 
-void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buffer) {
+int HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buffer,
+                                           bool *fb_modified) {
   if (buffer.planes[0].fd < 0) {
-    return;
+    return 0;
   }
 
   uint64_t handle_id = buffer.handle_id;
@@ -406,7 +415,7 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
         if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height, secure_present)) {
           layer->buffer_map->buffer_map[handle_id] = output_buffer_map_[handle_id];
           // Found fb_id for given handle_id key
-          return;
+          return 0;
         }
       }
     }
@@ -415,7 +424,7 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
       FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(it->second.get());
       if (fb_obj->IsEqual(buffer.format, buffer.width, buffer.height, secure_present)) {
         // Found fb_id for given handle_id key
-        return;
+        return 0;
       } else {
         // Erase from fb_id map if format or size have been modified
         layer->buffer_map->buffer_map.erase(it);
@@ -433,10 +442,12 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
     // Create and cache the fb_id in map
     layer->buffer_map->buffer_map[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
         buffer.format, buffer.width, buffer.height, false /* shallow */, secure_present);
+    *fb_modified = true;
   }
+  return 0;
 }
 
-void HWDeviceDRM::Registry::MapOutputBufferToFbId(std::shared_ptr<LayerBuffer> output_buffer) {
+void HWDeviceDRM::Registry::MapOutputBufferToFbId(std::shared_ptr<LayerBuffer> output_buffer, bool *fb_modified) {
   if (output_buffer->planes[0].fd < 0) {
     return;
   }
@@ -471,6 +482,7 @@ void HWDeviceDRM::Registry::MapOutputBufferToFbId(std::shared_ptr<LayerBuffer> o
     output_buffer_map_[handle_id] = std::make_shared<FrameBufferObject>(
         fb_id, output_buffer->format, output_buffer->width, output_buffer->height,
         false /* shallow */, secure_present);
+    *fb_modified = true;
   }
 }
 
@@ -1369,8 +1381,9 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
   noise_cfg_ = {};
   bool resource_update = hw_layers_info->updates_mask.test(kUpdateResources);
   bool buffer_update = hw_layers_info->updates_mask.test(kSwapBuffers);
+  bool fb_update = hw_layers_info->updates_mask.test(kUpdateFBObject);
   bool update_config = resource_update || buffer_update || tui_state_ == kTUIStateEnd ||
-                       hw_layers_info->flags.geometry_changed;
+                       hw_layers_info->flags.geometry_changed || fb_update;
   bool update_luts = hw_layers_info->updates_mask.test(kUpdateLuts);
 
   if (hw_panel_info_.partial_update && update_config) {
@@ -3064,7 +3077,8 @@ DisplayError HWDeviceDRM::SetupConcurrentWritebackModes() {
 void HWDeviceDRM::ConfigureConcurrentWriteback(const HWLayersInfo &hw_layer_info) {
   CwbConfig *cwb_config = hw_layer_info.hw_cwb_config;
   std::shared_ptr<LayerBuffer> output_buffer = hw_layer_info.output_buffer;
-  registry_.MapOutputBufferToFbId(output_buffer);
+  bool fb_modified = false;
+  registry_.MapOutputBufferToFbId(output_buffer, &fb_modified);
   uint32_t &vitual_conn_id = cwb_config_.token.conn_id;
 
   // Set the topology for Concurrent Writeback: [CRTC_PRIMARY_DISPLAY - CONNECTOR_VIRTUAL_DISPLAY].
