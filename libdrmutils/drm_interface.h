@@ -725,6 +725,7 @@ struct DRMConnectorInfo {
   bool is_wb_ubwc_supported;
   uint32_t topology_control;
   bool dyn_bitclk_support;
+  bool ext_bridge_hpd;
   std::vector<uint8_t> edid;
   uint32_t supported_colorspaces;
 };

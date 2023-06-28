@@ -547,6 +547,7 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   const string qsync_support = "qsync support=";
   const string wb_ubwc = "wb_ubwc";
   const string dyn_bitclk_support = "dyn bitclk support=";
+  const string ext_bridge = "ext bridge hpd support=";
 
   while (std::getline(stream, line)) {
     if (line.find(pixel_formats) != string::npos) {
@@ -578,6 +579,8 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
       info->is_wb_ubwc_supported = true;
     } else if (line.find(dyn_bitclk_support) != string::npos) {
       info->dyn_bitclk_support = (string(line, dyn_bitclk_support.length()) == "true");
+    } else if (line.find(ext_bridge) != string::npos) {
+      info->ext_bridge_hpd = (string(line, ext_bridge.length()) == "true");
     }
   }
 
