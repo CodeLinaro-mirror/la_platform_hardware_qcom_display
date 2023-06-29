@@ -5,5 +5,5 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = libdebug libdrmutils sdm/libs/utils sdm/libs/core sde-drm
 
 if ENABLE_HDR
-SUBDIRS += libqservice
+SUBDIRS += libqservice gpu_tonemapper
 endif
