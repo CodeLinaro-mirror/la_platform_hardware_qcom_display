@@ -1054,17 +1054,17 @@ bool CompManager::HandleCwbTeardown(Handle display_ctx) {
   return resource_intf_->HandleCwbTeardown(display_comp_ctx->display_resource_ctx);
 }
 
-DisplayError CompManager::RequestVirtualDisplayId(int32_t *vdisp_id) {
+DisplayError CompManager::RequestVirtualDisplayId(DisplayId display_id, int32_t *vdisp_id) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
-  return resource_intf_->RequestVirtualDisplayId(vdisp_id);
+  return resource_intf_->RequestVirtualDisplayId(display_id, vdisp_id);
 }
 
 DisplayError CompManager::AllocateVirtualDisplayId(int32_t *vdisp_id) {
-  return resource_intf_->AllocateVirtualDisplayId(vdisp_id);
+  return resource_intf_->AllocateVirtualDisplayId(DisplayId(*vdisp_id), vdisp_id);
 }
 
 DisplayError CompManager::DeallocateVirtualDisplayId(int32_t vdisp_id) {
-  return resource_intf_->DeallocateVirtualDisplayId(vdisp_id);
+  return resource_intf_->DeallocateVirtualDisplayId(DisplayId(vdisp_id), vdisp_id);
 }
 
 uint32_t CompManager::GetMixerCount(DisplayId display_id) {

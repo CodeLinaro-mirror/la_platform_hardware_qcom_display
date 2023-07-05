@@ -334,7 +334,7 @@ class CoreInterface {
 
     @return \link DisplayError \endlink
   */
-  virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id) = 0;
+  virtual DisplayError RequestVirtualDisplayId(uint64_t display_id, int32_t *vdisp_id) = 0;
 
  protected:
   virtual ~CoreInterface() { }
