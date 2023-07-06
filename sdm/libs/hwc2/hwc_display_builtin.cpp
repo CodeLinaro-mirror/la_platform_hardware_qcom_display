@@ -1,5 +1,8 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -282,8 +285,9 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   }
 
   if (layer_set_.empty()) {
-    // Avoid flush for Command mode panel.
-    flush_ = !client_connected_;
+    // Avoid flush for Command mode panel. Also Flush if the property
+    // flush_on_layerset_empty_ is set.
+    flush_ = (flush_on_layerset_empty_ && GetGeometryChanges()) || !client_connected_;
     validated_ = true;
     return status;
   }

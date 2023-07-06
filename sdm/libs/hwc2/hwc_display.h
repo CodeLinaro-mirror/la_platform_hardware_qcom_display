@@ -3,6 +3,9 @@
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -475,6 +478,7 @@ class HWCDisplay : public DisplayEventHandler {
   int64_t pending_refresh_rate_applied_time_ = INT64_MAX;
   std::deque<TransientRefreshRateInfo> transient_refresh_rate_info_;
   std::mutex transient_refresh_rate_lock_;
+  int flush_on_layerset_empty_ = 0;
 
  private:
   void DumpInputBuffers(void);

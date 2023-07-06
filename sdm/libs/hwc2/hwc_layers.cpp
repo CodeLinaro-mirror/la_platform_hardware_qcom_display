@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "hwc_layers.h"
 #include <utils/debug.h>
 #include <stdint.h>
@@ -742,10 +748,10 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       format = kFormatBGR888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
-      format = kFormatRGB565;
+      format = kFormatBGR565;
       break;
     case HAL_PIXEL_FORMAT_BGR_565:
-      format = kFormatBGR565;
+      format = kFormatRGB565;
       break;
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
