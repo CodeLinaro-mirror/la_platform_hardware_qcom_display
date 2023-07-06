@@ -1244,6 +1244,7 @@ int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4], uint32_t offset[4
       stride[0] = static_cast<uint32_t>(hnd->width * 2);
       break;
     case HAL_PIXEL_FORMAT_RGB_888:
+    case HAL_PIXEL_FORMAT_BGR_888:
       stride[0] = static_cast<uint32_t>(hnd->width * 3);
       break;
     case HAL_PIXEL_FORMAT_RGBA_8888:
@@ -1903,6 +1904,9 @@ void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
       break;
     case HAL_PIXEL_FORMAT_RGB_888:
       *drm_format = DRM_FORMAT_BGR888;
+      break;
+    case HAL_PIXEL_FORMAT_BGR_888:
+      *drm_format = DRM_FORMAT_RGB888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
       *drm_format = DRM_FORMAT_BGR565;

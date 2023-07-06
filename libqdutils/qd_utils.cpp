@@ -177,6 +177,8 @@ const char *GetHALPixelFormatString(int format) {
     return "RGBX_8888";
   case HAL_PIXEL_FORMAT_RGB_888:
     return "RGB_888";
+  case HAL_PIXEL_FORMAT_BGR_888:
+    return "BGR_888";
   case HAL_PIXEL_FORMAT_RGB_565:
     return "RGB_565";
   case HAL_PIXEL_FORMAT_BGR_565:

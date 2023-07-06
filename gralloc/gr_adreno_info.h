@@ -119,6 +119,7 @@ typedef enum {
   ADRENO_PIXELFORMAT_UYVY = 614,      //  YUV 4:2:2 packed progressive (1 plane)
   ADRENO_PIXELFORMAT_NV21 = 619,
   ADRENO_PIXELFORMAT_Y8U8V8A8 = 620,  // YUV 4:4:4 packed (1 plane)
+  ADRENO_PIXELFORMAT_B8G8R8_UNORM = 623,
   ADRENO_PIXELFORMAT_Y8 = 625,        //  Single 8-bit luma only channel YUV format
   ADRENO_PIXELFORMAT_TP10 = 654,      // YUV 4:2:0 planar 10 bits/comp (2 planes)
 } ADRENOPIXELFORMAT;
