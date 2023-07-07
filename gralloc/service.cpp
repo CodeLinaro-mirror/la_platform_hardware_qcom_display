@@ -44,21 +44,9 @@
 
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
-using IQtiAllocator3 = vendor::qti::hardware::display::allocator::V3_0::IQtiAllocator;
-using IQtiAllocator4 = vendor::qti::hardware::display::allocator::V4_0::IQtiAllocator;
 using aidl::android::hardware::graphics::allocator::impl::QtiAllocatorAIDL;
 
 int main(int, char **) {
-  android::sp<IQtiAllocator3> service3 =
-      new vendor::qti::hardware::display::allocator::V3_0::implementation::QtiAllocator();
-
-  configureRpcThreadpool(4, true /*callerWillJoin*/);
-  if (service3->registerAsService() != android::OK) {
-    ALOGE("Cannot register QTI Allocator 3 service");
-    return -EINVAL;
-  }
-  ALOGI("Initialized qti-allocator 3");
-
  // same as SF main thread
   struct sched_param param = {0};
   param.sched_priority = 2;
@@ -66,19 +54,7 @@ int main(int, char **) {
     ALOGI("%s: failed to set priority: %s", __FUNCTION__, strerror(errno));
   }
 
-  ALOGI("Registering qti-allocator 4");
-
-#ifdef TARGET_USES_GRALLOC4
-  android::sp<IQtiAllocator4> service4 =
-      new vendor::qti::hardware::display::allocator::V4_0::implementation::QtiAllocator();
-  if (service4->registerAsService() != android::OK) {
-    ALOGE("Cannot register QTI Allocator 4 service");
-    return -EINVAL;
-  }
-  ALOGI("Initialized qti-allocator 4");
-#endif
-
-ALOGI("Registering QTI Allocator AIDL as a service");
+  ALOGI("Registering QTI Allocator AIDL as a service");
   auto allocator = ndk::SharedRefBase::make<QtiAllocatorAIDL>();
   const std::string instance = std::string() + QtiAllocatorAIDL::descriptor + "/default";
   if (!allocator->asBinder().get()) {

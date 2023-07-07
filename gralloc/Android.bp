@@ -1,46 +1,4 @@
 cc_library_shared {
-    name: "gralloc.msmnile",
-    vendor: true,
-    sanitize: {
-        integer_overflow: true,
-    },
-
-    header_libs: [
-        "qti_kernel_headers",
-        "qti_display_kernel_headers",
-        "device_kernel_headers",
-        "display_headers",
-    ],
-    shared_libs: [
-        "libqdMetaData",
-        "libdl",
-        "liblog",
-        "libutils",
-        "libcutils",
-        "libhardware",
-        "libsync",
-        "libgrallocutils",
-        "libgralloccore",
-        "android.hardware.graphics.common@1.2",
-        "android.hardware.graphics.mapper@2.0",
-        "android.hardware.graphics.mapper@2.1",
-        "android.hardware.graphics.mapper@3.0",
-        "android.hardware.graphics.mapper@4.0",
-    ],
-    cflags: [
-        "-DLOG_TAG=\"qdgralloc\"",
-        "-D__QTI_DISPLAY_GRALLOC__",
-        "-Wno-sign-conversion",
-        "-Wno-unused-parameter",
-        "-Wno-unused-variable",
-        "-D__MIN_ANDROID_VER_T__",
-    ],
-    srcs: [
-        "gr_device_impl.cpp",
-    ],
-}
-
-cc_library_shared {
     name: "libgrallocutils",
     vendor: true,
     sanitize: {
@@ -59,7 +17,6 @@ cc_library_shared {
         "liblog",
         "libutils",
         "libcutils",
-        "libhardware",
         "android.hardware.graphics.common@1.2",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@2.1",
@@ -91,7 +48,6 @@ cc_library_shared {
         "display_headers",
         "qti_display_kernel_headers",
         "device_kernel_headers",
-        "display_headers",
         "qti_kernel_headers",
         "libvmmem_headers",
     ],
@@ -111,12 +67,10 @@ cc_library_shared {
         "liblog",
         "libutils",
         "libcutils",
-        "libhardware",
         "libgralloc.qti",
         "android.hardware.graphics.mapper@2.1",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.graphics.mapper@4.0",
-        "vendor.qti.hardware.display.mapper@3.0",
     ],
     cflags: [
         "-DLOG_TAG=\"qdgralloc\"",
@@ -128,7 +82,6 @@ cc_library_shared {
     srcs: [
         "gr_allocator.cpp",
         "gr_buf_mgr.cpp",
-        "gr_ion_alloc.cpp",
         "gr_dma_legacy_mgr.cpp",
         "gr_dma_mgr.cpp",
         "gr_alloc_interface.cpp",
@@ -171,22 +124,16 @@ cc_library_shared {
     vendor: true,
     relative_install_path: "hw",
 
-    header_libs: ["display_headers",
-        "qti_display_kernel_headers",
-        "device_kernel_headers",
-        "display_headers",
-    ],
+    header_libs: ["display_headers"],
     shared_libs: [
         "libhidlbase",
         "libqdMetaData",
         "libgrallocutils",
         "libgralloccore",
         "libsync",
-        "libdmabufheap",
         "liblog",
         "libutils",
         "libcutils",
-        "libhardware",
         "vendor.qti.hardware.display.mapper@3.0",
         "vendor.qti.hardware.display.mapperextensions@1.0",
         "android.hardware.graphics.mapper@2.0",
@@ -201,7 +148,6 @@ cc_library_shared {
         "-D__QTI_DISPLAY_GRALLOC__",
         "-Wno-sign-conversion",
         "-D__MIN_ANDROID_VER_T__",
-        "-DTARGET_USES_GRALLOC4",
     ],
     srcs: [
         "QtiMapper.cpp",
@@ -220,9 +166,6 @@ cc_library_shared {
     relative_install_path: "hw",
 
     header_libs: ["display_headers",
-        "qti_display_kernel_headers",
-        "device_kernel_headers",
-        "display_headers",
     ],
     shared_libs: [
         "libhidlbase",
@@ -234,7 +177,6 @@ cc_library_shared {
         "liblog",
         "libutils",
         "libcutils",
-        "libhardware",
         "vendor.qti.hardware.display.mapper@3.0",
         "vendor.qti.hardware.display.mapper@4.0",
         "vendor.qti.hardware.display.mapperextensions@1.0",
@@ -268,9 +210,6 @@ cc_binary {
     vendor: true,
     relative_install_path: "hw",
     header_libs: ["display_headers",
-        "qti_display_kernel_headers",
-        "device_kernel_headers",
-        "display_headers",
     ],
     shared_libs: [
         "libbinder",
@@ -283,7 +222,6 @@ cc_binary {
         "liblog",
         "libutils",
         "libcutils",
-        "libhardware",
         "vendor.qti.hardware.display.allocator@3.0",
         "vendor.qti.hardware.display.allocator@4.0",
         "vendor.qti.hardware.display.mapper@3.0",
