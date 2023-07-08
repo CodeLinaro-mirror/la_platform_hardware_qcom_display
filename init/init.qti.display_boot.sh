@@ -160,7 +160,7 @@ case "$target" in
         ;;
     esac
     ;;
-    "holi")
+    "holi"|"blair")
     #Set property to differentiate Holi & Blair
     #SOC ID for Holi is 454 and for Blair is 507
     case "$soc_hwid" in
