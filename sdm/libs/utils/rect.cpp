@@ -28,8 +28,8 @@
 */
 
 #include <math.h>
-#include <utils/rect.h>
-#include <utils/constants.h>
+#include "rect.h"
+#include "constants.h"
 #include <algorithm>
 
 #define __CLASS__ "RectUtils"

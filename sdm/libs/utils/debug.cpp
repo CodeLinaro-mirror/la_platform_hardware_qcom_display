@@ -28,8 +28,8 @@
 */
 
 #include <stdlib.h>
-#include <utils/debug.h>
-#include <utils/constants.h>
+#include "debug.h"
+#include "constants.h"
 #include <string>
 #include <algorithm>
 

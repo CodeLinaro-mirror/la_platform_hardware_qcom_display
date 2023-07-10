@@ -27,7 +27,7 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <utils/sys.h>
+#include <sys.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
