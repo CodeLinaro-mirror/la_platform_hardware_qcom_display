@@ -27,10 +27,15 @@ if test "x$with_core_includes" != "xno"; then
    CFLAGS="${CFLAGS} -I${core_incdir}"
 fi
 
+CFLAGS="${CFLAGS} -I/usr/include/libdrm "
+CURDIR=$PWD
+
 AC_ARG_WITH(sanitized-headers,
    AS_HELP_STRING([--with-sanitized-headers=DIR],
        [Specify the location of the sanitized Linux headers]),
    [CPPFLAGS="$CPPFLAGS -I$withval"])
+
+CPPFLAGS="$CPPFLAGS -DTARGET_HEADLESS -I/usr/include/libdrm -fno-operator-names -I$CURDIR/sdm/include/utils -I$CURDIR/libdebug/ -I$CURDIR/sdm/include/ -I/$CURDIR/include -I/$CURDIR/libdrmutils"
 
 AC_ARG_ENABLE([sdmhaldrm],
      AC_HELP_STRING([--enable-sdmhaldrm],
@@ -55,8 +60,6 @@ AC_SUBST([CFLAGS])
 AC_SUBST([CC])
 AC_CONFIG_FILES([ \
         Makefile \
-        libqservice/Makefile \
-        libqdutils/Makefile \
         libdebug/Makefile \
         libdrmutils/Makefile \
         sdm/libs/utils/Makefile \
