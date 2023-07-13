@@ -138,6 +138,9 @@
 #define ALLOW_TONEMAP_NATIVE                 DISPLAY_PROP("allow_tonemap_native")
 #define ENABLE_METADATA_DUMPING              DISPLAY_PROP("enable_metadata_dump")
 
+// Disable power saving features
+#define DISABLE_DPPS_FEATURES               DISPLAY_PROP("disable_dpps_features")
+
 // RC
 #define ENABLE_ROUNDED_CORNER                DISPLAY_PROP("enable_rounded_corner")
 #define DISABLE_ROUNDED_CORNER_THREAD        DISPLAY_PROP("disable_rounded_corner_thread")

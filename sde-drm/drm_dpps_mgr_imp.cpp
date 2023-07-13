@@ -27,9 +27,17 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cstring>
 #include <errno.h>
 #include <drm_logger.h>
+#include <utils/debug.h>
+#include <display_properties.h>
 
 #include "libdrm_macros.h"
 #include "drm/drm_fourcc.h"
@@ -44,6 +52,14 @@ static DRMDppsManagerDummyImp dpps_dummy_mgr;
 DRMDppsManagerIntf* GetDppsManagerIntf()
 {
 #if (defined(__ANDROID__))
+    int disable_power_features = 0;
+    sdm::Debug::Get()->GetProperty(DISABLE_DPPS_FEATURES, \
+                          &disable_power_features);
+
+    if (disable_power_features) {
+      return &dpps_dummy_mgr;
+    }
+
     return &dpps_mgr;
 #else
     return &dpps_dummy_mgr;

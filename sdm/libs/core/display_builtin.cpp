@@ -38,6 +38,7 @@
 #include <sys/mman.h>
 #include <private/hw_interface.h>
 #include <private/hw_info_interface.h>
+#include <display_properties.h>
 #include <iomanip>
 #include <algorithm>
 #include <functional>
@@ -2033,6 +2034,7 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
                     DisplayInterface *display_intf) {
   std::lock_guard<std::mutex> guard(lock_);
   int error = 0;
+  int disable_dpps_features = 0;
 
   if (!intf || !display_intf) {
     DLOGE("Invalid intf %pK display_intf %pK", intf, display_intf);
@@ -2052,6 +2054,13 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
   }
   DLOGI("Ready to register display %d-%d ", info_payload.display_id,
         info_payload.display_type);
+
+  Debug::Get()->GetProperty(DISABLE_DPPS_FEATURES, &disable_dpps_features);
+  if (disable_dpps_features) {
+    if (!dpps_intf_) {
+      dpps_intf_ = new DppsDummyImpl();
+    }
+  }
 
   if (!dpps_intf_) {
     if (!dpps_impl_lib_.Open(kDppsLib_)) {
@@ -2083,7 +2092,10 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
 
 exit:
   Deinit_nolock();
-  dpps_intf_ = new DppsDummyImpl();
+  if (!dpps_intf_) {
+    dpps_intf_ = new DppsDummyImpl();
+    display_id_.push_back(info_payload.display_id);
+  }
 }
 
 void DppsInfo::Deinit_nolock() {

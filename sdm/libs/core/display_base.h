@@ -385,7 +385,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   std::bitset<32> core_id_;
   uint32_t primary_core_id_ = 0;
   int core_count_ = 0;
-  ColorManagerProxy *color_mgr_ = NULL;  // each display object owns its ColorManagerProxy
+  ColorManagerIntf *color_mgr_ = NULL;
   bool partial_update_control_ = true;
   HWEventsInterface *hw_events_intf_ = NULL;
   bool disable_pu_one_frame_ = false;

@@ -45,6 +45,7 @@
 #include <string>
 #include <mutex>
 
+#include "dpu_core_mux.h"
 
 namespace sdm {
 
@@ -99,16 +100,57 @@ class FeatureInterface {
   virtual DisplayError GetParams(FeatureOps param_type, void *payload) = 0;
 };
 
-FeatureInterface* GetPostedStartFeatureCheckIntf(HWInterface *intf,
+FeatureInterface* GetPostedStartFeatureCheckIntf(DPUCoreMux *dpu_core_mux,
                                                  PPFeaturesConfig *config, bool dyn_switch);
+
+/*
+ * ColorManager Intf
+ * ColorManagerProxy and DPUColorManager extends Intf
+ */
+class ColorManagerIntf {
+ public:
+  virtual ~ColorManagerIntf() {}
+
+  virtual DisplayError ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
+                                    PPDisplayAPIPayload *out_payload,
+                                    PPPendingParams *pending_action) = 0;
+  virtual DisplayError ColorMgrGetNumOfModes(uint32_t *mode_cnt) = 0;
+  virtual DisplayError ColorMgrGetModes(uint32_t *mode_cnt, SDEDisplayMode *modes) = 0;
+  virtual DisplayError ColorMgrSetMode(int32_t color_mode_id) = 0;
+  virtual void SetDETuningCFGpending(bool cfg_pending) = 0;
+  virtual DisplayError ColorMgrGetModeInfo(int32_t mode_id, AttrVal *query) = 0;
+  virtual DisplayError ColorMgrSetColorTransform(uint32_t length,
+                                                  const double *trans_data) = 0;
+  virtual bool NeedsPartialUpdateDisable() = 0;
+  virtual DisplayError Commit() = 0;
+  virtual DisplayError ColorMgrSetModeWithRenderIntent(int32_t color_mode_id,
+                                               const PrimariesTransfer &blend_space,
+                                               uint32_t intent) = 0;
+  virtual DisplayError Validate(DispLayerStack *disp_layer_stack) = 0;
+  virtual bool GameEnhanceSupported() = 0;
+  virtual DisplayError ColorMgrGetStcModes(ColorModeList *mode_list) = 0;
+  virtual DisplayError ColorMgrSetStcMode(const ColorMode &color_mode) = 0;
+  virtual DisplayError Prepare() = 0;
+  virtual bool IsValidateNeeded() = 0;
+
+  virtual DisplayError ConfigureCWBDither(CwbConfig *cwb_cfg, bool free_data) = 0;
+  virtual DisplayError NotifyDisplayCalibrationMode(bool in_calibration) = 0;
+  virtual DisplayError ColorMgrSetLtmPccConfig(void* pcc_input, size_t size) = 0;
+  virtual DisplayError ColorMgrSetSprIntf(std::shared_ptr<SPRIntf> spr_intf) = 0;
+
+  // TBD: Should remove these legacy API's?
+  virtual DisplayError ApplyDefaultDisplayMode() = 0;
+  virtual DisplayError ColorMgrGetDefaultModeID(int32_t *mode_id) = 0;
+  virtual DisplayError ColorMgrCombineColorModes() = 0;
+};
 
 /*
  * ColorManager proxy to maintain necessary information to interact with underlying color service.
  * Each display object has its own proxy.
  */
-class ColorManagerProxy {
+class ColorManagerProxy : public ColorManagerIntf {
  public:
-  static DisplayError Init(const std::vector<HWResourceInfo> &hw_res_info);
+  static DisplayError Init();
   static void Deinit();
 
   /* Create ColorManagerProxy for this display object, following things need to be happening
@@ -117,11 +159,14 @@ class ColorManagerProxy {
    * 3. Populate necessary resources.
    * 4. Need get panel name for hw_panel_info_.
    */
-  static ColorManagerProxy *CreateColorManagerProxy(DisplayType type, HWInterface *hw_intf,
-                                                    DisplayDeviceContext &device_ctx,
-                                                    DisplayClientContext &client_ctx,
+  static ColorManagerProxy *CreateColorManagerProxy(DisplayType type,
+                                                    DPUCoreMux *dpu_core_mux,
+                                                    const HWDisplayAttributes &attribute,
+                                                    const HWPanelInfo &panel_info,
                                                     DppsControlInterface *dpps_intf,
-                                                    DisplayInterface *disp_intf);
+                                                    DisplayInterface *disp_intf,
+                                                    const HWResourceInfo &hw_res_info,
+                                                    uint32_t display_id);
 
   /* need reverse the effect of CreateColorManagerProxy. */
   ~ColorManagerProxy();
@@ -133,6 +178,7 @@ class ColorManagerProxy {
   DisplayError ColorMgrGetNumOfModes(uint32_t *mode_cnt);
   DisplayError ColorMgrGetModes(uint32_t *mode_cnt, SDEDisplayMode *modes);
   DisplayError ColorMgrSetMode(int32_t color_mode_id);
+  void SetDETuningCFGpending(bool cfg_pending);
   DisplayError ColorMgrGetModeInfo(int32_t mode_id, AttrVal *query);
   DisplayError ColorMgrSetColorTransform(uint32_t length, const double *trans_data);
   DisplayError ColorMgrGetDefaultModeID(int32_t *mode_id);
@@ -143,7 +189,6 @@ class ColorManagerProxy {
                                                const PrimariesTransfer &blend_space,
                                                uint32_t intent);
   DisplayError Validate(DispLayerStack *disp_layer_stack);
-  bool IsSupportStcTonemap();
   bool GameEnhanceSupported();
   DisplayError ColorMgrGetStcModes(ColorModeList *mode_list);
   DisplayError ColorMgrSetStcMode(const ColorMode &color_mode);
@@ -161,7 +206,7 @@ class ColorManagerProxy {
 
  protected:
   ColorManagerProxy() {}
-  ColorManagerProxy(int32_t id, DisplayType type, HWInterface *intf,
+  ColorManagerProxy(int32_t id, DisplayType type, DPUCoreMux *dpu_core_mux,
                     const HWDisplayAttributes &attr, const HWPanelInfo &info);
 
  private:
@@ -169,8 +214,8 @@ class ColorManagerProxy {
   static DynLib stc_lib_;
   static CreateColorInterface create_intf_;
   static DestroyColorInterface destroy_intf_;
-  static std::vector<HWResourceInfo> hw_res_info_;
   static GetScPostBlendInterface create_stc_intf_;
+  HWResourceInfo hw_res_info_;
 
   typedef DisplayError (ColorManagerProxy::*ConvertProc)(const HwConfigPayload &in_data,
                                         PPFeaturesConfig *out_data);
@@ -183,11 +228,12 @@ class ColorManagerProxy {
   void DumpColorMetaData(const ColorMetaData &color_metadata);
   bool HasNativeModeSupport();
   DisplayError ApplySwAssets();
+  void getCoreId(uint32_t &core_id);
 
-  int32_t display_id_;
+  uint32_t display_id_;
   DisplayType device_type_;
   PPHWAttributes pp_hw_attributes_;
-  HWInterface *hw_intf_;
+  DPUCoreMux *dpu_core_mux_;
   ColorInterface *color_intf_;
   PPFeaturesConfig pp_features_;
   FeatureInterface *feature_intf_;
@@ -203,7 +249,7 @@ class ColorManagerProxy {
 
 class ColorFeatureCheckingImpl : public FeatureInterface {
  public:
-  explicit ColorFeatureCheckingImpl(HWInterface *hw_intf, PPFeaturesConfig *pp_features,
+  explicit ColorFeatureCheckingImpl(DPUCoreMux *dpu_core_mux, PPFeaturesConfig *pp_features,
     bool dyn_switch);
   virtual ~ColorFeatureCheckingImpl() { }
 
@@ -217,7 +263,7 @@ class ColorFeatureCheckingImpl : public FeatureInterface {
   friend class FeatureStateDefaultTrigger;
   friend class FeatureStateSerializedTrigger;
 
-  HWInterface *hw_intf_;
+  DPUCoreMux *dpu_core_mux_;
   PPFeaturesConfig *pp_features_;
   std::array<FeatureInterface*, kFrameTriggerMax> states_ = {{NULL}};
   FeatureInterface *curr_state_ = NULL;
@@ -266,6 +312,100 @@ class FeatureStateSerializedTrigger : public FeatureInterface {
 
  private:
   ColorFeatureCheckingImpl *obj_;
+};
+
+class DPUColorManager : public ColorManagerIntf {
+ public:
+  static DisplayError Init(const std::vector<HWResourceInfo> &hw_res_info);
+  static DPUColorManager *CreateDpuColorManager(DisplayType type,
+                                                  DPUCoreMux *dpu_core_mux,
+                                                  DisplayDeviceContext &display_device_ctx,
+                                                  DisplayClientContext &display_client_ctx,
+                                                  DppsControlInterface *dpps_intf,
+                                                  DisplayInterface *disp_intf,
+                                                  vector<HWResourceInfo> &hw_res_info,
+                                                  DisplayId display_id_info);
+
+  void Deinit();
+
+  ~DPUColorManager();
+
+  DisplayError ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
+                                    PPDisplayAPIPayload *out_payload,
+                                    PPPendingParams *pending_action);
+  DisplayError ColorMgrGetNumOfModes(uint32_t *mode_cnt);
+  DisplayError ColorMgrGetModes(uint32_t *mode_cnt, SDEDisplayMode *modes);
+  DisplayError ColorMgrSetMode(int32_t color_mode_id);
+  DisplayError ColorMgrGetModeInfo(int32_t mode_id, AttrVal *query);
+  DisplayError ColorMgrSetColorTransform(uint32_t length, const double *trans_data);
+  DisplayError Commit();
+  DisplayError ColorMgrSetModeWithRenderIntent(int32_t color_mode_id,
+                                               const PrimariesTransfer &blend_space,
+                                               uint32_t intent);
+  DisplayError Validate(DispLayerStack *disp_layer_stack);
+  DisplayError CompareColorModeList(std::vector<ColorModeList> &mode_list);
+  DisplayError CompareAttrVal(vector<AttrVal> &query);
+
+  DisplayError ColorMgrGetStcModes(ColorModeList *mode_list);
+  DisplayError ColorMgrSetStcMode(const ColorMode &color_mode);
+  DisplayError Prepare();
+  DisplayError ConfigureCWBDither(CwbConfig *cwb_cfg, bool free_data);
+  DisplayError NotifyDisplayCalibrationMode(bool in_calibration);
+  DisplayError ColorMgrSetLtmPccConfig(void* pcc_input, size_t size);
+  DisplayError ColorMgrSetSprIntf(std::shared_ptr<SPRIntf> spr_intf);
+
+  // TBD: Should remove these legacy API's?
+  DisplayError ApplyDefaultDisplayMode();
+  DisplayError ColorMgrGetDefaultModeID(int32_t *mode_id);
+  DisplayError ColorMgrCombineColorModes();
+
+  void SetDETuningCFGpending(bool cfg_pending);
+
+  bool NeedsPartialUpdateDisable();
+  bool GameEnhanceSupported();
+  bool IsValidateNeeded();
+  bool ComparePendingAction(vector<PPPendingParams> &pending_action);
+  bool CompareSDEDisplayModes(vector<SDEDisplayMode> &mode);
+
+ protected:
+  DPUColorManager() {}
+  explicit DPUColorManager(DisplayId id_info);
+
+ private:
+  int CreatePhysicalDisplayIds(DisplayId display_id_info);
+
+  DisplayId display_id_info_;
+  vector<HWResourceInfo> hw_res_info_;
+  vector<ColorManagerProxy *> color_manager_proxy_list_;
+  vector<uint32_t> display_id_list_;
+};
+
+class ColorMgrFactoryIntf {
+ public:
+  virtual ColorManagerIntf* CreateColorManagerIntf(DisplayType type,
+                                                    DPUCoreMux *dpu_core_mux,
+                                                    DisplayDeviceContext &display_device_ctx,
+                                                    DisplayClientContext &display_client_ctx,
+                                                    DppsControlInterface *dpps_intf,
+                                                    DisplayInterface *disp_intf,
+                                                    vector<HWResourceInfo> &hw_res_info,
+                                                    DisplayId display_id_info) = 0;
+  virtual ~ColorMgrFactoryIntf() { }
+};
+
+extern "C" ColorMgrFactoryIntf* GetColorMgrFactoryIntf();
+
+class ColorMgrFactoryIntfImpl : public ColorMgrFactoryIntf {
+ public:
+  virtual ColorManagerIntf* CreateColorManagerIntf(DisplayType type,
+                                                    DPUCoreMux *dpu_core_mux,
+                                                    DisplayDeviceContext &display_device_ctx,
+                                                    DisplayClientContext &display_client_ctx,
+                                                    DppsControlInterface *dpps_intf,
+                                                    DisplayInterface *disp_intf,
+                                                    vector<HWResourceInfo> &hw_res_info,
+                                                    DisplayId display_id_info);
+  virtual ~ColorMgrFactoryIntfImpl() { }
 };
 
 }  // namespace sdm

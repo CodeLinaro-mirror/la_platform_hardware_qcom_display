@@ -228,9 +228,27 @@ DisplayError DisplayBase::Init() {
   // ColorManager supported for built-in display.
   if (kBuiltIn == display_type_) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
-    color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
-                                                            device_ctx_, client_ctx_,
-                                                            dpps_intf, this);
+    ColorMgrFactoryIntf *color_mgr_factory;
+
+    color_mgr_factory = GetColorMgrFactoryIntf();
+    if (!color_mgr_factory) {
+      DLOGW("failed to create color manager factory");
+    } else {
+      DLOGV("Creating color_mgr_ for display_id=%d, conn_id=%d",
+              display_id_info_.GetDisplayId(), display_id_info_.GetConnId());
+      color_mgr_ = color_mgr_factory->CreateColorManagerIntf(display_type_,
+                                                              dpu_core_mux_,
+                                                              device_ctx_,
+                                                              client_ctx_,
+                                                              dpps_intf, this,
+                                                              hw_resource_info_,
+                                                              display_id_info_);
+      if (!color_mgr_) {
+        DLOGW("Failed to create color_mgr_");
+      } else {
+        DLOGV("color_mgr_ is created successfully");
+      }
+    }
   }
   error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, device_ctx_,
                                          client_ctx_, &display_comp_ctx_, &cached_qos_data_, this);
@@ -2572,6 +2590,10 @@ DisplayError DisplayBase::SetColorModeInternal(const std::string &color_mode,
     return kErrorNotSupported;
   }
 
+  if (!color_mgr_) {
+    return kErrorNotSupported;
+  }
+
   error = color_mgr_->ColorMgrSetMode(sde_display_mode->id);
   if (error != kErrorNone) {
     DLOGE("Failed for mode id = %d", sde_display_mode->id);
@@ -4319,6 +4341,9 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
 
     err = comp_manager_->SetDetailEnhancerData(display_comp_ctx_, de_data);
     if (err != kErrorNone) {
+      if (color_mgr_) {
+        color_mgr_->SetDETuningCFGpending(false);
+      }
       DLOGW("SetDetailEnhancerConfig failed. err = %d", err);
       return err;
     }
@@ -4331,7 +4356,9 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
     }
     SetPUonDestScaler();
 
-    de_tuning_cfg_data->cfg_pending = false;
+    if (color_mgr_) {
+      color_mgr_->SetDETuningCFGpending(false);
+    }
   }
 
   return err;
