@@ -36,6 +36,7 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <map>
 
 #include "color_manager.h"
 
@@ -95,8 +96,9 @@ DisplayError PPFeaturesConfig::RetrieveNextFeature(PPFeatureInfo **feature) {
 // TBD: handle Posted start for command mode
 FeatureInterface* GetPostedStartFeatureCheckIntf(DPUCoreMux *dpu_core_mux,
                                                   PPFeaturesConfig *config,
-                                                  bool dyn_switch) {
-  return new ColorFeatureCheckingImpl(dpu_core_mux, config, dyn_switch);
+                                                  bool dyn_switch,
+                                                  uint32_t core_id) {
+  return new ColorFeatureCheckingImpl(dpu_core_mux, config, dyn_switch, core_id);
 }
 
 DisplayError ColorManagerProxy::Init() {
@@ -145,9 +147,9 @@ void ColorManagerProxy::Deinit() {
 
 ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, DPUCoreMux *dpu_core_mux,
                                      const HWDisplayAttributes &attr,
-                                     const HWPanelInfo &info)
+                                     const HWPanelInfo &info, const uint32_t &core_id)
     : display_id_(id), device_type_(type), pp_hw_attributes_(), dpu_core_mux_(dpu_core_mux),
-      color_intf_(NULL), pp_features_(), feature_intf_(NULL) {
+      color_intf_(NULL), pp_features_(), feature_intf_(NULL), core_id_(core_id) {
   int32_t enable_posted_start_dyn = 0;
   bool dyn_switch = false;
   Debug::Get()->GetProperty(ENABLE_POSTED_START_DYN_PROP, &enable_posted_start_dyn);
@@ -157,7 +159,8 @@ ColorManagerProxy::ColorManagerProxy(int32_t id, DisplayType type, DPUCoreMux *d
       dyn_switch = true;
       [[fallthrough]];
     case kControlPostedStart:
-      feature_intf_ = GetPostedStartFeatureCheckIntf(dpu_core_mux, &pp_features_, dyn_switch);
+      feature_intf_ = GetPostedStartFeatureCheckIntf(dpu_core_mux, &pp_features_, dyn_switch,
+                                                                                  core_id_);
       if (!feature_intf_) {
         DLOGI("Failed to create feature interface");
       } else {
@@ -186,6 +189,7 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
   DisplayError error = kErrorNone;
   PPFeatureVersion versions;
   ColorManagerProxy *color_manager_proxy = NULL;
+  uint32_t core_id = 0;
 
   // check if all resources are available before invoking factory method from libsdm-color.so.
   if (!color_lib_ || !create_intf_ || !destroy_intf_) {
@@ -199,13 +203,14 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
     return NULL;
   }
 
+  core_id = ColorManagerProxy::getCoreId(display_id);
   color_manager_proxy = new ColorManagerProxy(display_id, type, dpu_core_mux,
-                                                        attribute, panel_info);
+                                                  attribute, panel_info, core_id);
 
   if (color_manager_proxy) {
     color_manager_proxy->hw_res_info_ = hw_res_info;
     // 1. need query post-processing feature version from HWInterface.
-    error = color_manager_proxy->dpu_core_mux_->GetPPFeaturesVersion(&versions);
+    error = color_manager_proxy->dpu_core_mux_->GetPPFeaturesVersion(&versions, core_id);
     PPHWAttributes &hw_attr = color_manager_proxy->pp_hw_attributes_;
     if (error != kErrorNone) {
       DLOGW("Fail to get DSPP feature versions");
@@ -364,30 +369,30 @@ bool ColorManagerProxy::NeedsPartialUpdateDisable() {
     pp_features_.IsSwAssetDirty());
 }
 
-void ColorManagerProxy::getCoreId(uint32_t &core_id) {
+int ColorManagerProxy::getCoreId(uint32_t display_id) {
   uint16_t core_id_bit_map;
   int i = 0;
 
-  core_id_bit_map = DisplayId::GetCoreIdMap(display_id_);
+  core_id_bit_map = DisplayId::GetCoreIdMap(display_id);
   if (core_id_bit_map <= 0) {
-    DLOGE("Invalid core id = %d", core_id_bit_map);
-    core_id = -1;
-    return;
+    DLOGE("Invalid core id map = %d", core_id_bit_map);
+    return -1;
   }
 
-  // return the MSB set to get the core ID
-  while (!(core_id_bit_map & (1 << i))) {
-    i++;
+  // return set bit
+  for (i = 0; i < CORE_ID_SIZE_IN_BITS; i++) {
+    if (core_id_bit_map & BIT(i)) {
+      return i;
+    }
   }
 
-  core_id = i;
+  return -1;
 }
 
 DisplayError ColorManagerProxy::Commit() {
   Locker &locker(pp_features_.GetLocker());
   SCOPE_LOCK(locker);
 
-  uint32_t core_id = 0;
   DisplayError ret = kErrorNone;
   bool is_dirty = pp_features_.IsDirty();
   if (feature_intf_) {
@@ -395,20 +400,14 @@ DisplayError ColorManagerProxy::Commit() {
   }
 
   if (is_dirty) {
-    getCoreId(core_id);
-    if (core_id < 0) {
-      DLOGE("invalid core_id = %d", core_id);
-      return kErrorNotSupported;
-    }
-
-    // pass core to set PP features on sepcific core
-    DLOGV("Setting PPFeatures for core_id=%d", core_id);
+    // pass core to set PP features on specific core
+    DLOGV("Setting PPFeatures for core_id=%d", core_id_);
     while (ret == kErrorNone) {
       PPFeatureInfo *feature = nullptr;
       if (pp_features_.RetrieveNextFeature(&feature) || !feature) {
         break;
       }
-      ret = dpu_core_mux_->SetPPFeature(feature, core_id);
+      ret = dpu_core_mux_->SetPPFeature(feature, core_id_);
     }
 
     // Once all features were consumed, then destroy all feature instance from feature_list,
@@ -886,8 +885,9 @@ DisplayError ColorManagerProxy::ConfigureCWBDither(CwbConfig *cwb_cfg, bool free
 
 ColorFeatureCheckingImpl::ColorFeatureCheckingImpl(DPUCoreMux *dpu_core_mux,
                                                    PPFeaturesConfig *pp_features,
-                                                   bool dyn_switch)
-  : dpu_core_mux_(dpu_core_mux), pp_features_(pp_features), dyn_switch_(dyn_switch) {}
+                                                   bool dyn_switch, uint32_t core_id)
+  : dpu_core_mux_(dpu_core_mux), pp_features_(pp_features), dyn_switch_(dyn_switch),
+    core_id_(core_id) {}
 
 DisplayError ColorFeatureCheckingImpl::Init() {
   states_.at(kFrameTriggerDefault) = new FeatureStateDefaultTrigger(this);
@@ -1065,7 +1065,7 @@ DisplayError FeatureStatePostedStart::SetParams(FeatureOps param_type,
       return kErrorParameters;
     }
     if (mode != kFrameTriggerPostedStart) {
-      error = obj_->dpu_core_mux_->SetFrameTrigger(mode);
+      error = obj_->dpu_core_mux_->SetFrameTrigger(mode, obj_->core_id_);
       if (!error) {
         obj_->curr_state_ = obj_->states_.at(mode);
       }
@@ -1142,7 +1142,7 @@ DisplayError FeatureStateDefaultTrigger::SetParams(FeatureOps param_type,
       return kErrorParameters;
     }
     if (mode != kFrameTriggerDefault) {
-      error = obj_->dpu_core_mux_->SetFrameTrigger(mode);
+      error = obj_->dpu_core_mux_->SetFrameTrigger(mode, obj_->core_id_);
       if (!error) {
         obj_->curr_state_ = obj_->states_.at(mode);
       }
@@ -1219,7 +1219,7 @@ DisplayError FeatureStateSerializedTrigger::SetParams(FeatureOps param_type,
       return kErrorParameters;
     }
     if (mode != kFrameTriggerSerialize) {
-      error = obj_->dpu_core_mux_->SetFrameTrigger(mode);
+      error = obj_->dpu_core_mux_->SetFrameTrigger(mode, obj_->core_id_);
       if (!error) {
         obj_->curr_state_ = obj_->states_.at(mode);
       }
@@ -1280,9 +1280,11 @@ void DPUColorManager::Deinit() {
 }
 
 int DPUColorManager::CreatePhysicalDisplayIds(DisplayId display_id_info) {
-  int ret = 0, conn_id = 0, core_id = 0;
+  int ret = 0, core_id = 0;
+  std::map<uint8_t, uint32_t> conn_id_map;
 
   core_id = display_id_info.GetCoreIdMap();
+  conn_id_map = display_id_info.GetConnIdMap();
 
   if (!core_id) {
     DLOGE("No dpu is present core_id = %d", core_id);
@@ -1290,17 +1292,11 @@ int DPUColorManager::CreatePhysicalDisplayIds(DisplayId display_id_info) {
   }
 
   // Create physical display ID for each physical display
-  // display_id_0 = (core_id & 0x1) << 16) | (conn_id & 0xFFFF)
   for (int i = 0; core_id >> i; i++) {
     uint32_t disp_id = 0;
-    if (core_id & (1 << i)) {
-      conn_id = display_id_info.GetConnId(i);
-      uint32_t core_index  = 0;
-      while (!((core_id & (1 << i)) & (1 << core_index))) {
-        core_index++;
-      }
-      disp_id = DisplayId(core_index, conn_id).GetDisplayId();
-      DLOGV("Creating local color display id for display=%d, id=%d", i, disp_id);
+    if (core_id & BIT(i)) {
+      disp_id = DisplayId(i, conn_id_map).GetDisplayId();
+      DLOGV("Creating physical display id for core=%d, id=0x%x", i, disp_id);
       display_id_list_.push_back(disp_id);
     }
   }
@@ -1847,11 +1843,12 @@ ColorManagerIntf* ColorMgrFactoryIntfImpl::CreateColorManagerIntf(DisplayType ty
   }
 
   // extract core id, logical display ID from DisplayId class
-  uint32_t core_id_map = display_id_info.GetCoreIdMap();
+  std::bitset<8> core_id_bit_set(display_id_info.GetCoreIdMap());
   uint32_t display_id = display_id_info.GetDisplayId();
+  uint32_t core_id = 0;
 
   // Depending of core count either create DPUColorManager or create ColorManagerProxy
-  if (core_id_map > 1) {
+  if (core_id_bit_set.count() > 1) {
     DLOGV("Creating CreateDpuColorManager");
     ptr = DPUColorManager::CreateDpuColorManager(type, dpu_core_mux,
                                                   display_device_ctx,
@@ -1860,12 +1857,13 @@ ColorManagerIntf* ColorMgrFactoryIntfImpl::CreateColorManagerIntf(DisplayType ty
                                                   hw_res_info,
                                                   display_id_info);
   } else {
-    DLOGV("Creating CreateColorManagerProxy");
+    core_id = ColorManagerProxy::getCoreId(display_id);
+    DLOGV("Creating CreateColorManagerProxy for core_id=%d", core_id);
     ptr = ColorManagerProxy::CreateColorManagerProxy(type, dpu_core_mux,
                                                     display_client_ctx.display_attributes,
                                                     display_client_ctx.hw_panel_info,
                                                     dpps_intf, disp_intf,
-                                                    hw_res_info[0],
+                                                    hw_res_info[core_id],
                                                     display_id);
   }
 

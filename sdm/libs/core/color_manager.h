@@ -47,6 +47,8 @@
 
 #include "dpu_core_mux.h"
 
+#define BIT(x) (1 << x)
+
 namespace sdm {
 
 using snapdragoncolor::ColorMode;
@@ -101,7 +103,8 @@ class FeatureInterface {
 };
 
 FeatureInterface* GetPostedStartFeatureCheckIntf(DPUCoreMux *dpu_core_mux,
-                                                 PPFeaturesConfig *config, bool dyn_switch);
+                                                 PPFeaturesConfig *config, bool dyn_switch,
+                                                 uint32_t core_id);
 
 /*
  * ColorManager Intf
@@ -171,6 +174,8 @@ class ColorManagerProxy : public ColorManagerIntf {
   /* need reverse the effect of CreateColorManagerProxy. */
   ~ColorManagerProxy();
 
+  static int getCoreId(uint32_t display_id);
+
   DisplayError ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
                                     PPDisplayAPIPayload *out_payload,
                                     PPPendingParams *pending_action);
@@ -207,7 +212,8 @@ class ColorManagerProxy : public ColorManagerIntf {
  protected:
   ColorManagerProxy() {}
   ColorManagerProxy(int32_t id, DisplayType type, DPUCoreMux *dpu_core_mux,
-                    const HWDisplayAttributes &attr, const HWPanelInfo &info);
+                    const HWDisplayAttributes &attr, const HWPanelInfo &info,
+                    const uint32_t &core_id);
 
  private:
   static DynLib color_lib_;
@@ -228,7 +234,6 @@ class ColorManagerProxy : public ColorManagerIntf {
   void DumpColorMetaData(const ColorMetaData &color_metadata);
   bool HasNativeModeSupport();
   DisplayError ApplySwAssets();
-  void getCoreId(uint32_t &core_id);
 
   uint32_t display_id_;
   DisplayType device_type_;
@@ -245,12 +250,13 @@ class ColorManagerProxy : public ColorManagerIntf {
   snapdragoncolor::ScPostBlendInterface *stc_intf_ = NULL;
   snapdragoncolor::ColorMode curr_mode_;
   bool needs_update_ = false;
+  uint32_t core_id_;
 };
 
 class ColorFeatureCheckingImpl : public FeatureInterface {
  public:
   explicit ColorFeatureCheckingImpl(DPUCoreMux *dpu_core_mux, PPFeaturesConfig *pp_features,
-    bool dyn_switch);
+    bool dyn_switch, uint32_t core_id);
   virtual ~ColorFeatureCheckingImpl() { }
 
   DisplayError Init();
@@ -270,6 +276,7 @@ class ColorFeatureCheckingImpl : public FeatureInterface {
   std::vector<PPGlobalColorFeatureID> single_buffer_feature_;
   void CheckColorFeature(FrameTriggerMode *mode);
   bool dyn_switch_ = false;
+  uint32_t core_id_ = 0;
 };
 
 class FeatureStatePostedStart : public FeatureInterface {
