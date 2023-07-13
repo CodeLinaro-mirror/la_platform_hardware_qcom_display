@@ -518,6 +518,7 @@ class HWCSession : public HWCUEvent,
   Display GetActiveBuiltinDisplay();
   void HandlePendingRefresh();
   void NotifyClientStatus(bool connected);
+  int32_t GetVirtualDisplayId(HWDisplayInfo &info);
   android::status_t TUITransitionPrepare(int disp_id);
   android::status_t TUITransitionStart(int disp_id);
   android::status_t TUITransitionEnd(int disp_id);
