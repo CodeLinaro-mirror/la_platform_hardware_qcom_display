@@ -321,6 +321,7 @@ struct DisplayConfigVariableInfo : public DisplayConfigGroupInfo {
   uint32_t fps = 0;               //!< Frame rate per second.
   uint32_t vsync_period_ns = 0;   //!< VSync period in nanoseconds.
   bool is_virtual_config = false;
+  int32_t parent_config_index = -1;     // if virtual config, then corresponding panel config
 
   bool operator==(const DisplayConfigVariableInfo& info) const {
     return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) &&
