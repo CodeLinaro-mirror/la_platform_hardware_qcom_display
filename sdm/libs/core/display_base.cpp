@@ -946,7 +946,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   disp_layer_stack_->stack_info.output_buffer = layer_stack->output_buffer;
   disp_layer_stack_->stack_info.hw_cwb_config = layer_stack->cwb_config;
   for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
-    disp_layer_stack_->info[i].cwb_id = layer_stack->cwb_id;
+    disp_layer_stack_->info[i].cwb_id = DisplayId(layer_stack->cwb_id).GetConnId();
   }
 
   EnableLlccDuringAodMode(layer_stack);
@@ -1515,7 +1515,7 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
 
   for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
     disp_layer_stack_->info[i].output_buffer = layer_stack->output_buffer;
-    disp_layer_stack_->info[i].cwb_id = layer_stack->cwb_id;
+    disp_layer_stack_->info[i].cwb_id = DisplayId(layer_stack->cwb_id).GetConnId();
   }
   if (layer_stack->request_flags.trigger_refresh) {
     for (int i = 0; i < disp_layer_stack_->info.size(); i++) {
