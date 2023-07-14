@@ -188,6 +188,7 @@ case "$target" in
         setprop vendor.display.enable_spec_fence 0
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_gpu_color_convert 0
         ;;
     esac
 esac
