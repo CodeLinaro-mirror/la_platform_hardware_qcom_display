@@ -610,6 +610,7 @@ void HWCDisplay::PopulateHWCExtendedDisplayResolution() {
         info.h_total -= (panel_width - info.x_pixels);
         info.v_total -= (panel_height - info.y_pixels);
         info.is_virtual_config = true;
+        info.parent_config_index = highest_res_config_index;
         variable_config_map_[config_index] = info;
         hwc_config_map_.push_back(config_index);
         config_index++;
@@ -3104,12 +3105,27 @@ bool HWCDisplay::IsSameGroup(Config config_id1, Config config_id2) {
     return false;
   }
 
-  if (variable_config1 == variable_config2) {
+  DisplayConfigVariableInfo config_info1 = variable_config1->second;
+  DisplayConfigVariableInfo config_info2 = variable_config2->second;
+
+  if (config_info1.is_virtual_config) {
+    GetParentConfigInfo(&config_info1);
+  }
+
+  if (config_info2.is_virtual_config) {
+    GetParentConfigInfo(&config_info2);
+  }
+
+  // This check will be true for following scenarios:
+  // if config_id1 is same as config_id2.
+  // if one config is the derived virtual config of the other.
+  // if both configs are virtual config derived from same parent config.
+  if (config_info1 == config_info2) {
     return true;
   }
 
-  const DisplayConfigGroupInfo &config_group1 = variable_config1->second;
-  const DisplayConfigGroupInfo &config_group2 = variable_config2->second;
+  const DisplayConfigGroupInfo &config_group1 = config_info1;
+  const DisplayConfigGroupInfo &config_group2 = config_info2;
 
   return ((config_group1 == config_group2) &&
           (config_group1.allowed_mode_switch & (1 << (INT32(config_id2)))) &&
@@ -3938,5 +3954,13 @@ HWC3::Error HWCDisplay::SetFBForExtendedResolution(hwc2_config_t config,
   }
 
   return HWC3::Error::None;
+}
+
+void HWCDisplay::GetParentConfigInfo(DisplayConfigVariableInfo *config_info) {
+  uint32_t config_id = config_info->parent_config_index;
+  const auto &info = variable_config_map_.find(config_id);
+  if (info != variable_config_map_.end()) {
+    *config_info = info->second;
+  }
 }
 }  // namespace sdm

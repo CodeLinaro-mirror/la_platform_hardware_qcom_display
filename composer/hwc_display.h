@@ -612,6 +612,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool IsVirtualConfig(hwc2_config_t config);
   HWC3::Error SetFBForExtendedResolution(hwc2_config_t config,
                                          hwc2_config_t *real_config_for_fps_switch);
+  void GetParentConfigInfo(DisplayConfigVariableInfo *config_info);
 
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
