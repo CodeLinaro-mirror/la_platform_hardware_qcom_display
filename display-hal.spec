@@ -38,15 +38,12 @@ autoreconf -if
 mkdir -p %{buildroot}%{_includedir}
 cp include/display_color_processing.h %{buildroot}%{_includedir}
 cp include/display_properties.h  %{buildroot}%{_includedir}
-#cp libdebug/debug_handler.h  %{buildroot}%{_includedir}
+cp libdebug/debug_handler.h  %{buildroot}%{_includedir}
 cp libdrmutils/drm_interface.h %{buildroot}%{_includedir}
 cp libdrmutils/drm_res_mgr.h %{buildroot}%{_includedir}
 cp libdrmutils/drm_master.h %{buildroot}%{_includedir}
 cp libdrmutils/drm_logger.h %{buildroot}%{_includedir}
 cp libdrmutils/drm_lib_loader.h %{buildroot}%{_includedir}
-
-mkdir -p %{buildroot}%{_includedir}/libdebug
-cp libdebug/debug_handler.h  %{buildroot}%{_includedir}/libdebug
 
 mkdir -p %{buildroot}%{_includedir}/utils
 cp sdm/include/utils/constants.h %{buildroot}%{_includedir}/utils
@@ -95,7 +92,6 @@ cp sdm/include/private/strategy_interface.h %{buildroot}%{_includedir}/private
 %files dev
 %{_includedir}/display_color_processing.h
 %{_includedir}/display_properties.h
-%{_includedir}/libdebug/debug_handler.h
 %{_includedir}/debug_handler.h
 %{_includedir}/drm_interface.h
 %{_includedir}/drm_res_mgr.h
