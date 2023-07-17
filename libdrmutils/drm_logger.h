@@ -30,7 +30,7 @@
 #ifndef __DRM_LOGGER_H__
 #define __DRM_LOGGER_H__
 
-#include <libdebug/debug_handler.h>
+#include <debug_handler.h>
 #include <utility>
 
 namespace drm_utils {
