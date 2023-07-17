@@ -626,6 +626,16 @@ HWC3::Error HWCSession::DestroyVirtualDisplay(Display display) {
   return HWC3::Error::None;
 }
 
+int32_t HWCSession::GetVirtualDisplayId(HWDisplayInfo& info) {
+  for (auto& map_info : map_info_virtual_) {
+    if (map_info.sdm_id == info.display_id) {
+      return -1;
+    }
+  }
+
+  return info.display_id;
+}
+
 void HWCSession::Dump(uint32_t *out_size, char *out_buffer) {
   if (!out_size) {
     return;
@@ -1389,6 +1399,23 @@ void HWCSession::GetVirtualDisplayList() {
 
     virtual_display_list_.push_back(info);
   }
+
+  if (virtual_display_list_.empty() && virtual_display_factory_.IsGPUColorConvertSupported()) {
+    AddGpuBasedVirtualDisplay(&hw_displays_info);
+  }
+}
+
+void HWCSession::AddGpuBasedVirtualDisplay(const HWDisplaysInfo* const hw_displays_info) {
+  HWDisplayInfo hw_info = {};
+  hw_info.display_type = kVirtual;
+  hw_info.is_connected = true;
+  hw_info.is_primary = false;
+  hw_info.is_wb_ubwc_supported = true;
+  hw_info.display_id = 0;
+  while (hw_displays_info->find(hw_info.display_id) != hw_displays_info->end()) {
+    hw_info.display_id++;
+  }
+  virtual_display_list_.push_back(hw_info);
 }
 
 HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height, int32_t *format,
@@ -1423,11 +1450,23 @@ HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
     }
   }
 
-  // Request to get virtual display id corresponds writeback block, which could be used for WFD.
   int32_t display_id = -1;
-  auto err = core_intf_->RequestVirtualDisplayId(&display_id);
-  if (err != kErrorNone || display_id == -1) {
-    return HWC3::Error::NoResources;
+
+  if (!virtual_display_factory_.IsGPUColorConvertSupported()) {
+    // Request to get virtual display id corresponds writeback block, which could be used for WFD.
+    auto err = core_intf_->RequestVirtualDisplayId(&display_id);
+    if (err != kErrorNone || display_id == -1) {
+      return HWC3::Error::NoResources;
+    }
+  }
+  else {
+    for (auto &vdl : virtual_display_list_) {
+      display_id = GetVirtualDisplayId(vdl);
+      if (display_id == -1) {
+        continue;
+      }
+      break;
+    }
   }
 
   // Lock confined to this scope
