@@ -66,6 +66,7 @@ cc_binary {
         "android.hardware.common-V2-ndk_platform",
         "vendor.qti.hardware.display.config-V6-ndk_platform",
         "vendor.qti.hardware.display.demura@2.0",
+        "libtinyxml2",
     ],
 
     static_libs: [

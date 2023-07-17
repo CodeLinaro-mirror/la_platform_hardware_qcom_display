@@ -19,43 +19,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -86,6 +50,7 @@
 #include "hwc_debugger.h"
 #include "hwc_tonemapper.h"
 #include "hwc_session.h"
+#include "hwc_display_resolution_extn.h"
 
 #ifdef QTI_BSP
 #include <hardware/display_defs.h>
@@ -591,6 +556,70 @@ int HWCDisplay::Init() {
   return 0;
 }
 
+bool HWCDisplay::IsPanelConfig(uint32_t x, uint32_t y) {
+  for (auto &config : variable_config_map_) {
+    if (config.second.x_pixels == x && config.second.y_pixels == y) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void HWCDisplay::PopulateHWCExtendedDisplayResolution() {
+  // Extended display resolutions are calculated w.r.t. highest supported resolution only.
+  uint32_t highest_res_config_index = 0;
+  for (auto &config : variable_config_map_) {
+    if ((config.second.x_pixels > variable_config_map_[highest_res_config_index].x_pixels) &&
+        (config.second.y_pixels > variable_config_map_[highest_res_config_index].y_pixels)) {
+      highest_res_config_index = config.first;
+    }
+  }
+
+  uint32_t panel_width = variable_config_map_[highest_res_config_index].x_pixels;
+  uint32_t panel_height = variable_config_map_[highest_res_config_index].y_pixels;
+
+  // Populate extended display resolutions supported using dest scaler
+  HWCDisplayResolutionExtn disp_res_ext;
+  // vector<pair<width, height>>
+  std::vector<std::pair<uint32_t, uint32_t>> extended_display_resolutions = {};
+  DisplayError error = disp_res_ext.GetExtendedDisplayResolutions(panel_width, panel_height,
+                                                        &extended_display_resolutions);
+
+  if (error != kErrorNone) {
+    DLOGI("Extended display resolution not supported");
+    return;
+  }
+
+  if (extended_display_resolutions.size() == 0) {
+    return;
+  }
+
+  uint32_t config_index = num_configs_;
+  for (uint32_t res_index = 0; res_index < extended_display_resolutions.size(); res_index++) {
+    if (IsPanelConfig(extended_display_resolutions.at(res_index).first,
+                      extended_display_resolutions.at(res_index).second)) {
+      continue;
+    }
+
+    for (auto &config : variable_config_map_) {
+      if (config.second.x_pixels == panel_width && config.second.y_pixels == panel_height) {
+        DisplayConfigVariableInfo info = {};
+        info = config.second;
+        info.x_pixels = extended_display_resolutions.at(res_index).first;
+        info.y_pixels = extended_display_resolutions.at(res_index).second;
+        info.x_dpi *= (info.x_pixels / panel_width);
+        info.y_dpi *= (info.y_pixels / panel_height);
+        info.h_total -= (panel_width - info.x_pixels);
+        info.v_total -= (panel_height - info.y_pixels);
+        info.is_virtual_config = true;
+        variable_config_map_[config_index] = info;
+        hwc_config_map_.push_back(config_index);
+        config_index++;
+      }
+    }
+  }
+}
+
 void HWCDisplay::UpdateConfigs() {
   // SF doesnt care about dynamic bit clk support.
   // Exposing all configs will result in getting/setting of redundant configs.
@@ -616,15 +645,17 @@ void HWCDisplay::UpdateConfigs() {
     }
   }
 
-  if (num_configs_ != 0) {
-    hwc2_config_t active_config = hwc_config_map_.at(0);
-    GetActiveConfig(&active_config);
-    SetActiveConfigIndex(active_config);
-  }
+  PopulateHWCExtendedDisplayResolution();
 
   // Update num config count.
   num_configs_ = UINT32(variable_config_map_.size());
   DLOGI("num_configs = %d", num_configs_);
+
+  if (num_configs_ != 0) {
+    hwc2_config_t active_config = hwc_config_map_.at(0);
+    GetActiveConfig(false, &active_config);
+    SetActiveConfigIndex(active_config);
+  }
 }
 
 int HWCDisplay::Deinit() {
@@ -1279,7 +1310,7 @@ HWC2::Error HWCDisplay::GetPerFrameMetadataKeys(uint32_t *out_num_keys,
   return HWC2::Error::None;
 }
 
-HWC2::Error HWCDisplay::GetActiveConfig(hwc2_config_t *out_config) {
+HWC2::Error HWCDisplay::GetActiveConfig(bool get_real_config, hwc2_config_t *out_config) {
   if (out_config == nullptr) {
     return HWC2::Error::BadDisplay;
   }
@@ -1287,7 +1318,7 @@ HWC2::Error HWCDisplay::GetActiveConfig(hwc2_config_t *out_config) {
   if (pending_config_) {
     *out_config = pending_config_index_;
   } else {
-    GetActiveDisplayConfig(out_config);
+    GetActiveDisplayConfig(get_real_config, out_config);
   }
 
   if (*out_config < hwc_config_map_.size()) {
@@ -1349,9 +1380,19 @@ HWC2::Error HWCDisplay::SetClientTarget_3_1(buffer_handle_t target, shared_ptr<F
 HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
   DTRACE_SCOPED();
   hwc2_config_t current_config = 0;
-  GetActiveConfig(&current_config);
+  GetActiveConfig(false, &current_config);
   if (current_config == config) {
     return HWC2::Error::None;
+  }
+
+  hwc2_config_t real_config_for_fps_switch = config;
+  if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
+    HWC2::Error error = SetFBForExtendedResolution(config, &real_config_for_fps_switch);
+    if (!virtual_config_fps_switch_) {
+      return error;
+    } else {
+      config = real_config_for_fps_switch;
+    }
   }
 
   if (!IsModeSwitchAllowed(config)) {
@@ -1487,7 +1528,7 @@ HWC2::PowerMode HWCDisplay::GetCurrentPowerMode() {
 DisplayError HWCDisplay::VSync(const DisplayEventVSync &vsync) {
   if (callbacks_->Vsync_2_4CallbackRegistered()) {
     VsyncPeriodNanos vsync_period;
-    if (GetDisplayVsyncPeriod(&vsync_period) != HWC2::Error::None) {
+    if (GetDisplayVsyncPeriod(false, &vsync_period) != HWC2::Error::None) {
       vsync_period = 0;
     }
     ATRACE_INT("VsyncPeriod", INT32(vsync_period));
@@ -1959,6 +2000,7 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence
     pending_first_commit_config_ = false;
     SetActiveConfig(pending_first_commit_config_index_);
   }
+  virtual_config_fps_switch_ = false;
 
   return status;
 }
@@ -2268,7 +2310,7 @@ void HWCDisplay::GetPanelResolution(uint32_t *x_pixels, uint32_t *y_pixels) {
   DisplayConfigVariableInfo display_config;
   uint32_t active_index = 0;
 
-  display_intf_->GetActiveConfig(&active_index);
+  GetHWCActiveConfig(false, &active_index);
   display_intf_->GetConfig(active_index, &display_config);
 
   *x_pixels = display_config.x_pixels;
@@ -2279,7 +2321,7 @@ void HWCDisplay::GetRealPanelResolution(uint32_t *x_pixels, uint32_t *y_pixels) 
   DisplayConfigVariableInfo display_config;
   uint32_t active_index = 0;
 
-  display_intf_->GetActiveConfig(&active_index);
+  GetHWCActiveConfig(false, &active_index);
   display_intf_->GetRealConfig(active_index, &display_config);
 
   *x_pixels = display_config.x_pixels;
@@ -2522,7 +2564,7 @@ int HWCDisplay::HandleSecureSession(const std::bitset<kSecureMax> &secure_sessio
 
 int HWCDisplay::SetActiveDisplayConfig(uint32_t config) {
   uint32_t current_config = 0;
-  display_intf_->GetActiveConfig(&current_config);
+  GetHWCActiveConfig(false, &current_config);
   if (config == current_config) {
     return 0;
   }
@@ -2547,8 +2589,8 @@ int HWCDisplay::SetNoisePlugInOverride(bool override_en, int32_t attn, int32_t n
   return 0;
 }
 
-int HWCDisplay::GetActiveDisplayConfig(uint32_t *config) {
-  return display_intf_->GetActiveConfig(config) == kErrorNone ? 0 : -1;
+int HWCDisplay::GetActiveDisplayConfig(bool get_real_config, uint32_t *config) {
+  return GetHWCActiveConfig(get_real_config, config) == kErrorNone ? 0 : -1;
 }
 
 int HWCDisplay::GetDisplayConfigCount(uint32_t *count) {
@@ -2557,6 +2599,10 @@ int HWCDisplay::GetDisplayConfigCount(uint32_t *count) {
 
 int HWCDisplay::GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes) {
+  if (IsVirtualConfig(config)) {
+    *display_attributes = variable_config_map_[config];
+    return kErrorNone;
+  }
   return display_intf_->GetConfig(UINT32(config), display_attributes) == kErrorNone ? 0 : -1;
 }
 
@@ -2566,7 +2612,7 @@ int HWCDisplay::GetSupportedDisplayRefreshRates(std::vector<uint32_t> *supported
   }
 
   hwc2_config_t active_config = 0;
-  GetActiveConfig(&active_config);
+  GetActiveConfig(false, &active_config);
 
   int32_t config_group, active_config_group;
   auto error = GetDisplayAttribute(active_config, HwcAttribute::CONFIG_GROUP, &active_config_group);
@@ -2821,6 +2867,15 @@ int32_t HWCDisplay::GetDisplayConfigGroup(hwc2_config_t config) {
 bool HWCDisplay::IsModeSwitchAllowed(uint32_t config) {
   DisplayError error = kErrorNone;
   uint32_t allowed_mode_switch = 0;
+  if (variable_config_map_.find(config) == variable_config_map_.end()) {
+    DLOGE("Invalid config: %d", config);
+    return false;
+  }
+
+  bool is_new_config_virtual = variable_config_map_[config].is_virtual_config;
+  if (is_new_config_virtual) {
+    return true;
+  }
 
   error = display_intf_->IsSupportedOnDisplay(kSupportedModeSwitch, &allowed_mode_switch);
   if (error != kErrorNone) {
@@ -2840,12 +2895,12 @@ bool HWCDisplay::IsModeSwitchAllowed(uint32_t config) {
   return false;
 }
 
-HWC2::Error HWCDisplay::GetDisplayVsyncPeriod(VsyncPeriodNanos *vsync_period) {
+HWC2::Error HWCDisplay::GetDisplayVsyncPeriod(bool get_real_config, VsyncPeriodNanos *vsync_period) {
   if (GetTransientVsyncPeriod(vsync_period)) {
     return HWC2::Error::None;
   }
 
-  return GetVsyncPeriodByActiveConfig(vsync_period);
+  return GetVsyncPeriodByActiveConfig(get_real_config, vsync_period);
 }
 
 HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
@@ -2857,6 +2912,15 @@ HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
   if (variable_config_map_.find(config) == variable_config_map_.end()) {
     DLOGE("Invalid config: %d", config);
     return HWC2::Error::BadConfig;
+  }
+  hwc2_config_t real_config_for_fps_switch = config;
+  if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
+    HWC2::Error error = SetFBForExtendedResolution(config, &real_config_for_fps_switch);
+    if (!virtual_config_fps_switch_) {
+      return error;
+    } else {
+      config = real_config_for_fps_switch;
+    }
   }
 
   if (!IsModeSwitchAllowed(config)) {
@@ -2888,7 +2952,7 @@ HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
   }
 
   VsyncPeriodNanos vsync_period;
-  if (GetDisplayVsyncPeriod(&vsync_period) != HWC2::Error::None) {
+  if (GetDisplayVsyncPeriod(true, &vsync_period) != HWC2::Error::None) {
     return HWC2::Error::BadConfig;
   }
 
@@ -2912,15 +2976,16 @@ void HWCDisplay::ProcessActiveConfigChange() {
 
   DTRACE_SCOPED();
   VsyncPeriodNanos vsync_period;
-  if (GetVsyncPeriodByActiveConfig(&vsync_period) == HWC2::Error::None) {
+  if (GetVsyncPeriodByActiveConfig(true, &vsync_period) == HWC2::Error::None) {
     SubmitActiveConfigChange(vsync_period);
   }
 }
 
-HWC2::Error HWCDisplay::GetVsyncPeriodByActiveConfig(VsyncPeriodNanos *vsync_period) {
+HWC2::Error HWCDisplay::GetVsyncPeriodByActiveConfig(bool get_real_config,
+                                                     VsyncPeriodNanos *vsync_period) {
   hwc2_config_t active_config;
 
-  auto error = GetCachedActiveConfig(&active_config);
+  auto error = GetCachedActiveConfig(get_real_config, &active_config);
   if (error != HWC2::Error::None) {
     DLOGE("Failed to get active config!");
     return error;
@@ -3041,7 +3106,7 @@ bool HWCDisplay::IsSameGroup(hwc2_config_t config_id1, hwc2_config_t config_id2)
 
 bool HWCDisplay::AllowSeamless(hwc2_config_t config) {
   hwc2_config_t active_config;
-  auto error = GetCachedActiveConfig(&active_config);
+  auto error = GetCachedActiveConfig(true, &active_config);
   if (error != HWC2::Error::None) {
     DLOGE("Failed to get active config!");
     return false;
@@ -3054,7 +3119,7 @@ HWC2::Error HWCDisplay::SubmitDisplayConfig(hwc2_config_t config) {
   DTRACE_SCOPED();
 
   hwc2_config_t current_config = 0;
-  GetActiveConfig(&current_config);
+  GetActiveConfig(true, &current_config);
   if (current_config == config) {
     SetActiveConfigIndex(config);
     return HWC2::Error::None;
@@ -3092,10 +3157,10 @@ HWC2::Error HWCDisplay::SubmitDisplayConfig(hwc2_config_t config) {
   return HWC2::Error::None;
 }
 
-HWC2::Error HWCDisplay::GetCachedActiveConfig(hwc2_config_t *active_config) {
+HWC2::Error HWCDisplay::GetCachedActiveConfig(bool get_real_config, hwc2_config_t *active_config) {
   int config_index = GetActiveConfigIndex();
-  if ((config_index < 0) || (config_index >= hwc_config_map_.size())) {
-    return GetActiveConfig(active_config);
+  if ((config_index < 0) || (config_index >= hwc_config_map_.size()) || get_real_config) {
+    return GetActiveConfig(get_real_config, active_config);
   }
 
   *active_config = static_cast<hwc2_config_t>(hwc_config_map_.at(config_index));
@@ -3104,7 +3169,15 @@ HWC2::Error HWCDisplay::GetCachedActiveConfig(hwc2_config_t *active_config) {
 
 void HWCDisplay::SetActiveConfigIndex(int index) {
   std::lock_guard<std::mutex> lock(active_config_lock_);
-  active_config_index_ = index;
+
+  // In cases where client requests virtual config with fps change from previous mode,
+  // enable destination scaler based on requested resolution and also change active mode on panel
+  // to reflect fps switch.
+  // So avoid overriding of active_config_index_ from SubmitDisplayConfig in above scenario
+
+  if (!virtual_config_fps_switch_) {
+    active_config_index_ = index;
+  }
 }
 
 int HWCDisplay::GetActiveConfigIndex() {
@@ -3579,4 +3652,95 @@ DisplayError HWCDisplay::NotifyFpsMitigation(const float fps,
   return kErrorNone;
 }
 
+DisplayError HWCDisplay::GetHWCActiveConfig(bool get_real_config, hwc2_config_t *config_index) {
+  hwc2_config_t real_config;
+  DisplayError error = display_intf_->GetActiveConfig(&real_config);
+  if (error != kErrorNone) {
+    return error;
+  }
+  *config_index = real_config;
+
+  if (get_real_config) {
+    return kErrorNone;
+  }
+
+  bool is_current_config_virtual = variable_config_map_[active_config_index_].is_virtual_config;
+  if (is_current_config_virtual) {
+    *config_index = active_config_index_;
+
+    uint32_t real_config_width = variable_config_map_[real_config].x_pixels;
+    uint32_t real_config_height = variable_config_map_[real_config].y_pixels;
+    uint32_t real_config_fps = variable_config_map_[real_config].fps;
+
+    uint32_t virtual_config_width = variable_config_map_[active_config_index_].x_pixels;
+    uint32_t virtual_config_height = variable_config_map_[active_config_index_].y_pixels;
+    uint32_t virtual_config_fps = variable_config_map_[active_config_index_].fps;
+
+    if (real_config_fps == virtual_config_fps) {
+      return kErrorNone;
+    }
+
+    for (auto &config : variable_config_map_) {
+      if ((config.second.x_pixels == virtual_config_width) &&
+          (config.second.y_pixels == virtual_config_height) &&
+          (config.second.fps == real_config_fps)) {
+        *config_index = config.first;
+        break;
+      }
+    }
+  }
+
+  return kErrorNone;
+}
+
+bool HWCDisplay::IsVirtualConfig(hwc2_config_t config) {
+  if (variable_config_map_.find(config) != variable_config_map_.end()) {
+    if (variable_config_map_[config].is_virtual_config) {
+       return true;
+    }
+  }
+  return false;
+}
+
+HWC2::Error HWCDisplay::SetFBForExtendedResolution(hwc2_config_t config,
+                                                   hwc2_config_t *real_config_for_fps_switch) {
+  uint32_t new_config_width = variable_config_map_[config].x_pixels;
+  uint32_t new_config_height = variable_config_map_[config].y_pixels;
+  uint32_t new_config_fps = variable_config_map_[config].fps;
+
+  // Resize fb with the new resolution to enable dest scaler.
+  int status = SetFrameBufferResolution(new_config_width, new_config_height);
+  if (status) {
+    return HWC2::Error::BadConfig;
+  }
+
+  uint32_t hwc_active_config_width = variable_config_map_[active_config_index_].x_pixels;
+  uint32_t hwc_active_config_height = variable_config_map_[active_config_index_].y_pixels;
+  uint32_t hwc_active_config_fps = variable_config_map_[active_config_index_].fps;
+
+  SetActiveConfigIndex(config);
+
+  if (new_config_fps == hwc_active_config_fps) {
+    return HWC2::Error::None;
+  }
+
+  // Change in fps, so change the mode on panel also.
+  hwc2_config_t real_active_config = 0;
+  display_intf_->GetActiveConfig(&real_active_config);
+  uint32_t real_active_config_width = variable_config_map_[real_active_config].x_pixels;
+  uint32_t real_active_config_height = variable_config_map_[real_active_config].y_pixels;
+
+  // Find the mode with new fps which has same resolution as current mode set on panel.
+  for (auto &config : variable_config_map_) {
+    if ((config.second.x_pixels == real_active_config_width) &&
+        (config.second.y_pixels == real_active_config_height) &&
+        (config.second.fps == new_config_fps)) {
+      *real_config_for_fps_switch = config.first;
+      virtual_config_fps_switch_ = true;
+      break;
+    }
+  }
+
+  return HWC2::Error::None;
+}
 }  // namespace sdm

@@ -86,6 +86,8 @@ endif
 #Smomo config xml file
 PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_COPY_OUT_VENDOR)/etc/smomo_setting.xml
 
+PRODUCT_COPY_FILES += hardware/qcom/display/config/hwc_display_resolution_extn.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display/hwc_display_resolution_extn.xml
+
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.demo.hdmirotationlock=false \
     persist.sys.sf.color_saturation=1.0 \

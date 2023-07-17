@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include "hwc_display_dummy.h"
 #include <utils/debug.h>
 
@@ -81,7 +87,7 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   display_intf_ = &display_null_;
 }
 
-HWC2::Error HWCDisplayDummy::GetActiveConfig(hwc2_config_t *out_config) {
+HWC2::Error HWCDisplayDummy::GetActiveConfig(bool get_real_config, hwc2_config_t *out_config) {
   *out_config = 0;
   return HWC2::Error::None;
 }

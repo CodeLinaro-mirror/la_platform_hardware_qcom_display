@@ -29,7 +29,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -244,7 +244,7 @@ int HWCSession::GetActiveConfigIndex(int disp_id, uint32_t *config) {
   SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
 
   if (hwc_display_[disp_idx]) {
-    return hwc_display_[disp_idx]->GetActiveDisplayConfig(config);
+    return hwc_display_[disp_idx]->GetActiveDisplayConfig(false, config);
   }
 
   return -EINVAL;
@@ -969,7 +969,7 @@ int HWCSession::DisplayConfigImpl::GetActiveBuiltinDisplayAttributes(
   } else {
     if (hwc_session_->hwc_display_[disp_id]) {
       uint32_t config_index = 0;
-      HWC2::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
+      HWC2::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(false, &config_index);
       if (ret != HWC2::Error::None) {
         goto err;
       }
