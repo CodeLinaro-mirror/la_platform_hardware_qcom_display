@@ -1617,7 +1617,7 @@ DisplayError DisplayBase::InitializeColorModes() {
         }
       }
     }
-    PrimariesTransfer pt = {};
+    PrimariesTransfer pt;
     if (std::find(color_modes_cs_.begin(), color_modes_cs_.end(), pt) ==
         color_modes_cs_.end()) {
       color_modes_cs_.push_back(pt);
@@ -1764,7 +1764,7 @@ void DisplayBase::DeInitializeColorModes() {
 
 void DisplayBase::GetColorPrimaryTransferFromAttributes(const AttrVal &attr,
     std::vector<PrimariesTransfer> *supported_pt) {
-  std::string attribute_field = {};
+  std::string attribute_field = "";
   if (attr.empty()) {
     return;
   }
@@ -1851,11 +1851,11 @@ bool DisplayBase::SetHdrModeAtStart(LayerStack *layer_stack) {
 }
 
 PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
-  PrimariesTransfer pt = {};
+  PrimariesTransfer pt;
   auto current_color_attr_ = color_mode_attr_map_.find(current_color_mode_);
   AttrVal attr = current_color_attr_->second;
   std::string color_gamut = kNative, dynamic_range = kSdr, pic_quality = kStandard;
-  std::string transfer = {};
+  std::string transfer = "";
 
   if (attr.begin() != attr.end()) {
     for (auto &it : attr) {
