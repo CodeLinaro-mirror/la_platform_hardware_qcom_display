@@ -654,7 +654,7 @@ void HWCDisplay::UpdateConfigs() {
 
   if (num_configs_ != 0) {
     hwc2_config_t active_config = hwc_config_map_.at(0);
-    GetActiveConfig(false, &active_config);
+    GetActiveConfig(true, &active_config);
     SetActiveConfigIndex(active_config);
   }
 }
