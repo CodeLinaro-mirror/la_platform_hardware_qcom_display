@@ -1468,6 +1468,16 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       }
       break;
 #endif
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
+    case QTI_BUFFER_DEQUEUE_DURATION:
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeInt64(qtigralloc::MetadataType_BufferDequeueDuration,
+                                       *reinterpret_cast<int64_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -1762,6 +1772,14 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
             android::hardware::graphics::mapper::V4_0::Error::NONE) {
           return Error::BAD_VALUE;
         }
+      }
+      break;
+#endif
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
+    case QTI_BUFFER_DEQUEUE_DURATION:
+      if (android::gralloc4::decodeInt64(qtigralloc::MetadataType_BufferDequeueDuration, in,
+                                         &metadata->bufferDequeueDuration)) {
+        return Error::UNSUPPORTED;
       }
       break;
 #endif
