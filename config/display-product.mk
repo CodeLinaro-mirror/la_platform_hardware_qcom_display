@@ -47,11 +47,14 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/backlight_calib_vtdr6130_amol
 PRODUCT_COPY_FILES += hardware/qcom/display/config/backlight_calib_vtdr6130_amoled_cmd_mode_dsi_visionox_panel_with_DSC.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display/backlight_calib_vtdr6130_amoled_qsync_video_mode_dsi_visionox_panel_with_DSC.xml
 
 ifeq ($(TARGET_BOARD_PLATFORM),anorak61)
-    #QDCM calibration JSON file for sy103 amoled video mode single dsi with DSC panel.
-    #TBD: derived from qdcm_calib_data_r66451_amoled_video_mode_dsi_visionox_panel_with_DSC.json
-    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json
+    #QDCM calibration JSON file for sy103 amoled video mode with DSC panel.
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json
+
+    #QDCM calibration JSON files for sony amoled video mode with DSC panel
+    #TBD: files derived from corresponding sy103 panel calib files
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json
 endif
 
 #Smomo config xml file
