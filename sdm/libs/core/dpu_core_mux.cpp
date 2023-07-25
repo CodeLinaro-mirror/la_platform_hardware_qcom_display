@@ -453,8 +453,8 @@ DisplayError DPUCoreMux::Flush(std::map<uint32_t, HWLayersInfo> &hw_layers_info)
   return kErrorNone;
 }
 
-DisplayError DPUCoreMux::GetPPFeaturesVersion(PPFeatureVersion *vers) {
-  return hw_intf_.at(core_ids_[0])->GetPPFeaturesVersion(vers);
+DisplayError DPUCoreMux::GetPPFeaturesVersion(PPFeatureVersion *vers, uint32_t core_id) {
+  return hw_intf_.at(core_id)->GetPPFeaturesVersion(vers);
 }
 
 DisplayError DPUCoreMux::SetPPFeature(PPFeatureInfo *feature, uint32_t &core_id) {
@@ -849,6 +849,11 @@ DisplayError DPUCoreMux::SetFrameTrigger(FrameTriggerMode mode) {
   }
 
   return kErrorNone;
+}
+
+DisplayError DPUCoreMux::SetFrameTrigger(FrameTriggerMode mode, uint32_t core_id) {
+  DisplayError error = hw_intf_.at(core_id)->SetFrameTrigger(mode);
+  return error;
 }
 
 DisplayError DPUCoreMux::SetBLScale(uint32_t level) {

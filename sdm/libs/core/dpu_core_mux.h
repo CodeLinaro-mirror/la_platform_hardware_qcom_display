@@ -59,7 +59,7 @@ class DPUCoreMux {
   DisplayError Validate(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
   DisplayError Commit(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
   DisplayError Flush(std::map<uint32_t, HWLayersInfo> &hw_layers_info);
-  DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
+  DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers, uint32_t core_id);
   DisplayError SetPPFeature(PPFeatureInfo *feature, uint32_t &core_id);
   DisplayError SetVSyncState(bool enable);
   void SetIdleTimeoutMs(uint32_t timeout_ms);
@@ -88,6 +88,7 @@ class DPUCoreMux {
   DisplayError GetDynamicDSIClock(uint64_t *bit_clk_rate);
   DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                             uint8_t *out_data);
+  DisplayError SetFrameTrigger(FrameTriggerMode mode, uint32_t core_id);
   DisplayError SetFrameTrigger(FrameTriggerMode mode);
   DisplayError SetBLScale(uint32_t level);
   DisplayError GetPanelBlMaxLvl(uint32_t *max_bl);
