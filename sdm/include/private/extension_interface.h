@@ -23,11 +23,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #ifndef __EXTENSION_INTERFACE_H__
 #define __EXTENSION_INTERFACE_H__
@@ -45,6 +45,7 @@
 namespace sdm {
 
 #define EXTENSION_LIBRARY_NAME "libsdmextension.so"
+#define EXTENSION_TE_LIBRARY_NAME "libsdmextensionte.so"
 #define CREATE_EXTENSION_INTERFACE_NAME "CreateExtensionInterface"
 #define DESTROY_EXTENSION_INTERFACE_NAME "DestroyExtensionInterface"
 
