@@ -41,6 +41,7 @@
 namespace sdm {
 
 #define EXTENSION_LIBRARY_NAME "libsdmextension.so"
+#define EXTENSION_TE_LIBRARY_NAME "libsdmextensionte.so"
 #define CREATE_EXTENSION_INTERFACE_NAME "CreateExtensionInterface"
 #define DESTROY_EXTENSION_INTERFACE_NAME "DestroyExtensionInterface"
 
