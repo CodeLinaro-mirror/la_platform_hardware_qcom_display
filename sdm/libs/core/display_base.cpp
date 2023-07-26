@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <stdio.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -1483,14 +1490,10 @@ DisplayError DisplayBase::SetDetailEnhancerData(const DisplayDetailEnhancerData 
   }
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
-  if (GetDriverType() == DriverType::DRM) {
-    if (de_data.enable) {
-      disable_pu_on_dest_scaler_ = true;
-    } else {
-      SetPUonDestScaler();
-    }
+  if (de_data.enable) {
+    disable_pu_on_dest_scaler_ = true;
   } else {
-    DisablePartialUpdateOneFrame();
+    SetPUonDestScaler();
   }
 
   return kErrorNone;
@@ -1803,9 +1806,6 @@ DisplayError DisplayBase::ValidateDataspace(const ColorMetaData &color_metadata)
 // TODO(user): Temporary changes, to be removed when DRM driver supports
 // Partial update with Destination scaler enabled.
 void DisplayBase::SetPUonDestScaler() {
-  if (GetDriverType() == DriverType::FB) {
-    return;
-  }
   uint32_t mixer_width = mixer_attributes_.width;
   uint32_t mixer_height = mixer_attributes_.height;
   uint32_t display_width = display_attributes_.x_pixels;
