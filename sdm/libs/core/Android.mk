@@ -45,18 +45,6 @@ LOCAL_SRC_FILES               := core_interface.cpp \
                                  hw_info_interface.cpp \
                                  hw_interface.cpp
 
-ifeq (,$(filter Tiramisu 13 U 14 UpsideDownCake, $(PLATFORM_VERSION)))
-LOCAL_HW_INTF_PATH_1          := fb
-LOCAL_SRC_FILES               += $(LOCAL_HW_INTF_PATH_1)/hw_info.cpp \
-                                 $(LOCAL_HW_INTF_PATH_1)/hw_device.cpp \
-                                 $(LOCAL_HW_INTF_PATH_1)/hw_primary.cpp \
-                                 $(LOCAL_HW_INTF_PATH_1)/hw_hdmi.cpp \
-                                 $(LOCAL_HW_INTF_PATH_1)/hw_virtual.cpp \
-                                 $(LOCAL_HW_INTF_PATH_1)/hw_color_manager.cpp \
-                                 $(LOCAL_HW_INTF_PATH_1)/hw_scale.cpp \
-                                 $(LOCAL_HW_INTF_PATH_1)/hw_events.cpp
-endif
-
 ifneq ($(TARGET_IS_HEADLESS), true)
     LOCAL_SRC_FILES           += $(LOCAL_HW_INTF_PATH_2)/hw_info_drm.cpp \
                                  $(LOCAL_HW_INTF_PATH_2)/hw_device_drm.cpp \
