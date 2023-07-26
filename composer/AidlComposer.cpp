@@ -31,8 +31,9 @@ namespace hardware {
 namespace display {
 namespace composer3 {
 
-AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
-    : extensions_(extensions), hwc_session_(HWCSession::GetInstance()) {
+AidlComposer::AidlComposer() : hwc_session_(HWCSession::GetInstance()) { }
+
+AidlComposer::AidlComposer(HWCSession *hwc_session) {
   auto error = hwc_session_->Init();
   if (error) {
     ALOGE("Failed to get HWComposer instance");
@@ -55,10 +56,6 @@ ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_
   if (!composer_client || !composer_client->init()) {
     *aidl_return = nullptr;
     return TO_BINDER_STATUS(INT32(Error::NoResources));
-  }
-
-  if (extensions_) {
-    extensions_->init(composer_client);
   }
 
   auto clientDestroyed = [this]() { onClientDestroyed(); };
@@ -116,7 +113,7 @@ ScopedAStatus AidlComposer::getCapabilities(std::vector<Capability> *aidl_return
     }
   }
 
-  hidl_vec<Capability> caps_reply;
+  sdm::hidl_vec<Capability> caps_reply;
   caps_reply.setToExternal(caps.data(), caps.size());
 
   *aidl_return = caps_reply;

@@ -41,4 +41,5 @@ subdirs = [
     "sdm/libs/utils",
     "sdm/libs/core",
     "gralloc",
+    "composer",
 ]

@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "hwc_display_dummy.h"
 #include "utils/debug.h"
 
@@ -36,7 +42,7 @@ namespace sdm {
 
 int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                             HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                            qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                            qService::QService *qservice, Display id, int32_t sdm_id,
                             HWCDisplay **hwc_display) {
   HWCDisplay *hwc_display_dummy = new HWCDisplayDummy(core_intf, buffer_allocator, callbacks,
                                       event_handler, qservice, id, sdm_id);
@@ -48,20 +54,20 @@ void HWCDisplayDummy::Destroy(HWCDisplay *hwc_display) {
   delete hwc_display;
 }
 
-HWC2::Error HWCDisplayDummy::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayDummy::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayDummy::Present(int32_t *out_retire_fence) {
+HWC3::Error HWCDisplayDummy::Present(int32_t *out_retire_fence) {
   for (auto hwc_layer : layer_set_) {
     hwc_layer->PushBackReleaseFence(-1);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                                  HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                                 qService::QService *qservice, hwc2_display_t id,
+                                 qService::QService *qservice, Display id,
                                  int32_t sdm_id) :HWCDisplay(core_intf, buffer_allocator,
                                  callbacks, event_handler, qservice, kBuiltIn, id, sdm_id, true,
                                  DISPLAY_CLASS_BUILTIN) {
@@ -77,9 +83,9 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   display_intf_ = &display_null_;
 }
 
-HWC2::Error HWCDisplayDummy::GetActiveConfig(hwc2_config_t *out_config) {
+HWC3::Error HWCDisplayDummy::GetActiveConfig(Config *out_config) {
   *out_config = 0;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm

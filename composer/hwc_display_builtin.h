@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_BUILTIN_H__
 #define __HWC_DISPLAY_BUILTIN_H__
 
@@ -51,62 +57,62 @@ class HWCDisplayBuiltIn : public HWCDisplay {
 
   static int Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks,  HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                    qService::QService *qservice, Display id, int32_t sdm_id,
                     HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
   virtual int Init();
   virtual int Deinit();
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
-  virtual HWC2::Error Present(int32_t *out_retire_fence);
-  virtual HWC2::Error CommitLayerStack();
-  virtual HWC2::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
-  virtual HWC2::Error SetColorMode(ColorMode mode);
-  virtual HWC2::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+  virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC3::Error Present(int32_t *out_retire_fence);
+  virtual HWC3::Error CommitLayerStack();
+  virtual HWC3::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
+  virtual HWC3::Error SetColorMode(ColorMode mode);
+  virtual HWC3::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                        RenderIntent *out_intents);
-  virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
-  virtual HWC2::Error SetColorModeById(int32_t color_mode_id);
-  virtual HWC2::Error SetColorModeFromClientApi(int32_t color_mode_id);
-  virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
-  virtual HWC2::Error RestoreColorTransform();
+  virtual HWC3::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
+  virtual HWC3::Error SetColorModeById(int32_t color_mode_id);
+  virtual HWC3::Error SetColorModeFromClientApi(int32_t color_mode_id);
+  virtual HWC3::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
+  virtual HWC3::Error RestoreColorTransform();
   virtual int Perform(uint32_t operation, ...);
   virtual int HandleSecureSession(const std::bitset<kSecureMax> &secure_session,
                                   bool *power_on_pending);
   virtual DisplayError Refresh();
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
-  virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
+  virtual HWC3::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                          int32_t format, bool post_processed);
   virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, bool post_processed);
   virtual int GetFrameCaptureStatus() { return frame_capture_status_; }
   virtual DisplayError SetDetailEnhancerConfig(const DisplayDetailEnhancerData &de_data);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending);
-  virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer, int32_t acquire_fence,
+  virtual HWC3::Error SetReadbackBuffer(const native_handle_t *buffer, int32_t acquire_fence,
                                         bool post_processed_output);
-  virtual HWC2::Error GetReadbackBufferFence(int32_t *release_fence);
-  virtual HWC2::Error SetQSyncMode(QSyncMode qsync_mode);
+  virtual HWC3::Error GetReadbackBufferFence(int32_t *release_fence);
+  virtual HWC3::Error SetQSyncMode(QSyncMode qsync_mode);
   virtual DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous);
-  virtual HWC2::Error SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end, uint32_t v_start,
+  virtual HWC3::Error SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end, uint32_t v_start,
                                           uint32_t v_end, uint32_t factor_in, uint32_t factor_out);
   virtual DisplayError SetDynamicDSIClock(uint64_t bitclk);
   virtual DisplayError GetDynamicDSIClock(uint64_t *bitclk);
   virtual DisplayError GetSupportedDSIClock(std::vector<uint64_t> *bitclk_rates);
-  virtual HWC2::Error UpdateDisplayId(hwc2_display_t id);
-  virtual HWC2::Error SetPendingRefresh();
-  virtual HWC2::Error SetPanelBrightness(float brightness);
-  virtual HWC2::Error GetPanelBrightness(float *brightness);
+  virtual HWC3::Error UpdateDisplayId(Display id);
+  virtual HWC3::Error SetPendingRefresh();
+  virtual HWC3::Error SetPanelBrightness(float brightness);
+  virtual HWC3::Error GetPanelBrightness(float *brightness);
   virtual DisplayError TeardownConcurrentWriteback(void);
   virtual void SetFastPathComposition(bool enable) {
     fast_path_composition_ = enable && !readback_buffer_queued_;
   }
-  virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
-  virtual HWC2::Error PostCommitLayerStack(int32_t *out_retire_fence);
+  virtual HWC3::Error UpdatePowerMode(PowerMode mode);
+  virtual HWC3::Error PostCommitLayerStack(int32_t *out_retire_fence);
   virtual bool IsSmartPanelConfig(uint32_t config_id);
   virtual bool HasSmartPanelConfig(void);
-  virtual HWC2::Error SetPowerMode(HWC2::PowerMode mode, bool teardown);
+  virtual HWC3::Error SetPowerMode(PowerMode mode, bool teardown);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id);
+                    qService::QService *qservice, Display id, int32_t sdm_id);
   void SetMetaDataRefreshRateFlag(bool enable);
   virtual DisplayError SetDisplayMode(uint32_t mode);
   virtual DisplayError DisablePartialUpdateOneFrame();

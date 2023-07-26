@@ -25,7 +25,6 @@
 #include <memory>
 #include <aidl/android/hardware/graphics/composer3/BnComposer.h>
 #include <utils/Mutex.h>
-#include "QtiComposer3Client.h"
 #include "AidlComposerClient.h"
 #include "DisplayConfigAIDL.h"
 
@@ -43,7 +42,8 @@ using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 
 class AidlComposer : public BnComposer {
  public:
-  AidlComposer(const shared_ptr<QtiComposer3Client> &extensions);
+  AidlComposer();
+  AidlComposer(HWCSession *hwc_session);
   virtual ~AidlComposer();
 
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
@@ -59,7 +59,6 @@ class AidlComposer : public BnComposer {
   bool waitForClientDestroyedLocked(std::unique_lock<std::mutex> &lock);
   void onClientDestroyed();
 
-  shared_ptr<QtiComposer3Client> extensions_ = nullptr;
   HWCSession *hwc_session_ = nullptr;
   std::mutex mClientMutex;
   bool mClientAlive GUARDED_BY(mClientMutex) = false;

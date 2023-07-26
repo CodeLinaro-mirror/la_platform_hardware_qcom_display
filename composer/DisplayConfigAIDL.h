@@ -43,7 +43,9 @@
 #include <log/log.h>
 #include <utils/locker.h>
 
+#include "hwc_debugger.h"
 #include "hwc_session.h"
+#include "hwc_common.h"
 
 namespace aidl {
 namespace vendor {

@@ -40,10 +40,8 @@
 
 #include "DisplayConfigAIDL.h"
 #include "AidlComposer.h"
-#include "QtiComposer3Client.h"
 
 using aidl::vendor::qti::hardware::display::composer3::AidlComposer;
-using aidl::vendor::qti::hardware::display::composer3::QtiComposer3Client;
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 using android::ProcessState;
 using android::sp;
@@ -77,25 +75,14 @@ int main(int, char **) {
   ALOGI("Registering AidlComposer as a service");
   ABinderProcess_setThreadPoolMaxThreadCount(0);
   ALOGI("Creating AidlComposer extensions(QtiComposer3Client) service");
-  std::shared_ptr<QtiComposer3Client> qticomposer = ndk::SharedRefBase::make<QtiComposer3Client>();
-  std::shared_ptr<AidlComposer> composer = ndk::SharedRefBase::make<AidlComposer>(qticomposer);
+  std::shared_ptr<AidlComposer> composer = ndk::SharedRefBase::make<AidlComposer>();
   const std::string instance = std::string() + AidlComposer::descriptor + "/default";
   if (!composer->asBinder().get()) {
     ALOGW("AidlComposer's binder is null");
   }
 
   ndk::SpAIBinder composerBinder = composer->asBinder();
-  ALOGI("Registering QtiComposer3Client as an AidlComposer extension service");
-  binder_status_t status =
-      AIBinder_setExtension(composerBinder.get(), qticomposer->asBinder().get());
-  if (status != STATUS_OK) {
-    ALOGW("Failed to register QtiComposer3Client as an AidlComposer extension service (status:%d)",
-          status);
-  } else {
-    ALOGI("Successfully registered QtiComposer3Client as an AidlComposer extension service");
-  }
-
-  status = AServiceManager_addService(composerBinder.get(), instance.c_str());
+  binder_status_t status = AServiceManager_addService(composerBinder.get(), instance.c_str());
   if (status != STATUS_OK) {
     ALOGW("Failed to register AidlComposer as a service (status:%d)", status);
   } else {

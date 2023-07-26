@@ -34,7 +34,7 @@ PRODUCT_PACKAGES += \
 
 ifneq ($(TARGET_IS_HEADLESS),true)
 PRODUCT_PACKAGES += \
-    android.hardware.graphics.composer@2.4-service \
+    vendor.qti.hardware.display.composer-service \
 
 endif #TARGET_IS_HEADLESS
 
