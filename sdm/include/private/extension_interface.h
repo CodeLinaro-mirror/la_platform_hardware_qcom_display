@@ -94,6 +94,7 @@ class ExtensionInterface {
   virtual DisplayError DestroyCapabilitiesExtn(CapabilitiesInterface *interface) = 0;
 
   virtual DisplayError CreateCwbManagerExtn(CwbCallback *callback,
+                                            const vector<HWResourceInfo> &hw_resource_info,
                                             CwbManagerInterface **interface) = 0;
   virtual DisplayError DestroyCwbManagerExtn(CwbManagerInterface *interface) = 0;
 

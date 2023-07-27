@@ -55,7 +55,7 @@ DisplayError CompManager::Init(const std::vector<HWResourceInfo> &hw_res_info,
   DisplayError error = kErrorNone;
 
   if (extension_intf) {
-    extension_intf->CreateCwbManagerExtn(this, &cwb_mgr_intf_);
+    extension_intf->CreateCwbManagerExtn(this, hw_res_info, &cwb_mgr_intf_);
     error = extension_intf->CreateResourceExtn(hw_res_info, buffer_allocator, &resource_intf_);
     extension_intf->CreateDppsControlExtn(&dpps_ctrl_intf_, socket_handler);
     extension_intf->CreateCapabilitiesExtn(hw_res_info[0], &cap_intf_);
