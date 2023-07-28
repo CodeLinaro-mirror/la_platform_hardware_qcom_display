@@ -794,9 +794,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   case kStateDozeSuspend:
     error = hw_intf_->DozeSuspend(cached_qos_data_, release_fence);
-    if (display_type_ != kBuiltIn) {
-      active = true;
-    }
+    active = true;
     break;
 
   case kStateStandby:
