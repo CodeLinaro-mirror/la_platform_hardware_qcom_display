@@ -3,6 +3,9 @@
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -508,6 +511,8 @@ int HWCDisplay::Init() {
   if (needs_blit_ && blit_enabled) {
     // TODO(user): Add blit engine when needed
   }
+
+  HWCDebugHandler::Get()->GetProperty(FLUSH_ON_LAYERSET_EMPTY, &flush_on_layerset_empty_);
 
   error = display_intf_->GetNumVariableInfoConfigs(&num_configs_);
   if (error != kErrorNone) {

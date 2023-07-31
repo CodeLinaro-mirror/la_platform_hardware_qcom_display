@@ -1,5 +1,9 @@
 /*
 * Copyright (c) 2018 - 2020, The Linux Foundation. All rights reserved.
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -135,4 +139,6 @@
 
 #define DISABLE_VIRTUAL_DISPLAY              DISPLAY_PROP("disable_virtual_display")
 #define DISABLE_COLOR_TRANSFORMATION         DISPLAY_PROP("disable_color_transformation")
+
+#define FLUSH_ON_LAYERSET_EMPTY              DISPLAY_PROP("flush_on_layer_set_empty")
 #endif  // __DISPLAY_PROPERTIES_H__
