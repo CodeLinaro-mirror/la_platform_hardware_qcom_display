@@ -28,8 +28,7 @@ namespace display {
 namespace composer {
 namespace V3_0 {
 
-using MapperV2Error = android::hardware::graphics::mapper::V2_0::Error;
-using MapperV3Error = android::hardware::graphics::mapper::V3_0::Error;
+using MapperV4Error = android::hardware::graphics::mapper::V4_0::Error;
 
 ComposerHandleImporter::ComposerHandleImporter() : mInitialized(false) {}
 
@@ -39,13 +38,10 @@ void ComposerHandleImporter::initialize() {
     return;
   }
 
-  mMapper_V3 = IMapperV3::getService();
-  if (mMapper_V3 == nullptr) {
-    mMapper_V2 = IMapperV2::getService();
-    if (mMapper_V2 == nullptr) {
-      ALOGE("%s: cannnot acccess graphics mapper HAL!", __FUNCTION__);
-      return;
-    }
+  mMapper_V4 = IMapperV4::getService();
+  if (mMapper_V4 == nullptr) {
+    ALOGE("%s: cannnot acccess graphics mapper HAL!", __FUNCTION__);
+    return;
   }
 
   mInitialized = true;
@@ -53,10 +49,8 @@ void ComposerHandleImporter::initialize() {
 }
 
 void ComposerHandleImporter::cleanup() {
-  if (mMapper_V3 != nullptr) {
-    mMapper_V3.clear();
-  } else {
-    mMapper_V2.clear();
+  if (mMapper_V4 != nullptr) {
+    mMapper_V4.clear();
   }
   mInitialized = false;
 }
@@ -79,52 +73,30 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
     initialize();
   }
 
-  if (mMapper_V3 == nullptr && mMapper_V2 == nullptr) {
+  if (mMapper_V4 == nullptr) {
     ALOGE("%s: mMapper is null!", __FUNCTION__);
     return false;
   }
 
-  if (mMapper_V3 != nullptr) {
-    MapperV3Error error;
-    buffer_handle_t importedHandle;
+  MapperV4Error error;
+  buffer_handle_t importedHandle;
 
-    auto ret = mMapper_V3->importBuffer(
-        hidl_handle(handle), [&](const auto &tmpError, const auto &tmpBufferHandle) {
-          error = tmpError;
-          importedHandle = static_cast<buffer_handle_t>(tmpBufferHandle);
-        });
+  auto ret = mMapper_V4->importBuffer(
+      hidl_handle(handle), [&](const auto &tmpError, const auto &tmpBufferHandle) {
+        error = tmpError;
+        importedHandle = static_cast<buffer_handle_t>(tmpBufferHandle);
+      });
 
-    if (!ret.isOk()) {
-      ALOGE("%s: mapper importBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-      return false;
-    }
-
-    if (error != MapperV3Error::NONE) {
-      return false;
-    }
-
-    handle = importedHandle;
-  } else {
-    MapperV2Error error;
-    buffer_handle_t importedHandle;
-
-    auto ret = mMapper_V2->importBuffer(
-        hidl_handle(handle), [&](const auto &tmpError, const auto &tmpBufferHandle) {
-          error = tmpError;
-          importedHandle = static_cast<buffer_handle_t>(tmpBufferHandle);
-        });
-
-    if (!ret.isOk()) {
-      ALOGE("%s: mapper importBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-      return false;
-    }
-
-    if (error != MapperV2Error::NONE) {
-      return false;
-    }
-
-    handle = importedHandle;
+  if (!ret.isOk()) {
+    ALOGE("%s: mapper importBuffer failed: %s", __FUNCTION__, ret.description().c_str());
+    return false;
   }
+
+  if (error != MapperV4Error::NONE) {
+    return false;
+  }
+
+  handle = importedHandle;
 
   return true;
 }
@@ -136,21 +108,14 @@ void ComposerHandleImporter::freeBuffer(buffer_handle_t handle) {
 
   Mutex::Autolock lock(mLock);
 
-  if (mMapper_V3 == nullptr && mMapper_V2 == nullptr) {
+  if (mMapper_V4 == nullptr) {
     ALOGE("%s: mMapper is null!", __FUNCTION__);
     return;
   }
 
-  if (mMapper_V3 != nullptr) {
-    auto ret = mMapper_V3->freeBuffer(const_cast<native_handle_t *>(handle));
-    if (!ret.isOk()) {
-      ALOGE("%s: mapper freeBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-    }
-  } else {
-    auto ret = mMapper_V2->freeBuffer(const_cast<native_handle_t *>(handle));
-    if (!ret.isOk()) {
-      ALOGE("%s: mapper freeBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-    }
+  auto ret = mMapper_V4->freeBuffer(const_cast<native_handle_t *>(handle));
+  if (!ret.isOk()) {
+    ALOGE("%s: mapper freeBuffer failed: %s", __FUNCTION__, ret.description().c_str());
   }
 }
 
