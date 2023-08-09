@@ -835,6 +835,71 @@ ScopedAStatus DisplayConfigAIDL::getDisplayPortId(int32_t disp_id, int32_t *port
   return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
+ScopedAStatus DisplayConfigAIDL::isCacV2Supported(int disp_id, bool *supported) {
+  if (disp_id < 0 || disp_id >= sdm::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  if (!supported) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
+  auto ret = caps_->IsCacV2Supported(disp_id, supported);
+
+  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+}
+
+ScopedAStatus DisplayConfigAIDL::configureCacV2(int32_t disp_id, const CacV2Config &config,
+                                                bool enable) {
+  if (disp_id < 0 || disp_id >= sdm::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  sdm::CacConfig cac_config = {};
+  cac_config.k0r = config.k0r;
+  cac_config.k1r = config.k1r;
+  cac_config.k0b = config.k0b;
+  cac_config.k1b = config.k1b;
+  cac_config.pixel_pitch = config.pixel_pitch;
+  cac_config.normalization = config.normalization;
+
+  auto ret = settings_->PerformCacConfig(disp_id, cac_config, enable);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Failed to configure CAC = %d", __FUNCTION__, enable);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::configureCacV2PerEye(int32_t disp_id,
+                                                      const CacV2Config &leftConfig,
+                                                      const CacV2Config &rightConfig, bool enable) {
+  if (disp_id < 0 || disp_id >= sdm::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  // TODO(user): add support for CAC configuration per eye
+  sdm::CacConfig cac_config = {};
+  cac_config.k0r = leftConfig.k0r;
+  cac_config.k1r = leftConfig.k1r;
+  cac_config.k0b = leftConfig.k0b;
+  cac_config.k1b = leftConfig.k1b;
+  cac_config.pixel_pitch = leftConfig.pixel_pitch;
+  cac_config.normalization = leftConfig.normalization;
+
+  auto ret = settings_->PerformCacConfig(disp_id, cac_config, enable);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Failed to configure CAC = %d", __FUNCTION__, enable);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+
 void DisplayConfigAIDL::NotifyQsyncChange(uint64_t display_id, bool qsync_enabled,
                                           uint32_t refresh_rate, uint32_t qsync_refresh_rate) {
   // AIDL callback

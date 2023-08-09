@@ -206,17 +206,12 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
     return ScopedAStatus::ok();
   }
   ScopedAStatus getDisplayPortId(int32_t disp_id, int32_t *port_id) override;
-  ScopedAStatus isCacV2Supported(int32_t in_dispId, bool *_aidl_return) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2(int32_t in_dispId, const CacV2Config &in_config, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2PerEye(int32_t in_dispId, const CacV2Config &in_leftConfig,
-                                     const CacV2Config &in_rightConfig, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2ExtPerEye(int32_t in_dispId, const CacV2ConfigExt &in_leftConfig,
+  ScopedAStatus isCacV2Supported(int32_t disp_id, bool *_aidl_return) override;
+  ScopedAStatus configureCacV2(int32_t disp_id, const CacV2Config &in_config,
+                               bool in_enable) override;
+  ScopedAStatus configureCacV2PerEye(int32_t disp_id, const CacV2Config &in_leftConfig,
+                                     const CacV2Config &in_rightConfig, bool in_enable) override;
+  ScopedAStatus configureCacV2ExtPerEye(int32_t disp_id, const CacV2ConfigExt &in_leftConfig,
                                         const CacV2ConfigExt &in_rightConfig, bool in_enable) {
     return ScopedAStatus::ok();
   }
