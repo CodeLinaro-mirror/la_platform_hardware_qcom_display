@@ -137,6 +137,10 @@ class DisplayConfigAIDL : public BnDisplayConfig {
     ScopedAStatus getDisplayPortId(int32_t disp_id, int32_t *port_id) {
       return ScopedAStatus::fromStatus(STATUS_INVALID_OPERATION);
     }
+    ScopedAStatus isCacV2Supported(int dispId, bool* supported);
+    ScopedAStatus configureCacV2(int32_t dispId, const CacV2Config& config, bool enable);
+    ScopedAStatus configureCacV2PerEye(int32_t dispId, const CacV2Config& leftConfig,
+                                       const CacV2Config& rightConfig, bool enable);
 
   private:
     sdm::HWCSession *hwc_session_;
