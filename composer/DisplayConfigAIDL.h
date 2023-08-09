@@ -131,10 +131,6 @@ class DisplayConfigAIDL : public BnDisplayConfig {
     ScopedAStatus notifyDisplayIdleState(const std::vector<int32_t>& displayIds) {
       return ScopedAStatus::ok();
     }
-    ScopedAStatus isCacV2Supported(int dispId, bool* supported);
-    ScopedAStatus configureCacV2(int32_t dispId, const CacV2Config& config, bool enable);
-    ScopedAStatus configureCacV2PerEye(int32_t dispId, const CacV2Config& leftConfig,
-                                       const CacV2Config& rightConfig, bool enable);
 
   private:
     sdm::HWCSession *hwc_session_;
