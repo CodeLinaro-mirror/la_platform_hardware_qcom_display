@@ -301,6 +301,7 @@ class HWCDisplay : public DisplayEventHandler {
     return HWC2::Error::Unsupported;
   }
   bool IsFirstCommitDone() { return !first_cycle_; }
+  bool IsValidated() { return validated_; }
 
   // HWC2 APIs
   virtual HWC2::Error AcceptDisplayChanges(void);

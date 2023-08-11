@@ -173,11 +173,18 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
       }
     }
 
-    SCOPE_LOCK(locker_[display]);
     auto status = HWC2::Error::BadDisplay;
     if (hwc_display_[display]) {
       auto hwc_display = hwc_display_[display];
-      status = (hwc_display->*member)(std::forward<Args>(args)...);
+      if (hwc_display->IsValidated() && tunneled_layer_ !=-1) {
+        SCOPE_LOCK(tunnel_lock_);
+        status = (hwc_display->*member)(std::forward<Args>(args)...);
+      } else {
+        SCOPE_LOCK(locker_[display]);
+        if (hwc_display_[display]) {
+          status = (hwc_display->*member)(std::forward<Args>(args)...);
+        }
+      }
     }
     return INT32(status);
   }
@@ -197,15 +204,24 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
       }
     }
 
-    SCOPE_LOCK(locker_[display]);
     auto status = HWC2::Error::BadDisplay;
     if (hwc_display_[display]) {
       status = HWC2::Error::BadLayer;
       auto hwc_layer = hwc_display_[display]->GetHWCLayer(layer);
       if (hwc_layer != nullptr) {
-        status = (hwc_layer->*member)(std::forward<Args>(args)...);
-        if (hwc_display_[display]->GetGeometryChanges()) {
-          hwc_display_[display]->ResetValidation();
+        auto hwc_display = hwc_display_[display];
+        if (hwc_display->IsValidated() && tunneled_layer_ !=-1) {
+          SCOPE_LOCK(tunnel_lock_);
+          status = (hwc_layer->*member)(std::forward<Args>(args)...);
+          if (hwc_display_[display]->GetGeometryChanges()) {
+            hwc_display_[display]->ResetValidation();
+          }
+        } else {
+          SCOPE_LOCK(locker_[display]);
+          status = (hwc_layer->*member)(std::forward<Args>(args)...);
+          if (hwc_display_[display]->GetGeometryChanges()) {
+            hwc_display_[display]->ResetValidation();
+          }
         }
       }
     }
@@ -339,6 +355,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   static Locker power_state_[HWCCallbacks::kNumDisplays];
   static Locker hdr_locker_[HWCCallbacks::kNumDisplays];
   static Locker display_config_locker_;
+  static Locker tunnel_lock_;
 
  private:
   class CWB {
