@@ -190,6 +190,7 @@ case "$target" in
         setprop vendor.display.disable_cwb_idle_fallback 1
         setprop vendor.display.disable_gpu_color_convert 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
         ;;
     esac
 esac
