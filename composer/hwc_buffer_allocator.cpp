@@ -79,11 +79,13 @@ int HWCBufferAllocator::GetGrallocInstance() {
     return kErrorNone;
   }
 
-  allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
-      AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
   if (allocator_ == nullptr) {
-    DLOGE("Unable to get allocator");
-    return kErrorCriticalResource;
+    allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+        AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
+    if (allocator_ == nullptr) {
+      DLOGE("Unable to get allocator");
+      return kErrorCriticalResource;
+    }
   }
 
   if (mapper_ == nullptr) {
@@ -454,6 +456,7 @@ int HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, i
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return err;
   }
   int ret;
   if (handle != nullptr) {
@@ -498,6 +501,7 @@ int HWCBufferAllocator::GetAlignedWidthAndHeight(int width, int height, int form
   err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return err;
   }
   if (snap_helper_->IsSnapAllocEnabled()) {
     uint64_t alignedw_ul = 0;
