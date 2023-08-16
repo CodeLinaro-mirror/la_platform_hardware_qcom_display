@@ -184,11 +184,12 @@ int DRMManager::GetConnectorInfo(uint32_t conn_id, DRMConnectorInfo *info) {
   return conn_mgr_->GetConnectorInfo(conn_id, info);
 }
 
-int DRMManager::GetConnectorsInfo(DRMConnectorsInfo *infos) {
+int DRMManager::GetConnectorsInfo(bool skip_reload, DRMConnectorsInfo *infos) {
   *infos = {};
   int ret = -ENODEV;
   std::vector<uint32_t> conn_ids;
   conn_mgr_->Update();
+  conn_mgr_->SetSkipConnectorsReload(skip_reload);
   conn_mgr_->GetConnectorList(&conn_ids);
   for (auto iter : conn_ids) {
     DRMConnectorInfo info;

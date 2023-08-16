@@ -25,6 +25,11 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include "hwc_display_dummy.h"
@@ -38,8 +43,18 @@ int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_al
                             HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                             qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
                             HWCDisplay **hwc_display) {
+  return Create(core_intf, buffer_allocator, callbacks, event_handler,
+                qservice, id, sdm_id, 1920, 1080, hwc_display);
+}
+
+int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
+                            HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
+                            qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                            uint32_t primary_width, uint32_t primary_height,
+                            HWCDisplay **hwc_display) {
   HWCDisplay *hwc_display_dummy = new HWCDisplayDummy(core_intf, buffer_allocator, callbacks,
-                                      event_handler, qservice, id, sdm_id);
+                                                      event_handler, qservice, id, sdm_id,
+                                                      primary_width, primary_height);
   *hwc_display = hwc_display_dummy;
   return kErrorNone;
 }
@@ -66,19 +81,25 @@ HWC2::Error HWCDisplayDummy::SetColorMode(ColorMode mode) {
 HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                                  HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                                  qService::QService *qservice, hwc2_display_t id,
-                                 int32_t sdm_id) :HWCDisplay(core_intf, buffer_allocator,
+                                 int32_t sdm_id, uint32_t primary_width,
+                                 uint32_t primary_height) :HWCDisplay(core_intf, buffer_allocator,
                                  callbacks, event_handler, qservice, kBuiltIn, id, sdm_id,
                                  DISPLAY_CLASS_BUILTIN) {
   DisplayConfigVariableInfo config;
-  config.x_pixels = 720;
-  config.y_pixels = 1280;
-  config.x_dpi = 200.0f;
-  config.y_dpi = 200.0f;
+  config.x_pixels = primary_width;
+  config.y_pixels = primary_height;
+  config.x_dpi = 300.0f;
+  config.y_dpi = 300.0f;
   config.fps = 60;
   config.vsync_period_ns = 16600000;
   display_null_.SetFrameBufferConfig(config);
   num_configs_ = 1;
   display_intf_ = &display_null_;
+  client_target_ = new HWCLayer(id_, buffer_allocator_);
+  current_refresh_rate_ = max_refresh_rate_ = 60;
+  hwc_config_map_.resize(num_configs_);
+  variable_config_map_[0] = config;
+  hwc_config_map_.at(0) = 0;
 }
 
 HWC2::Error HWCDisplayDummy::GetActiveConfig(hwc2_config_t *out_config) {

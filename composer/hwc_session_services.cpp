@@ -25,6 +25,75 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <core/buffer_allocator.h>
@@ -501,6 +570,187 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
   return error;
 }
 
+int HWCSession::DisplayConfigImpl::tunnellingInit() {
+  char property[PROPERTY_VALUE_MAX] = {0};
+  property_get(ENABLE_TUNNELLING, property, "0");
+  if (!(strncmp(property, "0", PROPERTY_VALUE_MAX))) {
+    DLOGE("Tunnelling property not set. Exiting tunnellingInit!\n");
+    return EINVAL;
+  }
+
+  hwc_session_->tunneling_enabled_ = true;
+  return 0;
+}
+
+int HWCSession::DisplayConfigImpl::dequeueTunnelledBuffer(const native_handle_t* buffer,
+                                                          const native_handle_t*
+                                                          release_fence_handle) {
+  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[hwc_session_->tunneled_display_id_]);
+  if ((hwc_session_->tunneling_enabled_) == false) {
+    DLOGE("Tunneling not enabled\n");
+  }
+
+  DTRACE_SCOPED();
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = buffer;
+  if (!buffer_handle) {
+    DLOGE("Invalid native handle");
+  }
+
+  uint64_t buffer_id = ((private_handle_t *)buffer)->id;
+  if ((hwc_session_->tunneling_map_buffer_native_handle_.find(buffer_id)) !=
+      (hwc_session_->tunneling_map_buffer_native_handle_.end())) {
+    native_handle = hwc_session_->tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = hwc_session_->buffer_allocator_.ImportBuffer(buffer);
+    hwc_session_->tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id]
+                                                     = native_handle;
+  }
+  private_handle_t *private_handle = (private_handle_t *)native_handle;
+
+  shared_ptr<Fence> release_fence =
+  hwc_session_->tunneling_map_buffer_release_fence_[private_handle->id];
+
+  if (release_fence) {
+    hwc_session_->tunneled_layer_rf_ = release_fence;
+    native_handle_t* temp_rf =  native_handle_create(1,0);
+    temp_rf->data[0] = std::stoi(Fence::GetStr(release_fence));
+    release_fence_handle = temp_rf;
+  }
+
+  DLOGV("dequeueTunnelledBuffer successful.\n");
+  return 0;
+}
+
+int HWCSession::DisplayConfigImpl::queueTunnelledBuffer(const native_handle_t* buffer,
+                                                        const native_handle_t* acquire_fence) {
+  if ((hwc_session_->tunneling_enabled_) == false) {
+    DLOGW("Tunneling not enabled\n");
+    return EINVAL;
+  }
+
+  HWCDisplay *hwc_display = hwc_session_->hwc_display_[hwc_session_->tunneled_display_id_];
+  if (!hwc_display) {
+    DLOGE("Primary Display is not connected. Exiting queueTunnelledBuffer\n");
+    return EINVAL;
+  }
+
+  if (hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = hwc_display->GetHWCTunnelledLayer();
+    if (hwc_session_->tunneled_layer_ != -1) {
+      hwc_session_->SetLayerIsTunneled(hwc_session_->tunneled_display_id_,
+                                       hwc_session_->tunneled_layer_, true);
+    }
+  }
+
+  int32_t error = -EINVAL;
+
+  DTRACE_SCOPED();
+
+  bool tunneled_layer_present = false;
+  hwc_session_->IsTunnelledLayerPresent(hwc_session_->tunneled_display_id_,
+                                        &tunneled_layer_present);
+  if (tunneled_layer_present == false || hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return EINVAL;
+  }
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = buffer;
+  if (!buffer_handle) {
+    DLOGE("Invalid native handle");
+    return EINVAL;
+  }
+
+  uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
+  if (hwc_session_->tunneling_map_buffer_native_handle_.find(buffer_id) !=
+      hwc_session_->tunneling_map_buffer_native_handle_.end()) {
+    native_handle = hwc_session_->tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = hwc_session_->buffer_allocator_.ImportBuffer(buffer_handle);
+    if (native_handle == nullptr) {
+      return EINVAL;
+    }
+    hwc_session_->tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id]
+                                                     = native_handle;
+  }
+
+  uint32_t types_count = 0;
+  uint32_t reqs_count = 0;
+  const native_handle_t* native_fence_handle = acquire_fence;
+  shared_ptr<Fence> tunneled_layer_af = nullptr;    //Tunnel layer acquire fence.
+  // if native_fence_handle is NULL, acquire fence fd is considered -1
+  if (native_fence_handle) {
+    tunneled_layer_af = Fence::Create(dup(native_fence_handle->data[0]), "");
+  }
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[hwc_session_->tunneled_display_id_]);
+  }
+  error = hwc_session_->SetLayerBuffer(hwc_session_->tunneled_display_id_,
+                                       hwc_session_->tunneled_layer_, native_handle,
+                                       tunneled_layer_af);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("SetLayerBuffer failed! Exiting queueTunnelledBuffer.\n");
+    hwc_session_->tunneled_layer_ = -1;
+    return error;
+  }
+
+  if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
+    error = hwc_session_->ValidateDisplay(hwc_session_->tunneled_display_id_, &types_count,
+                                          &reqs_count);
+    if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
+      DLOGE("ValidateDisplay failed! Exiting queueTunnelledBuffer.\n");
+      hwc_session_->tunneled_layer_ = -1;
+      return error;
+    }
+  }
+  hwc_session_->IsTunnelledLayerPresent(hwc_session_->tunneled_display_id_,
+                                        &tunneled_layer_present);
+  if (tunneled_layer_present == false || hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = -1;
+    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return EINVAL;
+  }
+  shared_ptr<Fence> presentfence = nullptr;
+  error = hwc_session_->PresentDisplay(hwc_session_->tunneled_display_id_, &presentfence);
+  if (error != HWC2_ERROR_NONE) {
+    DLOGE("PresentDisplay failed! Exiting queueTunnelledBuffer.\n");
+    hwc_session_->tunneled_layer_ = -1;
+    return error;
+  }
+  close(std::stoi(Fence::GetStr(presentfence)));
+  auto hwc_layer = hwc_display->GetHWCLayer(hwc_session_->tunneled_layer_);
+  if (hwc_layer == nullptr) {
+    DLOGE("Unable to fetch corresponding hwc_layer for tunneled layer");
+    hwc_session_->tunneled_layer_ = -1;
+    return EINVAL;
+  }
+  shared_ptr<Fence> release_fence = nullptr;
+  hwc_layer->PopBackReleaseFence(&release_fence);
+  close(std::stoi(Fence::GetStr(hwc_session_->tunneled_layer_rf_)));
+  hwc_session_->tunneling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id]
+                                                   = release_fence;
+
+  DLOGV("queueTunnelledBuffer successful.\n");
+
+  return 0;
+}
+
+int HWCSession::DisplayConfigImpl::tunnellingDeinit() {
+  hwc_session_->tunneling_enabled_ = false;
+  for (auto i : hwc_session_->tunneling_map_buffer_native_handle_) {
+    native_handle_close(i.second);
+  }
+  for (auto i : hwc_session_->tunneling_map_buffer_release_fence_) {
+    close(std::stoi(Fence::GetStr(i.second)));
+  }
+  hwc_session_->tunneling_map_buffer_native_handle_.clear();
+  hwc_session_->tunneling_map_buffer_release_fence_.clear();
+  return 0;
+}
+
 int HWCSession::SetCameraLaunchStatus(uint32_t on) {
   if (null_display_mode_) {
     return 0;
@@ -619,7 +869,7 @@ int HWCSession::DisplayConfigImpl::ControlIdlePowerCollapse(bool enable, bool sy
 
 int HWCSession::IsWbUbwcSupported(bool *value) {
   HWDisplaysInfo hw_displays_info = {};
-  DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
+  DisplayError error = core_intf_->GetDisplaysStatus(false, &hw_displays_info);
   if (error != kErrorNone) {
     return -EINVAL;
   }

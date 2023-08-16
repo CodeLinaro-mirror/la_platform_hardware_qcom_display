@@ -725,6 +725,7 @@ struct DRMConnectorInfo {
   bool is_wb_ubwc_supported;
   uint32_t topology_control;
   bool dyn_bitclk_support;
+  bool ext_bridge_hpd;
   std::vector<uint8_t> edid;
   uint32_t supported_colorspaces;
 };
@@ -1063,7 +1064,7 @@ class DRMManagerInterface {
    * [output]: DRMConnectorsInfo: Resource info for connectors.
    * [return]: 0 on success, a negative error value otherwise.
    */
-  virtual int GetConnectorsInfo(DRMConnectorsInfo *info) = 0;
+  virtual int GetConnectorsInfo(bool skip_reload, DRMConnectorsInfo *info) = 0;
 
   /*
    * Provides information on a selected encoder.

@@ -15,6 +15,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __HWC_SESSION_H__
@@ -110,6 +115,19 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   enum HotPlugEvent {
     kHotPlugNone,
     kHotPlugEvent,
+  };
+
+  enum DisplayRebootStrategy {
+    kRebootStrategyDefault,
+    kRebootStrategyOnceDSI = kRebootStrategyDefault,
+    kRebootStrategyAlwaysDSI,
+  };
+
+  enum ComposerSetupMode {
+    kCompSetupModeDefault,
+    kCompSetupModePrimary = kCompSetupModeDefault,
+    kCompSetupModeNonPrimary,
+    kCompSetupModeNoDisplay,
   };
 
   HWCSession();
@@ -256,6 +274,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t SetLayerSourceCrop(hwc2_display_t display, hwc2_layer_t layer, hwc_frect_t crop);
   int32_t SetLayerTransform(hwc2_display_t display, hwc2_layer_t layer, int32_t int_transform);
   int32_t SetLayerZOrder(hwc2_display_t display, hwc2_layer_t layer, uint32_t z);
+  int32_t SetLayerIsTunneled(hwc2_display_t display, hwc2_layer_t layer, bool tunneled);
+  int32_t IsTunnelledLayerPresent(hwc2_display_t display, bool *tunnelled_layer_present);
   int32_t SetLayerType(hwc2_display_t display, hwc2_layer_t layer,
                        IQtiComposerClient::LayerType type);
   int32_t SetLayerSurfaceDamage(hwc2_display_t display, hwc2_layer_t layer, hwc_region_t damage);
@@ -279,8 +299,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
                                     int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
                                     uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
   int32_t SetDisplayElapseTime(hwc2_display_t display, uint64_t time);
-
-
+  int32_t dequeueTunnelledBuffer(const native_handle_t* buffer,
+                                 const native_handle_t* release_fence_handle);
+  int32_t queueTunnelledBuffer(const native_handle_t* buffer,
+                               const native_handle_t* acquire_fence);
   virtual int RegisterClientContext(std::shared_ptr<DisplayConfig::ConfigCallback> callback,
                                     DisplayConfig::ConfigInterface **intf);
   virtual void UnRegisterClientContext(DisplayConfig::ConfigInterface *intf);
@@ -410,6 +432,13 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     virtual int SetCameraSmoothInfo(CameraSmoothOp op, uint32_t fps);
     virtual int ControlCameraSmoothCallback(bool enable);
 #endif
+    virtual int tunnellingInit();
+    virtual int dequeueTunnelledBuffer(const native_handle_t* buffer_handle,
+                                       const native_handle_t* release_fence_handle);
+    virtual int queueTunnelledBuffer(const native_handle_t* buffer_handle,
+                                     const native_handle_t* acquire_fence_handle);
+    virtual int tunnellingDeinit();
+
     std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
     HWCSession *hwc_session_ = nullptr;
   };
@@ -472,6 +501,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool HasHDRSupport(HWCDisplay *hwc_display);
   void PostInit();
   int GetDispTypeFromPhysicalId(uint64_t physical_disp_id, DispType *disp_type);
+
+  int SetBestNullDisplayResolution();
+  bool IsFrameworkRebootRequired(bool is_primary);
 
   // Uevent handler
   virtual void UEventHandler(const char *uevent_data, int length);
@@ -554,6 +586,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool update_vsync_on_doze_ = false;
   std::vector<bool> is_hdr_display_;    // info on HDR supported
   std::map <hwc2_display_t, hwc2_display_t> map_hwc_display_;  // Real and dummy display pairs.
+  std::map <uint64_t, shared_ptr<Fence>> tunneling_map_buffer_release_fence_; // stores mapping
+                                                              // between buffer id and release fence
+  // stores mapping between buffer id and native handle
+  std::map <uint64_t, const native_handle_t *> tunneling_map_buffer_native_handle_;
   bool reset_panel_ = false;
   bool client_connected_ = false;
   bool new_bw_mode_ = false;
@@ -561,13 +597,11 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = nullptr;
   HWCSocketHandler socket_handler_;
-  bool hdmi_is_primary_ = false;
   bool is_composer_up_ = false;
   std::mutex mutex_lum_;
   int hpd_bpp_ = 0;
   int hpd_pattern_ = 0;
   static bool pending_power_mode_[HWCCallbacks::kNumDisplays];
-  static int null_display_mode_;
   HotPlugEvent pending_hotplug_event_ = kHotPlugNone;
   hwc2_display_t virtual_id_ = HWCCallbacks::kNumDisplays;
   Locker pluggable_handler_lock_;
@@ -577,6 +611,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t disable_mask_layer_hint_ = 0;
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
+  bool tunneling_enabled_ = false;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
   CWB cwb_;
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
@@ -592,6 +627,16 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool secure_session_active_ = false;
   bool is_idle_time_up_ = false;
   std::shared_ptr<IPCIntf> ipc_intf_ = nullptr;
+  bool pluggable_is_primary_ = false;
+  bool pluggable_primary_connected_ = false;
+  DisplayConfigVariableInfo primary_config_ = {};
+  int composer_setup_mode_ = kCompSetupModeDefault;
+  int display_reboot_strategy_ = kRebootStrategyDefault;
+  bool null_display_active_ = false;
+  static int null_display_mode_;
+  hwc2_layer_t tunneled_layer_ = -1;
+  shared_ptr<Fence> tunneled_layer_rf_ = nullptr; // tunneled layer's release fence
+  int tunneled_display_id_ = HWC_DISPLAY_PRIMARY;
 };
 }  // namespace sdm
 
