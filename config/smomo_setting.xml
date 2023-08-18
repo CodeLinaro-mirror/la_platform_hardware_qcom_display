@@ -26,10 +26,17 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Innovation Center are provided under the following license:
+Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 -->
 <SmomoSetting>
   <SmomoModeList>
-    <SmomoMode id="1" name="game">
+    <SmomoMode id="1" name="snapcam">
+      <FpsMap minFps="70" maxFps="74" appFps="72" refreshRate="144"/>
+    </SmomoMode>
+    <SmomoMode id="2" name="game">
       <!-- Sample mode config used by Game layer which defines 2 mode entries -->
       <FpsMap minFps="100" maxFps="1000" appFps="120" refreshRate="120" qsync="true" bypass="true" vsyncMove="3000000" early="1000000" late="6000000" slack="500000"/>
       <FpsMap minFps="52" maxFps="68" appFps="60" refreshRate="120" qsync="true" vsyncMove="3000000" early="1000000" late="6000000" slack="500000" maxLatency="0"/>
@@ -38,6 +45,14 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
   <SmoMoWhiteList>
     <LayerWhiteList>
+      <LayerApp name="snapcam">
+        <AppLayer name="SurfaceView - org.codeaurora.snapcam/com.android.camera.CameraActivity#0" type="camera"/>
+        <AppLayer name="SurfaceView - org.codeaurora.snapcam/com.android.camera.CameraLauncher#0" type="camera"/>
+        <AppLayer name="SurfaceView - org.codeaurora.snapcam/com.android.camera.CameraLauncher#1" type="camera"/>
+        <AppLayer name="SurfaceView[org.codeaurora.snapcam/com.android.camera.CameraLauncher](BLAST)#1" type="camera"/>
+        <AppLayer name="SurfaceView[org.codeaurora.snapcam/com.android.camera.CameraLauncher](BLAST)#0" type="camera" mode="1" enable="true"/>
+      </LayerApp>
+
       <!-- Sample config for Camera layer which uses default strategy -->
       <LayerApp name="camera">
         <AppLayer name="SurfaceView[com.sample.camera/com.android.camera.CameraActivity](BLAST)#0" type="camera" strategy="default" enable="true"/>
@@ -46,6 +61,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <!-- Sample config for Game layer which uses mode strategy -->
       <LayerApp name="game">
         <AppLayer name="SurfaceView[com.sample.game/com.sample.game.GameActivity](BLAST)#0" type="game" strategy="mode" mode="1" variation="0.6" samples="8" enable="true"/>
+      </LayerApp>
+
+      <LayerApp name="testgame">
+        <AppLayer name="SurfaceView - com.test.game/com.test.game.Activity#0" type="game" enable="false"/>
       </LayerApp>
     </LayerWhiteList>
   </SmoMoWhiteList>
