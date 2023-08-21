@@ -155,6 +155,13 @@ else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_hw_recovery_dump=1
 endif
+
+ifeq ($(TARGET_HAS_QTI_OPTIMIZATIONS), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_cache_manager=1 \
+    ro.surface_flinger.max_frame_buffer_acquired_buffers=2
+endif
+
 TARGET_IS_HEADLESS := false
 
 ifeq ($(TARGET_USES_QMAA),true)
