@@ -107,7 +107,10 @@ endif
 
 ifeq ($(TARGET_1G_DDR_RAM), true)
 PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.disable_layer_stitch=1
+    vendor.display.disable_layer_stitch=1 \
+    vendor.display.disable_rounded_corner=1 \
+    vendor.display.disable_cache_manager=1 \
+    debug.disable_screen_decorations=1
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_layer_stitch=0
