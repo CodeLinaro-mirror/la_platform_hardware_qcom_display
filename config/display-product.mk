@@ -52,6 +52,7 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_Sharp_2k_cmd_
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_Sharp_2k_video_mode_qsync_dsi_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_Sharp_2k_video_mode_qsync_dsi_panel.json
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_Sharp_qhd_cmd_mode_dsi_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_Sharp_qhd_cmd_mode_dsi_panel.json
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sharp_1080p_cmd_mode_dsi_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sharp_1080p_cmd_mode_dsi_panel.json
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_Sharp_qhd_video_mode_dsi_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_Sharp_qhd_video_mode_dsi_panel.json
 
 ifneq ($(TARGET_BOARD_PLATFORM),parrot)
     #QDCM calibration JSON file for nt36672e LCD video mode single dsi with DSC panel.
@@ -76,11 +77,14 @@ ifeq ($(TARGET_BOARD_PLATFORM),parrot)
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),anorak)
-    #QDCM calibration JSON file for sy103 amoled video mode single dsi with DSC panel.
-    #TBD: derived from qdcm_calib_data_r66451_amoled_video_mode_dsi_visionox_panel_with_DSC.json
-    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json
+    #QDCM calibration JSON file for sy103 amoled video mode with DSC panel.
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json
+
+    #QDCM calibration JSON files for sony amoled video mode with DSC panel
+    #TBD: files derived from corresponding sy103 panel calib files
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json
 endif
 
 #Smomo config xml file
