@@ -3695,10 +3695,9 @@ int32_t HWCSession::GetDisplayCapabilities(hwc2_display_t display,
   if (isBuiltin) {
     capabilities->resize(4);
     // TODO(user): Handle SKIP_CLIENT_COLOR_TRANSFORM based on DSPP availability
-    std::vector<HwcDisplayCapability> caps{
+    *capabilities = {
         HwcDisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM, HwcDisplayCapability::DOZE,
         HwcDisplayCapability::BRIGHTNESS, HwcDisplayCapability::PROTECTED_CONTENTS};
-    capabilities->setToExternal(caps.data(), caps.size());
   }
   return HWC2_ERROR_NONE;
 }
