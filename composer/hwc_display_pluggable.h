@@ -26,6 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #ifndef __HWC_DISPLAY_PLUGGABLE_H__
 #define __HWC_DISPLAY_PLUGGABLE_H__
@@ -54,6 +57,7 @@ class HWCDisplayPluggable : public HWCDisplay {
                                        RenderIntent *out_intents);
   virtual HWC2::Error SetColorMode(ColorMode mode);
   virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
+  virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
   virtual HWC2::Error SetClientTarget(buffer_handle_t target, int32_t acquire_fence,
                                        int32_t dataspace, hwc_region_t damage);
@@ -70,6 +74,7 @@ class HWCDisplayPluggable : public HWCDisplay {
   DisplayNullExternal display_null_;
   int underscan_width_ = 0;
   int underscan_height_ = 0;
+  bool has_color_tranform_ = false;
 };
 
 }  // namespace sdm
