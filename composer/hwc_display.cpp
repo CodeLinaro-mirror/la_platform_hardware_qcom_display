@@ -519,6 +519,8 @@ int HWCDisplay::Init() {
     swap_interval_zero_ = true;
   }
 
+  idle_active_ms_ = HWCDebugHandler::GetIdleTimeoutMs();
+
   client_target_ = new HWCLayer(id_, buffer_allocator_);
 
   error = display_intf_->GetNumVariableInfoConfigs(&num_configs_);
@@ -1604,6 +1606,9 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
     } break;
     case kPostIdleTimeout:
       display_idle_ = true;
+      if (NotifyIdleNow()) {
+        event_handler_->NotifyIdleStatus(true);
+      }
       break;
     case kVmReleaseDone: {
       if (event_handler_) {
@@ -3917,6 +3922,14 @@ void HWCDisplay::Abort() {
 
 void HWCDisplay::MarkClientActive(bool is_client_up) {
   is_client_up_ = is_client_up;
+}
+
+bool HWCDisplay::NotifyIdleNow() {
+  if (IsDisplayIdle() && (IsDisplayCommandMode() || idle_active_ms_ <= 0)) {
+    return true;
+  }
+
+  return false;
 }
 
 DisplayError HWCDisplay::GetHWCActiveConfig(bool get_real_config, hwc2_config_t *config_index) {

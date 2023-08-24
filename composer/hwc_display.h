@@ -605,6 +605,7 @@ class HWCDisplay : public DisplayEventHandler {
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
   void WaitOnPreviousFence();
+  bool NotifyIdleNow();
   bool IsPanelConfig(uint32_t x, uint32_t y);
   void PopulateHWCExtendedDisplayResolution();
   DisplayError GetHWCActiveConfig(bool get_real_config, hwc2_config_t *config_index);
@@ -627,6 +628,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool client_target_3_1_set_ = false;
   bool is_client_up_ = false;
   uint64_t expected_present_time_ = 0;  // Expected Present time for current frame
+  int idle_active_ms_ = 0;
   bool virtual_config_fps_switch_ = false;
 };
 

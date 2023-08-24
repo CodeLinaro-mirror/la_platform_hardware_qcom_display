@@ -815,14 +815,9 @@ void HWCSession::PerformQsyncCallback(Display display, bool qsync_enabled, uint3
 }
 
 void HWCSession::PerformIdleStatusCallback(Display display) {
-  std::shared_ptr<DisplayConfig::ConfigCallback> callback = idle_callback_.lock();
-  if (!callback) {
-    return;
-  }
-
   if (hwc_display_[display]->IsDisplayIdle()) {
     DTRACE_SCOPED();
-    callback->NotifyIdleStatus(true);
+    NotifyIdleStatus(true);
   }
 }
 
