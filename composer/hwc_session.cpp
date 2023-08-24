@@ -3274,7 +3274,7 @@ int HWCSession::RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info
 
 void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
   hwc2_display_t client_id = map_info->client_id;
-
+  hwc_display_[client_id]->SetDisplayRemoved();
   DLOGI("Notify hotplug display disconnected: client id = %d", UINT32(client_id));
   if ((pluggable_is_primary_ && client_id != HWC_DISPLAY_PRIMARY)|| !pluggable_is_primary_) {
     callbacks_.Hotplug(client_id, HWC2::Connection::Disconnected);
