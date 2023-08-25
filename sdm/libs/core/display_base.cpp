@@ -4714,6 +4714,13 @@ void DisplayBase::ResetDispLayerStack() {
     DLOGW("Stack did not clear in PostCommit. Clear now.");
     *disp_layer_stack_ = DispLayerStack();
   }
+
+  for (int i = 0; i < core_id_.size(); i++) {
+    if (!core_id_[i]) {
+        continue;
+    }
+    disp_layer_stack_->info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
+  }
 }
 
 DisplayError DisplayBase::DisableDestinationScalar() {

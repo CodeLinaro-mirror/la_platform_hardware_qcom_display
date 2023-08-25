@@ -64,6 +64,7 @@ DisplayError DisplayVirtual::Init() {
     return error;
   }
 
+  display_id_info_ = DisplayId(display_id_);
   dpu_core_mux_ = new DPUCoreMux(display_id_info_, kVirtual, hw_info_intf_, buffer_allocator_);
   if (error != kErrorNone) {
     return error;
