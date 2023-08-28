@@ -466,6 +466,7 @@ struct HWResourceInfo {
   DDRVersion ddr_version = kDDRVersion5;
   uint32_t core_id = 0;
   CacVersion cac_version = kCacVersionNone;
+  std::vector<LayerBufferFormat> cac_supported_formats;
 };
 
 struct HWSplitInfo {
