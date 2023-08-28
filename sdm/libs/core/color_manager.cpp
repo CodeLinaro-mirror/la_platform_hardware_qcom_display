@@ -210,6 +210,12 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
   PPFeatureVersion versions;
   int32_t display_id = -1;
   ColorManagerProxy *color_manager_proxy = NULL;
+  bool allow_tonemap_native = 0;
+  int32_t prop = 0;
+
+  if (Debug::Get()->GetProperty(ALLOW_TONEMAP_NATIVE, &prop) == kErrorNone) {
+    allow_tonemap_native = (prop == 1);
+  }
 
   // check if all resources are available before invoking factory method from libsdm-color.so.
   if (!color_lib_ || !create_intf_ || !destroy_intf_) {
@@ -276,8 +282,10 @@ ColorManagerProxy *ColorManagerProxy::CreateColorManagerProxy(DisplayType type,
       }
 
       if (color_manager_proxy->HasNativeModeSupport()) {
-        color_manager_proxy->curr_mode_.gamut = ColorPrimaries_Max;
-        color_manager_proxy->curr_mode_.gamma = Transfer_Max;
+        color_manager_proxy->curr_mode_.gamut = allow_tonemap_native ?
+                                                ColorPrimaries_BT709_5 : ColorPrimaries_Max;
+        color_manager_proxy->curr_mode_.gamma = allow_tonemap_native ?
+                                                Transfer_sRGB : Transfer_Max;
         color_manager_proxy->curr_mode_.intent = snapdragoncolor::kNative;
       }
     }
