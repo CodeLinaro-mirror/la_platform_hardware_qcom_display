@@ -110,7 +110,7 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format);
   virtual DisplayError ReserveDemuraResources();
-  virtual DisplayError RequestVirtualDisplayId(uint64_t display_id, int32_t *vdisp_id);
+  virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id);
 #ifdef PROFILE_COVERAGE_DATA
   virtual DisplayError DumpCodeCoverage();
 #endif

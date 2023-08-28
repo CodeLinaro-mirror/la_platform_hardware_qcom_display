@@ -190,8 +190,8 @@ void CoreImpl::ReleaseDemuraResources() {
     comp_mgr_.FreeDemuraFetchResources(it);
 }
 
-DisplayError CoreImpl::RequestVirtualDisplayId(uint64_t display_id, int32_t *vdisp_id) {
-  return comp_mgr_.RequestVirtualDisplayId(DisplayId(UINT32(display_id)), vdisp_id);
+DisplayError CoreImpl::RequestVirtualDisplayId(int32_t *vdisp_id) {
+  return comp_mgr_.RequestVirtualDisplayId(vdisp_id);
 }
 
 DisplayError CoreImpl::Deinit() {

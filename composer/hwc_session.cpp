@@ -1350,7 +1350,7 @@ HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
 
   // Request to get virtual display id corresponds writeback block, which could be used for WFD.
   int32_t display_id = -1;
-  auto err = core_intf_->RequestVirtualDisplayId(active_builtin_disp_id, &display_id);
+  auto err = core_intf_->RequestVirtualDisplayId(&display_id);
   if (err != kErrorNone || display_id == -1) {
     return HWC3::Error::NoResources;
   }
