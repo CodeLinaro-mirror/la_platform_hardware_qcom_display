@@ -31,7 +31,6 @@
 #define __HWC_DISPLAY_PLUGGABLE_H__
 
 #include "hwc_display.h"
-#include "display_null.h"
 #include "hwc_display_event_handler.h"
 
 namespace sdm {
@@ -68,7 +67,6 @@ class HWCDisplayPluggable : public HWCDisplay {
   static void GetDownscaleResolution(uint32_t primary_width, uint32_t primary_height,
                                      uint32_t *virtual_width, uint32_t *virtual_height);
 
-  DisplayNullExternal display_null_;
   int underscan_width_ = 0;
   int underscan_height_ = 0;
   bool has_color_tranform_ = false;

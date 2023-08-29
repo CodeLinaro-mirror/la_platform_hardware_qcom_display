@@ -62,6 +62,9 @@ class HWCDisplayDummy : public HWCDisplay {
   virtual HWC2::Error SetActiveConfigWithConstraints(
       hwc2_config_t config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
       VsyncPeriodChangeTimeline *out_timeline);
+  virtual HWC2::Error GetDisplayRequests(int32_t *out_display_requests,
+                                         uint32_t *out_num_elements, hwc2_layer_t *out_layers,
+                                         int32_t *out_layer_requests);
  private:
   HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                   HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
