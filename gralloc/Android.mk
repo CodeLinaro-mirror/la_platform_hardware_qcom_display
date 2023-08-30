@@ -24,6 +24,23 @@ LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 LOCAL_SRC_FILES               := gr_device_impl.cpp
 include $(BUILD_SHARED_LIBRARY)
 
+#libgralloc.qti
+include $(CLEAR_VARS)
+LOCAL_MODULE                  := libgralloc.qti
+LOCAL_VENDOR_MODULE           := true
+LOCAL_MODULE_TAGS             := optional
+LOCAL_C_INCLUDES              := $(common_includes) $(kernel_includes)
+LOCAL_HEADER_LIBRARIES        := display_headers display_intf_headers
+LOCAL_SHARED_LIBRARIES        := $(common_libs) liblog libcutils libutils \
+                                 libgralloctypes libhidlbase libhardware \
+                                 android.hardware.graphics.mapper@4.0
+LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qtigralloc\" -Wno-sign-conversion \
+                                 -Wno-unused-parameter -Wno-unused-variable
+LOCAL_CLANG                   := true
+LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
+LOCAL_SRC_FILES               := QtiGralloc.cpp
+include $(BUILD_SHARED_LIBRARY)
+
 #libgrallocutils
 include $(CLEAR_VARS)
 LOCAL_MODULE                  := libgrallocutils
@@ -42,7 +59,7 @@ LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-si
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 ifneq (,$(filter Tiramisu 13 U 14 UpsideDownCake, $(PLATFORM_VERSION)))
 LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
-LOCAL_CFLAGS                  += -D__ANDROID_T__
+LOCAL_CFLAGS                  += -D__MIN_ANDROID_VER_T__
 endif
 LOCAL_SRC_FILES               := gr_utils.cpp gr_adreno_info.cpp
 include $(BUILD_SHARED_LIBRARY)
@@ -73,7 +90,7 @@ endif
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 ifneq (,$(filter Tiramisu 13 U 14 UpsideDownCake, $(PLATFORM_VERSION)))
 LOCAL_HEADER_LIBRARIES        += qti_kernel_headers qti_display_kernel_headers device_kernel_headers
-LOCAL_CFLAGS                  += -D__ANDROID_T__
+LOCAL_CFLAGS                  += -D__MIN_ANDROID_VER_T__
 endif
 LOCAL_SRC_FILES               := gr_allocator.cpp gr_buf_mgr.cpp gr_dma_legacy_mgr.cpp gr_dma_mgr.cpp gr_alloc_interface.cpp
 include $(BUILD_SHARED_LIBRARY)

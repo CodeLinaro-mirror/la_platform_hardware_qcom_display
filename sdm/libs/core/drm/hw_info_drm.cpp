@@ -69,7 +69,7 @@
 #include <drm_master.h>
 #include <drm_res_mgr.h>
 #include <fcntl.h>
-#ifdef __ANDROID_T__
+#ifdef __MIN_ANDROID_VER_T__
 #include <display/media/msm_sde_rotator.h>
 #else
 #include <media/msm_sde_rotator.h>
