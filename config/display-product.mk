@@ -47,9 +47,13 @@ endif
 
 
 ifneq ($(TARGET_IS_HEADLESS),true)
+ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
-    android.hardware.graphics.composer@2.4-service \
-
+    vendor.qti.hardware.display.composer-service
+else
+PRODUCT_PACKAGES += \
+    android.hardware.graphics.composer@2.4-service
+endif
 endif #TARGET_IS_HEADLESS
 
 #Enable AIDL Hal for S

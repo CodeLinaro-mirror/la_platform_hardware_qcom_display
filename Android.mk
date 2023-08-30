@@ -4,7 +4,12 @@ display-hals := include $(sdm-libs)/utils $(sdm-libs)/core libdebug
 
 ifneq ($(TARGET_IS_HEADLESS), true)
     display-hals += libcopybit liblight libmemtrack hdmi_cec \
-                    $(sdm-libs)/hwc2 gpu_tonemapper libdrmutils
+                    gpu_tonemapper libdrmutils
+
+ifeq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
+display-hals += $(sdm-libs)/hwc2
+endif
+
 endif
 
 display-hals += gralloc
