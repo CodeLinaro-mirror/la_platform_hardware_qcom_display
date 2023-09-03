@@ -18,6 +18,10 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_SUBST([COMMON_CFLAGS], [-Wall -Werror -Wno-sign-conversion -Wconversion -DDEBUG_CALC_FPS])
 AC_SUBST([AM_CPPFLAGS], [--std=c++11])
 
+PKG_CHECK_MODULES([LIBDRM], [libdrm])
+AC_SUBST([LIBDRM_CFLAGS])
+AC_SUBST([LIBDRM_LIBS])
+
 AC_ARG_WITH([core_includes],
     AC_HELP_STRING([--with-core-includes=@<:@dir@:>@],
        [Specify the location of the core headers]),
@@ -56,13 +60,11 @@ AC_SUBST([CFLAGS])
 AC_SUBST([CC])
 AC_CONFIG_FILES([ \
         Makefile \
-        libqservice/Makefile \
         libdebug/Makefile \
         libdrmutils/Makefile \
         sde-drm/Makefile \
         sdm/libs/utils/Makefile \
         sdm/libs/dal/Makefile \
-        sdm/libs/core/Makefile \
-        libqdutils/Makefile
+        sdm/libs/core/Makefile
         ])
 AC_OUTPUT

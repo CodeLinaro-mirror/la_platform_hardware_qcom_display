@@ -167,7 +167,6 @@ DisplayError (*HWColorManagerDrm::pp_features_[])(const PPFeatureInfo &,
   [kFeaturePaV2] = NULL,
   [kFeatureDither] = &HWColorManagerDrm::GetDrmDither,
   [kFeatureSprDither] = &HWColorManagerDrm::GetDrmDither,
-  [kFeatureCWBDither] = &HWColorManagerDrm::GetDrmDither,
   [kFeatureGamut] = &HWColorManagerDrm::GetDrmGamut,
   [kFeaturePADither] = &HWColorManagerDrm::GetDrmPADither,
   [kFeaturePAHsic] = &HWColorManagerDrm::GetDrmPAHsic,
@@ -180,6 +179,7 @@ DisplayError (*HWColorManagerDrm::pp_features_[])(const PPFeatureInfo &,
   [kFeatureDgmGc] = &HWColorManagerDrm::GetDrmPGC,
   [kFeatureVigIgc] = &HWColorManagerDrm::GetDrmIGC,
   [kFeatureVigGamut] = &HWColorManagerDrm::GetDrmGamut,
+  [kFeatureCWBDither] = &HWColorManagerDrm::GetDrmDither,
 };
 
 uint32_t HWColorManagerDrm::GetFeatureVersion(const DRMPPFeatureInfo &feature) {
