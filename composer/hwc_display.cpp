@@ -1358,6 +1358,9 @@ HWC2::PowerMode HWCDisplay::GetCurrentPowerMode() {
 }
 
 DisplayError HWCDisplay::VSync(const DisplayEventVSync &vsync) {
+  if (display_removed_ == true) {
+    return kErrorNone;
+  }
   callbacks_->Vsync(id_, vsync.timestamp);
   return kErrorNone;
 }
