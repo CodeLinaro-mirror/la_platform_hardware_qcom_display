@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_LAYERS_H__
 #define __HWC_LAYERS_H__
 
@@ -30,18 +36,16 @@
 #include <utils/utils.h>
 #define HWC2_INCLUDE_STRINGIFICATION
 #define HWC2_USE_CPP11
-#include <hardware/hwcomposer2.h>
 #undef HWC2_INCLUDE_STRINGIFICATION
 #undef HWC2_USE_CPP11
-#include <android/hardware/graphics/composer/2.3/IComposerClient.h>
 #include <deque>
 #include <map>
 #include <set>
 #include "core/buffer_allocator.h"
 #include "hwc_buffer_allocator.h"
+#include "hwc_common.h"
 
-using PerFrameMetadataKey =
-    android::hardware::graphics::composer::V2_3::IComposerClient::PerFrameMetadataKey;
+using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
 
 namespace sdm {
 
@@ -72,35 +76,35 @@ enum GeometryChanges {
 
 class HWCLayer {
  public:
-  explicit HWCLayer(hwc2_display_t display_id, HWCBufferAllocator *buf_allocator);
+  explicit HWCLayer(Display display_id, HWCBufferAllocator *buf_allocator);
   ~HWCLayer();
   uint32_t GetZ() const { return z_; }
-  hwc2_layer_t GetId() const { return id_; }
+  LayerId GetId() const { return id_; }
   Layer *GetSDMLayer() { return layer_; }
   void ResetPerFrameData();
 
-  HWC2::Error SetLayerBlendMode(HWC2::BlendMode mode);
-  HWC2::Error SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence);
-  HWC2::Error SetLayerColor(hwc_color_t color);
-  HWC2::Error SetLayerCompositionType(HWC2::Composition type);
-  HWC2::Error SetLayerDataspace(int32_t dataspace);
-  HWC2::Error SetLayerDisplayFrame(hwc_rect_t frame);
-  HWC2::Error SetCursorPosition(int32_t x, int32_t y);
-  HWC2::Error SetLayerPlaneAlpha(float alpha);
-  HWC2::Error SetLayerSourceCrop(hwc_frect_t crop);
-  HWC2::Error SetLayerSurfaceDamage(hwc_region_t damage);
-  HWC2::Error SetLayerTransform(HWC2::Transform transform);
-  HWC2::Error SetLayerVisibleRegion(hwc_region_t visible);
-  HWC2::Error SetLayerPerFrameMetadata(uint32_t num_elements, const PerFrameMetadataKey *keys,
+  HWC3::Error SetLayerBlendMode(BlendMode mode);
+  HWC3::Error SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence);
+  HWC3::Error SetLayerColor(Color color);
+  HWC3::Error SetLayerCompositionType(Composition type);
+  HWC3::Error SetLayerDataspace(int32_t dataspace);
+  HWC3::Error SetLayerDisplayFrame(Rect frame);
+  HWC3::Error SetCursorPosition(int32_t x, int32_t y);
+  HWC3::Error SetLayerPlaneAlpha(float alpha);
+  HWC3::Error SetLayerSourceCrop(FRect crop);
+  HWC3::Error SetLayerSurfaceDamage(Region damage);
+  HWC3::Error SetLayerTransform(Transform transform);
+  HWC3::Error SetLayerVisibleRegion(Region visible);
+  HWC3::Error SetLayerPerFrameMetadata(uint32_t num_elements, const PerFrameMetadataKey *keys,
                                        const float *metadata);
-  HWC2::Error SetLayerPerFrameMetadataBlobs(uint32_t num_elements, const PerFrameMetadataKey *keys,
+  HWC3::Error SetLayerPerFrameMetadataBlobs(uint32_t num_elements, const PerFrameMetadataKey *keys,
                                             const uint32_t *sizes, const uint8_t* metadata);
-  HWC2::Error SetLayerZOrder(uint32_t z);
+  HWC3::Error SetLayerZOrder(uint32_t z);
   void SetComposition(const LayerComposition &sdm_composition);
-  HWC2::Composition GetClientRequestedCompositionType() { return client_requested_; }
-  HWC2::Composition GetOrigClientRequestedCompositionType() { return client_requested_orig_; }
-  void UpdateClientCompositionType(HWC2::Composition type) { client_requested_ = type; }
-  HWC2::Composition GetDeviceSelectedCompositionType() { return device_selected_; }
+  Composition GetClientRequestedCompositionType() { return client_requested_; }
+  Composition GetOrigClientRequestedCompositionType() { return client_requested_orig_; }
+  void UpdateClientCompositionType(Composition type) { client_requested_ = type; }
+  Composition GetDeviceSelectedCompositionType() { return device_selected_; }
   int32_t GetLayerDataspace() { return dataspace_; }
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   void ResetGeometryChanges() { geometry_changes_ = GeometryChanges::kNone; }
@@ -125,9 +129,9 @@ class HWCLayer {
  private:
   Layer *layer_ = nullptr;
   uint32_t z_ = 0;
-  const hwc2_layer_t id_;
-  const hwc2_display_t display_id_;
-  static std::atomic<hwc2_layer_t> next_id_;
+  const LayerId id_;
+  const Display display_id_;
+  static std::atomic<LayerId> next_id_;
   std::deque<int32_t> release_fences_;
   HWCBufferAllocator *buffer_allocator_ = NULL;
   int32_t dataspace_ =  HAL_DATASPACE_UNKNOWN;
@@ -143,22 +147,22 @@ class HWCLayer {
   bool buffer_flipped_ = false;
 
   // Composition requested by client(SF) Original
-  HWC2::Composition client_requested_orig_ = HWC2::Composition::Device;
+  Composition client_requested_orig_ = Composition::DEVICE;
   // Composition requested by client(SF) Modified for internel use
-  HWC2::Composition client_requested_ = HWC2::Composition::Device;
+  Composition client_requested_ = Composition::DEVICE;
   // Composition selected by SDM
-  HWC2::Composition device_selected_ = HWC2::Composition::Device;
+  Composition device_selected_ = Composition::DEVICE;
   uint32_t geometry_changes_ = GeometryChanges::kNone;
 
-  void SetRect(const hwc_rect_t &source, LayerRect *target);
-  void SetRect(const hwc_frect_t &source, LayerRect *target);
-  uint32_t GetUint32Color(const hwc_color_t &source);
+  void SetRect(const Rect &source, LayerRect *target);
+  void SetRect(const FRect &source, LayerRect *target);
+  uint32_t GetUint32Color(const Color &source);
   LayerBufferS3DFormat GetS3DFormat(uint32_t s3d_format);
   void GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec);
   DisplayError SetMetaData(const private_handle_t *pvt_handle, Layer *layer);
   uint32_t RoundToStandardFPS(float fps);
   void ValidateAndSetCSC(const private_handle_t *handle);
-  void SetDirtyRegions(hwc_region_t surface_damage);
+  void SetDirtyRegions(Region surface_damage);
 };
 
 struct SortLayersByZ {

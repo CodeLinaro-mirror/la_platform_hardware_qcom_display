@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "hwc_layers.h"
 #include <utils/debug.h>
 #include <stdint.h>
@@ -28,7 +34,7 @@
 
 namespace sdm {
 
-std::atomic<hwc2_layer_t> HWCLayer::next_id_(1);
+std::atomic<LayerId> HWCLayer::next_id_(1);
 
 DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_metadata) {
   if (getMetaData(const_cast<private_handle_t *>(pvt_handle), GET_COLOR_METADATA,
@@ -217,7 +223,7 @@ bool GetSDMColorSpace(const int32_t &dataspace, ColorMetaData *color_metadata) {
 }
 
 // Layer operations
-HWCLayer::HWCLayer(hwc2_display_t display_id, HWCBufferAllocator *buf_allocator)
+HWCLayer::HWCLayer(Display display_id, HWCBufferAllocator *buf_allocator)
   : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
   layer_ = new Layer();
   // Fences are deferred, so the first time this layer is presented, return -1
@@ -242,28 +248,28 @@ HWCLayer::~HWCLayer() {
   }
 }
 
-HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence) {
+HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence) {
   if (!buffer) {
-    if (client_requested_ == HWC2::Composition::Device ||
-        client_requested_ == HWC2::Composition::Cursor) {
+    if (client_requested_ == Composition::DEVICE ||
+        client_requested_ == Composition::CURSOR) {
       DLOGE("Invalid buffer handle: %p on layer: %d client requested comp type %d", buffer, id_,
             client_requested_);
       ::close(acquire_fence);
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
     } else {
-      return HWC2::Error::None;
+      return HWC3::Error::None;
     }
   }
 
   if (acquire_fence == 0) {
     DLOGW("acquire_fence is zero");
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   const private_handle_t *handle = static_cast<const private_handle_t *>(buffer);
 
   if (handle->fd < 0) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   LayerBuffer *layer_buffer = &layer_->input_buffer;
@@ -285,7 +291,7 @@ HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
 
   layer_buffer->flags.video = (handle->buffer_type == BUFFER_TYPE_VIDEO) ? true : false;
   if (SetMetaData(const_cast<private_handle_t *>(handle), layer_) != kErrorNone) {
-    return HWC2::Error::BadLayer;
+    return HWC3::Error::BadLayer;
   }
 
   // TZ Protected Buffer - L1
@@ -318,12 +324,12 @@ HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   layer_buffer->buffer_id = reinterpret_cast<uint64_t>(handle);
   layer_buffer->handle_id = handle->id;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerSurfaceDamage(hwc_region_t damage) {
+HWC3::Error HWCLayer::SetLayerSurfaceDamage(Region damage) {
   surface_updated_ = true;
-  if ((damage.numRects == 1) && (damage.rects[0].bottom == 0) && (damage.rects[0].right == 0)) {
+  if ((damage.num_rects == 1) && (damage.rects[0].bottom == 0) && (damage.rects[0].right == 0)) {
     surface_updated_ = false;
   }
 
@@ -333,14 +339,14 @@ HWC2::Error HWCLayer::SetLayerSurfaceDamage(hwc_region_t damage) {
 
   if (!partial_update_enabled_) {
     SetDirtyRegions(damage);
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   // Check if there is an update in SurfaceDamage rects.
-  if (layer_->dirty_regions.size() != damage.numRects) {
+  if (layer_->dirty_regions.size() != damage.num_rects) {
     layer_->update_mask.set(kSurfaceInvalidate);
   } else {
-    for (uint32_t j = 0; j < damage.numRects; j++) {
+    for (uint32_t j = 0; j < damage.num_rects; j++) {
       LayerRect damage_rect;
       SetRect(damage.rects[j], &damage_rect);
       if (damage_rect != layer_->dirty_regions.at(j)) {
@@ -351,35 +357,35 @@ HWC2::Error HWCLayer::SetLayerSurfaceDamage(hwc_region_t damage) {
   }
 
   SetDirtyRegions(damage);
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerBlendMode(HWC2::BlendMode mode) {
+HWC3::Error HWCLayer::SetLayerBlendMode(BlendMode mode) {
   LayerBlending blending = kBlendingPremultiplied;
   switch (mode) {
-    case HWC2::BlendMode::Coverage:
+      case BlendMode::COVERAGE:
       blending = kBlendingCoverage;
       break;
-    case HWC2::BlendMode::Premultiplied:
+    case BlendMode::PREMULTIPLIED:
       blending = kBlendingPremultiplied;
       break;
-    case HWC2::BlendMode::None:
+    case BlendMode::NONE:
       blending = kBlendingOpaque;
       break;
     default:
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
   }
 
   if (layer_->blending != blending) {
     geometry_changes_ |= kBlendMode;
     layer_->blending = blending;
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerColor(hwc_color_t color) {
-  if (client_requested_ != HWC2::Composition::SolidColor) {
-    return HWC2::Error::None;
+HWC3::Error HWCLayer::SetLayerColor(Color color) {
+  if (client_requested_ != Composition::SOLID_COLOR) {
+    return HWC3::Error::None;
   }
   if (layer_->solid_fill_color != GetUint32Color(color)) {
     layer_->solid_fill_color = GetUint32Color(color);
@@ -392,10 +398,10 @@ HWC2::Error HWCLayer::SetLayerColor(hwc_color_t color) {
   layer_->input_buffer.format = kFormatARGB8888;
   DLOGV_IF(kTagClient, "[%" PRIu64 "][%" PRIu64 "] Layer color set to %x", display_id_, id_,
            layer_->solid_fill_color);
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerCompositionType(HWC2::Composition type) {
+HWC3::Error HWCLayer::SetLayerCompositionType(Composition type) {
   // Validation is required when the client changes the composition type
   if (client_requested_ != type) {
     layer_->update_mask.set(kClientCompRequest);
@@ -403,25 +409,25 @@ HWC2::Error HWCLayer::SetLayerCompositionType(HWC2::Composition type) {
   client_requested_ = type;
   client_requested_orig_ = type;
   switch (type) {
-    case HWC2::Composition::Client:
+    case Composition::CLIENT:
       break;
-    case HWC2::Composition::Device:
+    case Composition::DEVICE:
       // We try and default to this in SDM
       break;
-    case HWC2::Composition::SolidColor:
+    case Composition::SOLID_COLOR:
       break;
-    case HWC2::Composition::Cursor:
+    case Composition::CURSOR:
       break;
-    case HWC2::Composition::Invalid:
-      return HWC2::Error::BadParameter;
+    case Composition::INVALID:
+      return HWC3::Error::BadParameter;
     default:
-      return HWC2::Error::Unsupported;
+      return HWC3::Error::Unsupported;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerDataspace(int32_t dataspace) {
+HWC3::Error HWCLayer::SetLayerDataspace(int32_t dataspace) {
   // Map deprecated dataspace values to appropriate new enums
   dataspace = TranslateFromLegacyDataspace(dataspace);
 
@@ -433,10 +439,10 @@ HWC2::Error HWCLayer::SetLayerDataspace(int32_t dataspace) {
       ValidateAndSetCSC(reinterpret_cast<private_handle_t *>(layer_->input_buffer.buffer_id));
     }
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerDisplayFrame(hwc_rect_t frame) {
+HWC3::Error HWCLayer::SetLayerDisplayFrame(Rect frame) {
   LayerRect dst_rect = {};
 
   SetRect(frame, &dst_rect);
@@ -445,7 +451,7 @@ HWC2::Error HWCLayer::SetLayerDisplayFrame(hwc_rect_t frame) {
     dst_rect_ = dst_rect;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 void HWCLayer::ResetPerFrameData() {
@@ -453,20 +459,20 @@ void HWCLayer::ResetPerFrameData() {
   layer_->transform = layer_transform_;
 }
 
-HWC2::Error HWCLayer::SetCursorPosition(int32_t x, int32_t y) {
-  hwc_rect_t frame = {};
+HWC3::Error HWCLayer::SetCursorPosition(int32_t x, int32_t y) {
+  Rect frame = {};
   frame.left = x;
   frame.top = y;
   frame.right = x + INT(layer_->dst_rect.right - layer_->dst_rect.left);
   frame.bottom = y + INT(layer_->dst_rect.bottom - layer_->dst_rect.top);
   SetLayerDisplayFrame(frame);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
+HWC3::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
   if (alpha < 0.0f || alpha > 1.0f) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   //  Conversion of float alpha in range 0.0 to 1.0 similar to the HWC Adapter
@@ -477,10 +483,10 @@ HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
     layer_->plane_alpha = plane_alpha;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerSourceCrop(hwc_frect_t crop) {
+HWC3::Error HWCLayer::SetLayerSourceCrop(FRect crop) {
   LayerRect src_rect = {};
   SetRect(crop, &src_rect);
   non_integral_source_crop_ = ((crop.left != roundf(crop.left)) ||
@@ -495,43 +501,43 @@ HWC2::Error HWCLayer::SetLayerSourceCrop(hwc_frect_t crop) {
     layer_->src_rect = src_rect;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerTransform(HWC2::Transform transform) {
+HWC3::Error HWCLayer::SetLayerTransform(Transform transform) {
   LayerTransform layer_transform = {};
-  switch (transform) {
-    case HWC2::Transform::FlipH:
+  switch (static_cast<int32_t>(transform)) {
+    case static_cast<int32_t>(Transform::FLIP_H):
       layer_transform.flip_horizontal = true;
       break;
-    case HWC2::Transform::FlipV:
+    case static_cast<int32_t>(Transform::FLIP_V):
       layer_transform.flip_vertical = true;
       break;
-    case HWC2::Transform::Rotate90:
+    case static_cast<int32_t>(Transform::ROT_90):
       layer_transform.rotation = 90.0f;
       break;
-    case HWC2::Transform::Rotate180:
-      layer_transform.flip_horizontal = true;
-      layer_transform.flip_vertical = true;
-      break;
-    case HWC2::Transform::Rotate270:
-      layer_transform.rotation = 90.0f;
+    case static_cast<int32_t>(Transform::ROT_180):
       layer_transform.flip_horizontal = true;
       layer_transform.flip_vertical = true;
       break;
-    case HWC2::Transform::FlipHRotate90:
+    case static_cast<int32_t>(Transform::ROT_270):
+      layer_transform.rotation = 90.0f;
+      layer_transform.flip_horizontal = true;
+      layer_transform.flip_vertical = true;
+      break;
+    case (static_cast<int32_t>(Transform::FLIP_H) | static_cast<int32_t>(Transform::ROT_90)):
       layer_transform.rotation = 90.0f;
       layer_transform.flip_horizontal = true;
       break;
-    case HWC2::Transform::FlipVRotate90:
+    case (static_cast<int32_t>(Transform::FLIP_V) | static_cast<int32_t>(Transform::ROT_90)):
       layer_transform.rotation = 90.0f;
       layer_transform.flip_vertical = true;
       break;
-    case HWC2::Transform::None:
+    case static_cast<int32_t>(Transform::NONE):
       break;
     default:
       //  bad transform
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
   }
 
   if (layer_transform_ != layer_transform) {
@@ -539,29 +545,29 @@ HWC2::Error HWCLayer::SetLayerTransform(HWC2::Transform transform) {
     layer_transform_ = layer_transform;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerVisibleRegion(hwc_region_t visible) {
+HWC3::Error HWCLayer::SetLayerVisibleRegion(Region visible) {
   layer_->visible_regions.clear();
-  for (uint32_t i = 0; i < visible.numRects; i++) {
+  for (uint32_t i = 0; i < visible.num_rects; i++) {
     LayerRect rect;
     SetRect(visible.rects[i], &rect);
     layer_->visible_regions.push_back(rect);
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerZOrder(uint32_t z) {
+HWC3::Error HWCLayer::SetLayerZOrder(uint32_t z) {
   if (z_ != z) {
     geometry_changes_ |= kZOrder;
     z_ = z;
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerPerFrameMetadata(uint32_t num_elements,
+HWC3::Error HWCLayer::SetLayerPerFrameMetadata(uint32_t num_elements,
                                                const PerFrameMetadataKey *keys,
                                                const float *metadata) {
   auto old_mastering_display = layer_->input_buffer.color_metadata.masteringDisplayInfo;
@@ -617,16 +623,16 @@ HWC2::Error HWCLayer::SetLayerPerFrameMetadata(uint32_t num_elements,
     layer_->update_mask.set(kMetadataUpdate);
     geometry_changes_ |= kDataspace;
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCLayer::SetLayerPerFrameMetadataBlobs(uint32_t num_elements,
+HWC3::Error HWCLayer::SetLayerPerFrameMetadataBlobs(uint32_t num_elements,
                                                     const PerFrameMetadataKey *keys,
                                                     const uint32_t *sizes,
                                                     const uint8_t* metadata) {
   if (!keys || !sizes || !metadata) {
     DLOGE("metadata or sizes or keys is null");
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   ColorMetaData &color_metadata = layer_->input_buffer.color_metadata;
@@ -635,7 +641,7 @@ HWC2::Error HWCLayer::SetLayerPerFrameMetadataBlobs(uint32_t num_elements,
       case PerFrameMetadataKey::HDR10_PLUS_SEI:
         if (sizes[i] > HDR_DYNAMIC_META_DATA_SZ) {
           DLOGE("Size of HDR10_PLUS_SEI = %d", sizes[i]);
-          return HWC2::Error::BadParameter;
+          return HWC3::Error::BadParameter;
         }
         // if dynamic metadata changes, store and set needs validate
         if (!SameConfig(static_cast<const uint8_t*>(color_metadata.dynamicMetaDataPayload),
@@ -649,20 +655,20 @@ HWC2::Error HWCLayer::SetLayerPerFrameMetadataBlobs(uint32_t num_elements,
         break;
       default:
         DLOGW("Invalid key = %d", keys[i]);
-        return HWC2::Error::BadParameter;
+        return HWC3::Error::BadParameter;
     }
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-void HWCLayer::SetRect(const hwc_rect_t &source, LayerRect *target) {
+void HWCLayer::SetRect(const Rect &source, LayerRect *target) {
   target->left = FLOAT(source.left);
   target->top = FLOAT(source.top);
   target->right = FLOAT(source.right);
   target->bottom = FLOAT(source.bottom);
 }
 
-void HWCLayer::SetRect(const hwc_frect_t &source, LayerRect *target) {
+void HWCLayer::SetRect(const FRect &source, LayerRect *target) {
   // Recommended way of rounding as in hwcomposer2.h - SetLayerSourceCrop
   target->left = std::ceil(source.left);
   target->top = std::ceil(source.top);
@@ -670,7 +676,7 @@ void HWCLayer::SetRect(const hwc_frect_t &source, LayerRect *target) {
   target->bottom = std::floor(source.bottom);
 }
 
-uint32_t HWCLayer::GetUint32Color(const hwc_color_t &source) {
+uint32_t HWCLayer::GetUint32Color(const Color &source) {
   // Returns 32 bit ARGB
   uint32_t a = UINT32(source.a) << 24;
   uint32_t r = UINT32(source.r) << 16;
@@ -929,8 +935,8 @@ DisplayError HWCLayer::SetMetaData(const private_handle_t *pvt_handle, Layer *la
 }
 
 bool HWCLayer::IsDataSpaceSupported() {
-  if (client_requested_ != HWC2::Composition::Device &&
-      client_requested_ != HWC2::Composition::Cursor) {
+  if (client_requested_ != Composition::DEVICE &&
+      client_requested_ != Composition::CURSOR) {
     // Layers marked for GPU can have any dataspace
     return true;
   }
@@ -1056,21 +1062,21 @@ uint32_t HWCLayer::RoundToStandardFPS(float fps) {
 }
 
 void HWCLayer::SetComposition(const LayerComposition &sdm_composition) {
-  auto hwc_composition = HWC2::Composition::Invalid;
+  auto hwc_composition = Composition::INVALID;
   switch (sdm_composition) {
     case kCompositionGPU:
-      hwc_composition = HWC2::Composition::Client;
+      hwc_composition = Composition::CLIENT;
       break;
     case kCompositionCursor:
-      hwc_composition = HWC2::Composition::Cursor;
+      hwc_composition = Composition::CURSOR;
       break;
     default:
-      hwc_composition = HWC2::Composition::Device;
+      hwc_composition = Composition::DEVICE;
       break;
   }
   // Update solid fill composition
   if (sdm_composition == kCompositionSDE && layer_->flags.solid_fill != 0) {
-    hwc_composition = HWC2::Composition::SolidColor;
+    hwc_composition = Composition::SOLID_COLOR;
   }
   device_selected_ = hwc_composition;
 
@@ -1116,9 +1122,9 @@ bool HWCLayer::IsScalingPresent() {
   return ((src_width != dst_width) || (dst_height != src_height));
 }
 
-void HWCLayer::SetDirtyRegions(hwc_region_t surface_damage) {
+void HWCLayer::SetDirtyRegions(Region surface_damage) {
   layer_->dirty_regions.clear();
-  for (uint32_t i = 0; i < surface_damage.numRects; i++) {
+  for (uint32_t i = 0; i < surface_damage.num_rects; i++) {
     LayerRect rect;
     SetRect(surface_damage.rects[i], &rect);
     layer_->dirty_regions.push_back(rect);

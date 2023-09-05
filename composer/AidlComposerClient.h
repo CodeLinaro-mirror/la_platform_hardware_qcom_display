@@ -26,7 +26,6 @@
 #include <unordered_set>
 #include <vector>
 #include <string>
-#include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #include <aidlcommonsupport/NativeHandle.h>
 #include "hwc_session.h"
@@ -96,7 +95,6 @@ using ::android::hardware::hidl_handle;
 using ndk::ScopedAStatus;
 using ndk::SpAIBinder;
 
-using sdm::Fence;
 using sdm::HWCSession;
 using sdm::HWC3::Error;
 using std::shared_ptr;
@@ -222,10 +220,6 @@ class AidlComposerClient : public BnComposerClient {
   Error getDisplayReadbackBuffer(int64_t display, const native_handle_t *rawHandle,
                                  const native_handle_t **outHandle);
 
-  // Methods for extensions (QtiComposer3Client)
-  ScopedAStatus executeQtiCommands(const std::vector<QtiDisplayCommand> &in_commands,
-                                   std::vector<CommandResultPayload> *aidl_return);
-
  protected:
   SpAIBinder createBinder() override;
 
@@ -253,11 +247,14 @@ class AidlComposerClient : public BnComposerClient {
     bool init();
     Error execute(const std::vector<DisplayCommand> &in_commands,
                   std::vector<CommandResultPayload> *aidl_return);
-    Error qtiExecute(const std::vector<QtiDisplayCommand> &in_commands,
-                     std::vector<CommandResultPayload> *aidl_return);
-    Error validateDisplay(int64_t display);
-    Error presentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
-
+    Error validateDisplay(int64_t display, std::vector<sdm::LayerId>& changedLayers,
+                          std::vector<Composition>& compositionTypes,
+                          uint32_t& displayRequestMask, std::vector<sdm::LayerId>& requestedLayers,
+                          std::vector<int32_t>& requestMasks,
+                          ClientTargetProperty& clienttargetproperty);
+    Error presentDisplay(int64_t display, int32_t *presentFence,
+                         std::vector<sdm::LayerId>& layers,
+                         std::vector<int32_t>& releaseFences);
     void reset() { mWriter->reset(); }
 
    private:
@@ -322,12 +319,6 @@ class AidlComposerClient : public BnComposerClient {
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
 
-    // Commands from extensions (QtiComposer3Client)
-    void executeSetClientTarget_3_1(int64_t display, const ClientTarget &command);
-    void executeSetDisplayElapseTime(int64_t display, uint64_t time);
-    void executeSetLayerType(int64_t display, int64_t layer, sdm::LayerType type);
-    void executeSetLayerFlag(int64_t display, int64_t layer, sdm::LayerFlag flag);
-
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
     FRect readFRect();
@@ -358,7 +349,7 @@ class AidlComposerClient : public BnComposerClient {
     Error updateLayerSidebandStream(int64_t display, int64_t layer, buffer_handle_t handle) {
       return updateBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle);
     }
-    Error postPresentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
+    Error postPresentDisplay(int64_t display, int32_t *presentFence);
     Error postValidateDisplay(int64_t display, uint32_t &types_count, uint32_t &reqs_count);
   };
 

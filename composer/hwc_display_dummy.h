@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_DUMMY_H__
 #define __HWC_DISPLAY_DUMMY_H__
 
@@ -39,17 +45,17 @@ class HWCDisplayDummy : public HWCDisplay {
  public:
   static int Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                    qService::QService *qservice, Display id, int32_t sdm_id,
                     HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
-  virtual HWC2::Error Present(int32_t *out_retire_fence);
-  virtual HWC2::Error GetActiveConfig(hwc2_config_t *out_config);
+  virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC3::Error Present(int32_t *out_retire_fence);
+  virtual HWC3::Error GetActiveConfig(Config *out_config);
 
  private:
   HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                   HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                  qService::QService *qservice, hwc2_display_t id, int32_t sdm_id);
+                  qService::QService *qservice, Display id, int32_t sdm_id);
   DisplayNull display_null_;
 };
 

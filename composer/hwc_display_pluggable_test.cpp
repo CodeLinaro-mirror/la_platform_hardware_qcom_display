@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -51,7 +57,7 @@ using std::array;
 
 int HWCDisplayPluggableTest::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                                    qService::QService *qservice, hwc2_display_t id,
+                                    qService::QService *qservice, Display id,
                                     int32_t sdm_id, uint32_t panel_bpp, uint32_t pattern_type,
                                     HWCDisplay **hwc_display) {
   HWCDisplay *hwc_pluggable_test = new HWCDisplayPluggableTest(core_intf, buffer_allocator,
@@ -83,7 +89,7 @@ HWCDisplayPluggableTest::HWCDisplayPluggableTest(CoreInterface *core_intf,
                                                  HWCBufferAllocator *buffer_allocator,
                                                  HWCCallbacks *callbacks,
                                                  HWCDisplayEventHandler *event_handler,
-                                                 qService::QService *qservice, hwc2_display_t id,
+                                                 qService::QService *qservice, Display id,
                                                  int32_t sdm_id, uint32_t panel_bpp,
                                                  uint32_t pattern_type)
   : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kPluggable, id,
@@ -129,8 +135,8 @@ int HWCDisplayPluggableTest::Deinit() {
 }
 
 
-HWC2::Error HWCDisplayPluggableTest::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggableTest::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  auto status = HWC3::Error::None;
   if (active_secure_sessions_[kSecureDisplay] || display_paused_) {
     MarkLayersForGPUBypass();
     return status;
@@ -161,8 +167,8 @@ HWC2::Error HWCDisplayPluggableTest::Validate(uint32_t *out_num_types, uint32_t 
   return  status;
 }
 
-HWC2::Error HWCDisplayPluggableTest::Present(int32_t *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggableTest::Present(int32_t *out_retire_fence) {
+  auto status = HWC3::Error::None;
 
   if (active_secure_sessions_[kSecureDisplay]) {
     return status;
@@ -190,9 +196,9 @@ HWC2::Error HWCDisplayPluggableTest::Present(int32_t *out_retire_fence) {
       flush_on_error_ = true;
     } else if (error == kErrorShutDown) {
       shutdown_pending_ = true;
-      status = HWC2::Error::Unsupported;
+      status = HWC3::Error::Unsupported;
     } else if (error == kErrorNotValidated) {
-      status = HWC2::Error::NotValidated;
+      status = HWC3::Error::NotValidated;
     } else if (error != kErrorPermission) {
       DLOGE("Commit failed. Error = %d", error);
         // To prevent surfaceflinger infinite wait, flush the previous frame during Commit()
@@ -722,8 +728,8 @@ int HWCDisplayPluggableTest::DestroyLayerStack() {
   return 0;
 }
 
-HWC2::Error HWCDisplayPluggableTest::PostCommit(int32_t *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggableTest::PostCommit(int32_t *out_retire_fence) {
+  auto status = HWC3::Error::None;
   // Do no call flush on errors, if a successful buffer is never submitted.
   if (flush_ && flush_on_error_) {
     display_intf_->Flush(&layer_stack_);

@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <sync/sync.h>
 #include <utils/constants.h>
@@ -93,7 +99,7 @@ DisplayError HWCDisplayBuiltIn::PMICInterface::Notify(SecureEvent event) {
 
 int HWCDisplayBuiltIn::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                               HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                              qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                              qService::QService *qservice, Display id, int32_t sdm_id,
                               HWCDisplay **hwc_display) {
   int status = 0;
   uint32_t builtin_width = 0;
@@ -135,7 +141,7 @@ void HWCDisplayBuiltIn::Destroy(HWCDisplay *hwc_display) {
 
 HWCDisplayBuiltIn::HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                                      HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                                     qService::QService *qservice, hwc2_display_t id,
+                                     qService::QService *qservice, Display id,
                                      int32_t sdm_id)
     : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kBuiltIn, id,
                  sdm_id, true, DISPLAY_CLASS_BUILTIN),
@@ -208,8 +214,8 @@ int HWCDisplayBuiltIn::Deinit() {
   return 0;
 }
 
-HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  auto status = HWC3::Error::None;
   DisplayError error = kErrorNone;
 
   DTRACE_SCOPED();
@@ -230,7 +236,7 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
 
   // Apply current Color Mode and Render Intent.
   if (color_mode_->ApplyCurrentColorModeWithRenderIntent(
-      static_cast<bool>(layer_stack_.flags.hdr_present)) != HWC2::Error::None) {
+      static_cast<bool>(layer_stack_.flags.hdr_present)) != HWC3::Error::None) {
     // Fallback to GPU Composition, if Color Mode can't be applied.
     MarkLayersForClientComposition();
   }
@@ -274,7 +280,7 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
       // Client realizes need for resync upon change in config.
       // Since we know config has changed, triggering vsync proactively
       // can help in reducing pipeline delays to enable events.
-      SetVsyncEnabled(HWC2::Vsync::Enable);
+      SetVsyncEnabled(true);
       DTRACE_END();
     }
     // On success, set current refresh rate to new refresh rate.
@@ -294,7 +300,7 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::CommitLayerStack() {
+HWC3::Error HWCDisplayBuiltIn::CommitLayerStack() {
   skip_commit_ = CanSkipCommit();
   return HWCDisplay::CommitLayerStack();
 }
@@ -331,13 +337,13 @@ void HWCDisplayBuiltIn::SetPartialUpdate(DisplayConfigFixedInfo fixed_info) {
   client_target_->SetPartialUpdate(partial_update_enabled_);
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetPowerMode(HWC2::PowerMode mode, bool teardown) {
+HWC3::Error HWCDisplayBuiltIn::SetPowerMode(PowerMode mode, bool teardown) {
   DisplayConfigFixedInfo fixed_info = {};
   display_intf_->GetConfig(&fixed_info);
   bool command_mode = fixed_info.is_cmdmode;
 
   auto status = HWCDisplay::SetPowerMode(mode, teardown);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     return status;
   }
 
@@ -347,11 +353,11 @@ HWC2::Error HWCDisplayBuiltIn::SetPowerMode(HWC2::PowerMode mode, bool teardown)
     SetPartialUpdate(fixed_info);
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
+  auto status = HWC3::Error::None;
 
   DTRACE_SCOPED();
   ATRACE_INT("PartialUpdate", partial_update_enabled_);
@@ -374,13 +380,13 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
     bool command_mode = fixed_info.is_cmdmode;
 
     status = CommitLayerStack();
-    if (status == HWC2::Error::None) {
+    if (status == HWC3::Error::None) {
       HandleFrameOutput();
       SolidFillCommit();
       status = PostCommitLayerStack(out_retire_fence);
     }
 
-    if (status == HWC2::Error::None) {
+    if (status == HWC3::Error::None) {
       display_intf_->GetConfig(&fixed_info);
       is_cmd_mode_ = fixed_info.is_cmdmode;
       if (is_cmd_mode_ != command_mode) {
@@ -394,33 +400,33 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
+HWC3::Error HWCDisplayBuiltIn::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
   if (out_modes == nullptr) {
     *out_num_modes = color_mode_->GetColorModeCount();
   } else {
     color_mode_->GetColorModes(out_num_modes, out_modes);
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+HWC3::Error HWCDisplayBuiltIn::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                                 RenderIntent *out_intents) {
   if (out_intents == nullptr) {
     *out_num_intents = color_mode_->GetRenderIntentCount(mode);
   } else {
     color_mode_->GetRenderIntents(mode, out_num_intents, out_intents);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorMode(ColorMode mode) {
+HWC3::Error HWCDisplayBuiltIn::SetColorMode(ColorMode mode) {
   return SetColorModeWithRenderIntent(mode, RenderIntent::COLORIMETRIC);
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
+HWC3::Error HWCDisplayBuiltIn::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
   auto status = color_mode_->CacheColorModeWithRenderIntent(mode, intent);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for mode = %d intent = %d", mode, intent);
     return status;
   }
@@ -429,9 +435,9 @@ HWC2::Error HWCDisplayBuiltIn::SetColorModeWithRenderIntent(ColorMode mode, Rend
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorModeById(int32_t color_mode_id) {
+HWC3::Error HWCDisplayBuiltIn::SetColorModeById(int32_t color_mode_id) {
   auto status = color_mode_->SetColorModeById(color_mode_id);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for mode = %d", color_mode_id);
     return status;
   }
@@ -442,18 +448,18 @@ HWC2::Error HWCDisplayBuiltIn::SetColorModeById(int32_t color_mode_id) {
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorModeFromClientApi(int32_t color_mode_id) {
+HWC3::Error HWCDisplayBuiltIn::SetColorModeFromClientApi(int32_t color_mode_id) {
   DisplayError error = kErrorNone;
   std::string mode_string;
 
   error = display_intf_->GetColorModeName(color_mode_id, &mode_string);
   if (error) {
     DLOGE("Failed to get mode name for mode %d", color_mode_id);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   auto status = color_mode_->SetColorModeFromClientApi(mode_string);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("Failed to set mode = %d", color_mode_id);
     return status;
   }
@@ -461,9 +467,9 @@ HWC2::Error HWCDisplayBuiltIn::SetColorModeFromClientApi(int32_t color_mode_id) 
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::RestoreColorTransform() {
+HWC3::Error HWCDisplayBuiltIn::RestoreColorTransform() {
   auto status = color_mode_->RestoreColorTransform();
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed to RestoreColorTransform");
     return status;
   }
@@ -473,19 +479,19 @@ HWC2::Error HWCDisplayBuiltIn::RestoreColorTransform() {
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
+HWC3::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
                                                  android_color_transform_t hint) {
   if (!matrix) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   if (disable_color_transformation_) {
     color_tranform_failed_ = (HAL_COLOR_TRANSFORM_IDENTITY != hint);
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   auto status = color_mode_->SetColorTransform(matrix, hint);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for hint = %d", hint);
     color_tranform_failed_ = true;
     return status;
@@ -498,12 +504,12 @@ HWC2::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
   return status;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
+HWC3::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
                                                  int32_t acquire_fence,
                                                  bool post_processed_output) {
   const private_handle_t *handle = reinterpret_cast<const private_handle_t *>(buffer);
   if (!handle || (handle->fd < 0)) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   // Configure the output buffer as Readback buffer
@@ -523,16 +529,16 @@ HWC2::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
   readback_configured_ = false;
   validated_ = false;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetReadbackBufferFence(int32_t *release_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayBuiltIn::GetReadbackBufferFence(int32_t *release_fence) {
+  auto status = HWC3::Error::None;
 
   if (readback_configured_ && (output_buffer_.release_fence_fd >= 0)) {
     *release_fence = output_buffer_.release_fence_fd;
   } else {
-    status = HWC2::Error::Unsupported;
+    status = HWC3::Error::Unsupported;
     *release_fence = -1;
   }
 
@@ -566,7 +572,7 @@ DisplayError HWCDisplayBuiltIn::TeardownConcurrentWriteback(void) {
   return error;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
+HWC3::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
                                                    uint32_t v_start, uint32_t v_end,
                                                    uint32_t factor_in, uint32_t factor_out) {
   DisplayError error = kErrorNone;
@@ -578,7 +584,7 @@ HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_
       factor_out > kMaxFactorVal) {
     DLOGE("Invalid roi region = [%u, %u, %u, %u, %u, %u]",
            h_start, h_end, v_start, v_end, factor_in, factor_out);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   GetPanelResolution(&panel_width, &panel_height);
@@ -587,7 +593,7 @@ HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_
       v_start >= panel_height || v_end > panel_height) {
     DLOGE("Invalid roi region = [%u, %u, %u, %u], panel resolution = [%u, %u]",
            h_start, h_end, v_start, v_end, panel_width, panel_height);
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
   dpps_ad4_roi_cfg.h_start = h_start;
@@ -599,11 +605,11 @@ HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_
 
   error = display_intf_->SetDisplayDppsAdROI(&dpps_ad4_roi_cfg);
   if (error)
-    return HWC2::Error::BadConfig;
+    return HWC3::Error::BadConfig;
 
   callbacks_->Refresh(id_);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 int HWCDisplayBuiltIn::Perform(uint32_t operation, ...) {
@@ -702,7 +708,7 @@ int HWCDisplayBuiltIn::HandleSecureSession(const std::bitset<kSecureMax> &secure
     return -EINVAL;
   }
 
-  if (current_power_mode_ != HWC2::PowerMode::On) {
+  if (current_power_mode_ != PowerMode::ON) {
     return 0;
   }
 
@@ -830,14 +836,14 @@ void HWCDisplayBuiltIn::HandleFrameDump() {
   }
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
+HWC3::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                                   int32_t format, bool post_processed) {
   HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, post_processed);
   dump_output_to_file_ = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
   DLOGI("output_layer_dump_enable %d", dump_output_to_file_);
 
   if (!count || !dump_output_to_file_ || (output_buffer_info_.alloc_buffer_info.fd >= 0)) {
-    return HWC2::Error::None;
+    return HWC3::Error::None;
   }
 
   // Allocate and map output buffer
@@ -856,7 +862,7 @@ HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_m
   if (buffer_allocator_->AllocateBuffer(&output_buffer_info_) != 0) {
     DLOGE("Buffer allocation failed");
     output_buffer_info_ = {};
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
   void *buffer = mmap(NULL, output_buffer_info_.alloc_buffer_info.size, PROT_READ | PROT_WRITE,
@@ -866,14 +872,14 @@ HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_m
     DLOGE("mmap failed with err %d", errno);
     buffer_allocator_->FreeBuffer(&output_buffer_info_);
     output_buffer_info_ = {};
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
   output_buffer_base_ = buffer;
   const native_handle_t *handle = static_cast<native_handle_t *>(output_buffer_info_.private_data);
   SetReadbackBuffer(handle, -1, post_processed);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 int HWCDisplayBuiltIn::FrameCaptureAsync(const BufferInfo &output_buffer_info,
@@ -954,21 +960,21 @@ DisplayError HWCDisplayBuiltIn::GetMixerResolution(uint32_t *width, uint32_t *he
   return display_intf_->GetMixerResolution(width, height);
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
+HWC3::Error HWCDisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
   // Client needs to ensure that config change and qsync mode change
   // are not triggered in the same drawcycle.
   if (pending_config_) {
     DLOGE("Failed to set qsync mode. Pending active config transition");
-    return HWC2::Error::Unsupported;
+    return HWC3::Error::Unsupported;
   }
 
   auto err = display_intf_->SetQSyncMode(qsync_mode);
   if (err != kErrorNone) {
-    return HWC2::Error::Unsupported;
+    return HWC3::Error::Unsupported;
   }
 
   validated_ = false;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 DisplayError HWCDisplayBuiltIn::ControlIdlePowerCollapse(bool enable, bool synchronous) {
@@ -1010,23 +1016,23 @@ DisplayError HWCDisplayBuiltIn::GetSupportedDSIClock(std::vector<uint64_t> *bitc
   return kErrorNotSupported;
 }
 
-HWC2::Error HWCDisplayBuiltIn::UpdateDisplayId(hwc2_display_t id) {
+HWC3::Error HWCDisplayBuiltIn::UpdateDisplayId(Display id) {
   id_ = id;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetPendingRefresh() {
+HWC3::Error HWCDisplayBuiltIn::SetPendingRefresh() {
   pending_refresh_ = true;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::UpdatePowerMode(HWC2::PowerMode mode) {
+HWC3::Error HWCDisplayBuiltIn::UpdatePowerMode(PowerMode mode) {
   current_power_mode_ = mode;
   validated_ = false;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::PostCommitLayerStack(int32_t *out_retire_fence) {
+HWC3::Error HWCDisplayBuiltIn::PostCommitLayerStack(int32_t *out_retire_fence) {
   if (pmic_notification_pending_) {
     // Wait for current commit to complete
     if (*out_retire_fence >= 0) {
@@ -1041,22 +1047,22 @@ HWC2::Error HWCDisplayBuiltIn::PostCommitLayerStack(int32_t *out_retire_fence) {
   return HWCDisplay::PostCommitLayerStack(out_retire_fence);
 }
 
-HWC2::Error HWCDisplayBuiltIn::SetPanelBrightness(float brightness) {
+HWC3::Error HWCDisplayBuiltIn::SetPanelBrightness(float brightness) {
   DisplayError ret = display_intf_->SetPanelBrightness(brightness);
   if (ret != kErrorNone) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayBuiltIn::GetPanelBrightness(float *brightness) {
+HWC3::Error HWCDisplayBuiltIn::GetPanelBrightness(float *brightness) {
   DisplayError ret = display_intf_->GetPanelBrightness(brightness);
   if (ret != kErrorNone) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 bool HWCDisplayBuiltIn::IsSmartPanelConfig(uint32_t config_id) {

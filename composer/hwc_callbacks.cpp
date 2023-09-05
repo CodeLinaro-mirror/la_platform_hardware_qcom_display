@@ -26,6 +26,13 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include "hwc_callbacks.h"
@@ -34,121 +41,103 @@
 
 namespace sdm {
 
-HWC2::Error HWCCallbacks::Hotplug(hwc2_display_t display, HWC2::Connection state) {
+HWC3::Error HWCCallbacks::Hotplug(Display display, bool state) {
   std::lock_guard<std::mutex> hotplug_lock(hotplug_mutex_);
   if (!hotplug_) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
-  hotplug_(hotplug_data_, display, INT32(state));
-  return HWC2::Error::None;
+  (*hotplug_)(hotplug_data_, display, INT32(state));
+    return HWC3::Error::None;
 }
 
-HWC2::Error HWCCallbacks::Refresh(hwc2_display_t display) {
+HWC3::Error HWCCallbacks::Refresh(Display display) {
   std::lock_guard<std::mutex> refresh_lock(refresh_mutex_);
   if (!refresh_) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
-  refresh_(refresh_data_, display);
+  (*refresh_)(refresh_data_, display);
   pending_refresh_.set(UINT32(display));
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCCallbacks::Vsync(hwc2_display_t display, int64_t timestamp) {
+HWC3::Error HWCCallbacks::Vsync(Display display, int64_t timestamp, uint32_t period) {
   std::lock_guard<std::mutex> vsync_lock(vsync_mutex_);
   if (!vsync_) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
   DTRACE_SCOPED();
-  vsync_(vsync_data_, display, timestamp);
-  return HWC2::Error::None;
+  (*vsync_)(vsync_data_, static_cast<long>(display), timestamp, static_cast<int>(period));
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCCallbacks::Vsync_2_4(hwc2_display_t display, int64_t timestamp, uint32_t period) {
-  std::lock_guard<std::mutex> vsync_2_4_lock(vsync_2_4_mutex_);
-  DTRACE_SCOPED();
-  if (!vsync_2_4_) {
-    return HWC2::Error::NoResources;
-  }
-
-  vsync_2_4_(vsync_2_4_data_, display, timestamp, period);
-  return HWC2::Error::None;
-}
-
-HWC2::Error HWCCallbacks::VsyncPeriodTimingChanged(
-    hwc2_display_t display, hwc_vsync_period_change_timeline_t *updated_timeline) {
+HWC3::Error HWCCallbacks::VsyncPeriodTimingChanged(
+    Display display, VsyncPeriodChangeTimeline *updated_timeline) {
   std::lock_guard<std::mutex>
     vsyncPeriodTimingChanged_lock(vsync_period_timing_changed_mutex_);
   DTRACE_SCOPED();
   if (!vsync_period_timing_changed_) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
-  vsync_period_timing_changed_(vsync_period_timing_changed_data_, display, updated_timeline);
-  return HWC2::Error::None;
+  (*vsync_period_timing_changed_)(vsync_period_timing_changed_data_, static_cast<long>(display), *updated_timeline);
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCCallbacks::SeamlessPossible(hwc2_display_t display) {
+HWC3::Error HWCCallbacks::SeamlessPossible(Display display) {
   std::lock_guard<std::mutex> seamlessPossible_lock(seamless_possible_mutex_);
   DTRACE_SCOPED();
   if (!seamless_possible_) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
-  seamless_possible_(seamless_possible_data_, display);
-  return HWC2::Error::None;
+  (*seamless_possible_)(seamless_possible_data_, static_cast<long>(display));
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCCallbacks::Register(HWC2::Callback descriptor, hwc2_callback_data_t callback_data,
-                                   hwc2_function_pointer_t pointer) {
+HWC3::Error HWCCallbacks::Register(CallbackCommand descriptor, void *callback_data,
+                                   void *pointer) {
   switch (descriptor) {
-    case HWC2::Callback::Hotplug:
+    case CALLBACK_HOTPLUG:
       {
         std::lock_guard<std::mutex> hotplug_lock(hotplug_mutex_);
         hotplug_data_ = callback_data;
-        hotplug_ = reinterpret_cast<HWC2_PFN_HOTPLUG>(pointer);
+        hotplug_ = static_cast<onHotplug_func_t *>(pointer);
       }
       break;
-    case HWC2::Callback::Refresh:
+    case CALLBACK_REFRESH:
       {
         std::lock_guard<std::mutex> refresh_lock(refresh_mutex_);
         refresh_data_ = callback_data;
-        refresh_ = reinterpret_cast<HWC2_PFN_REFRESH>(pointer);
+        refresh_ = static_cast<onRefresh_func_t *>(pointer);
       }
       break;
-    case HWC2::Callback::Vsync:
+    case CALLBACK_VSYNC:
       {
         std::lock_guard<std::mutex> vsync_lock(vsync_mutex_);
         vsync_data_ = callback_data;
-        vsync_ = reinterpret_cast<HWC2_PFN_VSYNC>(pointer);
+        vsync_ = static_cast<onVsync_func_t *>(pointer);
       }
       break;
-    case HWC2::Callback::Vsync_2_4:
-      {
-        std::lock_guard<std::mutex> vsync_2_4_lock(vsync_2_4_mutex_);
-        vsync_2_4_data_ = callback_data;
-        vsync_2_4_ = reinterpret_cast<HWC2_PFN_VSYNC_2_4>(pointer);
-      }
-      break;
-    case HWC2::Callback::VsyncPeriodTimingChanged:
+    case CALLBACK_VSYNC_PERIOD_TIMING_CHANGED:
       {
         std::lock_guard<std::mutex>
           vsyncPeriodTimingChanged_lock(vsync_period_timing_changed_mutex_);
         vsync_period_timing_changed_data_ = callback_data;
         vsync_period_timing_changed_ =
-          reinterpret_cast<HWC2_PFN_VSYNC_PERIOD_TIMING_CHANGED>(pointer);
+                static_cast<onVsyncPeriodTimingChanged_func_t *>(pointer);
       }
       break;
-    case HWC2::Callback::SeamlessPossible:
+    case CALLBACK_SEAMLESS_POSSIBLE:
       {
         std::lock_guard<std::mutex> seamlessPossible_lock(seamless_possible_mutex_);
         seamless_possible_data_ = callback_data;
-        seamless_possible_ = reinterpret_cast<HWC2_PFN_SEAMLESS_POSSIBLE>(pointer);
+        seamless_possible_ = static_cast<onSeamlessPossible_func_t *>(pointer);
       }
       break;
     default:
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm

@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -41,7 +47,7 @@ namespace sdm {
 
 int HWCDisplayPluggable::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                               qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                               qService::QService *qservice, Display id, int32_t sdm_id,
                                uint32_t primary_width, uint32_t primary_height,
                                bool use_primary_res, HWCDisplay **hwc_display) {
   uint32_t pluggable_width = 0;
@@ -99,7 +105,7 @@ int HWCDisplayPluggable::Init() {
   return status;
 }
 
-HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
+HWC3::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
                                                    android_color_transform_t hint) {
   if (HAL_COLOR_TRANSFORM_IDENTITY == hint) {
     has_color_tranform_ = false;
@@ -114,7 +120,7 @@ HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
   callbacks_->Refresh(id_);
   validated_ = false;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 void HWCDisplayPluggable::Destroy(HWCDisplay *hwc_display) {
@@ -129,14 +135,14 @@ HWCDisplayPluggable::HWCDisplayPluggable(CoreInterface *core_intf,
                                          HWCCallbacks *callbacks,
                                          HWCDisplayEventHandler *event_handler,
                                          qService::QService *qservice,
-                                         hwc2_display_t id,
+                                         Display id,
                                          int32_t sdm_id)
     : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kPluggable, id,
                  sdm_id, false, DISPLAY_CLASS_PLUGGABLE) {
 }
 
-HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  auto status = HWC3::Error::None;
 
   if (active_secure_sessions_[kSecureDisplay]) {
     MarkLayersForGPUBypass();
@@ -153,7 +159,7 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
 
   status = color_mode_->ApplyCurrentColorModeWithRenderIntent(
                                                  static_cast<bool>(layer_stack_.flags.hdr_present));
-  if (status != HWC2::Error::None || has_color_tranform_) {
+  if (status != HWC3::Error::None || has_color_tranform_) {
     // Fallback to GPU Composition if Color Mode can't be applied or if a color tranform needs to be
     // applied.
 
@@ -166,19 +172,19 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
   return status;
 }
 
-HWC2::Error HWCDisplayPluggable::Present(int32_t *out_retire_fence) {
-  auto status = HWC2::Error::None;
+HWC3::Error HWCDisplayPluggable::Present(int32_t *out_retire_fence) {
+  auto status = HWC3::Error::None;
 
   if (!active_secure_sessions_[kSecureDisplay]) {
     status = HWCDisplay::CommitLayerStack();
-    if (status == HWC2::Error::None) {
+    if (status == HWC3::Error::None) {
       status = HWCDisplay::PostCommitLayerStack(out_retire_fence);
     }
   }
   return status;
 }
 
-void HWCDisplayPluggable::ApplyScanAdjustment(hwc_rect_t *display_frame) {
+void HWCDisplayPluggable::ApplyScanAdjustment(Rect *display_frame) {
   if ((underscan_width_ <= 0) || (underscan_height_ <= 0)) {
     return;
   }
@@ -261,7 +267,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
       }
       validated_ = false;
 
-      SetVsyncEnabled(HWC2::Vsync::Enable);
+      SetVsyncEnabled(true);
 
       display_null_.SetActive(false);
       DLOGI("Display is connected successfully.");
@@ -286,7 +292,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
       }
       display_null_.SetFrameBufferConfig(fb_config);
 
-      SetVsyncEnabled(HWC2::Vsync::Disable);
+      SetVsyncEnabled(false);
       core_intf_->DestroyDisplay(display_intf_);
       display_intf_ = &display_null_;
 
@@ -312,32 +318,32 @@ DisplayError HWCDisplayPluggable::Flush() {
   return display_intf_->Flush(&layer_stack_);
 }
 
-HWC2::Error HWCDisplayPluggable::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
+HWC3::Error HWCDisplayPluggable::GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes) {
   if (out_modes == nullptr) {
     *out_num_modes = color_mode_->GetColorModeCount();
   } else {
     color_mode_->GetColorModes(out_num_modes, out_modes);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayPluggable::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+HWC3::Error HWCDisplayPluggable::GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                                  RenderIntent *out_intents) {
   if (out_intents == nullptr) {
     *out_num_intents = color_mode_->GetRenderIntentCount(mode);
   } else {
     color_mode_->GetRenderIntents(mode, out_num_intents, out_intents);
   }
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayPluggable::SetColorMode(ColorMode mode) {
+HWC3::Error HWCDisplayPluggable::SetColorMode(ColorMode mode) {
   return SetColorModeWithRenderIntent(mode, RenderIntent::COLORIMETRIC);
 }
 
-HWC2::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
+HWC3::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
   auto status = color_mode_->CacheColorModeWithRenderIntent(mode, intent);
-  if (status != HWC2::Error::None) {
+  if (status != HWC3::Error::None) {
     DLOGE("failed for mode = %d intent = %d", mode, intent);
     return status;
   }
@@ -348,10 +354,10 @@ HWC2::Error HWCDisplayPluggable::SetColorModeWithRenderIntent(ColorMode mode, Re
   return status;
 }
 
-HWC2::Error HWCDisplayPluggable::UpdatePowerMode(HWC2::PowerMode mode) {
+HWC3::Error HWCDisplayPluggable::UpdatePowerMode(PowerMode mode) {
   current_power_mode_ = mode;
   validated_ = false;
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm

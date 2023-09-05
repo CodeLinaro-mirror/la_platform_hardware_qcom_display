@@ -1,6 +1,5 @@
 /*
 * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,6 +26,12 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <core/buffer_allocator.h>
 #include <utils/debug.h>
@@ -159,7 +164,7 @@ int HWCSession::SetDisplayStatus(int disp_id, HWCDisplay::DisplayStatus status) 
   }
 
   if (status == HWCDisplay::kDisplayStatusResume || status == HWCDisplay::kDisplayStatusPause) {
-    hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+    Display active_builtin_disp_id = GetActiveBuiltinDisplay();
     if (active_builtin_disp_id < HWCCallbacks::kNumDisplays) {
       {
         SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
@@ -303,11 +308,10 @@ int HWCSession::DisplayConfigImpl::SetPanelBrightness(uint32_t level) {
     return -EINVAL;
   }
 
-  hwc2_device_t *device = static_cast<hwc2_device_t *>(hwc_session_);
   if (level == 0) {
-    return INT32(hwc_session_->SetDisplayBrightness(device, HWC_DISPLAY_PRIMARY, -1.0f));
+    return INT32(hwc_session_->SetDisplayBrightness(HWC_DISPLAY_PRIMARY, -1.0f));
   } else {
-    return INT32(hwc_session_->SetDisplayBrightness(device, HWC_DISPLAY_PRIMARY,
+    return INT32(hwc_session_->SetDisplayBrightness(HWC_DISPLAY_PRIMARY,
                                                     (level - 1)/254.0f));
   }
 }
@@ -463,7 +467,7 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
     float out_min_luminance = 0.0f;
     if (hwc_display->GetHdrCapabilities(&out_num_types, nullptr, &out_max_luminance,
                                         &out_max_average_luminance, &out_min_luminance)
-                                        != HWC2::Error::None) {
+                                        != HWC3::Error::None) {
       break;
     }
     if (!out_num_types) {
@@ -476,7 +480,7 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
 
     if (hwc_display->GetHdrCapabilities(&out_num_types, caps->supported_hdr_types.data(),
                                         &out_max_luminance, &out_max_average_luminance,
-                                        &out_min_luminance) == HWC2::Error::None) {
+                                        &out_min_luminance) == HWC3::Error::None) {
       error = 0;
     }
   } while (false);
@@ -485,7 +489,7 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
 }
 
 int HWCSession::SetCameraLaunchStatus(uint32_t on) {
-  hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+  Display active_builtin_disp_id = GetActiveBuiltinDisplay();
   if (active_builtin_disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("No active displays");
     return -EINVAL;
@@ -547,12 +551,12 @@ int HWCSession::DisplayConfigImpl::DisplayBWTransactionPending(bool *status) {
 }
 
 int HWCSession::DisplayConfigImpl::SetDisplayAnimating(uint64_t display_id, bool animating) {
-  return hwc_session_->CallDisplayFunction(static_cast<hwc2_device_t *>(hwc_session_), display_id,
-                                           &HWCDisplay::SetDisplayAnimating, animating);
+  return static_cast<int> (hwc_session_->CallDisplayFunction(display_id,
+                                           &HWCDisplay::SetDisplayAnimating, animating));
 }
 
 int HWCSession::ControlIdlePowerCollapse(bool enable, bool synchronous) {
-  hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+  Display active_builtin_disp_id = GetActiveBuiltinDisplay();
   if (active_builtin_disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("No active displays");
     return -EINVAL;
@@ -622,9 +626,9 @@ int HWCSession::DisplayConfigImpl::GetWriteBackCapabilities(bool *isWbUbwcSuppor
 int HWCSession::SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start,
                                     uint32_t h_end, uint32_t v_start, uint32_t v_end,
                                     uint32_t factor_in, uint32_t factor_out) {
-  return CallDisplayFunction(static_cast<hwc2_device_t *>(this), display_id,
+  return static_cast<int> (CallDisplayFunction(display_id,
                              &HWCDisplay::SetDisplayDppsAdROI, h_start, h_end, v_start, v_end,
-                             factor_in, factor_out);
+                             factor_in, factor_out));
 }
 
 int HWCSession::DisplayConfigImpl::SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start,
@@ -666,7 +670,7 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
 
   DLOGI("disp_id: %d power_mode: %d", disp_id, power_mode);
   HWCDisplay::HWCLayerStack stack = {};
-  hwc2_display_t dummy_disp_id = hwc_session_->map_hwc_display_.at(disp_id);
+  Display dummy_disp_id = hwc_session_->map_hwc_display_.at(disp_id);
 
   {
     // Power state transition start.
@@ -683,7 +687,7 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
 
   {
     SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-    auto mode = static_cast<HWC2::PowerMode>(power_mode);
+    auto mode = static_cast<PowerMode>(power_mode);
     hwc_session_->hwc_display_[disp_id]->SetPowerMode(mode, false /* teardown */);
   }
 
@@ -774,15 +778,15 @@ int HWCSession::DisplayConfigImpl::GetDebugProperty(const std::string prop_name,
 int HWCSession::DisplayConfigImpl::GetActiveBuiltinDisplayAttributes(
                                           DisplayConfig::Attributes *attr) {
   int error = -EINVAL;
-  hwc2_display_t disp_id = hwc_session_->GetActiveBuiltinDisplay();
+  Display disp_id = hwc_session_->GetActiveBuiltinDisplay();
 
   if (disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("Invalid display = %d", disp_id);
   } else {
     if (hwc_session_->hwc_display_[disp_id]) {
       uint32_t config_index = 0;
-      HWC2::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
-      if (ret != HWC2::Error::None) {
+      HWC3::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
+      if (ret != HWC3::Error::None) {
         goto err;
       }
       DisplayConfigVariableInfo var_info;
@@ -936,11 +940,11 @@ int HWCSession::DisplayConfigImpl::SetQsyncMode(uint32_t disp_id, DisplayConfig:
 
 int32_t HWCSession::getDisplayBrightness(uint32_t display, float *brightness) {
   if (!brightness) {
-    return HWC2_ERROR_BAD_PARAMETER;
+    return static_cast<int32_t> (HWC3::Error::BadParameter);
   }
 
   if (display >= HWCCallbacks::kNumDisplays) {
-    return HWC2_ERROR_BAD_DISPLAY;
+    return static_cast<int32_t> (HWC3::Error::BadDisplay);
   }
 
   SEQUENCE_WAIT_SCOPE_LOCK(locker_[display]);
@@ -959,8 +963,8 @@ int32_t HWCSession::getDisplayBrightness(uint32_t display, float *brightness) {
 }
 
 int32_t HWCSession::setDisplayBrightness(uint32_t display, float brightness) {
-  return SetDisplayBrightness(static_cast<hwc2_device_t *>(this),
-                              static_cast<hwc2_display_t>(display), brightness);
+  return static_cast<int32_t> (SetDisplayBrightness(static_cast<Display>(display),
+                               brightness));
 }
 
 }  // namespace sdm

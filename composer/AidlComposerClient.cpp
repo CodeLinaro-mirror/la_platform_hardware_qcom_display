@@ -90,12 +90,23 @@ AidlComposerClient::~AidlComposerClient() {
     } else {
       ALOGW("%s: Performing a final presentDisplay", __FUNCTION__);
 
-      mCommandEngine->validateDisplay(dpy.first);
+      std::vector<sdm::LayerId> changedLayers;
+      std::vector<Composition> compositionTypes;
+      uint32_t displayRequestMask;
+      std::vector<sdm::LayerId> requestedLayers;
+      std::vector<int32_t> requestMasks;
+      ClientTargetProperty clientTargetProperty;
+
+      mCommandEngine->validateDisplay(dpy.first, changedLayers, compositionTypes,
+                                      displayRequestMask, requestedLayers, requestMasks,
+                                      clientTargetProperty);
 
       hwc_session_->AcceptDisplayChanges(dpy.first);
 
-      shared_ptr<Fence> presentFence = nullptr;
-      mCommandEngine->presentDisplay(dpy.first, &presentFence);
+      int32_t presentFence = -1;
+      std::vector<sdm::LayerId> layers;
+      std::vector<int32_t> fences;
+      mCommandEngine->presentDisplay(dpy.first, &presentFence, layers, fences);
     }
   }
 
@@ -211,21 +222,7 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
                                                   std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
-  std::lock_guard<std::mutex> hwc_lock(hwc_session_->command_seq_mutex_);
-
   Error error = mCommandEngine->execute(in_commands, aidl_return);
-
-  return TO_BINDER_STATUS(INT32(error));
-}
-
-ScopedAStatus AidlComposerClient::executeQtiCommands(
-    const std::vector<QtiDisplayCommand> &in_commands,
-    std::vector<CommandResultPayload> *aidl_return) {
-  std::lock_guard<std::mutex> lock(m_command_mutex_);
-
-  std::lock_guard<std::mutex> hwc_lock(hwc_session_->command_seq_mutex_);
-
-  Error error = mCommandEngine->qtiExecute(in_commands, aidl_return);
 
   return TO_BINDER_STATUS(INT32(error));
 }
@@ -490,13 +487,15 @@ ScopedAStatus AidlComposerClient::getReadbackBufferAttributes(
 
 ScopedAStatus AidlComposerClient::getReadbackBufferFence(int64_t in_display,
                                                          ::ndk::ScopedFileDescriptor *aidl_return) {
-  shared_ptr<Fence> fence = nullptr;
+  int32_t fence = -1;
   auto error = hwc_session_->GetReadbackBufferFence(in_display, &fence);
   if (error != Error::None) {
     return TO_BINDER_STATUS(INT32(error));
   }
 
-  *aidl_return = ::ndk::ScopedFileDescriptor(Fence::Dup(fence));
+  *aidl_return = ::ndk::ScopedFileDescriptor(::dup(fence));
+  if (fence >= 0)
+    ::close(fence);
 
   return TO_BINDER_STATUS(INT32(error));
 }
@@ -644,14 +643,12 @@ ScopedAStatus AidlComposerClient::setPowerMode(int64_t in_display, PowerMode in_
 ScopedAStatus AidlComposerClient::setReadbackBuffer(
     int64_t in_display, const NativeHandle &in_buffer,
     const ::ndk::ScopedFileDescriptor &in_release_fence) {
-  shared_ptr<Fence> fence = nullptr;
+  int32_t fence = -1;
   buffer_handle_t buffer = ::android::makeFromAidl(in_buffer);
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(in_release_fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
-
-  fence = Fence::Create(fd, "read_back");
-
+  fence = fd;
   {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
     if (mDisplayData.find(in_display) == mDisplayData.end()) {
@@ -673,7 +670,7 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
 }
 
 ScopedAStatus AidlComposerClient::setVsyncEnabled(int64_t in_display, bool in_enabled) {
-  auto error = hwc_session_->SetVsyncEnabled(in_display, static_cast<int32_t>(in_enabled));
+  auto error = hwc_session_->SetVsyncEnabled(in_display, in_enabled);
 
   return TO_BINDER_STATUS(INT32(error));
 }
@@ -869,33 +866,6 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
   return (mCommandIndex) ? Error::None : Error::BadParameter;
 }
 
-Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplayCommand> &commands,
-                                                    std::vector<CommandResultPayload> *result) {
-  for (const auto &displayCmd : commands) {
-    for (const auto &layerCmd : displayCmd.qtiLayers) {
-      ExecuteCommand(layerCmd.qtiLayerType, &CommandEngine::executeSetLayerType, displayCmd.display,
-                     layerCmd.layer, layerCmd.qtiLayerType);
-      ExecuteCommand(layerCmd.qtiLayerFlags, &CommandEngine::executeSetLayerFlag,
-                     displayCmd.display, layerCmd.layer, layerCmd.qtiLayerFlags);
-    }
-    ExecuteCommand(displayCmd.clientTarget_3_1, &CommandEngine::executeSetClientTarget_3_1,
-                   displayCmd.display, *displayCmd.clientTarget_3_1);
-    ExecuteCommand(displayCmd.time, &CommandEngine::executeSetDisplayElapseTime, displayCmd.display,
-                   displayCmd.time);
-
-    ++mCommandIndex;
-  }
-
-  if (!mCommandIndex) {
-    ALOGW("%s: No command found", __FUNCTION__);
-  }
-
-  *result = mWriter->getPendingCommandResults();
-  reset();
-
-  return (mCommandIndex) ? Error::None : Error::BadParameter;
-}
-
 void AidlComposerClient::CommandEngine::executeSetColorTransform(int64_t display,
                                                                  const std::vector<float> &matrix) {
   auto err = mClient.hwc_session_->SetColorTransform(display, matrix);
@@ -910,16 +880,11 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
   buffer_handle_t clientTarget =
       useCache ? nullptr : ::android::makeFromAidl(*command.buffer.handle);
   native_handle_t *clientTargetClone = const_cast<native_handle_t *>(clientTarget);
-  shared_ptr<Fence> fence = nullptr;
+  int32_t fence = -1;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(command.buffer.fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
-
-  fence = Fence::Create(fd, "fbt");
-  if (fence == nullptr) {
-    ALOGV("%s: Failed to dup fence %d", __FUNCTION__, fd);
-    sync_wait(fd, -1);
-  }
+  fence = fd;
 
   sdm::Region region = {command.damage.size(),
                         reinterpret_cast<Rect const *>(command.damage.data())};
@@ -961,16 +926,11 @@ void AidlComposerClient::CommandEngine::executeSetOutputBuffer(uint64_t display,
   bool useCache = !buffer.handle;
   buffer_handle_t outputBuffer = useCache ? nullptr : ::android::makeFromAidl(*buffer.handle);
   native_handle_t *outputBufferClone = const_cast<native_handle_t *>(outputBuffer);
-  shared_ptr<Fence> fence = nullptr;
+  int32_t fence = -1;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(buffer.fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
-
-  fence = Fence::Create(fd, "outbuf");
-  if (fence == nullptr) {
-    ALOGV("%s: Failed to dup fence %d", __FUNCTION__, fd);
-    sync_wait(fd, -1);
-  }
+  fence = fd;
 
   auto err = lookupBuffer(display, -1, BufferCache::OUTPUT_BUFFERS, buffer.slot, useCache,
                           outputBuffer, &outputBuffer);
@@ -995,9 +955,26 @@ void AidlComposerClient::CommandEngine::executeValidateDisplay(
     int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime) {
   executeSetExpectedPresentTimeInternal(display, expectedPresentTime);
 
-  auto err = validateDisplay(display);
+  std::vector<sdm::LayerId> changedLayers;
+  std::vector<Composition> compositionTypes;
+  uint32_t displayRequestMask;
+  std::vector<sdm::LayerId> requestedLayers;
+  std::vector<int32_t> requestMasks;
+  ClientTargetProperty clientTargetProperty;
 
-  if (err != Error::None) {
+  auto err = validateDisplay(display, changedLayers, compositionTypes, displayRequestMask,
+                             requestedLayers, requestMasks, clientTargetProperty);
+
+  if (err == Error::None) {
+    mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(changedLayers),
+                                       compositionTypes);
+    mWriter->setDisplayRequests(display, displayRequestMask,
+                               static_cast<std::vector<int64_t>>(requestedLayers),
+                               requestMasks);
+    static constexpr float kBrightness = 1.f;
+    DimmingStage dimmingStage = DimmingStage::NONE;
+    mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
+  } else {
     writeError(__FUNCTION__, err);
   }
 }
@@ -1006,36 +983,52 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
     int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime) {
   executeSetExpectedPresentTimeInternal(display, expectedPresentTime);
 
-  // Handle unified commit.
-  bool needsCommit = false;
-  shared_ptr<Fence> presentFence = nullptr;
-  uint32_t typesCount = 0;
-  uint32_t reqsCount = 0;
-  bool validate_only = false;
-  auto status = mClient.hwc_session_->CommitOrPrepare(display, validate_only, &presentFence,
-                                                      &typesCount, &reqsCount, &needsCommit);
-  if (needsCommit) {
-    if (status != Error::None && status != Error::HasChanges) {
-      ALOGE("%s: CommitOrPrepare failed %d", __FUNCTION__, status);
-    }
-    // Implement post validation. Getcomptypes etc;
-    postValidateDisplay(display, typesCount, reqsCount);
-    mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
-  } else {
-    if (status == Error::HasChanges) {
-      // Perform post validate.
-      auto error = postValidateDisplay(display, typesCount, reqsCount);
-      if (error == Error::None) {
-        mClient.hwc_session_->AcceptDisplayChanges(display);
-      }
-      // Set result to validated, has comp changes
-      mWriter->setPresentOrValidateResult(display, static_cast<PresentOrValidate::Result>(2));
-    } else {
-      // Set result to Presented.
+  int32_t presentFence = -1;
+  std::vector<sdm::LayerId> layers;
+  std::vector<int32_t> fences;
+  std::vector<::ndk::ScopedFileDescriptor> aidlReleaseFences;
+  auto err = presentDisplay(display, &presentFence, layers, fences);
+  if (err == Error::None) {
       mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Presented);
-    }
-    // perform post present display.
-    postPresentDisplay(display, &presentFence);
+      mWriter->setPresentFence(display,
+                              std::move(::ndk::ScopedFileDescriptor(::dup(presentFence))));
+      if (presentFence >= 0)
+          ::close(presentFence);
+
+      // Convert from Fence to ScopedFileDescriptor
+      for (auto const fd : fences) {
+        aidlReleaseFences.emplace_back(::ndk::ScopedFileDescriptor(::dup(fd)));
+        if (fd >= 0)
+          ::close(fd);
+      }
+      mWriter->setReleaseFences(display, layers, std::move(aidlReleaseFences));
+      return;
+  }
+
+  // Present has failed. We need to fallback to validate
+  std::vector<sdm::LayerId> changedLayers;
+  std::vector<Composition> compositionTypes;
+  uint32_t displayRequestMask = 0x0;
+  std::vector<sdm::LayerId> requestedLayers;
+  std::vector<int32_t> requestMasks;
+  ClientTargetProperty clientTargetProperty;
+
+  err = validateDisplay(display, changedLayers, compositionTypes, displayRequestMask,
+                             requestedLayers, requestMasks, clientTargetProperty);
+  // mResources->setDisplayMustValidateState(mDisplay, false);
+  if (err == Error::None) {
+    mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
+    mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(changedLayers),
+                                       compositionTypes);
+    mWriter->setDisplayRequests(display, displayRequestMask,
+                               static_cast<std::vector<int64_t>>(requestedLayers),
+                               requestMasks);
+    static constexpr float kBrightness = 1.f;
+    DimmingStage dimmingStage = DimmingStage::NONE;
+    mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
+  } else {
+
+    writeError(__FUNCTION__, err);
   }
 }
 
@@ -1046,21 +1039,54 @@ void AidlComposerClient::CommandEngine::executeAcceptDisplayChanges(int64_t disp
   }
 }
 
-Error AidlComposerClient::CommandEngine::presentDisplay(int64_t display,
-                                                        shared_ptr<Fence> *presentFence) {
+Error AidlComposerClient::CommandEngine::presentDisplay(int64_t display,int32_t *presentFence,
+                                                  std::vector<sdm::LayerId>& layers,
+                                                  std::vector<int32_t>& releaseFences) {
   auto err = mClient.hwc_session_->PresentDisplay(display, presentFence);
   if (err != Error::None) {
-    return err;
+    return static_cast<Error>(err);
   }
 
-  return postPresentDisplay(display, presentFence);
+  uint32_t count = 0;
+  err = mClient.hwc_session_->GetReleaseFences(display, &count, nullptr, nullptr);
+  if (err != Error::None) {
+    ALOGW("failed to get release fences");
+    return Error::None;
+  }
+
+  layers.resize(count);
+  releaseFences.resize(count);
+  err = mClient.hwc_session_->GetReleaseFences(display, &count, layers.data(), &releaseFences);
+  if (err != Error::None) {
+    ALOGW("failed to get release fences");
+    layers.clear();
+    releaseFences.clear();
+    return Error::None;
+  }
+
+  return static_cast<Error>(err);
 }
 
 void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
-  shared_ptr<Fence> presentFence = nullptr;
+  int32_t presentFence = -1;
+  std::vector<sdm::LayerId> layers;
+  std::vector<int32_t> fences;
+  std::vector<::ndk::ScopedFileDescriptor> aidlReleaseFences;
 
-  auto err = presentDisplay(display, &presentFence);
-  if (err != Error::None) {
+  auto err = presentDisplay(display, &presentFence, layers, fences);
+  if (err == Error::None) {
+      mWriter->setPresentFence(display,
+                              std::move(::ndk::ScopedFileDescriptor(::dup(presentFence))));
+      if (presentFence >= 0)
+         ::close(presentFence);
+      // Convert from Fence to ScopedFileDescriptor
+      for (auto const fd : fences) {
+        aidlReleaseFences.emplace_back(::ndk::ScopedFileDescriptor(::dup(fd)));
+        if (fd >= 0)
+         ::close(fd);
+      }
+      mWriter->setReleaseFences(display, layers, std::move(aidlReleaseFences));
+  } else {
     writeError(__FUNCTION__, err);
   }
 }
@@ -1080,16 +1106,11 @@ void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, i
   bool useCache = !buffer.handle;
   buffer_handle_t layerBuffer = useCache ? nullptr : ::android::makeFromAidl(*buffer.handle);
   native_handle_t *layerBufferClone = const_cast<native_handle_t *>(layerBuffer);
-  shared_ptr<Fence> fence = nullptr;
+  int32_t fence = -1;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(buffer.fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
-
-  fence = Fence::Create(fd, "layer");
-  if (fence == nullptr) {
-    ALOGV("%s: Failed to dup fence %d", __FUNCTION__, fd);
-    sync_wait(fd, -1);
-  }
+  fence = fd;
 
   auto error = lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, buffer.slot, useCache,
                             layerBuffer, &layerBuffer);
@@ -1270,27 +1291,12 @@ void AidlComposerClient::CommandEngine::executeSetLayerPerFrameMetadataBlobs(
 
 void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
     int64_t display, int64_t layer, const LayerBrightness &brightness) {
-  auto err = mClient.hwc_session_->SetLayerBrightness(display, layer, brightness.brightness);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
-  }
+  //writeError(__FUNCTION__, Error::Unsupported);
 }
 
 void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(
     int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime) {
-  if (!expectedPresentTime.has_value()) {
-    return;
-  }
-
-  uint64_t expectedPresentTimestamp = 0;
-  if (expectedPresentTime->timestampNanos > 0) {
-    expectedPresentTimestamp = static_cast<uint64_t>(expectedPresentTime->timestampNanos);
-  }
-
-  auto err = mClient.hwc_session_->SetExpectedPresentTime(display, expectedPresentTimestamp);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
-  }
+  //writeError(__FUNCTION__, Error::Unsupported);
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
@@ -1303,74 +1309,33 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   // writeError(__FUNCTION__, Error::Unsupported);
 }
 
-Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
-  bool validate_only = true;
-  bool needsCommit = false;
+
+Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display,
+                                       std::vector<sdm::LayerId>& changedLayers,
+                                       std::vector<Composition>& compositionTypes,
+                                       uint32_t& displayRequestMask,
+                                       std::vector<sdm::LayerId>& requestedLayers,
+                                       std::vector<int32_t>& requestMasks,
+                                       ClientTargetProperty& clientTargetProperty) {
   uint32_t types_count = 0;
   uint32_t reqs_count = 0;
-  shared_ptr<Fence> presentFence = nullptr;
 
-  auto err = mClient.hwc_session_->CommitOrPrepare(display, validate_only, &presentFence,
-                                                   &types_count, &reqs_count, &needsCommit);
+  auto err = mClient.hwc_session_->ValidateDisplay(display, &types_count, &reqs_count);
   if (err != Error::None && err != Error::HasChanges) {
     return err;
   }
 
-  return postValidateDisplay(display, types_count, reqs_count);
-}
-
-Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
-                                                            shared_ptr<Fence> *presentFence) {
-  uint32_t count = 0;
-  auto err = mClient.hwc_session_->GetReleaseFences(display, &count, nullptr, nullptr);
+  err = mClient.hwc_session_->GetChangedCompositionTypes(display, &types_count, nullptr, nullptr);
   if (err != Error::None) {
-    ALOGW("%s: Failed to get release fences", __FUNCTION__);
-    return Error::None;
+    return static_cast<Error>(err);
   }
 
-  std::vector<sdm::LayerId> layers;
-  std::vector<shared_ptr<Fence>> releaseFences;
-  std::vector<::ndk::ScopedFileDescriptor> aidlReleaseFences;
-  layers.resize(count);
-  releaseFences.resize(count);
-  err = mClient.hwc_session_->GetReleaseFences(display, &count, layers.data(), &releaseFences);
-  if (err != Error::None) {
-    ALOGW("%s: Failed to get release fences", __FUNCTION__);
-    layers.clear();
-    releaseFences.clear();
-    return Error::None;
-  }
-
-  // Convert from Fence to ScopedFileDescriptor
-  for (auto const &fd : releaseFences) {
-    aidlReleaseFences.emplace_back(::ndk::ScopedFileDescriptor(Fence::Dup(fd)));
-  }
-
-  mWriter->setPresentFence(display,
-                           std::move(::ndk::ScopedFileDescriptor(Fence::Dup(*presentFence))));
-  mWriter->setReleaseFences(display, layers, std::move(aidlReleaseFences));
-
-  return Error::None;
-}
-
-Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, uint32_t &types_count,
-                                                             uint32_t &reqs_count) {
-  std::vector<sdm::LayerId> changedLayers;
-  std::vector<Composition> compositionTypes;
-  std::vector<sdm::LayerId> requestedLayers;
-  std::vector<int32_t> requestMasks;
-  ClientTargetProperty clientTargetProperty;
   changedLayers.resize(types_count);
   compositionTypes.resize(types_count);
-  auto err =
-      mClient.hwc_session_->GetChangedCompositionTypes(display, &types_count, nullptr, nullptr);
-  if (err != Error::None) {
-    return err;
-  }
-
-  err = mClient.hwc_session_->GetChangedCompositionTypes(
-      display, &types_count, changedLayers.data(),
-      reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
+  err = mClient.hwc_session_->GetChangedCompositionTypes(display, &types_count,
+                        changedLayers.data(),
+                        reinterpret_cast<std::underlying_type<Composition>::type*>(
+                        compositionTypes.data()));
 
   if (err != Error::None) {
     changedLayers.clear();
@@ -1384,93 +1349,16 @@ Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, ui
   if (err != Error::None) {
     changedLayers.clear();
     compositionTypes.clear();
-    return err;
+    return static_cast<Error>(err);
   }
 
   requestedLayers.resize(reqs_count);
   requestMasks.resize(reqs_count);
   err = mClient.hwc_session_->GetDisplayRequests(display, &display_reqs, &reqs_count,
-                                                 requestedLayers.data(), requestMasks.data());
-  if (err != Error::None) {
-    changedLayers.clear();
-    compositionTypes.clear();
+                                                 requestedLayers.data(),
+                                                 reinterpret_cast<int32_t*>(requestMasks.data()));
 
-    requestedLayers.clear();
-    requestMasks.clear();
-  }
-
-  err = mClient.hwc_session_->GetClientTargetProperty(display, &clientTargetProperty);
-  if (err != Error::None) {
-    // todo: reset to default values
-    return err;
-  }
-
-  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(changedLayers),
-                                      compositionTypes);
-  mWriter->setDisplayRequests(display, display_reqs,
-                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
-  static constexpr float kBrightness = 1.f;
-  DimmingStage dimmingStage = DimmingStage::NONE;
-  mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
-
-  return err;
-}
-
-// TODO: Re-add extensions API
-void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t display,
-                                                                   const ClientTarget &command) {
-  bool useCache = true;
-  buffer_handle_t clientTarget = nullptr;
-  shared_ptr<Fence> fence = nullptr;
-  auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(command.buffer.fence);
-  auto fd = sfd.get();
-  *sfd.getR() = -1;
-
-  fence = Fence::Create(fd, "fbt");
-  if (fence == nullptr) {
-    ALOGW("%s: Failed to dup fence %d", __FUNCTION__, fd);
-    sync_wait(fd, -1);
-  }
-
-  sdm::Region region = {};
-  auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
-                          clientTarget, &clientTarget);
-  if (err == Error::None) {
-    err = mClient.hwc_session_->SetClientTarget_3_1(display, clientTarget, fence,
-                                                    INT32(command.dataspace), region);
-    auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
-                                     useCache, clientTarget);
-    if (err == Error::None) {
-      err = updateBufErr;
-    }
-  }
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
-  }
-}
-
-void AidlComposerClient::CommandEngine::executeSetDisplayElapseTime(int64_t display,
-                                                                    uint64_t time) {
-  auto err = mClient.hwc_session_->SetDisplayElapseTime(display, time);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
-  }
-}
-
-void AidlComposerClient::CommandEngine::executeSetLayerType(int64_t display, int64_t layer,
-                                                            sdm::LayerType type) {
-  auto err = mClient.hwc_session_->SetLayerType(display, layer, type);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
-  }
-}
-
-void AidlComposerClient::CommandEngine::executeSetLayerFlag(int64_t display, int64_t layer,
-                                                            sdm::LayerFlag flag) {
-  auto err = mClient.hwc_session_->SetLayerFlag(display, layer, flag);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
-  }
+  return static_cast<Error>(err);
 }
 
 Error AidlComposerClient::CommandEngine::lookupBufferCacheEntryLocked(
