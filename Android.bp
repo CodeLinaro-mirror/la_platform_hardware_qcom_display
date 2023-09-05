@@ -9,12 +9,15 @@ soong_config_module_type {
         "gralloc4",
         "default",
         "var3",
+        "platform_version_12",
+        "platform_version_13",
     ],
     properties: [
         "cflags",
         "enabled",
         "srcs",
         "header_libs",
+        "shared_libs",
     ],
 }
 
@@ -120,6 +123,18 @@ qtidisplay_cc_defaults {
             conditions_default: {
                 enabled: true,
             },
+        },
+        platform_version_12: {
+            shared_libs: [
+                "android.hardware.common-V2-ndk_platform",
+                "vendor.qti.hardware.display.config-V10-ndk_platform",
+            ],
+        },
+        platform_version_13: {
+           shared_libs: [
+               "android.hardware.common-V2-ndk",
+               "vendor.qti.hardware.display.config-V10-ndk",
+           ],
         },
     },
 }
