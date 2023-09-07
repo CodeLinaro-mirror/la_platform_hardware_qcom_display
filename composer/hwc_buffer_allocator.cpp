@@ -34,7 +34,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -69,7 +69,8 @@ int HWCBufferAllocator::GetGrallocInstance() {
     return kErrorNone;
   }
 
-  allocator_ = IAllocator::getService();
+  allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+      AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
   if (allocator_ == nullptr) {
     DLOGE("Unable to get allocator");
     return kErrorCriticalResource;
@@ -186,18 +187,13 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
     return kErrorMemory;
   }
 
-  hidl_handle raw_handle = nullptr;
-
-  allocator_->allocate(descriptor, 1,
-                       [&](const auto &_error, const auto &_stride, const auto &_buffers) {
-                         hidl_err = _error;
-                         raw_handle = _buffers[0];
-                       });
-
-  if (hidl_err != Error::NONE) {
+  AllocationResult result;
+  auto status = allocator_->allocate(descriptor, 1, &result);
+  if (!status.isOk()) {
     DLOGE("Failed to allocate buffer");
     return kErrorMemory;
   }
+  hidl_handle raw_handle = android::makeFromAidl(result.buffers[0]);
 
   mapper_->importBuffer(raw_handle, [&](const auto &_error, const auto &_buffer) {
     hidl_err = _error;

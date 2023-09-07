@@ -34,8 +34,8 @@ cc_binary {
         "libdisplaydebug",
         "libsdmutils",
         "libgrallocutils",
+        "android.hardware.graphics.allocator-V2-ndk",
         "android.hardware.graphics.mapper@4.0",
-        "android.hardware.graphics.allocator@4.0",
         "vendor.qti.hardware.display.mapper@4.0",
         "libgralloc.qti",
         "libgralloctypes",
@@ -44,6 +44,10 @@ cc_binary {
         "vendor.qti.hardware.display.mapperextensions@1.3",
         "vendor.qti.hardware.display.config-V5-ndk",
         "libbinder_ndk",
+    ],
+
+    static_libs: [
+        "libaidlcommonsupport",
     ],
     srcs: [
         "sdm_comp_buffer_allocator.cpp",
