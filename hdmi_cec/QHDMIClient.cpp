@@ -26,6 +26,11 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #define DEBUG 0
 #include <QServiceUtils.h>
@@ -57,7 +62,7 @@ void QHDMIClient::onCECMessageRecieved(char *msg, ssize_t len)
 void QHDMIClient::registerClient(sp<QHDMIClient>& client)
 {
     sp<IServiceManager> sm = defaultServiceManager();
-    sp<IBinder> binder = sm->getService(String16("display.qservice"));
+    sp<IBinder> binder = sm->checkService(String16("display.qservice"));
     binder->linkToDeath(client);
     mQService = interface_cast<IQService>(binder);
     mQService->connect(interface_cast<IQHDMIClient>(client));

@@ -39,6 +39,7 @@
 #include <core/display_interface.h>
 #include <private/extension_interface.h>
 #include <core/buffer_allocator.h>
+#include <private/spr_intf.h>
 #include <vector>
 
 namespace sdm {
@@ -67,6 +68,7 @@ class Strategy {
   DisplayError SetBlendSpace(const PrimariesTransfer &blend_space);
   void GenerateROI(DispLayerStack *disp_layer_stack, const PUConstraints &pu_constraints);
   void SetDisplayLayerStack(DispLayerStack *disp_layer_stack);
+  DisplayError SetSprIntf(std::shared_ptr<SPRIntf> intf);
 
  private:
   void GenerateROI();
@@ -88,6 +90,7 @@ class Strategy {
   bool extn_start_success_ = false;
   bool disable_gpu_comp_ = false;
   BufferAllocator *buffer_allocator_ = NULL;
+  std::shared_ptr<SPRIntf> spr_intf_ = nullptr;
 };
 
 }  // namespace sdm

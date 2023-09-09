@@ -251,6 +251,8 @@ DisplayError DisplayBuiltIn::Deinit() {
       }
     }
     demura_dynamic_enabled_ = true;
+
+    DeinitCWBBuffer();
   }
   dpps_info_.Deinit();
   return DisplayBase::Deinit();
@@ -267,6 +269,12 @@ DisplayError DisplayBuiltIn::PrePrepare(LayerStack *layer_stack) {
   if (error != kErrorNone) {
     return error;
   }
+
+  error = HandleSPR();
+  if (error != kErrorNone) {
+    return error;
+  }
+  disp_layer_stack_->stack_info.spr_enable = spr_enable_;
 
   AppendCWBLayer(layer_stack);
   // Do not skip validate if needs update PP features.
@@ -329,11 +337,6 @@ DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
 
   if (error == kErrorNeedsLutRegen && (ForceToneMapUpdate(layer_stack) == kErrorNone)) {
     return kErrorNone;
-  }
-
-  error = HandleSPR();
-  if (error != kErrorNone) {
-    return error;
   }
 
   error = DisplayBase::Prepare(layer_stack);
@@ -514,6 +517,7 @@ DisplayError DisplayBuiltIn::SetupSPR() {
     if (color_mgr_) {
       color_mgr_->ColorMgrSetSprIntf(spr_);
     }
+    comp_manager_->SetSprIntf(display_comp_ctx_, spr_);
   }
 
   return kErrorNone;
@@ -631,7 +635,8 @@ DisplayError DisplayBuiltIn::SetupDemuraLayer() {
   }
 #ifndef TRUSTED_VM
   demura_layer_.input_buffer.size = buffer->alloc_buffer_info.size;
-  demura_layer_.input_buffer.buffer_id = buffer->alloc_buffer_info.id;
+  demura_layer_.input_buffer.buffer_id = reinterpret_cast<uint64_t>(buffer->private_data);
+  demura_layer_.input_buffer.handle_id = buffer->alloc_buffer_info.id;
   demura_layer_.input_buffer.format = buffer->alloc_buffer_info.format;
   demura_layer_.input_buffer.width = buffer->alloc_buffer_info.aligned_width;
   demura_layer_.input_buffer.unaligned_width = buffer->alloc_buffer_info.aligned_width;
@@ -997,11 +1002,14 @@ DisplayError DisplayBuiltIn::CommitLocked(LayerStack *layer_stack) {
 
 DisplayError DisplayBuiltIn::PostCommit() {
   DisplayBase::PostCommit();
-
-  if (pending_brightness_) {
-    Fence::Wait(retire_fence_);
-    SetPanelBrightness(cached_brightness_);
-    pending_brightness_ = false;
+  // Mutex scope
+  {
+    lock_guard<recursive_mutex> obj(brightness_lock_);
+    if (pending_brightness_) {
+      Fence::Wait(retire_fence_);
+      SetPanelBrightness(cached_brightness_);
+      pending_brightness_ = false;
+    }
   }
 
   if (commit_event_enabled_) {
@@ -1306,9 +1314,11 @@ DisplayError DisplayBuiltIn::SetBppMode(uint32_t bpp) {
       return error;
     }
     DisplayBase::ReconfigureDisplay();
+    shared_ptr<Fence> release_fence = nullptr;
+    SetDisplayState(kStateOff, 0, &release_fence);
+    sleep(1);
+    SetDisplayState(kStateOn, 0, &release_fence);
   }
-
-  event_handler_->Refresh();
 
   return kErrorNone;
 }
@@ -2019,11 +2029,9 @@ std::string DisplayBuiltIn::Dump() {
         comp_type = "";
       }
     }
-
-    os << comp_manager_->Dump(DisplayId(display_id_));
+    os << comp_manager_->Dump(display_comp_ctx_);
     os << newline << "\n";
   }
-
   return os.str();
 }
 
@@ -2031,8 +2039,7 @@ std::string DisplayBuiltIn::Dump() {
 DppsInterface* DppsInfo::dpps_intf_ = NULL;
 std::vector<int32_t> DppsInfo::display_id_ = {};
 
-void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
-                    DisplayInterface *display_intf) {
+void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name, DisplayInterface *display_intf) {
   std::lock_guard<std::mutex> guard(lock_);
   int error = 0;
   int disable_dpps_features = 0;
@@ -2678,7 +2685,9 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
     info_intf->GetHWResourceInfo(&hw_resource_info);
     hdr_supported &= hw_resource_info.has_hdr;
+    uint32_t core_id = hw_resource_info.core_id;
     has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;
+    has_concurrent_writeback &= device_ctx_[core_id].hw_panel_info.hdr_enabled;
   }
 
   bool hdr_plus_supported = false;
@@ -2689,8 +2698,8 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
 
   fixed_info->hdr_supported = hdr_supported;
   // Built-in displays always support HDR10+ when the target supports HDR
-  fixed_info->hdr_plus_supported = hdr_supported && hdr_plus_supported;
-  fixed_info->dolby_vision_supported = hdr_supported && dolby_vision_supported;
+  fixed_info->hdr_plus_supported = fixed_info->hdr_supported && hdr_plus_supported;
+  fixed_info->dolby_vision_supported = fixed_info->hdr_supported && dolby_vision_supported;  
   // Populate luminance values only if hdr will be supported on that display
   fixed_info->max_luminance = fixed_info->hdr_supported ?
                               client_ctx_.hw_panel_info.peak_luminance: 0;
@@ -2842,14 +2851,17 @@ DisplayError DisplayBuiltIn::SetAlternateDisplayConfig(uint32_t *alt_config) {
   return error;
 }
 
-
 // LCOV_EXCL_START
 DisplayError DisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh) {
   DisplayError error = kErrorNone;
 
   error = DisplayBase::HandleSecureEvent(secure_event, needs_refresh);
   if (error) {
-    DLOGE("Failed to handle secure event %d", secure_event);
+    if (error == kErrorPermission) {
+      DLOGW("Failed to handle secure event %d", secure_event);
+    } else {
+      DLOGE("Failed to handle secure event %d", secure_event);
+    }
     return error;
   }
 
@@ -3021,38 +3033,37 @@ void DisplayBuiltIn::InitCWBBuffer() {
     return;
   }
 
-  if (disable_cwb_idle_fallback_) {
+  if (disable_cwb_idle_fallback_ || cwb_buffer_initialized_) {
     return;
   }
 
-  BufferInfo output_buffer_info;
   // Initialize CWB buffer with display resolution to get full size buffer
   // as mixer or fb can init with custom values based on property
-  output_buffer_info.buffer_config.width = client_ctx_.display_attributes.x_pixels;
-  output_buffer_info.buffer_config.height = client_ctx_.display_attributes.y_pixels;
+  output_buffer_info_.buffer_config.width = client_ctx_.display_attributes.x_pixels;
+  output_buffer_info_.buffer_config.height = client_ctx_.display_attributes.y_pixels;
 
-  output_buffer_info.buffer_config.format = kFormatRGBX8888Ubwc;
-  output_buffer_info.buffer_config.buffer_count = 1;
-  if (buffer_allocator_->AllocateBuffer(&output_buffer_info) != 0) {
+  output_buffer_info_.buffer_config.format = kFormatRGBX8888Ubwc;
+  output_buffer_info_.buffer_config.buffer_count = 1;
+  if (buffer_allocator_->AllocateBuffer(&output_buffer_info_) != 0) {
     DLOGE("Buffer allocation failed");
     return;
   }
 
   LayerBuffer buffer = {};
-  buffer.planes[0].fd = output_buffer_info.alloc_buffer_info.fd;
+  buffer.planes[0].fd = output_buffer_info_.alloc_buffer_info.fd;
   buffer.planes[0].offset = 0;
-  buffer.planes[0].stride = output_buffer_info.alloc_buffer_info.stride;
-  buffer.size = output_buffer_info.alloc_buffer_info.size;
-  buffer.handle_id = output_buffer_info.alloc_buffer_info.id;
-  buffer.width = output_buffer_info.alloc_buffer_info.aligned_width;
-  buffer.height = output_buffer_info.alloc_buffer_info.aligned_height;
-  buffer.format = output_buffer_info.alloc_buffer_info.format;
-  buffer.unaligned_width = output_buffer_info.buffer_config.width;
-  buffer.unaligned_height = output_buffer_info.buffer_config.height;
+  buffer.planes[0].stride = output_buffer_info_.alloc_buffer_info.stride;
+  buffer.size = output_buffer_info_.alloc_buffer_info.size;
+  buffer.handle_id = output_buffer_info_.alloc_buffer_info.id;
+  buffer.width = output_buffer_info_.alloc_buffer_info.aligned_width;
+  buffer.height = output_buffer_info_.alloc_buffer_info.aligned_height;
+  buffer.format = output_buffer_info_.alloc_buffer_info.format;
+  buffer.unaligned_width = output_buffer_info_.buffer_config.width;
+  buffer.unaligned_height = output_buffer_info_.buffer_config.height;
 
   cwb_layer_.composition = kCompositionCWBTarget;
   cwb_layer_.input_buffer = buffer;
-  cwb_layer_.input_buffer.buffer_id = reinterpret_cast<uint64_t>(output_buffer_info.private_data);
+  cwb_layer_.input_buffer.buffer_id = reinterpret_cast<uint64_t>(output_buffer_info_.private_data);
   cwb_layer_.src_rect = {0, 0, FLOAT(cwb_layer_.input_buffer.unaligned_width),
                          FLOAT(cwb_layer_.input_buffer.unaligned_height)};
   cwb_layer_.dst_rect = {0, 0, FLOAT(cwb_layer_.input_buffer.unaligned_width),
@@ -3063,7 +3074,26 @@ void DisplayBuiltIn::InitCWBBuffer() {
   return;
 }
 
+void DisplayBuiltIn::DeinitCWBBuffer() {
+  if (!cwb_buffer_initialized_) {
+    return;
+  }
+
+  buffer_allocator_->FreeBuffer(&output_buffer_info_);
+  cwb_layer_ = {};
+  cwb_buffer_initialized_ = false;
+}
+
 void DisplayBuiltIn::AppendCWBLayer(LayerStack *layer_stack) {
+  if (cwb_buffer_initialized_ &&
+      (cwb_layer_.input_buffer.unaligned_width < client_ctx_.display_attributes.x_pixels ||
+       cwb_layer_.input_buffer.unaligned_height < client_ctx_.display_attributes.y_pixels)) {
+    DLOGI("Resetting CWB layer due to insufficient buffer size(%dx%d) compare to output(%dx%d).",
+          cwb_layer_.input_buffer.unaligned_width, cwb_layer_.input_buffer.unaligned_height,
+          client_ctx_.display_attributes.x_pixels, client_ctx_.display_attributes.y_pixels);
+    DeinitCWBBuffer();
+  }
+
   if (!cwb_buffer_initialized_) {
     // If CWB buffer is not initialized, then it must be initialized for video mode
     InitCWBBuffer();

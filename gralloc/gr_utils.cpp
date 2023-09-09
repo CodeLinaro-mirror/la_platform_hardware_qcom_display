@@ -2361,7 +2361,7 @@ void UnmapAndReset(private_handle_t *handle) {
 
 int ValidateAndMap(private_handle_t *handle) {
   if (private_handle_t::validate(handle)) {
-    ALOGE("%s: Private handle is invalid - handle:%p", __func__, handle);
+    ALOGW("%s: Private handle is invalid - handle:%p", __func__, handle);
     return -1;
   }
   if (handle->fd_metadata < 0) {
@@ -3033,12 +3033,13 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
   }
 
   private_handle_t *handle = static_cast<private_handle_t *>(buffer);
-  MetaData_t *data = reinterpret_cast<MetaData_t *>(handle->base_metadata);
 
   int err = ValidateAndMap(handle);
   if (err != 0) {
     return Error::UNSUPPORTED;
   }
+
+  MetaData_t *data = reinterpret_cast<MetaData_t *>(handle->base_metadata);
 
   if (data == nullptr) {
     return ret;

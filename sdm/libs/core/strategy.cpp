@@ -259,6 +259,10 @@ DisplayError Strategy::Reconfigure(DisplayInfoContext &info_ctx,
   extension_intf_->CreatePartialUpdate(display_id_info_, display_type_, hw_resource_info_,
                                        info_ctx, &partial_update_intf_);
 
+  if (partial_update_intf_ && spr_intf_) {
+    partial_update_intf_->SetSprIntf(spr_intf_);
+  }
+
   error = strategy_intf_->Reconfigure(info_ctx, device_ctx, hw_resource_info_);
   if (error != kErrorNone) {
     return error;
@@ -370,6 +374,18 @@ void Strategy::CalculateSrcRect(const Layer &layer, float split_factor, int tran
       in_rect->left = out_rect->right;
       break;
   }
+}
+
+DisplayError Strategy::SetSprIntf(std::shared_ptr<SPRIntf> intf) {
+  if (partial_update_intf_) {
+    DisplayError ret = partial_update_intf_->SetSprIntf(intf);
+    if (ret != kErrorNone) {
+      return ret;
+    }
+    spr_intf_ = intf;
+    return ret;
+  }
+  return kErrorNotSupported;
 }
 
 }  // namespace sdm

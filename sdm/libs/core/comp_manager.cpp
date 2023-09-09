@@ -981,9 +981,13 @@ bool CompManager::IsSafeMode() {
   return safe_mode_;
 }
 
-std::string CompManager::Dump(DisplayId display_id) {
+std::string CompManager::Dump(Handle display_ctx) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
-  return resource_intf_->Dump(display_id);
+
+  DisplayCompositionContext *display_comp_ctx =
+      reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+
+  return resource_intf_->Dump(display_comp_ctx->display_resource_ctx);
 }
 
 DppsControlInterface* CompManager::GetDppsControlIntf() {
@@ -1022,9 +1026,7 @@ DisplayError CompManager::CaptureCwb(Handle display_ctx, const LayerBuffer &outp
   return error;
 }
 
-void CompManager::NotifyCwbDone(int32_t display_id, int32_t status,
-                                        const LayerBuffer& buffer) {
-  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+void CompManager::NotifyCwbDone(int32_t display_id, int32_t status, const LayerBuffer &buffer) {
   callback_map_[display_id]->NotifyCwbDone(status, buffer);
 }
 
@@ -1077,6 +1079,12 @@ void CompManager::GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_i
         reinterpret_cast<DisplayCompositionContext *>(display_ctx);
     resource_intf_->GetDSConfig(display_comp_ctx->display_resource_ctx, dest_scale_info_map);
   }
+}
+
+DisplayError CompManager::SetSprIntf(Handle display_ctx, std::shared_ptr<SPRIntf> intf) {
+  DisplayCompositionContext *disp_comp_ctx =
+      reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+  return disp_comp_ctx->strategy->SetSprIntf(intf);
 }
 
 }  // namespace sdm

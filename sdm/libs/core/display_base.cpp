@@ -984,6 +984,7 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   disp_layer_stack_->stack_info.output_buffer = layer_stack->output_buffer;
   disp_layer_stack_->stack_info.hw_cwb_config = layer_stack->cwb_config;
+  disp_layer_stack_->stack_info.spr_enable = spr_enable_;
   for (auto& info : disp_layer_stack_->info) {
     info.second.cwb_id = DisplayId(layer_stack->cwb_id).GetConnId(info.first);
   }
@@ -3143,7 +3144,13 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   uint32_t display_height = client_ctx_.display_attributes.y_pixels;
   bool xr_variant = IsXRVariant();
 
-  if (xr_variant || (HasConcurrentWriteback() && layer_stack->output_buffer)) {
+  bool valid_lm_tappoint = layer_stack->cwb_config
+                               ? layer_stack->cwb_config->tap_point == CwbTapPoint::kLmTapPoint
+                               : false;
+  // Resize mixer attributes to fb config when client requests CWB at LM tap-point
+  // TODO(user): remove below check when clients request buffer with mixer resolution
+  if (xr_variant || (HasConcurrentWriteback() && layer_stack->output_buffer &&
+      valid_lm_tappoint)) {
     DLOGV_IF(kTagDisplay, "Found concurrent writeback, configure LM width:%d height:%d", fb_width,
              fb_height);
     *new_mixer_width = fb_width;
@@ -4156,7 +4163,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
 
 DisplayError DisplayBase::GetOutputBufferAcquireFence(shared_ptr<Fence> *out_fence) {
   ClientLock lock(disp_mutex_);
-  LayerBuffer *out_buffer = disp_layer_stack_->stack_info.output_buffer;
+  std::shared_ptr<LayerBuffer>out_buffer = disp_layer_stack_->stack_info.output_buffer;
   if (out_buffer == nullptr) {
     return kErrorNotSupported;
   }
@@ -4347,6 +4354,19 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
         }
       }
 
+      switch (de_tuning_cfg_data->params.content_type) {
+        case kDeContentTypeVideo:
+          de_data.content_type = kContentTypeVideo;
+          break;
+        case kDeContentTypeGraphics:
+          de_data.content_type = kContentTypeGraphics;
+          break;
+        case kDeContentTypeUnknown:
+        default:
+          de_data.content_type = kContentTypeUnknown;
+          break;
+      }
+
       if (de_tuning_cfg_data->params.flags & kDeTuningFlagDeBlend) {
         de_data.override_flags |= kOverrideDEBlend;
         de_data.de_blend = de_tuning_cfg_data->params.de_blend;
@@ -4498,7 +4518,7 @@ void DisplayBase::PrepareForAsyncTransition() {
 
 std::chrono::system_clock::time_point DisplayBase::WaitUntil() {
   int idle_time_ms = disp_layer_stack_->stack_info.common_info.set_idle_time_ms;
-  std::chrono::system_clock::time_point timeout_time;
+  std::chrono::milliseconds timeout_duration;
 
   DLOGV_IF(kTagDisplay, "Off: %d, time: %d, timeout:%d, panel: %s",
         state_ == kStateOff, idle_time_ms, handle_idle_timeout_,
@@ -4507,12 +4527,13 @@ std::chrono::system_clock::time_point DisplayBase::WaitUntil() {
   // Indefinite wait if state is off or idle timeout has triggered
   if (state_ == kStateOff || idle_time_ms <= 0 || handle_idle_timeout_ ||
       client_ctx_.hw_panel_info.mode != kModeVideo || pending_commit_) {
-    timeout_time = std::chrono::system_clock::from_time_t(INT_MAX);
+    timeout_duration = std::chrono::milliseconds(INT_MAX);
   } else {
-    std::chrono::system_clock::time_point current_time = std::chrono::system_clock::now();
-    timeout_time = current_time + std::chrono::milliseconds(idle_time_ms);
+    timeout_duration = std::chrono::milliseconds(idle_time_ms);
   }
-  return timeout_time;
+
+  std::chrono::system_clock::time_point current_time = std::chrono::system_clock::now();
+  return current_time + timeout_duration;
 }
 
 DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
@@ -4544,6 +4565,50 @@ void DisplayBase::Refresh() {
 
 void DisplayBase::OnCwbTeardown(bool sync_teardown) {
   hw_intf_->HandleCwbTeardown(sync_teardown);
+}
+
+DisplayError DisplayBase::ValidateCwbRoiWithOutputBuffer(const LayerBuffer &output_buffer,
+                                                         CwbConfig &cwb_config) {
+  if (cwb_config.pu_as_cwb_roi) {
+    uint32_t full_frame_width = cwb_config.cwb_full_rect.right - cwb_config.cwb_full_rect.left;
+    uint32_t full_frame_height = cwb_config.cwb_full_rect.bottom - cwb_config.cwb_full_rect.top;
+    if (full_frame_width > output_buffer.width || full_frame_height > output_buffer.height) {
+      // If output buffer is less than full frame when PU as CWB ROI is enabled, then it
+      // may possible in later validation for partial update that it may fallback to full frame
+      // ROI and then it will cause commit failure due to falling of PU ROI out of CWB ROI
+      // bounds. So, to avoid such case, just disable pu_as_cwb_roi to fallback to full
+      // frame update instead of partial update.
+      cwb_config.pu_as_cwb_roi = false;
+    }
+  }
+
+  if (!cwb_config.pu_as_cwb_roi && !IsValid(cwb_config.cwb_roi)) {
+    // Fall to full frame ROI for invalid CWB ROI, when pu_as_cwb_roi is disabled.
+    cwb_config.cwb_roi = cwb_config.cwb_full_rect;
+  }
+
+  // If CWB ROI doesn't fit into provided output buffer, then it limits the right and bottom
+  // bounds of CWB ROI as per provided output buffer to avoid commit failure due to insufficient
+  // buffer detection for CWB ROI.
+  int32_t roi_width = cwb_config.cwb_roi.right - cwb_config.cwb_roi.left;
+  int32_t roi_height = cwb_config.cwb_roi.bottom - cwb_config.cwb_roi.top;
+  if (roi_width > output_buffer.width || roi_height > output_buffer.height) {
+    DLOGW(
+        "Insufficient buffer(%dx%d) provided for cwb roi(%f, %f, %f, %f). "
+        "Thus, falling to buffer fit ROI.",
+        output_buffer.width, output_buffer.height, cwb_config.cwb_roi.left, cwb_config.cwb_roi.top,
+        cwb_config.cwb_roi.right, cwb_config.cwb_roi.bottom);
+
+    if (roi_width > output_buffer.width) {
+      cwb_config.cwb_roi.right = FLOAT(output_buffer.width) + cwb_config.cwb_roi.left;
+    }
+
+    if (roi_height > output_buffer.height) {
+      cwb_config.cwb_roi.bottom = FLOAT(output_buffer.height) + cwb_config.cwb_roi.top;
+    }
+  }
+
+  return kErrorNone;
 }
 
 DisplayError DisplayBase::CaptureCwb(const LayerBuffer &output_buffer, const CwbConfig &config) {
@@ -4584,6 +4649,12 @@ DisplayError DisplayBase::CaptureCwb(const LayerBuffer &output_buffer, const Cwb
   error = ValidateCwbConfigInfo(&cwb_config, output_buffer.format);
   if (error != kErrorNone) {
     DLOGE("CWB_config validation failed.");
+    return error;
+  }
+
+  error = ValidateCwbRoiWithOutputBuffer(output_buffer, cwb_config);
+  if (error != kErrorNone) {
+    DLOGW("Buffer validation failed");
     return error;
   }
 

@@ -203,6 +203,12 @@
 // Configuration to reserve the writeback blocks for specific usage like CWB, IWE or WFD
 #define RESERVED_WRITEBACK_CONFIG            DISPLAY_PROP("reserved_writeback_config")
 
+// Property to set desired libscale optimization mode on source
+#define SCALING_SOURCE_OPT_MODE              DISPLAY_PROP("scaling_source_opt_mode")
+// Property to set desired libscale optimization mode on destination
+#define SCALING_DEST_OPT_MODE                DISPLAY_PROP("scaling_dest_opt_mode")
+
+
 // Add all vendor.display properties above
 
 #define DISABLE_AHARDWARE_BUFFER_PROP        GRALLOC_PROP("disable_ahardware_buffer")

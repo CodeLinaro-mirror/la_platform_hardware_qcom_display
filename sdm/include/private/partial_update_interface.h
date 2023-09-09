@@ -27,6 +27,7 @@
 
 #include <core/display_interface.h>
 #include <core/buffer_allocator.h>
+#include <private/spr_intf.h>
 
 #include "hw_info_types.h"
 
@@ -41,6 +42,7 @@ class PartialUpdateInterface {
   virtual DisplayError Start(const PUConstraints &pu_constraints) = 0;
   virtual DisplayError GenerateROI(DispLayerStack *disp_layer_stack) = 0;
   virtual DisplayError Stop() = 0;
+  virtual DisplayError SetSprIntf(std::shared_ptr<SPRIntf> intf) = 0;
 
  protected:
   virtual ~PartialUpdateInterface() { }

@@ -72,8 +72,8 @@ class DRMCrtc {
   void ParseProperties();
   void ParseCapabilities(uint64_t blob_id);
   void ParseCompRatio(std::string line, bool real_time);
-  void SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_roi,
-              DRMRect *crtc_rois);
+  void SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_roi, DRMRect *crtc_rois,
+              DRMRect *spr_rois);
   void SetSolidfillStages(drmModeAtomicReq *req, uint32_t obj_id,
                           const std::vector<DRMSolidfillStage> *solid_fills);
   void SetNoiseLayerConfig(drmModeAtomicReq *req, uint32_t obj_id,

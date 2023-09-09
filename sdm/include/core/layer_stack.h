@@ -90,6 +90,7 @@
 #include "sdm_types.h"
 
 namespace sdm {
+// clang-format off
 
 /*! @brief This enum represents display layer blending types.
 
@@ -282,11 +283,9 @@ struct LayerFlags {
       uint32_t skip_iwe : 1;
                               //!< This flag shall be set to indicate that this layer
                               //!< is handled by IWE for two phase composition.
-      // clang-format off
       uint32_t front_buffer : 1;
                               //!< This flag shall be set by client to indicate that the layer
                               //!< is used for front-buffer rendering
-      // clang-format on
     };
 
     uint32_t flags = 0;       //!< For initialization purpose only.
@@ -602,7 +601,8 @@ struct LayerStack {
                                        //!< descriptor.
                                        //!< NOTE: This field applies to a physical display only.
 
-  LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
+  std::shared_ptr<LayerBuffer> output_buffer = nullptr;
+                                       //!< Pointer to the buffer where composed buffer would be
                                        //!< rendered for virtual displays.
                                        //!< NOTE: This field applies to a virtual display only.
 
@@ -633,6 +633,7 @@ struct LayerStack {
   uint64_t expected_present_time = 0;  //!< Expected Present timestamp for current frame.
 };
 
+// clang-format on
 }  // namespace sdm
 
 #endif  // __LAYER_STACK_H__

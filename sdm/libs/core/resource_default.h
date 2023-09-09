@@ -112,7 +112,7 @@ class ResourceDefault : public ResourceInterface {
     return kErrorResources;
   }
   virtual void HandleSkipValidate(Handle display_ctx);
-  virtual std::string Dump(DisplayId display_id);
+  virtual std::string Dump(Handle display_ctx);
   virtual uint32_t GetMixerCount(DisplayId display_id);
   virtual DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
   virtual void HandleTUITransition(Handle display_ctx, bool tui_active);

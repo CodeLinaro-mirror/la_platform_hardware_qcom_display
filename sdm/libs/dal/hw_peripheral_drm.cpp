@@ -262,7 +262,7 @@ DisplayError HWPeripheralDRM::SetBppMode(uint32_t bpp) {
     }
   }
 
-  DLOGE("current display mode dont't support switch to bpp: %d", bpp);
+  DLOGW("current display mode dont't support switch to bpp: %d", bpp);
   return kErrorNotSupported;
 }
 
@@ -494,10 +494,14 @@ DisplayError HWPeripheralDRM::HandleSecureEvent(SecureEvent secure_event,
   switch (secure_event) {
     case kTUITransitionPrepare:
     case kTUITransitionUnPrepare:
-      tui_state_ = kTUIStateInProgress;
+      if (tui_state_ == kTUIStateNone) {
+        tui_state_ = kTUIStateInProgress;
+      }
       break;
     case kTUITransitionStart: {
-      tui_state_ = kTUIStateStart;
+      if (tui_state_ == kTUIStateNone) {
+        tui_state_ = kTUIStateStart;
+      }
       ControlIdlePowerCollapse(false /* enable */, false /* synchronous */);
       if (hw_panel_info_.mode != kModeCommand) {
         SetQOSData(qos_data);
@@ -513,7 +517,11 @@ DisplayError HWPeripheralDRM::HandleSecureEvent(SecureEvent secure_event,
     break;
 
     case kTUITransitionEnd: {
-      tui_state_ = kTUIStateEnd;
+      if (tui_state_ == kTUIStateInProgress) {
+        tui_state_ = kTUIStateEnd;
+      } else {
+        tui_state_ = kTUIStateNone;
+      }
       ResetPropertyCache();
       ControlIdlePowerCollapse(true /* enable */, false /* synchronous */);
       if (hw_panel_info_.mode != kModeCommand || pending_power_state_ == kPowerStateOff) {
@@ -571,6 +579,13 @@ DisplayError HWPeripheralDRM::ControlIdlePowerCollapse(bool enable, bool synchro
 
 DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, SyncPoints *sync_points) {
   DTRACE_SCOPED();
+  if (tui_state_ != kTUIStateNone || pending_cwb_teardown_) {
+    DLOGI("Request deferred TUI state %d pending cwb teardown %d", tui_state_,
+          pending_cwb_teardown_);
+    pending_power_state_ = kPowerStateOn;
+    return kErrorDeferred;
+  }
+
   if (!drm_atomic_intf_) {
     DLOGE("DRM Atomic Interface is null!");
     return kErrorUndefined;
@@ -617,6 +632,12 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, SyncPoints *syn
 
 DisplayError HWPeripheralDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
   DTRACE_SCOPED();
+  if ((tui_state_ != kTUIStateNone && tui_state_ != kTUIStateEnd) || pending_cwb_teardown_) {
+    DLOGI("Request deferred TUI state %d pending cwb teardown %d", tui_state_,
+          pending_cwb_teardown_);
+    pending_power_state_ = kPowerStateOff;
+    return kErrorDeferred;
+  }
   if (!first_cycle_) {
     drm_mgr_intf_->MarkPanelFeatureForNullCommit(token_,
                                            panel_feature_property_map_[kPanelFeatureDemuraInitCfg]);

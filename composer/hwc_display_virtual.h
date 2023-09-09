@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -66,7 +66,7 @@ class HWCDisplayVirtual : public HWCDisplay {
  protected:
   uint32_t width_ = 0;
   uint32_t height_ = 0;
-  LayerBuffer output_buffer_ = {};
+  std::shared_ptr<LayerBuffer> output_buffer_ = std::make_shared<LayerBuffer>();
   const native_handle_t *output_handle_ = nullptr;
 
  private:

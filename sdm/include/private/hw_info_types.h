@@ -51,6 +51,7 @@ namespace sdm {
 using std::string;
 using std::pair;
 using std::vector;
+// clang-format off
 
 const int kMaxSDELayers = 16;   // Maximum number of layers that can be handled by MDP5 hardware
                                 // in a given layer stack.
@@ -910,6 +911,7 @@ enum UpdateType {
   kUpdateResources,  // Indicates Strategy & RM execution, which can update resources.
   kSwapBuffers,      // Indicates Strategy & RM execution, which can update buffer handler and crop.
   kUpdateLuts,       // Indicates TM only Strategy execution, which can update SSPP color features.
+  kUpdateFBObject,   // Indicates that the FrameBuffer Object has been updated.
   kUpdateMax,
 };
 
@@ -970,6 +972,10 @@ enum SelfRefreshState {
   kSelfRefreshDisableReadAlloc,     // Indicates to disable self refresh
 };
 
+struct SprOverfetchLines {
+  uint32_t top = 0;  // Over fetch lines for SPR pu on Top
+};
+
 struct CommonStackInfo {
   int set_idle_time_ms = -1;    // Set idle time to the new specified value.
                                 //    -1 indicates no change in idle time since last set value.
@@ -980,6 +986,7 @@ struct CommonStackInfo {
   PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
   shared_ptr<Fence> retire_fence = nullptr;
   shared_ptr<Fence> sync_handle = nullptr;
+  SprOverfetchLines spr_overfetch_lines = {};
 };
 
 struct LayerStackInfo {
@@ -1008,9 +1015,10 @@ struct LayerStackInfo {
   bool cwb_present = false;  // Indicates there is cwb layer or not
   bool lower_fps = false;  // This field hints to lower the fps in case of idle fallback
   bool enable_self_refresh = false;  // This field hints to enable self refresh when idle timeout
-  LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
-                                       //!< rendered for virtual displays.
-                                       //!< NOTE: This field applies to a virtual display only.
+  std::shared_ptr<LayerBuffer> output_buffer = nullptr;
+                                     //!< Pointer to the buffer where composed buffer would be
+                                     //!< rendered for virtual displays.
+                                     //!< NOTE: This field applies to a virtual display only.
   CwbConfig *hw_cwb_config = NULL;     //!< Struct that contains CWB configuration passed to
                                        //!< driver by SDM.
   bool rc_config = false;
@@ -1035,6 +1043,9 @@ struct HWLayersInfo {
   shared_ptr<Fence> sync_handle = nullptr;  // Release fence id for current draw cycle.
   std::vector<LayerRect> left_frame_roi = {};   // Left ROI.
   std::vector<LayerRect> right_frame_roi = {};  // Right ROI.
+  LayerRect partial_fb_roi = {};   // Damaged area in framebuffer.
+  bool roi_split = false;          // Indicates separated left and right ROI
+  bool async_cursor_updates = false;  // Cursor layer allowed to have async updates
   DestScaleInfoMap dest_scale_info_map = {};
   HWLayerConfig config[kMaxSDELayers] {};
   HWHDRLayerInfo hdr_layer_info = {};
@@ -1042,7 +1053,10 @@ struct HWLayersInfo {
   HWQosData qos_data = {};
   uint32_t retire_fence_offset = 0;
   shared_ptr<Fence> retire_fence = nullptr;  // Retire fence for current draw cycle.
-  LayerBuffer *output_buffer = NULL;   //!< Pointer to the buffer where composed buffer would be
+  LayerStackFlags flags;               //!< Flags associated with this layer set.
+  PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
+  std::shared_ptr<LayerBuffer> output_buffer = nullptr;
+                                       //!< Pointer to the buffer where composed buffer would be
                                        //!< rendered for virtual displays.
                                        //!< NOTE: This field applies to a virtual display only.
   uint32_t output_fb_id = 0;           //!< FB ID of the output buffer of virtual display
@@ -1274,6 +1288,7 @@ struct DisplayInfoContext {
 
 typedef DisplayInfoContext DisplayClientContext;
 typedef std::map<uint32_t, DisplayInfoContext> DisplayDeviceContext;
+// clang-format on
 }  // namespace sdm
 
 #endif  // __HW_INFO_TYPES_H__

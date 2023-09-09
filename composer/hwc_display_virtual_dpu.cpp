@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -128,10 +128,10 @@ HWC3::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
       }
     }
 
-    output_buffer_.width = UINT32(new_aligned_w);
-    output_buffer_.height = UINT32(new_aligned_h);
-    output_buffer_.unaligned_width = UINT32(new_width);
-    output_buffer_.unaligned_height = UINT32(new_height);
+    output_buffer_->width = UINT32(new_aligned_w);
+    output_buffer_->height = UINT32(new_aligned_h);
+    output_buffer_->unaligned_width = UINT32(new_width);
+    output_buffer_->unaligned_height = UINT32(new_height);
   }
 
   return HWC3::Error::None;
@@ -155,9 +155,9 @@ HWC3::Error HWCDisplayVirtualDPU::PreValidateDisplay(bool *exit_validate) {
     layer->flags.updating = true;
   }
 
-  layer_stack_.output_buffer = &output_buffer_;
+  layer_stack_.output_buffer = output_buffer_;
   // If Output buffer of Virtual Display is not secure, set SKIP flag on the secure layers.
-  if (!output_buffer_.flags.secure && layer_stack_.flags.secure_present) {
+  if (!output_buffer_->flags.secure && layer_stack_.flags.secure_present) {
     for (auto hwc_layer : layer_set_) {
       Layer *layer = hwc_layer->GetSDMLayer();
       if (layer->input_buffer.flags.secure) {
@@ -185,7 +185,7 @@ HWC3::Error HWCDisplayVirtualDPU::Validate(uint32_t *out_num_types, uint32_t *ou
 HWC3::Error HWCDisplayVirtualDPU::Present(shared_ptr<Fence> *out_retire_fence) {
   auto status = HWC3::Error::None;
 
-  if (!output_buffer_.buffer_id) {
+  if (!output_buffer_->buffer_id) {
     return HWC3::Error::NoResources;
   }
 
@@ -193,7 +193,7 @@ HWC3::Error HWCDisplayVirtualDPU::Present(shared_ptr<Fence> *out_retire_fence) {
     return HWC3::Error::None;
   }
 
-  layer_stack_.output_buffer = &output_buffer_;
+  layer_stack_.output_buffer = output_buffer_;
 
   status = HWCDisplay::CommitLayerStack();
   if (status != HWC3::Error::None) {
@@ -224,7 +224,7 @@ HWC3::Error HWCDisplayVirtualDPU::CommitOrPrepare(bool validate_only,
                                                   uint32_t *out_num_requests, bool *needs_commit) {
   DTRACE_SCOPED();
 
-  layer_stack_.output_buffer = &output_buffer_;
+  layer_stack_.output_buffer = output_buffer_;
   auto status = HWCDisplay::CommitOrPrepare(validate_only, out_retire_fence, out_num_types,
                                             out_num_requests, needs_commit);
   return status;

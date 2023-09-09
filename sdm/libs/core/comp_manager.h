@@ -41,6 +41,7 @@
 #include <core/display_interface.h>
 #include <private/extension_interface.h>
 #include <private/hw_interface.h>
+#include <private/spr_intf.h>
 #include <utils/locker.h>
 #include<limits.h>
 #include <bitset>
@@ -141,12 +142,13 @@ class CompManager : public CwbCallback {
   virtual void NotifyCwbDone(int32_t display_id, int32_t status, const LayerBuffer& buffer);
   virtual void TriggerRefresh(int32_t display_id);
   virtual void TriggerCwbTeardown(int32_t display_id, bool sync_teardown);
-  std::string Dump(DisplayId display_id);
+  std::string Dump(Handle display_ctx);
   uint32_t GetMixerCount(DisplayId display_id);
   uint32_t GetActiveDisplayCount();
   void SetDisplayLayerStack(Handle display_ctx, DispLayerStack *disp_layer_stack);
   void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map);
   bool IsDisplayHWAvailable();
+  DisplayError SetSprIntf(Handle display_ctx, std::shared_ptr<SPRIntf> intf);
 
  private:
   static const int kMaxThermalLevel = 3;

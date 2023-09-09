@@ -303,7 +303,8 @@ struct LayerBuffer {
   LayerBufferFlags flags;       //!< Flags associated with this buffer.
 
   uint64_t buffer_id __attribute__((aligned(8))) = 0;
-                                //!< Specifies the buffer id.
+  //!< Specifies the buffer id.
+  //!< This is converted from BufferInfo's private_data.
   UbwcCrStatsVector  ubwc_crstats[NUM_UBWC_CR_STATS_LAYERS] = {};
                                 //! < UBWC Compression ratio,stats. Stored as a vector of pair of
                                 //! of (tile size, #of tiles)
@@ -321,7 +322,7 @@ struct LayerBuffer {
     color_metadata.transfer = Transfer_sRGB;
   }
 
-  uint64_t handle_id = 0;
+  uint64_t handle_id = 0;       //!< This is the BufferInfo's ID.
   uint64_t usage = 0;           //!< Opaque Usage flags associated with this layer buffer.
 };
 

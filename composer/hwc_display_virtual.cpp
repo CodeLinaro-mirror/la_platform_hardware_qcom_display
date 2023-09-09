@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -93,7 +93,7 @@ HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
     if (output_handle_) {
       BufferInfo buffer_info;
       const native_handle_t *output_handle =
-          reinterpret_cast<const native_handle_t *>(output_buffer_.buffer_id);
+          reinterpret_cast<const native_handle_t *>(output_buffer_->buffer_id);
       void *base_ptr = NULL;
       int error = buffer_allocator_->MapBuffer(output_handle, nullptr, &base_ptr);
       if (error != 0) {
@@ -164,16 +164,16 @@ HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
       return HWC3::Error::BadParameter;
     }
 
-    output_buffer_.flags.secure = 0;
-    output_buffer_.flags.video = 0;
-    output_buffer_.buffer_id = reinterpret_cast<uint64_t>(output_handle);
-    output_buffer_.format = new_sdm_format;
-    output_buffer_.color_metadata = color_metadata;
+    output_buffer_->flags.secure = 0;
+    output_buffer_->flags.video = 0;
+    output_buffer_->buffer_id = reinterpret_cast<uint64_t>(output_handle);
+    output_buffer_->format = new_sdm_format;
+    output_buffer_->color_metadata = color_metadata;
     output_handle_ = output_handle;
 
     // TZ Protected Buffer - L1
     if (output_handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
-      output_buffer_.flags.secure = 1;
+      output_buffer_->flags.secure = 1;
     }
 
     // ToDo: Need to extend for non-RGB formats
@@ -181,12 +181,12 @@ HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
     uint32_t width = 0;
     buffer_allocator_->GetFd((void *)output_handle, fd);
     buffer_allocator_->GetWidth((void *)output_handle, width);
-    output_buffer_.planes[0].fd = fd;
-    output_buffer_.planes[0].offset = 0;
-    output_buffer_.planes[0].stride = width;
+    output_buffer_->planes[0].fd = fd;
+    output_buffer_->planes[0].offset = 0;
+    output_buffer_->planes[0].stride = width;
   }
 
-  output_buffer_.acquire_fence = release_fence;
+  output_buffer_->acquire_fence = release_fence;
 
   return HWC3::Error::None;
 }

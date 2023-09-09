@@ -782,8 +782,9 @@ void DRMCrtc::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
 
     case DRMOps::CRTC_SET_ROI: {
       uint32_t num_roi = va_arg(args, uint32_t);
-      DRMRect *crtc_rois = va_arg(args, DRMRect*);
-      SetROI(req, obj_id, num_roi, crtc_rois);
+      DRMRect *crtc_rois = va_arg(args, DRMRect *);
+      DRMRect *spr_rois = va_arg(args, DRMRect *);
+      SetROI(req, obj_id, num_roi, crtc_rois, spr_rois);
     } break;
 
     case DRMOps::CRTC_SET_SECURITY_LEVEL: {
@@ -903,13 +904,13 @@ void DRMCrtc::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
   }
 }
 
-void DRMCrtc::SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_roi,
-                     DRMRect *crtc_rois) {
+void DRMCrtc::SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_roi, DRMRect *crtc_rois,
+                     DRMRect *spr_rois) {
 #ifdef SDE_MAX_ROI_V1
   if (num_roi > SDE_MAX_ROI_V1 || !prop_mgr_.IsPropertyAvailable(DRMProperty::ROI_V1)) {
     return;
   }
-  if (!num_roi || !crtc_rois) {
+  if (!num_roi || !crtc_rois || !spr_rois) {
     AddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::ROI_V1),
                 0, false /* cache */, tmp_prop_val_map_);
     DRM_LOGD("CRTC ROI is set to NULL to indicate full frame update");
@@ -925,6 +926,15 @@ void DRMCrtc::SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_roi,
     roi_v1_.roi[i].y2 = crtc_rois[i].bottom;
     DRM_LOGD("CRTC %d, ROI[l,t,b,r][%d %d %d %d]", obj_id,
              roi_v1_.roi[i].x1, roi_v1_.roi[i].y1, roi_v1_.roi[i].x2, roi_v1_.roi[i].y2);
+#ifdef SDE_DRM_SPR_ROI
+    roi_v1_.roi_feature_flags = SDE_DRM_ROI_SPR_FLAG_EN;
+    roi_v1_.spr_roi[i].x1 = spr_rois[i].left;
+    roi_v1_.spr_roi[i].x2 = spr_rois[i].right;
+    roi_v1_.spr_roi[i].y1 = spr_rois[i].top;
+    roi_v1_.spr_roi[i].y2 = spr_rois[i].bottom;
+    DRM_LOGD("CRTC %d, SPR ROI[l,t,b,r][%d %d %d %d]", obj_id, roi_v1_.spr_roi[i].x1,
+             roi_v1_.spr_roi[i].y1, roi_v1_.spr_roi[i].x2, roi_v1_.spr_roi[i].y2);
+#endif
   }
   AddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::ROI_V1),
               reinterpret_cast<uint64_t>(&roi_v1_), false /* cache */, tmp_prop_val_map_);
