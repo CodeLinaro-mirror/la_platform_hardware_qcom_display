@@ -36,4 +36,10 @@ cc_library_headers {
 subdirs = [
     "libqservice",
     "libqdutils",
+    "libddebug",
+    "gpu_tonemapper",
+    "sdm/libs/utils",
+    "sdm/libs/core",
+    "gralloc",
+    "composer",
 ]

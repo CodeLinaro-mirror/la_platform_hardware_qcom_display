@@ -27,11 +27,17 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/utils.h>
 #include <vector>
 
 #include "hw_events_interface.h"
-#ifndef __ANDROID_T__
+#ifndef __MIN_ANDROID_VER_T__
 #include "fb/hw_events.h"
 #endif
 #include "drm/hw_events_drm.h"
@@ -47,7 +53,7 @@ DisplayError HWEventsInterface::Create(int display_id, DisplayType display_type,
   DisplayError error = kErrorNone;
   HWEventsInterface *hw_events = nullptr;
   if (GetDriverType() == DriverType::FB) {
-#ifndef __ANDROID_T__
+#ifndef __MIN_ANDROID_VER_T__
     hw_events = new HWEvents();
 #endif
   } else {
