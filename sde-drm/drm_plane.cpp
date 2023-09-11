@@ -565,6 +565,7 @@ void DRMPlane::GetTypeInfo(const PropertyMap &prop_map) {
 
   string line = {};
   string pixel_formats = "pixel_formats=";
+  string cac_supported_formats = "cac_supported_formats=";
   string max_linewidth = "max_linewidth=";
   string max_upscale = "max_upscale=";
   string max_downscale = "max_downscale=";
@@ -594,6 +595,10 @@ void DRMPlane::GetTypeInfo(const PropertyMap &prop_map) {
       vector<pair<uint32_t, uint64_t>> formats_supported;
       ParseFormats(line.erase(0, pixel_formats.length()), &formats_supported);
       info->formats_supported = std::move(formats_supported);
+    } else if (line.find(cac_supported_formats) != string::npos) {
+      vector<pair<uint32_t, uint64_t>> cac_formats_supported;
+      ParseFormats(line.erase(0, cac_supported_formats.length()), &cac_formats_supported);
+      info->cac_formats_supported = std::move(cac_formats_supported);
     } else if (line.find(max_linewidth) != string::npos) {
       info->max_linewidth = std::stoi(line.erase(0, max_linewidth.length()));
     } else if (line.find(max_upscale) != string::npos) {

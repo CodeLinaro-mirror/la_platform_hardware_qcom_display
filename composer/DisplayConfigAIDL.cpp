@@ -1068,6 +1068,43 @@ ScopedAStatus DisplayConfigAIDL::configureCacV2PerEye(int32_t dispId, const CacV
   return ScopedAStatus::ok();
 }
 
+ScopedAStatus DisplayConfigAIDL::configureCacV2ExtPerEye(int32_t dispId,
+                                                         const CacV2ConfigExt& leftConfig,
+                                                         const CacV2ConfigExt& rightConfig,
+                                                         bool enable) {
+  if (dispId < 0 || dispId >= sdm::HWCCallbacks::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[dispId]);
+  sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[dispId];
+  if (!hwc_display) {
+    ALOGW("%s: Invalid display:%d", __FUNCTION__, dispId);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  // TODO(user): add support for CAC configuration per eye
+  sdm::CacConfig cac_config = {};
+  cac_config.k0r = leftConfig.redCenterPhaseStep;
+  cac_config.k1r = leftConfig.redSecondOrderPhaseStep;
+  cac_config.k0b = leftConfig.blueCenterPhaseStep;
+  cac_config.k1b = leftConfig.blueSecondOrderPhaseStep;
+  cac_config.pixel_pitch = leftConfig.pixelPitch;
+  cac_config.normalization = leftConfig.normalization;
+  cac_config.mid_le_y_offset = leftConfig.verticalCenter;
+  cac_config.mid_le_x_offset = leftConfig.horizontalCenter;
+  cac_config.mid_re_y_offset = rightConfig.verticalCenter;
+  cac_config.mid_re_x_offset = rightConfig.horizontalCenter;
+
+  if (hwc_display->PerformCacConfig(cac_config, enable) != HWC2::Error::None) {
+    ALOGE("Failed to configure CAC = %d", enable);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+
 } // namespace config
 } // namespace display
 } // namespace hardware
