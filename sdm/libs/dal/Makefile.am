@@ -40,3 +40,6 @@ libsdmdal_la_CPPFLAGS += -I${includedir}/libdrm
 libsdmdal_la_CPPFLAGS += @LIBDRM_CFLAGS@
 libsdmdal_la_LIBADD = ../utils/libsdmutils.la ../../../sde-drm/libsdedrm.la -ldl -ldisplaydebug
 libsdmdal_la_LDFLAGS = -shared -avoid-version @LIBUTILS_LIBS@ @LIBCUTILS_LIBS@ @LIBLOG_LIBS@
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libsdmdal.pc

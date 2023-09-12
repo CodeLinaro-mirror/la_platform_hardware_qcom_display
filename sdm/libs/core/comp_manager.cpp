@@ -204,6 +204,9 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
   // resources for the added display is configured properly.
   if (!display_comp_ctx->is_primary_panel) {
     max_sde_secondary_fetch_layers_ = UINT32(Debug::GetSecondaryMaxFetchLayers());
+    if (display_comp_ctx->display_type == kBuiltIn) {
+      max_sde_builtin_fetch_layers_ = max_sde_secondary_fetch_layers_;
+    }
   }
 
   display_demura_status_[display_id] = false;
