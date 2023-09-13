@@ -97,13 +97,20 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1 \
     vendor.display.normal_noc_efficiency_factor=0.85 \
     vendor.display.camera_noc_efficiency_factor=0.70 \
-    vendor.display.disable_layer_stitch=0 \
     vendor.display.secure_preview_buffer_format=420_sp \
     vendor.gralloc.secure_preview_buffer_format=420_sp \
     debug.sf.enable_advanced_sf_phase_offset=1 \
     debug.sf.high_fps_late_sf_phase_offset_ns=-5000000 \
     debug.sf.high_fps_early_phase_offset_ns=-5000000 \
     debug.sf.high_fps_early_gl_phase_offset_ns=-5000000
+endif
+
+ifeq ($(TARGET_1G_DDR_RAM), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_layer_stitch=1
+else
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_layer_stitch=0
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),monaco)
