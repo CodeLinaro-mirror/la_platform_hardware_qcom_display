@@ -30,8 +30,6 @@ using ::android::hardware::hidl_string;
 using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
-using ::android::hidl::base::V1_0::DebugInfo;
-using ::android::hidl::base::V1_0::IBase;
 using gralloc::BufferManager;
 
 class QtiAllocatorAIDL : public BnAllocator {

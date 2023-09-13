@@ -25,11 +25,11 @@ namespace allocator {
 namespace impl {
 
 static void GetProperties(gralloc::GrallocProperties *props) {
-  props->use_system_heap_for_sensors = property_get_bool(USE_SYSTEM_HEAP_FOR_SENSORS_PROP, 1);
+  props->use_system_heap_for_sensors = property_get_bool(USE_SYSTEM_HEAP_FOR_SENSORS, 1);
 
   props->ubwc_disable = property_get_bool(DISABLE_UBWC_PROP, 0);
 
-  props->ahardware_buffer_disable = property_get_bool(DISABLE_AHARDWARE_BUFFER_PROP, 0);
+  props->ahardware_buffer_disable = property_get_bool(DISABLE_AHARDWAREBUFFER_PROP, 0);
 }
 
 static inline ndk::ScopedAStatus ToBinderStatus(Error error) {
@@ -57,7 +57,7 @@ QtiAllocatorAIDL::QtiAllocatorAIDL() {
   GetProperties(&properties);
   buf_mgr_ = BufferManager::GetInstance();
   buf_mgr_->SetGrallocDebugProperties(properties);
-  enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
+  enable_logs_ = property_get_bool("vendor.gralloc.enable_logs", 0);
 }
 
 ndk::ScopedAStatus QtiAllocatorAIDL::allocate(const std::vector<uint8_t>& descriptor, int32_t count,
