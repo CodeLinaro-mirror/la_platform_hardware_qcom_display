@@ -26,22 +26,31 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_BUFFER_ALLOCATOR_H__
 #define __HWC_BUFFER_ALLOCATOR_H__
 
 #include <fcntl.h>
 #include <sys/mman.h>
 
-#include <android/hardware/graphics/allocator/2.0/IAllocator.h>
-#include <android/hardware/graphics/allocator/3.0/IAllocator.h>
-#include <android/hardware/graphics/mapper/2.1/IMapper.h>
-#include <android/hardware/graphics/mapper/3.0/IMapper.h>
+#include <aidl/android/hardware/graphics/allocator/AllocationError.h>
+#include <aidl/android/hardware/graphics/allocator/AllocationResult.h>
+#include <aidl/android/hardware/graphics/allocator/IAllocator.h>
+#include <android/binder_manager.h>
+#include <aidlcommonsupport/NativeHandle.h>
+#include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include "gralloc_priv.h"
 
-using IAllocatorV3 = android::hardware::graphics::allocator::V3_0::IAllocator;
-using IAllocatorV2 = android::hardware::graphics::allocator::V2_0::IAllocator;
-using IMapperV3 = android::hardware::graphics::mapper::V3_0::IMapper;
-using IMapperV2 = android::hardware::graphics::mapper::V2_0::IMapper;
+using aidl::android::hardware::graphics::allocator::AllocationResult;
+using aidl::android::hardware::graphics::allocator::IAllocator;
+using android::hardware::graphics::mapper::V4_0::IMapper;
 namespace sdm {
 
 template <class Type>
@@ -68,10 +77,8 @@ class HWCBufferAllocator : public BufferAllocator {
 
  private:
   DisplayError GetGrallocInstance();
-  android::sp<IMapperV2> mapper_V2_;
-  android::sp<IMapperV3> mapper_V3_;
-  android::sp<IAllocatorV2> allocator_V2_;
-  android::sp<IAllocatorV3> allocator_V3_;
+  android::sp<IMapper> mapper_;
+  std::shared_ptr<IAllocator> allocator_;
 };
 
 }  // namespace sdm

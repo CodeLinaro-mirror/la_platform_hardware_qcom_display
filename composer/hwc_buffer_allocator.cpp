@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <gralloc_priv.h>
 
 #include <core/buffer_allocator.h>
@@ -40,10 +47,8 @@
 
 #define __CLASS__ "HWCBufferAllocator"
 
-using android::hardware::graphics::mapper::V2_0::Error;
-using MapperV3Error = android::hardware::graphics::mapper::V3_0::Error;
-using android::hardware::graphics::mapper::V2_0::BufferDescriptor;
-using MapperV3BufferDescriptor = android::hardware::graphics::mapper::V3_0::BufferDescriptor;
+using android::hardware::graphics::mapper::V4_0::Error;
+using android::hardware::graphics::mapper::V4_0::BufferDescriptor;
 using android::hardware::hidl_handle;
 using android::hardware::hidl_vec;
 
@@ -51,27 +56,23 @@ namespace sdm {
 
 DisplayError HWCBufferAllocator::GetGrallocInstance() {
   // Lazy initialization of gralloc HALs
-  if (mapper_V3_ != nullptr || mapper_V2_ != nullptr || allocator_V3_ != nullptr ||
-      allocator_V2_ != nullptr) {
+  if (mapper_ != nullptr || allocator_ != nullptr) {
     return kErrorNone;
   }
 
-  allocator_V3_ = IAllocatorV3::getService();
-  if (allocator_V3_ == nullptr) {
-    allocator_V2_ = IAllocatorV2::getService();
-    if (allocator_V2_ == nullptr) {
+  if (allocator_ == nullptr) {
+    allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+        AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
+    if (allocator_ == nullptr) {
       DLOGE("Unable to get allocator");
       return kErrorCriticalResource;
     }
   }
 
-  mapper_V3_ = IMapperV3::getService();
-  if (mapper_V3_ == nullptr) {
-    mapper_V2_ = IMapperV2::getService();
-    if (mapper_V2_ == nullptr) {
-      DLOGE("Unable to get mapper");
-      return kErrorCriticalResource;
-    }
+  mapper_ = IMapper::getService();
+  if (mapper_ == nullptr) {
+    DLOGE("Unable to get mapper");
+    return kErrorCriticalResource;
   }
 
   return kErrorNone;
@@ -112,8 +113,8 @@ DisplayError HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
 
   const native_handle_t *buf = nullptr;
 
-  if (mapper_V3_ != nullptr) {
-    IMapperV3::BufferDescriptorInfo descriptor_info;
+  if (mapper_ != nullptr) {
+    IMapper::BufferDescriptorInfo descriptor_info;
     descriptor_info.width = buffer_config.width;
     descriptor_info.height = buffer_config.height;
     descriptor_info.layerCount = 1;
@@ -121,63 +122,10 @@ DisplayError HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
         static_cast<android::hardware::graphics::common::V1_2::PixelFormat>(format);
     descriptor_info.usage = alloc_flags;
 
-    auto hidl_err = MapperV3Error::NONE;
-
-    auto descriptor = BufferDescriptor();
-    mapper_V3_->createDescriptor(descriptor_info, [&](const auto &_error, const auto &_descriptor) {
-      hidl_err = _error;
-      if (hidl_err != MapperV3Error::NONE) {
-        return;
-      }
-      descriptor = _descriptor;
-    });
-
-    if (hidl_err != MapperV3Error::NONE) {
-      DLOGE("Failed to create descriptor");
-      return kErrorMemory;
-    }
-
-    hidl_handle raw_handle = nullptr;
-
-    allocator_V3_->allocate(descriptor, 1,
-                            [&](const auto &_error, const auto &_stride, const auto &_buffers) {
-                              hidl_err = _error;
-                              if (hidl_err != MapperV3Error::NONE) {
-                                return;
-                              }
-                              raw_handle = _buffers[0];
-                            });
-
-    if (hidl_err != MapperV3Error::NONE) {
-      DLOGE("Failed to allocate buffer");
-      return kErrorMemory;
-    }
-
-    mapper_V3_->importBuffer(raw_handle, [&](const auto &_error, const auto &_buffer) {
-      hidl_err = _error;
-      if (hidl_err != MapperV3Error::NONE) {
-        return;
-      }
-      buf = static_cast<const native_handle_t *>(_buffer);
-    });
-
-    if (hidl_err != MapperV3Error::NONE) {
-      DLOGE("Failed to import buffer into HWC");
-      return kErrorMemory;
-    }
-  } else {
-    IMapperV2::BufferDescriptorInfo descriptor_info;
-    descriptor_info.width = buffer_config.width;
-    descriptor_info.height = buffer_config.height;
-    descriptor_info.layerCount = 1;
-    descriptor_info.format =
-        static_cast<android::hardware::graphics::common::V1_0::PixelFormat>(format);
-    descriptor_info.usage = alloc_flags;
-
     auto hidl_err = Error::NONE;
 
     auto descriptor = BufferDescriptor();
-    mapper_V2_->createDescriptor(descriptor_info, [&](const auto &_error, const auto &_descriptor) {
+    mapper_->createDescriptor(descriptor_info, [&](const auto &_error, const auto &_descriptor) {
       hidl_err = _error;
       if (hidl_err != Error::NONE) {
         return;
@@ -190,27 +138,16 @@ DisplayError HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
       return kErrorMemory;
     }
 
-    hidl_handle raw_handle = nullptr;
-
-    allocator_V2_->allocate(descriptor, 1,
-                            [&](const auto &_error, const auto &_stride, const auto &_buffers) {
-                              hidl_err = _error;
-                              if (hidl_err != Error::NONE) {
-                                return;
-                              }
-                              raw_handle = _buffers[0];
-                            });
-
-    if (hidl_err != Error::NONE) {
+    AllocationResult result;
+    auto status = allocator_->allocate(descriptor, 1, &result);
+    if (!status.isOk()) {
       DLOGE("Failed to allocate buffer");
       return kErrorMemory;
     }
+    hidl_handle raw_handle = android::makeFromAidl(result.buffers[0]);
 
-    mapper_V2_->importBuffer(raw_handle, [&](const auto &_error, const auto &_buffer) {
+    mapper_->importBuffer(raw_handle, [&](const auto &_error, const auto &_buffer) {
       hidl_err = _error;
-      if (hidl_err != Error::NONE) {
-        return;
-      }
       buf = static_cast<const native_handle_t *>(_buffer);
     });
 
@@ -237,10 +174,8 @@ DisplayError HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
 DisplayError HWCBufferAllocator::FreeBuffer(BufferInfo *buffer_info) {
   DisplayError err = kErrorNone;
   auto hnd = reinterpret_cast<void *>(buffer_info->private_data);
-  if (mapper_V3_ != nullptr) {
-    mapper_V3_->freeBuffer(hnd);
-  } else {
-    mapper_V2_->freeBuffer(hnd);
+  if (mapper_ != nullptr) {
+    mapper_->freeBuffer(hnd);
   }
   AllocatedBufferInfo &alloc_buffer_info = buffer_info->alloc_buffer_info;
 
@@ -512,25 +447,16 @@ DisplayError HWCBufferAllocator::MapBuffer(const private_handle_t *handle,
 
   auto hnd = const_cast<private_handle_t *>(handle);
   void *buffer_ptr = NULL;
-  if (mapper_V3_ != nullptr) {
-    const IMapperV3::Rect access_region = {.left = 0, .top = 0, .width = 0, .height = 0};
-    mapper_V3_->lock(
+  if (mapper_ != nullptr) {
+    const IMapper::Rect access_region = {.left = 0, .top = 0, .width = 0, .height = 0};
+    mapper_->lock(
         reinterpret_cast<void *>(hnd), (uint64_t)BufferUsage::CPU_READ_OFTEN, access_region,
         acquire_fence_handle,
-        [&](const auto &_error, const auto &_buffer, const auto &_bpp, const auto &_stride) {
-          if (_error == MapperV3Error::NONE) {
+        [&](const auto &_error, const auto &_buffer) {
+          if (_error == Error::NONE) {
             buffer_ptr = _buffer;
           }
         });
-  } else {
-    const IMapperV2::Rect access_region = {.left = 0, .top = 0, .width = 0, .height = 0};
-    mapper_V2_->lock(reinterpret_cast<void *>(hnd), (uint64_t)BufferUsage::CPU_READ_OFTEN,
-                     access_region, acquire_fence_handle,
-                     [&](const auto &_error, const auto &_buffer) {
-                       if (_error == Error::NONE) {
-                         buffer_ptr = _buffer;
-                       }
-                     });
   }
   if (!buffer_ptr) {
     return kErrorUndefined;
@@ -542,15 +468,8 @@ DisplayError HWCBufferAllocator::UnmapBuffer(const private_handle_t *handle, int
   DisplayError err = kErrorNone;
   *release_fence = -1;
   auto hnd = const_cast<private_handle_t *>(handle);
-  if (mapper_V3_ != nullptr) {
-    mapper_V3_->unlock(reinterpret_cast<void *>(hnd),
-                       [&](const auto &_error, const auto &_release_fence) {
-                         if (_error != MapperV3Error::NONE) {
-                           err = kErrorUndefined;
-                         }
-                       });
-  } else {
-    mapper_V2_->unlock(reinterpret_cast<void *>(hnd),
+  if (mapper_ != nullptr) {
+    mapper_->unlock(reinterpret_cast<void *>(hnd),
                        [&](const auto &_error, const auto &_release_fence) {
                          if (_error != Error::NONE) {
                            err = kErrorUndefined;
