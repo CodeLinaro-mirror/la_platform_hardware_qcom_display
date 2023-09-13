@@ -1027,7 +1027,9 @@ DisplayError CompManager::CaptureCwb(Handle display_ctx, const LayerBuffer &outp
 }
 
 void CompManager::NotifyCwbDone(int32_t display_id, int32_t status, const LayerBuffer &buffer) {
-  callback_map_[display_id]->NotifyCwbDone(status, buffer);
+  if (callback_map_[display_id]) {
+    callback_map_[display_id]->NotifyCwbDone(status, buffer);
+  }
 }
 
 void CompManager::TriggerRefresh(int32_t display_id) {
