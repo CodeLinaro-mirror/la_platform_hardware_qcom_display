@@ -4164,7 +4164,8 @@ HWC3::Error HWCSession::GetDisplayConnectionType(Display display, HwcDisplayConn
     return HWC3::Error::BadDisplay;
   }
   *type = HwcDisplayConnectionType::EXTERNAL;
-  if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN) {
+  if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN ||
+      (display == HWC_DISPLAY_PRIMARY && pluggable_is_primary_)) {
     *type = HwcDisplayConnectionType::INTERNAL;
   }
 
