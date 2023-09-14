@@ -29,6 +29,7 @@
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
+#include <aidl/android/hardware/graphics/composer3/DisplayConfiguration.h>
 #include <aidl/android/hardware/graphics/composer3/Capability.h>
 #include <aidl/android/hardware/graphics/common/ColorTransform.h>
 #include <functional>
