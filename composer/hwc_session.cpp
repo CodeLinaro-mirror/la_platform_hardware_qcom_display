@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -2644,16 +2644,18 @@ int HWCSession::CreatePrimaryDisplay() {
       continue;
     }
 
-    // todo (user): If primary display is not connected (e.g. hdmi as primary), a NULL display
-    // need to be created. SF expects primary display hotplug during callback registration unlike
-    // previous implementation where first hotplug could be notified anytime.
-    if (!info.is_connected) {
-      DLOGE("Primary display is not connected. Not supported at present.");
-      break;
-    }
-
     auto hwc_display = &hwc_display_[HWC_DISPLAY_PRIMARY];
     hwc2_display_t client_id = map_info_primary_.client_id;
+    if (!info.is_connected) {
+      // primary display is not connected, create a dummy display.
+      HWCDisplayDummy::Create(core_intf_, &buffer_allocator_, &callbacks_, this, qservice_,
+                              0, 0, hwc_display);
+      null_display_active_ = true;
+      map_info_primary_.disp_type = info.display_type;
+      map_info_primary_.sdm_id = info.display_id;
+      status = kErrorNone;
+      break;
+    }
 
     if (info.display_type == kBuiltIn) {
       status = HWCDisplayBuiltIn::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
@@ -2824,6 +2826,14 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
 
   for (auto &iter : *hw_displays_info) {
     auto &info = iter.second;
+
+    if (info.is_primary && info.is_connected && null_display_active_) {
+      DLOGI("Pluggable display is connected. Exit!");
+      auto hwc_display_dummy = hwc_display_[HWC_DISPLAY_PRIMARY];
+      HWCDisplayDummy::Destroy(hwc_display_dummy);
+      CoreInterface::DestroyCore();
+      _exit(1);
+    }
 
     // Do not recreate primary display or if display is not connected.
     if (info.is_primary || info.display_type != kPluggable || !info.is_connected) {
