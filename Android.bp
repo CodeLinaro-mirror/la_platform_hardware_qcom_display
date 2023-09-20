@@ -59,4 +59,8 @@ soong_config_string_variable {
 subdirs = [
     "libqservice",
     "libqdutils",
+    "libddebug",
+    "gpu_tonemapper",
+    "sdm/libs/utils",
+    "sdm/libs/core",
 ]
