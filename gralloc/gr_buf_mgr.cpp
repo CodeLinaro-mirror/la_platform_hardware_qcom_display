@@ -714,6 +714,16 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
         return Error::BAD_VALUE;
       }
       break;
+#ifdef PLANE_COMPONENT_TYPE_BLOB
+    case static_cast<int32_t>(PixelFormat::BLOB):
+      if (comp.type.value == qtigralloc::PlaneLayoutComponentType_Blob.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = -1;
+      } else {
+        return Error::BAD_VALUE;
+      }
+      break;
+#endif
     default:
       ALOGI_IF(DEBUG, "Offset and size in bits unknown for format %d", format);
       return Error::UNSUPPORTED;
@@ -780,6 +790,14 @@ static void grallocToStandardPlaneLayoutComponentType(uint32_t in,
     comp.type = qtigralloc::PlaneLayoutComponentType_Meta;
     components->push_back(comp);
   }
+
+#ifdef PLANE_COMPONENT_TYPE_BLOB
+  if (in & PLANE_COMPONENT_BLOB) {
+    comp.type = qtigralloc::PlaneLayoutComponentType_Blob;
+    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
+    components->push_back(comp);
+  }
+#endif
 }
 
 static Error getFormatLayout(private_handle_t *handle, std::vector<PlaneLayout> *out) {

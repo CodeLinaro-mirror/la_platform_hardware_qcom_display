@@ -1934,6 +1934,23 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       plane_info[0].h_subsampling = 0;
       plane_info[0].v_subsampling = 0;
       break;
+    case static_cast<int32_t>(PixelFormat::BLOB):
+      if (info.height != 1) {
+        ALOGE("%s: Buffers with PixelFormat::BLOB must have height 1 ", __FUNCTION__);
+        err = -EINVAL;
+        return err;
+      }
+      *plane_count = 1;
+      plane_info[0].component = (PlaneComponent)PLANE_COMPONENT_BLOB;
+      plane_info[0].offset = 0;
+      plane_info[0].stride = static_cast<int32_t>(UINT(width));
+      plane_info[0].stride_bytes = static_cast<int32_t>(width);
+      plane_info[0].scanlines = static_cast<int32_t>(height);
+      plane_info[0].size = static_cast<uint32_t>(width);
+      plane_info[0].step = 0;
+      plane_info[0].h_subsampling = 0;
+      plane_info[0].v_subsampling = 0;
+      break;
 
       // Unsupported formats
     case HAL_PIXEL_FORMAT_YCbCr_422_I:

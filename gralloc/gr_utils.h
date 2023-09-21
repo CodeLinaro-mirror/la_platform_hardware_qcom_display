@@ -62,6 +62,7 @@
 
 #define OVERFLOW(x, y) (((y) != 0) && ((x) > (UINT_MAX / (y))))
 
+using android::hardware::graphics::common::V1_2::PixelFormat;
 using android::hardware::graphics::common::V1_1::BufferUsage;
 
 namespace gralloc {
@@ -135,6 +136,9 @@ enum PlaneComponent {
 
   /* alpha */
   PLANE_COMPONENT_A = 1 << 20,
+
+  /* blob */
+  PLANE_COMPONENT_BLOB = 1 << 29,
 
   /* raw data plane */
   PLANE_COMPONENT_RAW = 1 << 30,
