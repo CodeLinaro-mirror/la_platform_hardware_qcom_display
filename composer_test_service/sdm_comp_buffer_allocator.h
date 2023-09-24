@@ -38,17 +38,21 @@
 #include <QtiGrallocMetadata.h>
 
 #include <android/hardware/graphics/common/1.2/types.h>
-#include <android/hardware/graphics/allocator/4.0/IAllocator.h>
+#include <aidl/android/hardware/graphics/allocator/AllocationError.h>
+#include <aidl/android/hardware/graphics/allocator/AllocationResult.h>
+#include <aidl/android/hardware/graphics/allocator/IAllocator.h>
+#include <android/binder_manager.h>
+#include <aidlcommonsupport/NativeHandle.h>
 #include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
 #include <vendor/qti/hardware/display/mapperextensions/1.3/IQtiMapperExtensions.h>
 #include <QtiGrallocPriv.h>
 #include <core/buffer_allocator.h>
 
-
-using android::hardware::graphics::allocator::V4_0::IAllocator;
-using android::hardware::graphics::mapper::V4_0::IMapper;
+using aidl::android::hardware::graphics::allocator::AllocationResult;
+using aidl::android::hardware::graphics::allocator::IAllocator;
 using android::hardware::graphics::common::V1_1::BufferUsage;
+using android::hardware::graphics::mapper::V4_0::IMapper;
 using vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
 using IQtiMapperExtensions_v1_3 =
     vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
@@ -95,7 +99,7 @@ class SDMCompBufferAllocator : public BufferAllocator {
   void SetBufferAccessControlInfo(std::bitset<kBufferPermMax> perm, BufferPermission *buf_perm);
   LayerBufferFormat GetFormatSDM(const int32_t &source, const int flags);
   android::sp<IMapper> mapper_;
-  android::sp<IAllocator> allocator_;
+  std::shared_ptr<IAllocator> allocator_;
   android::sp<IQtiMapperExtensions_v1_3> mapper_ext_;
 };
 

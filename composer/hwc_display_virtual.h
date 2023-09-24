@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -52,6 +52,7 @@ class HWCDisplayVirtual : public HWCDisplay {
                                          int32_t format, CwbConfig &cwb_config);
   virtual HWC3::Error GetDisplayType(int32_t *out_type);
   virtual HWC3::Error SetColorMode(ColorMode mode);
+  virtual HWC3::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
   virtual HWC3::Error SetOutputBuffer(buffer_handle_t buf, shared_ptr<Fence> release_fence);
   virtual HWC3::Error DumpVDSBuffer();
   bool NeedsGPUBypass();

@@ -134,6 +134,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_rounded_corner_thread=0
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),blair)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.allow_tonemap_native=1
+endif
+
 ifneq ($(PLATFORM_VERSION), 10)
     PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 endif

@@ -754,6 +754,19 @@ int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]) 
 
   memset(ycbcr->reserved, 0, sizeof(ycbcr->reserved));
 
+  // Check metadata if the geometry has been updated.
+  CropRectangle_t buffer_dim;
+  if (GetMetaDataValue(const_cast<private_handle_t *>(hnd),
+                       (int64_t)StandardMetadataType::CROP, &buffer_dim) == Error::NONE) {
+    int32_t sliceWidth  = buffer_dim.right - buffer_dim.left;
+    int32_t sliceHeight = buffer_dim.bottom - buffer_dim.top;
+    BufferInfo info(sliceWidth, sliceHeight, format, usage);
+    err = GetAlignedWidthAndHeight(info, &width, &height);
+    if (err) {
+      return err;
+    }
+  }
+
   // Check metadata for interlaced content.
   int interlace_flag = 0;
   if (GetMetaDataValue(const_cast<private_handle_t *>(hnd), QTI_PP_PARAM_INTERLACED,

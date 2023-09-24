@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -211,6 +211,10 @@ HWC3::Error HWCDisplayVirtual::GetDisplayType(int32_t *out_type) {
 }
 
 HWC3::Error HWCDisplayVirtual::SetColorMode(ColorMode mode) {
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplayVirtual::SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent) {
   return HWC3::Error::None;
 }
 

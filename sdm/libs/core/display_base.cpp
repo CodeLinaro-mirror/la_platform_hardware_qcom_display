@@ -62,7 +62,8 @@ static bool ValidNoisePluginDebugOverride(uint32_t override_param) {
           (override_param < kNoisePlugInDebugPropertyEnd));
 }
 
-static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
+static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut,
+                                                     bool allow_tonemap_native) {
   if (gamut.find(kDisplayP3) != std::string::npos || gamut.find(kDcip3) != std::string::npos) {
     return ColorPrimaries_DCIP3;
   } else if (gamut.find(kHdr) != std::string::npos || gamut.find("bt2020") != std::string::npos ||
@@ -74,7 +75,7 @@ static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
   } else if (gamut.find(kNative) != std::string::npos) {
     DLOGW("Native Gamut found");
     // Native gamut will have unknown primary, setting ColorPrimaries_Max
-    return ColorPrimaries_Max;
+    return (allow_tonemap_native ? ColorPrimaries_BT709_5 : ColorPrimaries_Max);
   }
 
   return ColorPrimaries_BT709_5;
@@ -3510,7 +3511,7 @@ void DisplayBase::GetColorPrimaryTransferFromAttributes(const AttrVal &attr,
         (it.first.find(kDynamicRangeAttribute) != std::string::npos)) {
       attribute_field = it.second;
       PrimariesTransfer pt = {};
-      pt.primaries = GetColorPrimariesFromAttribute(attribute_field);
+      pt.primaries = GetColorPrimariesFromAttribute(attribute_field, allow_tonemap_native_);
       if (pt.primaries == ColorPrimaries_BT709_5) {
         pt.transfer = Transfer_sRGB;
         supported_pt->push_back(pt);
@@ -3657,18 +3658,18 @@ PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
   // TODO(user): Check is if someone calls with hal_display_p3
   if (hw_resource_info_.src_tone_map.none() &&
       (pic_quality == kStandard && color_gamut == kBt2020)) {
-    pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
+    pt.primaries = GetColorPrimariesFromAttribute(color_gamut, allow_tonemap_native_);
     if (transfer == kHlg) {
       pt.transfer = Transfer_HLG;
     } else {
       pt.transfer = Transfer_SMPTE_ST2084;
     }
   } else if (color_gamut == kDcip3) {
-    pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
+    pt.primaries = GetColorPrimariesFromAttribute(color_gamut, allow_tonemap_native_);
     pt.transfer = Transfer_sRGB;
   } else if (color_gamut == kNative && !allow_tonemap_native_) {
     // if allow_tonemap_native_ is set, blend space is defaulted to BT709 + sRGB
-    pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
+    pt.primaries = GetColorPrimariesFromAttribute(color_gamut, allow_tonemap_native_);
     pt.transfer = Transfer_Max;
   }
 

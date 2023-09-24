@@ -172,6 +172,15 @@ case "$target" in
         setprop vendor.display.enable_perf_hint_large_comp_cycle 0
         setprop vendor.display.enable_posted_start_dyn 1
         setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_async_powermode 0
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_gpu_color_convert 0
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
+        setprop vendor.gralloc.secure_preview_only 1
         ;;
         507|565|578)
         # Set property for blair
