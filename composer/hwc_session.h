@@ -522,8 +522,11 @@ class HWCSession : public HWCUEvent,
   int HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool delay_hotplug);
   int HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info);
   void DestroyDisplay(DisplayMapInfo *map_info);
+  void DestroyDisplayLocked(DisplayMapInfo *map_info);
   void DestroyPluggableDisplay(DisplayMapInfo *map_info);
+  void DestroyPluggableDisplayLocked(DisplayMapInfo *map_info);
   void DestroyNonPluggableDisplay(DisplayMapInfo *map_info);
+  void DestroyNonPluggableDisplayLocked(DisplayMapInfo *map_info);
   int GetConfigCount(int disp_id, uint32_t *count);
   int GetActiveConfigIndex(int disp_id, uint32_t *config);
   int SetActiveConfigIndex(int disp_id, uint32_t config);

@@ -25,7 +25,7 @@ QtiComposer3Client::QtiComposer3Client() : hwc_session_(HWCSession::GetInstance(
   }
 }
 
-ScopedAStatus QtiComposer3Client::init(const std::shared_ptr<AidlComposerClient> &composer_client) {
+ScopedAStatus QtiComposer3Client::init(const std::weak_ptr<AidlComposerClient> &composer_client) {
   composer_client_ = composer_client;
   return ScopedAStatus::ok();
 }
@@ -36,9 +36,11 @@ ScopedAStatus QtiComposer3Client::qtiExecuteCommands(
     std::vector<CommandResultPayload> *_aidl_return) {
   std::vector<CommandResultPayload> qti_results;
 
-  if (composer_client_) {
-    auto qti_status = composer_client_->executeQtiCommands(in_qtiCommands, &qti_results);
-    auto status = composer_client_->executeCommands(in_commands, _aidl_return);
+  auto composer_client = composer_client_.lock();
+
+  if (composer_client) {
+    auto qti_status = composer_client->executeQtiCommands(in_qtiCommands, &qti_results);
+    auto status = composer_client->executeCommands(in_commands, _aidl_return);
 
     for (auto &result : qti_results) {
       _aidl_return->push_back(std::move(result));
@@ -51,9 +53,11 @@ ScopedAStatus QtiComposer3Client::qtiExecuteCommands(
 
 ScopedAStatus QtiComposer3Client::qtiTryDrawMethod(int64_t in_display,
                                                    QtiDrawMethod in_drawMethod) {
-  auto error = hwc_session_->TryDrawMethod(in_display, in_drawMethod);
-
-  return TO_BINDER_STATUS(INT32(error));
+  if (hwc_session_) {
+    auto error = hwc_session_->TryDrawMethod(in_display, in_drawMethod);
+    return TO_BINDER_STATUS(INT32(error));
+  }
+  return ScopedAStatus::ok();
 }
 
 SpAIBinder QtiComposer3Client::createBinder() {
