@@ -22,6 +22,7 @@ qtidisplay_cc_defaults {
         "-Wno-missing-field-initializers",
         "-Wall",
         "-Werror",
+        "-Wno-reorder-ctor",
     ],
     shared_libs: [
         "liblog",
