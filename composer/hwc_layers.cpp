@@ -314,6 +314,10 @@ HWCLayer::HWCLayer(Display display_id, HWCBufferAllocator *buf_allocator)
   // Fences are deferred, so the first time this layer is presented, return -1
   // TODO(user): Verify that fences are properly obtained on suspend/resume
   release_fences_.push_back(nullptr);
+
+  int value = 0;
+  Debug::Get()->GetProperty(DISABLE_GET_SCREEN_DECORATOR_SUPPORT, &value);
+  disable_get_screen_decorator_support_ = (value == 1);
 }
 
 HWCLayer::~HWCLayer() {
@@ -521,6 +525,9 @@ HWC3::Error HWCLayer::SetLayerCompositionType(Composition type) {
     case Composition::CURSOR:
       break;
     case Composition::DISPLAY_DECORATION:
+      if (disable_get_screen_decorator_support_) {
+        return HWC3::Error::Unsupported;
+      }
       break;
     case Composition::INVALID:
       return HWC3::Error::BadParameter;
