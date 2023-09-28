@@ -335,6 +335,10 @@ HWCLayer::HWCLayer(Display display_id, HWCBufferAllocator *buf_allocator)
     : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
   layer_ = new Layer();
   geometry_changes_ |= kAdded;
+
+  int value = 0;
+  Debug::Get()->GetProperty(DISABLE_GET_SCREEN_DECORATOR_SUPPORT, &value);
+  disable_get_screen_decorator_support_ = (value == 1);
 }
 
 HWCLayer::~HWCLayer() {
@@ -542,6 +546,9 @@ HWC3::Error HWCLayer::SetLayerCompositionType(Composition type) {
     case Composition::CURSOR:
       break;
     case Composition::DISPLAY_DECORATION:
+      if (disable_get_screen_decorator_support_) {
+        return HWC3::Error::Unsupported;
+      }
       break;
     case Composition::INVALID:
       return HWC3::Error::BadParameter;
