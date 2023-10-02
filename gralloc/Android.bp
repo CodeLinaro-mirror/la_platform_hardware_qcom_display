@@ -1,17 +1,22 @@
 //libgrallocutils
 cc_library_shared {
     name: "libgrallocutils",
-    defaults: ["qtidisplay_common_defaults"],
+    defaults: [
+        "qtidisplay_defaults",
+        "qtidisplay_common_defaults",
+    ],
     vendor: true,
     sanitize: {
         integer_overflow: true,
     },
-
     header_libs: [
         "display_headers",
         "qti_kernel_headers",
         "qti_display_kernel_headers",
         "device_kernel_headers",
+        "libubwcp_headers",
+        "snapalloc_interface_headers",
+        "common_interface_headers",
     ],
     shared_libs: [
         "libdl",
@@ -22,6 +27,11 @@ cc_library_shared {
         "android.hardware.graphics.mapper@2.1",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.graphics.mapper@4.0",
+        "libbinder_ndk",
+        "libgralloc.qti",
+        "libutilscallstack",
+        "libdisplaydebug",
+        "android.hardware.graphics.allocator-V2-ndk",
     ],
     cflags: [
         "-DLOG_TAG=\"qdgralloc\"",
@@ -34,6 +44,8 @@ cc_library_shared {
         "gr_utils.cpp",
         "gr_adreno_info.cpp",
         "gr_camera_info.cpp",
+        "gr_debugger.cpp",
+        "gr_snap_helper.cpp",
     ],
 }
 
@@ -124,7 +136,11 @@ cc_library_shared {
     vendor: true,
     relative_install_path: "hw",
 
-    header_libs: ["display_headers"],
+    header_libs: [
+        "display_headers",    
+        "snapalloc_interface_headers",
+        "common_interface_headers",
+    ],
     shared_libs: [
         "libhidlbase",
         "libgrallocutils",
@@ -142,6 +158,9 @@ cc_library_shared {
         "libdmabufheap",
         "vendor.qti.hardware.display.mapperextensions@1.2",
         "vendor.qti.hardware.display.mapperextensions@1.3",
+        "android.hardware.graphics.allocator-V2-ndk",
+        "libgralloc.qti",
+        "libutilscallstack",
     ],
     cflags: [
         "-DLOG_TAG=\"qdgralloc\"",
@@ -164,7 +183,11 @@ cc_binary {
     },
     vendor: true,
     relative_install_path: "hw",
-    header_libs: ["display_headers"],
+    header_libs: [
+        "display_headers", 
+        "snapalloc_interface_headers",
+        "common_interface_headers",
+    ],
     shared_libs: [
         "libbinder",
         "libbinder_ndk",
@@ -182,7 +205,10 @@ cc_binary {
         "libdmabufheap",
         "vendor.qti.hardware.display.mapperextensions@1.2",
         "vendor.qti.hardware.display.mapperextensions@1.3",
-        "android.hardware.graphics.allocator-V1-ndk",
+        "android.hardware.graphics.allocator-V2-ndk",
+        "libjsoncpp",
+        "libgralloc.qti",
+        "libutilscallstack",
     ],
     static_libs: [
         "libaidlcommonsupport",
