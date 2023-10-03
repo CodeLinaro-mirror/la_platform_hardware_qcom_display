@@ -20,6 +20,10 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __COLOR_METADATA_H__
@@ -79,6 +83,38 @@ typedef enum GammaTransfer {
   Transfer_HLG             = 18,  // ARIB STD-B67
   Transfer_Max             = 0xff,
 } GammaTransfer;
+
+typedef enum RenderIntent {
+  //<! Colors with vendor defined gamut
+  kRenderIntentNative,
+  //<! Colors with in gamut are left untouched, out side the gamut are hard clipped
+  kRenderIntentColorimetric,
+  //<! Colors with in gamut are ehanced, out side the gamuat are hard clipped
+  kRenderIntentEnhance,
+  //<! Tone map hdr colors to display's dynamic range, mapping to display gamut is
+  //<! defined in colormertic.
+  kRenderIntentToneMapColorimetric,
+  //<! Tone map hdr colors to display's dynamic range, mapping to display gamut is
+  //<! defined in enhance.
+  kRenderIntentToneMapEnhance,
+  //<! Custom render intents range
+  kRenderIntentOemCustomStart = 0x100,
+  kRenderIntentOemCustomEnd = 0x1ff,
+  //<! If STC implementation returns kOemModulateHw render intent, STC manager will
+  //<! call the implementation for all the render intent/blend space combination.
+  //<! STC implementation can modify/modulate the HW assets.
+  kRenderIntentOemModulateHw = 0xffff - 1,
+  kRenderIntentMaxRenderIntent = 0xffff
+}RenderIntent;
+
+typedef struct ColorMode {
+  //<! Blend-Space gamut
+  ColorPrimaries gamut;
+  //<! Blend-space Gamma
+  GammaTransfer gamma;
+  //<! Intent of the mode
+  RenderIntent intent;
+}ColorMode;
 
 typedef enum MatrixCoEfficients {
   MatrixCoEff_Identity           = 0,
