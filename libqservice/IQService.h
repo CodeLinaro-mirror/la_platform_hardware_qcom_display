@@ -136,7 +136,7 @@ public:
       SET_DEMURA_STATE = 60,                   // Enable/disable demura feature
       SET_DEMURA_CONFIG = 61,                  // Set the demura configuration index
       SET_BPP_MODE = 62,                       // Set Panel bpp to 24bpp or 30bpp
-      PERFORM_CAC_CONFIG = 56,                 // Set CAC Configuration for the display
+      PERFORM_CAC_CONFIG = 63,                 // Set CAC Configuration for the display
       COMMAND_LIST_END = 400,
     };
 
