@@ -284,6 +284,7 @@ class HWCDisplay : public DisplayEventHandler {
   HWCLayer *GetHWCLayer(hwc2_layer_t layer_id);
   hwc2_layer_t GetHWCTunnelledLayer();
   void ResetValidation() { validated_ = false; }
+  void SetDisplayRemoved() { display_removed_ = true; }
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   bool CanSkipValidate();
   bool IsSkipValidateState() { return (validate_state_ == kSkipValidate); }
@@ -301,6 +302,7 @@ class HWCDisplay : public DisplayEventHandler {
     return HWC2::Error::Unsupported;
   }
   bool IsFirstCommitDone() { return !first_cycle_; }
+  bool IsValidated() { return validated_; }
 
   // HWC2 APIs
   virtual HWC2::Error AcceptDisplayChanges(void);
@@ -528,6 +530,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool windowed_display_ = false;
   uint32_t active_refresh_rate_ = 0;
   bool has_tunneled_layer_ = false;
+  bool display_removed_ = false;
 
  private:
   void DumpInputBuffers(void);

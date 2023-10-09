@@ -26,6 +26,9 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #ifndef __CLIENT_IMPL_H__
 #define __CLIENT_IMPL_H__
@@ -128,6 +131,12 @@ class ClientImpl : public ClientInterface {
   virtual int GetDisplayType(uint64_t physical_disp_id, DisplayType *disp_type);
   virtual int AllowIdleFallback();
   virtual int DummyDisplayConfigAPI();
+  virtual int tunnellingInit();
+  virtual int dequeueTunnelledBuffer(const native_handle_t* buffer_handle,
+                                     const native_handle_t* release_fence_handle);
+  virtual int queueTunnelledBuffer(const native_handle_t* buffer_handle,
+                                   const native_handle_t* acquire_fence_handle);
+  virtual int tunnellingDeinit();
 
  private:
   android::sp<IDisplayConfig> display_config_ = nullptr;

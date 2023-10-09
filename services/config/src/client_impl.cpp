@@ -26,6 +26,9 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear */
 
 #include <string>
 #include <vector>
@@ -1003,6 +1006,67 @@ int ClientImpl::AllowIdleFallback() {
   if (display_config_) {
     display_config_->perform(client_handle_, kAllowIdleFallback, {}, {}, hidl_cb);
   }
+  return error;
+}
+
+int ClientImpl::tunnellingInit() {
+  int error =0;
+  auto hidl_cb = [&error] (int32_t err, ByteStream params, HandleStream handles) {
+    error = err;
+  };
+  display_config_->perform(client_handle_, kTunnelingInit, {}, {}, hidl_cb);
+  return error;
+}
+
+int ClientImpl::queueTunnelledBuffer(const native_handle_t *buffer_handle,
+                                     const native_handle_t* acquire_fence_handle)
+{
+  hidl_handle handle = buffer_handle;
+  std::vector<hidl_handle> handle_vector;
+  handle_vector.push_back(buffer_handle);
+  HandleStream input_handles = handle_vector;
+  ByteStream input_params;
+  input_params.setToExternal(reinterpret_cast<uint8_t*>(&acquire_fence_handle),
+                             sizeof(native_handle_t*));
+
+  int error = 0;
+  auto hidl_cb = [&error] (int32_t err, ByteStream params, HandleStream handles) {
+    error = err;
+  };
+
+  display_config_->perform(client_handle_, kQueueTunneledBuffer, input_params,
+                           input_handles, hidl_cb);
+  return error;
+}
+
+int ClientImpl::dequeueTunnelledBuffer(const native_handle_t* buffer_handle,
+                                       const native_handle_t* release_fence_handle)
+{
+  hidl_handle handle = buffer_handle;
+  std::vector<hidl_handle> handle_vector;
+  handle_vector.push_back(buffer_handle);
+  HandleStream input_handles = handle_vector;
+  ByteStream input_params;
+  input_params.setToExternal(reinterpret_cast<uint8_t*>(&release_fence_handle),
+                             sizeof(native_handle_t*));
+
+  int error = 0;
+  auto hidl_cb = [&error] (int32_t err, ByteStream params, HandleStream handles) {
+    error = err;
+  };
+
+  display_config_->perform(client_handle_, kDequeueTunneledBuffer, input_params,
+                           input_handles, hidl_cb);
+
+  return error;
+}
+
+int ClientImpl::tunnellingDeinit() {
+  int error =0;
+  auto hidl_cb = [&error] (int32_t err, ByteStream params, HandleStream handles) {
+    error = err;
+  };
+    display_config_->perform(client_handle_, kTunnellingDeinit,  {}, {}, hidl_cb);
   return error;
 }
 
