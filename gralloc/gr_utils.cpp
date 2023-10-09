@@ -29,7 +29,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -83,7 +83,8 @@ bool IsYuvFormat(int format) {
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:  // Same as YCbCr_420_SP_VENUS
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
-    case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
+    case static_cast<int>(PixelFormat::YCRCB_420_SP):
     case HAL_PIXEL_FORMAT_YCrCb_422_SP:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
@@ -624,7 +625,7 @@ void GetYuvUbwcSPPlaneInfo(uint32_t width, uint32_t height, int color_format,
 // This API gets information about 8 planes (Y_Plane, UV_Plane, Y_Meta_Plane, UV_Meta_Plane,
 // Y_Plane, UV_Plane, Y_Meta_Plane, UV_Meta_Plane) and it stores the
 // information in PlaneLayoutInfo array.
-void GetYuvUbwcInterlacedSPPlaneInfo(uint32_t width, uint32_t height,
+void GetYuvUbwcInterlacedSPPlaneInfo(uint32_t width, uint32_t height, int32_t format,
                                      PlaneLayoutInfo plane_info[8]) {
   // UBWC interlaced has top-bottom field layout with each field as
   // 8-plane (including meta plane also) NV12_UBWC with width = image_width
@@ -634,9 +635,13 @@ void GetYuvUbwcInterlacedSPPlaneInfo(uint32_t width, uint32_t height,
   height = (height + 1) >> 1;
 
 #ifndef QMAA
-  GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV12_UBWC, &plane_info[0]);
-
-  GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV12_UBWC, &plane_info[4]);
+  if (format == HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC) {
+    GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV124R_UBWC, &plane_info[0]);
+    GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV124R_UBWC, &plane_info[4]);
+  } else {
+    GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV12_UBWC, &plane_info[0]);
+    GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV12_UBWC, &plane_info[4]);
+  }
 #endif
 }
 
@@ -846,6 +851,7 @@ int GetRawPlaneInfo(int32_t format, int32_t width, int32_t height, PlaneLayoutIn
 bool IsUBwcFormat(int format) {
   switch (format) {
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
     case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
       return true;
@@ -903,6 +909,7 @@ bool IsUBwcPISupported(int format, uint64_t usage) {
   // As of now only two formats
   switch (format) {
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_2_BATCH:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_4_BATCH:
@@ -966,6 +973,12 @@ void GetYuvUBwcWidthAndHeight(int width, int height, int format, unsigned int *a
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH:
       *aligned_w = MMM_COLOR_FMT_Y_STRIDE(MMM_COLOR_FMT_NV12_UBWC, width);
       *aligned_h = MMM_COLOR_FMT_Y_SCANLINES(MMM_COLOR_FMT_NV12_UBWC, height);
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
+#ifndef QMAA
+      *aligned_w = MMM_COLOR_FMT_Y_STRIDE(MMM_COLOR_FMT_NV124R_UBWC, width);
+      *aligned_h = MMM_COLOR_FMT_Y_SCANLINES(MMM_COLOR_FMT_NV124R_UBWC, height);
+#endif
       break;
     case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
       // The macro returns the stride which is 4/3 times the width, hence * 3/4
@@ -1051,6 +1064,11 @@ unsigned int GetUBwcSize(int width, int height, int format, unsigned int aligned
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
       size = MMM_COLOR_FMT_BUFFER_SIZE(MMM_COLOR_FMT_NV12_UBWC, width, height);
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
+#ifndef QMAA
+      size = MMM_COLOR_FMT_BUFFER_SIZE(MMM_COLOR_FMT_NV124R_UBWC, width, height);
+#endif
       break;
     case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
       size = MMM_COLOR_FMT_BUFFER_SIZE(MMM_COLOR_FMT_NV12_BPP10_UBWC, width, height);
@@ -1620,11 +1638,17 @@ int GetImplDefinedFormat(uint64_t usage, int format) {
 
   // If input format is HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED then based on
   // the usage bits, gralloc assigns a format.
-  if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED ||
-      format == HAL_PIXEL_FORMAT_YCbCr_420_888) {
-    if ((usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC || usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_PI)
-        && format != HAL_PIXEL_FORMAT_YCbCr_420_888 && !(usage & GRALLOC_USAGE_PRIVATE_10BIT)) {
-      gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC;
+  if (format == static_cast<int>(PixelFormat::IMPLEMENTATION_DEFINED) ||
+      format == static_cast<int>(PixelFormat::YCBCR_420_888)) {
+    if ((usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC || usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_PI ||
+        usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R ) &&
+        format != static_cast<int>(PixelFormat::YCBCR_420_888) &&
+        !(usage & GRALLOC_USAGE_PRIVATE_10BIT)) {
+      if (usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R) {
+        gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC;
+      } else {
+        gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC;
+      }
     } else if (usage & BufferUsage::VIDEO_ENCODER) {
       if (usage & GRALLOC_USAGE_PRIVATE_VIDEO_NV21_ENCODER) {
         gr_format = HAL_PIXEL_FORMAT_NV21_ENCODEABLE;  // NV21
@@ -1761,6 +1785,7 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
 
 #ifndef QMAA
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_2_BATCH:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_4_BATCH:
@@ -1768,7 +1793,7 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       GetYuvSubSamplingFactor(format, &h_subsampling, &v_subsampling);
       if (flags & LAYOUT_INTERLACED_FLAG) {
         *plane_count = 8;
-        GetYuvUbwcInterlacedSPPlaneInfo(width, height, plane_info);
+        GetYuvUbwcInterlacedSPPlaneInfo(width, height, format ,plane_info);
         plane_info[0].step = plane_info[4].step = 1;
         plane_info[1].step = plane_info[5].step = 2;
         plane_info[0].h_subsampling = plane_info[4].h_subsampling = 0;
@@ -1783,7 +1808,11 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
         plane_info[6].step = plane_info[7].step = 0;
       } else {
         *plane_count = 4;
-        GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV12_UBWC, plane_info);
+        if (format == HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC) {
+          GetYuvUbwcSPPlaneInfo(width, height,MMM_COLOR_FMT_NV124R_UBWC, plane_info);
+        } else {
+          GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV12_UBWC, plane_info);
+        }
         plane_info[0].h_subsampling = 0;
         plane_info[0].v_subsampling = 0;
         plane_info[0].step = 1;
@@ -1973,6 +2002,7 @@ void GetYuvSubSamplingFactor(int32_t format, int *h_subsampling, int *v_subsampl
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
@@ -2150,6 +2180,7 @@ void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
       *drm_format = DRM_FORMAT_NV12;
       break;
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_2_BATCH:
     case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_4_BATCH:
