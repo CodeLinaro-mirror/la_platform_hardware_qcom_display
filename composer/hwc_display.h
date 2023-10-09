@@ -478,6 +478,10 @@ class HWCDisplay : public DisplayEventHandler {
   virtual bool HasReadBackBufferSupport() { return false; }
   virtual bool IsDisplayIdle() { return false; };
   virtual HWC3::Error GetClientTargetProperty(ClientTargetProperty *out_client_target_property);
+  virtual HWC3::Error CommitOrPrepare(bool validate_only, shared_ptr<Fence> *out_retire_fence,
+                                      uint32_t *out_num_types, uint32_t *out_num_requests,
+                                      bool *needs_commit);
+  virtual HWC3::Error PreValidateDisplay(bool *exit_validate) { return HWC3::Error::None; }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -530,6 +534,8 @@ class HWCDisplay : public DisplayEventHandler {
   HWC3::Error GetCachedActiveConfig(Config *config);
   void SetActiveConfigIndex(int active_config_index);
   int GetActiveConfigIndex();
+  HWC3::Error PostPrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests);
+  HWC3::Error HandlePrepareError(DisplayError error);
 
   bool validated_ = false;
   bool layer_stack_invalid_ = true;

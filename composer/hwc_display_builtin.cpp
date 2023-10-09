@@ -232,6 +232,61 @@ void HWCDisplayBuiltIn::ValidateUiScaling() {
   force_reset_validate_ = false;
 }
 
+HWC3::Error HWCDisplayBuiltIn::PreValidateDisplay(bool *exit_validate) {
+  DTRACE_SCOPED();
+
+  auto status = HWC3::Error::None;
+  // If no resources are available for the current display, mark it for GPU by pass and continue to
+  // do invalidate until the resources are available
+  if (display_paused_) {
+    MarkLayersForGPUBypass();
+    *exit_validate = true;
+    return status;
+  }
+
+  if (color_tranform_failed_) {
+    // Must fall back to client composition
+    MarkLayersForClientComposition();
+  }
+
+  // Fill in the remaining blanks in the layers and add them to the SDM layerstack
+  BuildLayerStack();
+
+  // Check for scaling layers during Doze mode
+  ValidateUiScaling();
+
+  // Add stitch layer to layer stack.
+  AppendStitchLayer();
+
+  // Checks and replaces layer stack for solid fill
+  SolidFillPrepare();
+
+  // Apply current Color Mode and Render Intent.
+  if (color_mode_->ApplyCurrentColorModeWithRenderIntent(
+          static_cast<bool>(layer_stack_.flags.hdr_present)) != HWC3::Error::None) {
+    // Fallback to GPU Composition, if Color Mode can't be applied.
+    MarkLayersForClientComposition();
+  }
+
+  uint32_t refresh_rate = 0;
+  display_intf_->GetRefreshRate(&refresh_rate);
+  current_refresh_rate_ = refresh_rate;
+
+  if (layer_set_.empty()) {
+    // Avoid flush for Command mode panel.
+    flush_ = !client_connected_;
+    validated_ = true;
+    *exit_validate = true;
+    return status;
+  }
+
+  display_idle_ = false;
+  has_client_composition_ = false;
+
+  *exit_validate = false;
+  return status;
+}
+
 HWC3::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
   auto status = HWC3::Error::None;
   DisplayError error = kErrorNone;

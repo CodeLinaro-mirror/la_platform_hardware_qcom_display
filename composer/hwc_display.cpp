@@ -2856,4 +2856,111 @@ HWC3::Error HWCDisplay::GetClientTargetProperty(ClientTargetProperty *out_client
   return HWC3::Error::None;
 }
 
+HWC3::Error HWCDisplay::CommitOrPrepare(bool validate_only, shared_ptr<Fence> *out_retire_fence,
+                                        uint32_t *out_num_types, uint32_t *out_num_requests,
+                                        bool *needs_commit) {
+  display_idle_ = false;
+  DTRACE_SCOPED();
+
+  if (shutdown_pending_) {
+    validated_ = false;
+    return HWC3::Error::BadDisplay;
+  }
+
+  if (CanSkipSdmPrepare(out_num_types, out_num_requests)) {
+    *needs_commit = true;
+    return ((*out_num_types > 0) ? HWC3::Error::HasChanges : HWC3::Error::None);
+  }
+
+  UpdateRefreshRate();
+  UpdateActiveConfig();
+  bool exit_validate = false;
+  PreValidateDisplay(&exit_validate);
+  if (exit_validate) {
+    client_target_3_1_set_ = false;
+    return HWC3::Error::None;
+  }
+  DisplayError error = display_intf_->CommitOrPrepare(&layer_stack_);
+  // Mask error if needed.
+  auto status = HandlePrepareError(error);
+  if (status != HWC3::Error::None) {
+    client_target_3_1_set_ = false;
+    return status;
+  }
+
+  *needs_commit = error == kErrorNeedsCommit;
+
+  if (!(*needs_commit)) {
+    PostCommitLayerStack(out_retire_fence);
+  }
+
+  return PostPrepareLayerStack(out_num_types, out_num_requests);
+}
+
+HWC3::Error HWCDisplay::HandlePrepareError(DisplayError error) {
+  if (error == kErrorNone || error == kErrorNeedsCommit) {
+    return HWC3::Error::None;
+  }
+
+  if (error == kErrorShutDown) {
+    shutdown_pending_ = true;
+  } else if (error == kErrorPermission) {
+    WaitOnPreviousFence();
+    MarkLayersForGPUBypass();
+    geometry_changes_on_doze_suspend_ |= geometry_changes_;
+  } else {
+    DLOGW("Prepare failed. Error = %d", error);
+    // To prevent surfaceflinger infinite wait, flush the previous frame during Commit()
+    // so that previous buffer and fences are released, and override the error.
+    flush_ = true;
+    validated_ = false;
+    // Prepare cycle can fail on a newly connected display if insufficient pipes
+    // are available at this moment. Trigger refresh so that the other displays
+    // can free up pipes and a valid content can be attached to virtual display.
+    callbacks_->Refresh(id_);
+    return HWC3::Error::BadDisplay;
+  }
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplay::PostPrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  DTRACE_SCOPED();
+  // clear geometry_changes_on_doze_suspend_ on successful prepare.
+  geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
+
+  layer_changes_.clear();
+  layer_requests_.clear();
+  has_client_composition_ = false;
+  for (auto hwc_layer : layer_set_) {
+    Layer *layer = hwc_layer->GetSDMLayer();
+    LayerComposition &composition = layer->composition;
+
+    if (composition == kCompositionSDE || composition == kCompositionStitch) {
+      layer_requests_[hwc_layer->GetId()] = DisplayRequest::LayerRequest::CLEAR_CLIENT_TARGET;
+    }
+
+    Composition requested_composition = hwc_layer->GetClientRequestedCompositionType();
+    // Set SDM composition to HWC3 type in HWCLayer
+    hwc_layer->SetComposition(composition);
+    Composition device_composition = hwc_layer->GetDeviceSelectedCompositionType();
+    if (device_composition == Composition::CLIENT) {
+      has_client_composition_ = true;
+    }
+    // Update the changes list only if the requested composition is different from SDM comp type
+    if (requested_composition != device_composition) {
+      layer_changes_[hwc_layer->GetId()] = device_composition;
+    }
+    hwc_layer->ResetValidation();
+  }
+
+  client_target_->ResetValidation();
+  *out_num_types = UINT32(layer_changes_.size());
+  *out_num_requests = UINT32(layer_requests_.size());
+  validate_state_ = kNormalValidate;
+  validated_ = true;
+  layer_stack_invalid_ = false;
+
+  return ((*out_num_types > 0) ? HWC3::Error::HasChanges : HWC3::Error::None);
+}
+
 } //namespace sdm

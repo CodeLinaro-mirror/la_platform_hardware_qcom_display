@@ -3644,8 +3644,48 @@ HWC3::Error HWCSession::CommitOrPrepare(Display display, bool validate_only,
                                         shared_ptr<Fence> *out_retire_fence,
                                         uint32_t *out_num_types, uint32_t *out_num_requests,
                                         bool *needs_commit) {
-  // TODO: Add implementation for this in place of ValidateDisplay
-  return HWC3::Error::None;
+  if (display >= HWCCallbacks::kNumDisplays) {
+    return HWC3::Error::BadDisplay;
+  }
+
+  Display target_display = display;
+
+  {
+    SCOPE_LOCK(power_state_[display]);
+    if (power_state_transition_[display]) {
+      // Route all interactions with client to dummy display.
+      target_display = map_hwc_display_.find(display)->second;
+    }
+  }
+  DTRACE_SCOPED();
+  // TODO(user): Handle secure session, handle QDCM solid fill
+  HandleSecureSession();
+  auto status = HWC3::Error::BadDisplay;
+  *needs_commit = true;
+  {
+    SEQUENCE_ENTRY_SCOPE_LOCK(locker_[target_display]);
+    if (pending_power_mode_[display]) {
+      status = HWC3::Error::None;
+    } else if (hwc_display_[target_display]) {
+      hwc_display_[target_display]->ProcessActiveConfigChange();
+      hwc_display_[target_display]->SetFastPathComposition(false);
+      status = hwc_display_[display]->CommitOrPrepare(validate_only, out_retire_fence,
+                                                      out_num_types, out_num_requests,
+                                                      needs_commit);
+    }
+  }
+
+  // Sequence locking currently begins on Validate, so cancel the sequence lock on failures
+  if (status != HWC3::Error::None && status != HWC3::Error::HasChanges) {
+    SEQUENCE_CANCEL_SCOPE_LOCK(locker_[target_display]);
+  }
+
+  // Validate done on a dummy display or commit already done. Assume present is complete.
+  if (display != target_display || !(*needs_commit)) {
+    SEQUENCE_EXIT_SCOPE_LOCK(locker_[target_display]);
+  }
+
+  return status;
 }
 
 HWC3::Error HWCSession::TryDrawMethod(Display display, DrawMethod drawMethod) {

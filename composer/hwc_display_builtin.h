@@ -185,6 +185,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual HWC3::Error SetPowerMode(PowerMode mode, bool teardown);
   virtual bool HasReadBackBufferSupport();
   virtual bool IsDisplayIdle();
+  virtual HWC3::Error PreValidateDisplay(bool *exit_validate);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
