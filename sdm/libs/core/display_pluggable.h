@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -33,6 +33,7 @@
 #define __DISPLAY_PLUGGABLE_H__
 
 #include <private/hw_events_interface.h>
+#include <utils/multi_core_instantiator.h>
 
 #include <map>
 #include <string>
@@ -44,11 +45,12 @@ namespace sdm {
 
 class DisplayPluggable : public DisplayBase, HWEventHandler {
  public:
-  DisplayPluggable(DisplayEventHandler *event_handler, std::vector<HWInfoInterface*> hw_info_intf,
+  DisplayPluggable(DisplayEventHandler *event_handler,
+                   sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                    BufferAllocator *buffer_allocator, CompManager *comp_manager);
   DisplayPluggable(DisplayId display_id, DisplayEventHandler *event_handler,
-                   std::vector<HWInfoInterface*> hw_info_intf, BufferAllocator *buffer_allocator,
-                   CompManager *comp_manager);
+                   sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
+                   BufferAllocator *buffer_allocator, CompManager *comp_manager);
   DisplayError Init() override;
   DisplayError Prepare(LayerStack *layer_stack) override;
   DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate,

@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -43,18 +43,16 @@
 namespace sdm {
 
 DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler,
-                               std::vector<HWInfoInterface*> hw_info_intf,
+                               sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(kVirtual, event_handler, kDeviceVirtual, buffer_allocator,
-                comp_manager, hw_info_intf) {
-}
+    : DisplayBase(kVirtual, event_handler, kDeviceVirtual, buffer_allocator, comp_manager,
+                  hw_info_intf) {}
 
 DisplayVirtual::DisplayVirtual(DisplayId display_id, DisplayEventHandler *event_handler,
-                               std::vector<HWInfoInterface*> hw_info_intf,
+                               sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(display_id, kVirtual, event_handler, kDeviceVirtual,
-                buffer_allocator, comp_manager, hw_info_intf) {
-}
+    : DisplayBase(display_id, kVirtual, event_handler, kDeviceVirtual, buffer_allocator,
+                  comp_manager, hw_info_intf) {}
 
 DisplayError DisplayVirtual::Init() {
   ClientLock lock(disp_mutex_);
@@ -78,9 +76,9 @@ DisplayError DisplayVirtual::Init() {
     display_id_ = display_id_info_.GetDisplayId();
   }
 
-  for (auto info_intf : hw_info_intf_) {
+  for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    info_intf->GetHWResourceInfo(&hw_resource_info);
+    info_intf->second->GetHWResourceInfo(&hw_resource_info);
     hw_resource_info_.push_back(hw_resource_info);
   }
 

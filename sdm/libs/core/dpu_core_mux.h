@@ -1,7 +1,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -15,6 +15,7 @@
 #include <utils/formats.h>
 #include <utils/rect.h>
 #include <utils/utils.h>
+#include <utils/multi_core_instantiator.h>
 #include <core/sdm_types.h>
 #include <drm_interface.h>
 
@@ -35,7 +36,8 @@ class DPUCoreMux {
  public:
   DisplayError Destroy();
 
-  DPUCoreMux(DisplayId display_id, DisplayType type, std::vector<HWInfoInterface*> hw_info_intf,
+  DPUCoreMux(DisplayId display_id, DisplayType type,
+             sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
              BufferAllocator *buffer_allocator);
   DisplayError Init();
   DisplayError Deinit();
