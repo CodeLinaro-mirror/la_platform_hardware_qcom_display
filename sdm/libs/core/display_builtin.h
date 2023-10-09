@@ -137,12 +137,14 @@ class DisplayIPCVmCallbackImpl : public IPCVmCallbackIntf {
 
 class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
  public:
-  DisplayBuiltIn(DisplayEventHandler *event_handler, std::vector<HWInfoInterface*> hw_info_intf,
+  DisplayBuiltIn(DisplayEventHandler *event_handler,
+                 sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                  BufferAllocator *buffer_allocator, CompManager *comp_manager,
                  std::shared_ptr<IPCIntf> ipc_intf);
   DisplayBuiltIn(DisplayId display_id, DisplayEventHandler *event_handler,
-                 std::vector<HWInfoInterface*> hw_info_intf, BufferAllocator *buffer_allocator,
-                 CompManager *comp_manager, std::shared_ptr<IPCIntf> ipc_intf);
+                 sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
+                 BufferAllocator *buffer_allocator, CompManager *comp_manager,
+                 std::shared_ptr<IPCIntf> ipc_intf);
   virtual ~DisplayBuiltIn();
 
   DisplayError Init() override;

@@ -56,18 +56,20 @@
 namespace sdm {
 
 DisplayBuiltIn::DisplayBuiltIn(DisplayEventHandler *event_handler,
-                               std::vector<HWInfoInterface*> hw_info_intf,
+                               sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager,
                                std::shared_ptr<IPCIntf> ipc_intf)
-  : DisplayBase(kBuiltIn, event_handler, kDeviceBuiltIn, buffer_allocator, comp_manager,
-                hw_info_intf), ipc_intf_(ipc_intf) {}
+    : DisplayBase(kBuiltIn, event_handler, kDeviceBuiltIn, buffer_allocator, comp_manager,
+                  hw_info_intf),
+      ipc_intf_(ipc_intf) {}
 
 DisplayBuiltIn::DisplayBuiltIn(DisplayId display_id, DisplayEventHandler *event_handler,
-                               std::vector<HWInfoInterface*> hw_info_intf,
+                               sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager,
                                std::shared_ptr<IPCIntf> ipc_intf)
-  : DisplayBase(display_id, kBuiltIn, event_handler, kDeviceBuiltIn, buffer_allocator, comp_manager,
-                hw_info_intf), ipc_intf_(ipc_intf) {}
+    : DisplayBase(display_id, kBuiltIn, event_handler, kDeviceBuiltIn, buffer_allocator,
+                  comp_manager, hw_info_intf),
+      ipc_intf_(ipc_intf) {}
 
 DisplayBuiltIn::~DisplayBuiltIn() {
 }
@@ -2681,9 +2683,9 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   bool hdr_supported = true;
   bool has_concurrent_writeback = true;
 
-  for (auto info_intf : hw_info_intf_) {
+  for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    info_intf->GetHWResourceInfo(&hw_resource_info);
+    info_intf->second->GetHWResourceInfo(&hw_resource_info);
     hdr_supported &= hw_resource_info.has_hdr;
     uint32_t core_id = hw_resource_info.core_id;
     has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;

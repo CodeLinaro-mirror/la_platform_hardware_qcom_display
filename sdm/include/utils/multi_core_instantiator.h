@@ -6,6 +6,7 @@
 #ifndef __MULTI_CORE_INSTANTIATOR_H__
 #define __MULTI_CORE_INSTANTIATOR_H__
 
+#include <stdint.h>
 #include<map>
 
 namespace sdm {
@@ -18,33 +19,27 @@ class MultiCoreInstance {
  public:
   MultiCoreInstance() { }
 
-  void Insert(Key k, Value v) {
-    mp[k] = v;
-  }
+  void Insert(Key k, Value v) { mp[k] = v; }
 
-  MultiCoreIterator<Key, Value> Find(Key key) {
-    return mp.find(key);
-  }
+  MultiCoreIterator<Key, Value> Find(Key key) { return mp.find(key); }
 
-  MultiCoreIterator<Key, Value> End() {
-    return mp.end();
-  }
+  MultiCoreIterator<Key, Value> End() { return mp.end(); }
 
-  MultiCoreIterator<Key, Value> Begin() {
-    return mp.begin();
-  }
+  MultiCoreIterator<Key, Value> Begin() { return mp.begin(); }
 
-  Value& operator[](int index) {
-    return mp[index];
-  }
+  uint32_t Size() { return mp.size(); }
 
-  void Erase(const Key& key) {
-    mp.erase(key);
-  }
+  bool Empty() { return mp.empty(); }
 
-  void Erase(MultiCoreIterator<Key, Value> position) {
-    mp.erase(position);
-  }
+  Value &operator[](int index) { return mp[index]; }
+
+  Value &At(int index) { return mp[index]; }
+
+  void Erase(const Key &key) { mp.erase(key); }
+
+  void Erase(MultiCoreIterator<Key, Value> position) { mp.erase(position); }
+
+  void Clear() { mp.clear(); }
 
  private:
   std::map<Key, Value> mp;

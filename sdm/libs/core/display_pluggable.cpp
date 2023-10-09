@@ -44,16 +44,16 @@
 namespace sdm {
 
 DisplayPluggable::DisplayPluggable(DisplayEventHandler *event_handler,
-                                   std::vector<HWInfoInterface*> hw_info_intf,
+                                   sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(kPluggable, event_handler, kDevicePluggable, buffer_allocator,
-                comp_manager, hw_info_intf) {}
+    : DisplayBase(kPluggable, event_handler, kDevicePluggable, buffer_allocator, comp_manager,
+                  hw_info_intf) {}
 
 DisplayPluggable::DisplayPluggable(DisplayId display_id, DisplayEventHandler *event_handler,
-                                   std::vector<HWInfoInterface*> hw_info_intf,
+                                   sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(display_id, kPluggable, event_handler, kDevicePluggable,
-                buffer_allocator, comp_manager, hw_info_intf) {}
+    : DisplayBase(display_id, kPluggable, event_handler, kDevicePluggable, buffer_allocator,
+                  comp_manager, hw_info_intf) {}
 
 DisplayError DisplayPluggable::Init() {
   ClientLock lock(disp_mutex_);

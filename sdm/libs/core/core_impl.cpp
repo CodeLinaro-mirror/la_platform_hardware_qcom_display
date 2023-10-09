@@ -106,7 +106,7 @@ DisplayError CoreImpl::Init() {
   enable_null_display_ = (value == 1);
   DLOGI("property: enable_null_display_ = %d", enable_null_display_);
   if (enable_null_display_) {
-    hw_info_intf_.push_back(new HWInfoDefault());
+    hw_info_intf_[0] = new HWInfoDefault();
     return kErrorNone;
   }
 
@@ -116,13 +116,13 @@ DisplayError CoreImpl::Init() {
     if ((err != kErrorNone) || !enable_null_display_) {
       goto CleanupOnError;
     }
-    hw_info_intf_.push_back(new HWInfoDefault());
+    hw_info_intf_[0] = new HWInfoDefault();
     return kErrorNone;
   }
 
-  for (auto hw_info : hw_info_intf_) {
+  for (auto hw_info = hw_info_intf_.Begin(); hw_info != hw_info_intf_.End(); hw_info++) {
     HWResourceInfo hw_resource;
-    error = hw_info->GetHWResourceInfo(&hw_resource);
+    error = hw_info->second->GetHWResourceInfo(&hw_resource);
     if (error != kErrorNone)
       goto CleanupOnError;
     hw_resource_.push_back(hw_resource);
@@ -141,7 +141,7 @@ DisplayError CoreImpl::Init() {
     if (hw_info_intf_[0]) {
       HWInfoInterface::Destroy(hw_info_intf_);
     }
-    hw_info_intf_.push_back(new HWInfoDefault());;
+    hw_info_intf_[0] = new HWInfoDefault();
     return kErrorNone;
   }
 
@@ -171,7 +171,7 @@ DisplayError CoreImpl::Init() {
 
 CleanupOnError:
   HWInfoInterface::Destroy(hw_info_intf_);
-  hw_info_intf_.clear();
+  hw_info_intf_.Clear();
   hw_resource_.clear();
 
   return error;
@@ -218,14 +218,13 @@ DisplayError CoreImpl::Deinit() {
   }
 
   if (enable_null_display_) {
-    for (auto hw_info : hw_info_intf_) {
-      delete static_cast<HWInfoDefault *>(hw_info);
-      hw_info = nullptr;
+    for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
+      delete static_cast<HWInfoDefault *>(info_intf->second);
     }
   } else {
     HWInfoInterface::Destroy(hw_info_intf_);
   }
-  hw_info_intf_.clear();
+  hw_info_intf_.Clear();
 #ifdef TRUSTED_VM
   // release free memory from the heap, needed for Trusted_VM due to the limited
   // carveout size
@@ -311,16 +310,13 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
   DisplayBase *display_base = NULL;
   DisplayType display_type = iter->second.display_type;
 
-  if (core_count > hw_info_intf_.size()) {
+  if (core_count > hw_info_intf_.Size()) {
     return kErrorCriticalResource;
   }
 
-  std::vector<HWInfoInterface*> hw_info_intf;
-  std::bitset<32> core_id_map = disp_id.GetCoreIdMap();
-  for (auto info_intf : hw_info_intf_) {
-    if (core_id_map[info_intf->GetCoreId()]) {
-      hw_info_intf.push_back(info_intf);
-    }
+  sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf;
+  for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
+    hw_info_intf[info_intf->first] = (info_intf->second);
   }
 
   switch (display_type) {
@@ -444,9 +440,9 @@ DisplayError CoreImpl::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_d
 DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
   hw_displays_info->clear();
   // Needed for error-checking in CreateDisplay(int32_t display_id, ...) and getting display-type.
-  for (auto hw_info : hw_info_intf_) {
+  for (auto hw_info = hw_info_intf_.Begin(); hw_info != hw_info_intf_.End(); hw_info++) {
     HWDisplaysInfo display_infos;
-    DisplayError error = hw_info->GetDisplaysStatus(&display_infos);
+    DisplayError error = hw_info->second->GetDisplaysStatus(&display_infos);
     if (error)
       return error;
     hw_displays_info->insert(display_infos.begin(), display_infos.end());
@@ -494,9 +490,9 @@ DisplayError CoreImpl::GetMaxDisplaysSupported(DisplayType type, int32_t *max_di
 
   // ToDo: Revisit this avoid creating duplicate slot in dual core case
   *max_displays = 0;
-  for (auto hw_info : hw_info_intf_) {
+  for (auto hw_info = hw_info_intf_.Begin(); hw_info != hw_info_intf_.End(); hw_info++) {
     int32_t tmp;
-    DisplayError error = hw_info->GetMaxDisplaysSupported(type, &tmp);
+    DisplayError error = hw_info->second->GetMaxDisplaysSupported(type, &tmp);
     if (error)
       return error;
 

@@ -37,6 +37,7 @@
 #include <utils/utils.h>
 #include <private/hw_info_interface.h>
 #include <vector>
+#include <utils/multi_core_instantiator.h>
 
 #ifndef TARGET_HEADLESS
 #include "hw_info_drm.h"
@@ -47,9 +48,9 @@
 namespace sdm {
 
 int32_t HWInfoInterface::ref_count_ = 0;
-std::vector<HWInfoInterface*> HWInfoInterface::intf_(kMaxCore, nullptr);
+sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> HWInfoInterface::intf_;
 
-DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs,
+DisplayError HWInfoInterface::Create(sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> *intfs,
                                      std::bitset<8> core_ids) {
   DisplayError error = kErrorNone;
   for (uint32_t i = 0; i < core_ids.size(); i++) {
@@ -59,7 +60,7 @@ DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs,
 
 #ifndef TARGET_HEADLESS
     if (ref_count_ > 0 && intf_[i]) {
-      intfs->push_back(intf_[i]);
+      intfs->At(i) = intf_[i];
       continue;
     }
 #endif
@@ -78,29 +79,29 @@ DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs,
       if (i > 0) {
         ref_count_++;
       }
-      return intfs->size() ? kErrorNone : error;
+      return intfs->Size() ? kErrorNone : error;
     }
 
 #ifndef TARGET_HEADLESS
-    intfs->push_back(hw_info);
-    intf_[i] = (hw_info);
+    intfs->At(i) = hw_info;
+    intf_[i] = hw_info;
 #else
-    intfs->push_back(nullptr);
+    *intfs[i] = nullptr;
 #endif
   }
   ref_count_++;
   return error;
 }
 
-DisplayError HWInfoInterface::Destroy(std::vector<HWInfoInterface*> &intfs) {
+DisplayError HWInfoInterface::Destroy(sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> &intfs) {
   ref_count_ = ref_count_ - 1 >= 0 ? --ref_count_ : 0;
   DLOGV("refcount: %d", ref_count_);
   if (!ref_count_) {
-    for (auto &hw_info : intfs) {
-      delete hw_info;
+    for (auto hw_info = intfs.Begin(); hw_info != intfs.End(); hw_info++) {
+      delete hw_info->second;
     }
   }
-  intf_.clear();
+  intf_.Clear();
   return kErrorNone;
 }
 

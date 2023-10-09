@@ -36,6 +36,7 @@
 
 #include <core/core_interface.h>
 #include <private/hw_info_types.h>
+#include <utils/multi_core_instantiator.h>
 #include <inttypes.h>
 #include <vector>
 #include <utility>
@@ -46,8 +47,9 @@ namespace sdm {
 
 class HWInfoInterface {
  public:
-  static DisplayError Create(std::vector<HWInfoInterface*> *intfs, std::bitset<8> core_ids);
-  static DisplayError Destroy(std::vector<HWInfoInterface*> &intfs);
+  static DisplayError Create(sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> *intfs,
+                             std::bitset<8> core_ids);
+  static DisplayError Destroy(sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> &intfs);
   virtual DisplayError Init() = 0;
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
@@ -61,7 +63,7 @@ class HWInfoInterface {
   virtual uint32_t GetCoreId() = 0;
 
  protected:
-  static std::vector<HWInfoInterface*> intf_;
+  static sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> intf_;
   virtual ~HWInfoInterface() { }
   static const int kMaxCore = 12;
   static int32_t ref_count_;

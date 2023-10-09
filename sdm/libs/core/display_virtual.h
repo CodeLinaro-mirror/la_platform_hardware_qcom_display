@@ -69,6 +69,7 @@
 #define __DISPLAY_VIRTUAL_H__
 
 #include <private/hw_info_types.h>
+#include <utils/multi_core_instantiator.h>
 #include <vector>
 #include "display_base.h"
 
@@ -78,11 +79,12 @@ class HWVirtualInterface;
 
 class DisplayVirtual : public DisplayBase {
  public:
-  DisplayVirtual(DisplayEventHandler *event_handler, std::vector<HWInfoInterface*> hw_info_intf,
+  DisplayVirtual(DisplayEventHandler *event_handler,
+                 sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                  BufferAllocator *buffer_allocator, CompManager *comp_manager);
   DisplayVirtual(DisplayId display_id, DisplayEventHandler *event_handler,
-                 std::vector<HWInfoInterface*> hw_info_intf, BufferAllocator *buffer_allocator,
-                 CompManager *comp_manager);
+                 sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
+                 BufferAllocator *buffer_allocator, CompManager *comp_manager);
   virtual DisplayError Init();
   virtual DisplayError Deinit();
   virtual DisplayError Prepare(LayerStack *layer_stack);
