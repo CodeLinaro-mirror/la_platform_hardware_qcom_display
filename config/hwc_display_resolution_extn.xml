@@ -8,10 +8,12 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
     <ScalingFactor x="1.5" y="1.5"/>
     <ScalingFactor x="2" y="2"/>
     <ScalingFactor x="2.5" y="2.5"/>
+    <ScalingResolution w="2368" h="1280"/>
   </PanelResolution>
   <PanelResolution width="5088" height="2544">
     <ScalingFactor x="1.5" y="1.5"/>
     <ScalingFactor x="2" y="2"/>
     <ScalingFactor x="2.5" y="2.5"/>
+    <ScalingResolution w="1696" h="848"/>
   </PanelResolution>
 </Target>
