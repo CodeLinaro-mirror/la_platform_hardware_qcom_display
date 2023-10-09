@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -220,7 +220,7 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
                        uint32_t bpp, PlaneLayoutInfo *plane_info);
 void GetYuvUbwcSPPlaneInfo(uint32_t width, uint32_t height, int color_format,
                            PlaneLayoutInfo *plane_info);
-void GetYuvUbwcInterlacedSPPlaneInfo(uint32_t width, uint32_t height,
+void GetYuvUbwcInterlacedSPPlaneInfo(uint32_t width, uint32_t height, int32_t format,
                                      PlaneLayoutInfo plane_info[8]);
 void GetRgbUBwcBlockSize(uint32_t bpp, int *block_width, int *block_height);
 unsigned int GetRgbUBwcMetaBufferSize(int width, int height, uint32_t bpp);
