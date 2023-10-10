@@ -227,6 +227,11 @@ int HWCSession::Init() {
   async_vds_creation_ = (value == 1);
   DLOGI("async_vds_creation: %d", async_vds_creation_);
 
+  value = 0;
+  Debug::Get()->GetProperty(DISABLE_GET_SCREEN_DECORATOR_SUPPORT, &value);
+  disable_get_screen_decorator_support_ = (value == 1);
+  DLOGI("disable_get_screen_decorator_support: %d", disable_get_screen_decorator_support_);
+
   InitSupportedDisplaySlots();
   // Create primary display here. Remaining builtin displays will be created after client has set
   // display indexes which may happen sometime before callback is registered.
@@ -3802,6 +3807,14 @@ void HWCSession::SetCpuPerfHintLargeCompCycle() {
   if (!found_non_primary_active_display) {
     hwc_display_[HWC_DISPLAY_PRIMARY]->SetCpuPerfHintLargeCompCycle();
   }
+}
+
+HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
+                                                    AlphaInterpretation *alpha) {
+  if (disable_get_screen_decorator_support_) {
+    return HWC3::Error::Unsupported;
+  }
+  return CallDisplayFunction(display, &HWCDisplay::getDisplayDecorationSupport, format, alpha);
 }
 
 }  // namespace sdm
