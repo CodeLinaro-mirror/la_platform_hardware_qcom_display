@@ -60,8 +60,9 @@ int main(int, char **) {
     return EXIT_FAILURE;
   }
 
-  binder_status_t status =
-      AServiceManager_addService(allocator->asBinder().get(), instance.c_str());
+  binder_status_t status = AServiceManager_addServiceWithFlags(
+      allocator->asBinder().get(), instance.c_str(),
+      AServiceManager_AddServiceFlag::ADD_SERVICE_ALLOW_ISOLATED);
   if (status != STATUS_OK) {
     ALOGW("Failed to register QTI Allocator AIDL as a service (status:%d)", status);
     return EXIT_FAILURE;
