@@ -19,7 +19,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -214,6 +214,11 @@ int HWCSession::Init() {
     disable_virtual_display_ = (value == 1);
   }
   DLOGI("DISABLE_VIRTUAL_DISPLAY: %d", disable_virtual_display_);
+
+  value = 0;
+  Debug::Get()->GetProperty(DISABLE_GET_SCREEN_DECORATOR_SUPPORT, &value);
+  disable_get_screen_decorator_support_ = (value == 1);
+  DLOGI("disable_get_screen_decorator_support: %d", disable_get_screen_decorator_support_);
 
   status = InitSupportedDisplaySlots();
   if (status) {
@@ -3336,6 +3341,9 @@ HWC3::Error HWCSession::GetOverlaySupport(OverlayProperties *supported_props) {
 
 HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
                                                     AlphaInterpretation *alpha) {
+  if (disable_get_screen_decorator_support_) {
+    return HWC3::Error::Unsupported;
+  }
   return CallDisplayFunction(display, &HWCDisplay::getDisplayDecorationSupport, format, alpha);
 }
 
