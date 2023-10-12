@@ -148,6 +148,7 @@ class HWCLayer {
   bool secure_ = false;
   bool compatible_ = false;
   bool ignore_sdr_histogram_md_ = false;
+  bool disable_get_screen_decorator_support_ = false;
 
   // Composition requested by client(SF) Original
   Composition client_requested_orig_ = Composition::DEVICE;
