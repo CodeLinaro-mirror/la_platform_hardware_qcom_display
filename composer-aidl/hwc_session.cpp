@@ -995,6 +995,13 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
     return HWC3::Error::BadDisplay;
   }
 
+  // ON_SUSPEND (wearables mode) isn't supported by hardware.
+  // VTS groups both suspend modes for  testing purposes
+  // Return as un-supported to handle VTS failure.
+  if (int_mode == INT32(PowerMode::ON_SUSPEND)) {
+     return HWC3::Error::Unsupported;
+  }
+
   //  validate device and also avoid undefined behavior in cast to PowerMode
   if (int_mode < INT32(PowerMode::OFF) || int_mode > INT32(PowerMode::ON_SUSPEND)) {
     return HWC3::Error::BadParameter;
@@ -1047,7 +1054,6 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
     // Reset the pending refresh bit
     pending_refresh_.reset(UINT32(display));
   }
-
   return HWC3::Error::None;
 }
 
