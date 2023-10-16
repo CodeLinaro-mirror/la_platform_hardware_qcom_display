@@ -1420,6 +1420,9 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
                                       out);
       break;
 #endif
+    case QTI_VIDEO_TS_INFO:
+      qtigralloc::encodeVideoTimestampInfo(metadata->videoTsInfo, out);
+      break;
     default:
       error = Error::UNSUPPORTED;
   }
@@ -1659,6 +1662,12 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     case QTI_VIDEO_HISTOGRAM_STATS:
       if (qtigralloc::decodeVideoHistogramMetadata(in, &metadata->video_histogram_stats) !=
                                       IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
+      break;
+    case QTI_VIDEO_TS_INFO:
+      if (qtigralloc::decodeVideoTimestampInfo(in, &metadata->videoTsInfo) !=
+		      IMapper_4_0_Error::NONE) {
         return Error::UNSUPPORTED;
       }
       break;
