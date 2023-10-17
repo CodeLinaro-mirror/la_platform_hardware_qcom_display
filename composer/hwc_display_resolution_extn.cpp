@@ -70,12 +70,12 @@ DisplayError HWCDisplayResolutionExtn::GetExtendedDisplayResolutions(uint32_t pa
             if (x == nullptr || y == nullptr) {
               continue;
             }
-            const float x_factor = std::atof(x);
-            const float y_factor = std::atof(y);
+            const double x_factor = std::atof(x);
+            const double y_factor = std::atof(y);
 
-            float res_x = panel_width / x_factor;
-            float res_y = panel_height / y_factor;
-            if ((floorf(res_x) == res_x) && (floorf(res_y) == res_y) &&
+            double res_x = panel_width / x_factor;
+            double res_y = panel_height / y_factor;
+            if ((floor(res_x) == res_x) && (floor(res_y) == res_y) &&
                 (UINT32(res_x) % 2 == 0) && (UINT32(res_y) % 2 == 0)) {
               extended_disp_res->push_back(std::make_pair(UINT32(res_x), UINT32(res_y)));
             } else {
