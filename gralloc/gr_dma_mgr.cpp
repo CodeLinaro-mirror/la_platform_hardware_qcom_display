@@ -25,6 +25,40 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #define DEBUG 0
@@ -40,7 +74,12 @@
 #include <cutils/properties.h>
 #include <errno.h>
 #include <utils/Trace.h>
+#ifndef QMAA
+#include <linux/msm_ion.h>
+#endif
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "gr_utils.h"
 #include "gralloc_priv.h"
@@ -149,7 +188,7 @@ int DmaManager::MapBuffer(void **base, unsigned int size, unsigned int offset, i
   *base = addr;
   if (addr == MAP_FAILED) {
     err = -errno;
-    ALOGE("ion: Failed to map memory in the client: %s", strerror(errno));
+    ALOGE("dma: Failed to map memory in the client: %s", strerror(errno));
   } else {
     ALOGD_IF(DEBUG, "ion: Mapped buffer base:%p size:%u offset:%u fd:%d", addr, size, offset, fd);
   }
@@ -159,41 +198,44 @@ int DmaManager::MapBuffer(void **base, unsigned int size, unsigned int offset, i
 
 int DmaManager::UnmapBuffer(void *base, unsigned int size, unsigned int /*offset*/) {
   ATRACE_CALL();
-  ALOGD_IF(DEBUG, "ion: Unmapping buffer  base:%p size:%u", base, size);
+  ALOGD_IF(DEBUG, "dma: Unmapping buffer  base:%p size:%u", base, size);
 
   int err = 0;
   if (munmap(base, size)) {
     err = -errno;
-    ALOGE("ion: Failed to unmap memory at %p : %s", base, strerror(errno));
+    ALOGE("dma: Failed to unmap memory at %p : %s", base, strerror(errno));
   }
 
   return err;
 }
 
-int DmaManager::SecureMemPerms(int fd) {
+int DmaManager::SecureMemPerms(__attribute__ ((unused)) AllocData *data) {
   int ret = 0;
-  fd = 0;
+  // Disable libvmmem calls until library is added to QIIFA CMD
   /*
-  * TODO: Finish Secure Memory Implementation once libvmmem is deployed
-  ret = vmm_->modify_buffer_permissions(fd, vmm->current_vm, usecase_perms);
+  std::unique_ptr<VmMem> vmmem = VmMem::CreateVmMem();
+  VmPerm vm_perms;
+
+  for (auto vm_name : data->vm_names) {
+    VmHandle handle = vmmem->FindVmByName(vm_name);
+    vm_perms.push_back(std::make_pair(handle, VMMEM_READ | VMMEM_WRITE));
+  }
+
+  ret = vmmem->LendDmabuf(data->fd, vm_perms);
   */
   return ret;
 }
 
-void DmaManager::GetHeapInfo(uint64_t usage, std::string *ion_heap_name, unsigned int *alloc_type,
-                             unsigned int *ion_flags, bool *sec_flag, bool *sensor_flag) {
+void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *dma_heap_name,
+                             std::vector<std::string> *dma_vm_names, unsigned int *alloc_type,
+                             unsigned int * /* dmaflags */) {
   std::string heap_name = "qcom,system";
   unsigned int type = 0;
-  uint32_t flags = 0;
 #ifndef QMAA
   if (usage & GRALLOC_USAGE_PROTECTED) {
     if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
       heap_name = "qcom,display";
-      /*
-       * There is currently no flag in ION for Secure Display
-       * VM. Please add it to the define once available.
-       */
-      *sec_flag = true;
+      dma_vm_names->push_back("qcom,cp_sec_display");
     } else if (usage & BufferUsage::CAMERA_OUTPUT) {
       int secure_preview_only = 0;
       char property[PROPERTY_VALUE_MAX];
@@ -201,17 +243,28 @@ void DmaManager::GetHeapInfo(uint64_t usage, std::string *ion_heap_name, unsigne
         secure_preview_only = atoi(property);
       }
       heap_name = "qcom,display";
-      *sec_flag = true;
+      if (usage & GRALLOC_USAGE_PRIVATE_CDSP) {
+        dma_vm_names->push_back("qcom,cp_cdsp");
+      }
+      if (usage & BufferUsage::COMPOSER_OVERLAY) {
+        if (secure_preview_only) {
+          dma_vm_names->push_back("qcom,cp_camera_preview");
+        } else {
+          dma_vm_names->push_back("qcom,cp_camera");
+          dma_vm_names->push_back("qcom,cp_camera_preview");
+        }
+      } else {
+        dma_vm_names->push_back("qcom,cp_camera");
+      }
     } else if (usage & GRALLOC_USAGE_PRIVATE_CDSP) {
       heap_name = "qcom,secure-cdsp";
-      *sec_flag = true;
     } else {
       heap_name = "qcom,secure-pixel";
-      *sec_flag = true;
     }
+    type |= private_handle_t::PRIV_FLAGS_SECURE_BUFFER;
   } else if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
     // Reuse GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY with no GRALLOC_USAGE_PROTECTED flag to alocate
-    // memory from non secure CMA for tursted UI use case
+    // memory from non secure CMA for trusted UI use case
     heap_name = "qcom,display";
   }
 
@@ -227,8 +280,7 @@ void DmaManager::GetHeapInfo(uint64_t usage, std::string *ion_heap_name, unsigne
 #endif
 
   *alloc_type = type;
-  *ion_flags = flags;
-  *ion_heap_name = heap_name;
+  *dma_heap_name = heap_name;
 
   return;
   }
