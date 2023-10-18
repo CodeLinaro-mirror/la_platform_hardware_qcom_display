@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <dlfcn.h>
@@ -270,6 +274,7 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   DLOGI("\tScale = %d", hw_resource->scale_factor);
   DLOGI("\tFudge_factor = %d", hw_resource->extra_fudge_factor);
   DLOGI("\tib_fudge_factor = %f", hw_resource->ib_fudge_factor);
+  DLOGI("\tHas IN_FENCE = %d", hw_resource->has_in_fence);
 
   if (hw_resource->separate_rotator || hw_resource->num_dma_pipe) {
     GetHWRotatorInfo(hw_resource);
@@ -487,8 +492,10 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
     hw_resource->hw_pipes.push_back(std::move(pipe_caps));
   }
 
-  if(planes.size() != 0)
+  if(planes.size() != 0) {
     hw_resource->has_excl_rect = planes[0].second.has_excl_rect;
+    hw_resource->has_in_fence = planes[0].second.has_in_fence;
+  }
 }
 
 void HWInfoDRM::PopulatePipeCaps(const sde_drm::DRMPlaneTypeInfo &info,

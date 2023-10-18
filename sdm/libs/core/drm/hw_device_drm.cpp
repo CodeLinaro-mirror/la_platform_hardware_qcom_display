@@ -1274,6 +1274,11 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CRTC, pipe_id, token_.crtc_id);
 
         if (!validate && input_buffer->acquire_fence_fd >= 0) {
+          if (hw_resource_.has_in_fence) {
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_IN_FENCE_FD, pipe_id,
+                                    input_buffer->acquire_fence_fd);
+          }
+
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_INPUT_FENCE, pipe_id,
                                     input_buffer->acquire_fence_fd);
         }
