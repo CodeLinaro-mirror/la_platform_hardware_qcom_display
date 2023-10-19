@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -91,6 +91,7 @@ class DisplayNull : public DisplayInterface {
   virtual DisplayError GetActiveConfig(uint32_t *config);
   virtual DisplayError GetNumVariableInfoConfigs(uint32_t *count);
   virtual DisplayError Prepare(LayerStack *layer_stack);
+  virtual DisplayError CommitOrPrepare(LayerStack *layer_stack);
   virtual bool IsPrimaryDisplay() { return true; }
   virtual bool IsUnderscanSupported() { return true; }
   virtual void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) { }

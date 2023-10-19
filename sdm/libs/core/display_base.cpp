@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -506,6 +506,25 @@ void DisplayBase::SetRCData(LayerStack *layer_stack) {
     hw_layers_info.rc_layers_info.bottom_width = rc_out_config->bottom_width;
     hw_layers_info.rc_layers_info.bottom_height = rc_out_config->bottom_height;
   }
+}
+
+DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
+  DTRACE_SCOPED();
+  DisplayError error = kErrorNone;
+  // Perform prepare
+  error = Prepare(layer_stack);
+  if (error != kErrorNone) {
+    if (error == kErrorPermission) {
+      DLOGW("Prepare failed: %d", error);
+    } else {
+      DLOGE("Prepare failed: %d", error);
+    }
+    return error;
+  }
+
+  // TODO: Revisit logic to trigger commit based on draw outcome.
+  //       Currently falling back to original flow.
+  return kErrorNeedsCommit;
 }
 
 DisplayError DisplayBase::Commit(LayerStack *layer_stack) {

@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <algorithm>
 #include "display_null.h"
 
@@ -123,6 +130,15 @@ DisplayError DisplayNull::Prepare(LayerStack *layer_stack) {
     }
   }
   return kErrorNone;
+}
+
+DisplayError DisplayNull::CommitOrPrepare(LayerStack *layer_stack) {
+  // Perform prepare
+  DisplayError error = Prepare(layer_stack);
+
+  // Since this is Null Display, returning Commit successful by returning
+  // kErrorNone instead of kErrorNeedsCommit.
+  return error;
 }
 
 DisplayError DisplayNull::GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
