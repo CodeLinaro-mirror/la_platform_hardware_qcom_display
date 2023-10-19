@@ -385,6 +385,12 @@ enum CacVersion {
   kCacVersion2,
 };
 
+enum DDRVersion {
+  kDDRVersion4,
+  kDDRVersion5,
+  kDDRVersion5x,
+};
+
 struct InlineRotationInfo {
   InlineRotationVersion inrot_version = kInlineRotationNone;
   std::vector<LayerBufferFormat> inrot_fmts_supported;
@@ -473,6 +479,7 @@ struct HWResourceInfo {
   uint32_t dsc_block_count = 0;
   uint32_t core_id = 0;
   CacVersion cac_version = kCacVersionNone;
+  DDRVersion ddr_version = kDDRVersion5;
 };
 
 struct HWSplitInfo {

@@ -401,6 +401,14 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
     hw_resource->cac_version = kCacVersion2;
   }
 
+  if (info.ddr_version == sde_drm::DDRVersion::kDDRVersion4) {
+    hw_resource->ddr_version = kDDRVersion4;
+  } else if (info.ddr_version == sde_drm::DDRVersion::kDDRVersion5) {
+    hw_resource->ddr_version = kDDRVersion5;
+  } else if (info.ddr_version == sde_drm::DDRVersion::kDDRVersion5x) {
+    hw_resource->ddr_version = kDDRVersion5x;
+  }
+
   for (int index = 0; index < kBwModeMax; index++) {
     if (index == kBwVFEOn) {
       hw_resource->dyn_bw_info.total_bw_limit[index] = info.max_bandwidth_low / kKiloUnit;

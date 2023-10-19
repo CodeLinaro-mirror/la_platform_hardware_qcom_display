@@ -129,6 +129,7 @@ class HWCSession : public HWCUEvent,
   enum HotPlugEvent {
     kHotPlugNone,
     kHotPlugEvent,
+    kHotPlugProcessing,
   };
 
   enum ClientCommitDone {
@@ -220,7 +221,7 @@ class HWCSession : public HWCUEvent,
   HWC3::Error SetDisplayBrightness(Display display, float brightness);
   HWC3::Error WaitForResources(bool wait_for_resources, Display active_builtin_id,
                                Display display_id);
-  
+
   HWC3::Error GetDisplayType(Display display, int32_t *out_type);
   HWC3::Error GetDisplayAttribute(Display display, Config config, HwcAttribute attribute,
                                   int32_t *out_value);

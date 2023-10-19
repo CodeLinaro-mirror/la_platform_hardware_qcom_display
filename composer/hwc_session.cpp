@@ -3670,6 +3670,7 @@ void HWCSession::HandlePendingHotplug(Display disp_id, const shared_ptr<Fence> &
       int32_t err = pluggable_handler_lock_.TryLock();
       if (!err) {
         // Do hotplug handling in a different thread to avoid blocking PresentDisplay.
+        pending_hotplug_event_ = kHotPlugProcessing;
         std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
         pluggable_handler_lock_.Unlock();
       } else {
@@ -4121,7 +4122,22 @@ int HWCSession::WaitForCommitDone(Display display, int client_id) {
     DLOGI("Acquired lock for client %d display %" PRIu64, client_id, display);
     callbacks_.Refresh(display);
     clients_waiting_for_commit_[display].set(client_id);
-    locker_[display].Wait();
+    if (hwc_display_[display]) {
+      uint32_t config = 0;
+      int32_t vsync_period = 0;
+      hwc_display_[display]->GetCachedActiveConfig(0, &config);
+      hwc_display_[display]->GetDisplayAttribute(config, HwcAttribute::VSYNC_PERIOD, &vsync_period);
+      timeout_ms = (kNumDrawCycles * (vsync_period / kDenomNstoMs)) + 100;
+      DLOGI("timeout in ms %d", timeout_ms);
+    }
+    int result = locker_[display].WaitFinite(timeout_ms);
+    if (result) {
+      if (hwc_display_[display]->GetCurrentPowerMode() == PowerMode::OFF) {
+        DLOGW("Display is powered off, bail");
+      }
+      DLOGW("Wait timed out, error=%d", result);
+      return result;
+    }
     if (commit_error_[display] != 0) {
       DLOGE("Commit done failed with error %d for client %d display %" PRIu64,
             commit_error_[display], client_id, display);
@@ -4394,7 +4410,7 @@ android::status_t HWCSession::TUITransitionEndLocked(int disp_id) {
   //Add check for internal state for bailing out (needs_refresh to false)
   if (needs_refresh) {
     DLOGI("Waiting for device unassign");
-    int ret = WaitForCommitDoneAsync(target_display, kClientTrustedUI);
+    int ret = WaitForCommitDone(target_display, kClientTrustedUI);
     if (ret != 0) {
       if (ret != -ETIMEDOUT) {
         DLOGE("Device unassign failed with error %d", ret);
@@ -4449,14 +4465,16 @@ android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
       trigger_refresh |= needs_refresh;
     }
   }
+
+  if (pending_hotplug_event_ == kHotPlugEvent) {
+    // Do hotplug handling in a different thread to avoid blocking TUI thread.
+    pending_hotplug_event_ = kHotPlugProcessing;
+    std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
+  }
   if (trigger_refresh) {
     callbacks_.Refresh(target_display);
   }
 
-  if (pending_hotplug_event_ == kHotPlugEvent) {
-    // Do hotplug handling in a different thread to avoid blocking TUI thread.
-    std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
-  }
   // Reset tui session state variable.
   DLOGI("End of TUI session on display %d", disp_id);
   return 0;

@@ -759,10 +759,18 @@ enum struct InlineRotationVersion {
   kInlineRotationV2,
 };
 
+/* CAC Version */
 enum struct CacVersion {
   NONE,
   V1,
   V2,
+};
+
+/* DDR Version */
+enum struct DDRVersion {
+  kDDRVersion4,
+  kDDRVersion5,
+  kDDRVersion5x,
 };
 
 /* Type for panel feature resource reservation info */
@@ -820,6 +828,7 @@ struct DRMCrtcInfo {
   bool has_noise_layer = false;
   uint32_t dsc_block_count = 0;
   CacVersion cac_version = CacVersion::NONE;
+  DDRVersion ddr_version = DDRVersion::kDDRVersion5;
 };
 
 enum struct DRMPlaneType {

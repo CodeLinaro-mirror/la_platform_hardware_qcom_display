@@ -695,6 +695,18 @@ DisplayError HWDeviceDRM::Init() {
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr(new HWColorManagerDrm());
   hw_color_mgr_ = std::move(hw_color_mgr);
 
+  int value = 0;
+  if (Debug::GetProperty(FORCE_TONEMAPPING, &value) == kErrorNone) {
+    force_tonemapping_ = (value == 1);
+    DLOGI("force_tonemapping_ %d", force_tonemapping_);
+  }
+
+  value = 0;
+  if (Debug::GetProperty(ASPECT_RATIO_THRESHOLD, &value) == kErrorNone) {
+    aspect_ratio_threshold_ = 1 + (FLOAT(value) / 100);
+    DLOGI("aspect_ratio_threshold_: %f", aspect_ratio_threshold_);
+  }
+
   return kErrorNone;
 }
 
@@ -1773,6 +1785,56 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
 
           SetSsppTonemapFeatures(pipe_info);
         } else if (update_luts) {
+          if (force_tonemapping_) {
+            sde_drm::DRMFp16CscType fp16_csc_type = sde_drm::DRMFp16CscType::kFP16CscTypeMax;
+            int fp16_igc_en = 0;
+            int fp16_unmult_en = 0;
+            drm_msm_fp16_gc fp16_gc_config = {.flags = 0, .mode = FP16_GC_MODE_INVALID};
+            SelectFp16Config(layer.input_buffer, &fp16_igc_en, &fp16_unmult_en, &fp16_csc_type,
+                             &fp16_gc_config, layer.blending);
+
+            // Account for PMA block activation directly at translation time to preserve layer
+            // blending definition and avoid issues when a layer structure is reused.
+            DRMBlendType blending = DRMBlendType::UNDEFINED;
+            LayerBlending layer_blend = layer.blending;
+            if (layer_blend == kBlendingPremultiplied) {
+              // If blending type is premultiplied alpha, prevent performing alpha unmultiply
+              // multiple times for INV PMA / FP16 / UCSC blocks
+              if (fp16_unmult_en) {
+                layer_blend = kBlendingCoverage;
+                pipe_info->inverse_pma_info.inverse_pma = false;
+                pipe_info->inverse_pma_info.op = kReset;
+                if (pipe_info->ucsc_config.unmult_en) {
+                  pipe_info->ucsc_write_op[kUcscUnmult] = kReset;
+                  pipe_info->ucsc_config.unmult_en = 0;
+                }
+                DLOGI_IF(kTagDriverConfig, "PMA handled by FP16 UNMULT block - Pipe id: %u",
+                         pipe_id);
+              } else if (pipe_info->ucsc_config.unmult_en) {
+                layer_blend = kBlendingCoverage;
+                if (pipe_info->inverse_pma_info.inverse_pma && (pipe_info->lut_info.size() > 0)) {
+                  // Inverse PMA set along with 3d gamut takes precedence over UCSC
+                  pipe_info->ucsc_write_op[kUcscUnmult] = kReset;
+                  pipe_info->ucsc_config.unmult_en = 0;
+                  DLOGI_IF(kTagDriverConfig, "PMA handled by Inverse PMA block - Pipe id: %u",
+                           pipe_id);
+                } else {
+                  // Inverse PMA set by color transform needs to be reset as it is handled by UCSC
+                  pipe_info->inverse_pma_info.inverse_pma = false;
+                  pipe_info->inverse_pma_info.op = kReset;
+                  DLOGI_IF(kTagDriverConfig, "PMA handled by UCSC UNMULT block - Pipe id: %u",
+                           pipe_id);
+                }
+              } else if (pipe_info->inverse_pma_info.inverse_pma) {
+                layer_blend = kBlendingCoverage;
+                DLOGI_IF(kTagDriverConfig, "PMA handled by Inverse PMA block - Pipe id: %u",
+                         pipe_id);
+              }
+            }
+            SetBlending(layer_blend, &blending);
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_BLEND_TYPE, pipe_id, blending);
+          }
+
           SetSsppTonemapFeatures(pipe_info);
         }
 
@@ -2639,7 +2701,9 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
   float display_aspect_ratio =
       FLOAT(display_attributes_[index].x_pixels) / FLOAT(display_attributes_[index].y_pixels);
 
-  if (display_aspect_ratio != mixer_aspect_ratio) {
+  float display_to_mixer_aspect_ratio = std::max(display_aspect_ratio, mixer_aspect_ratio) /
+                                        std::min(display_aspect_ratio, mixer_aspect_ratio);
+  if (display_to_mixer_aspect_ratio > aspect_ratio_threshold_) {
     DLOGW("Aspect ratio mismatch! input: res %dx%d display: res %dx%d", mixer_attributes.width,
           mixer_attributes.height, display_attributes_[index].x_pixels,
           display_attributes_[index].y_pixels);

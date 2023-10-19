@@ -381,6 +381,7 @@ class HWDeviceDRM : public HWInterface {
   std::unordered_map<uint32_t, HWCwbConfig> cwb_config_;
   // cwb state lock. Set before accesing or updating cwb_config_
   static std::unordered_map<uint32_t, std::mutex> cwb_state_lock_;
+  bool force_tonemapping_ = false;
 
  private:
   void GetCWBCapabilities();
@@ -390,6 +391,7 @@ class HWDeviceDRM : public HWInterface {
   bool autorefresh_ = false;
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr_ = {};
   bool seamless_mode_switch_ = false;
+  float aspect_ratio_threshold_ = 1.0;
 };
 
 }  // namespace sdm
