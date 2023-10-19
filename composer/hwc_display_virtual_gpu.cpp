@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "hwc_display_virtual_gpu.h"
 #include "hwc_session.h"
 
@@ -66,13 +73,13 @@ int HWCDisplayVirtualGPU::Deinit() {
 
 HWCDisplayVirtualGPU::HWCDisplayVirtualGPU(CoreInterface *core_intf, HWCBufferAllocator
                                            *buffer_allocator, HWCCallbacks *callbacks,
-                                           hwc2_display_t id, int32_t sdm_id, uint32_t width,
+                                           Display id, int32_t sdm_id, uint32_t width,
                                            uint32_t height, float min_lum, float max_lum) :
   HWCDisplayVirtual(core_intf, buffer_allocator, callbacks, id, sdm_id, width, height),
   color_convert_task_(*this) {
 }
 
-HWC2::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+HWC3::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
   DTRACE_SCOPED();
 
   // Reset previous changes.
@@ -86,13 +93,13 @@ HWC2::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *ou
     layer->composition = needs_gpu_bypass ? kCompositionSDE : kCompositionGPU;
 
     if (needs_gpu_bypass) {
-      if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Client) {
-       layer_changes_[hwc_layer->GetId()] = HWC2::Composition::Device;
-       layer_requests_[hwc_layer->GetId()] = HWC2::LayerRequest::ClearClientTarget;
+      if (hwc_layer->GetClientRequestedCompositionType() == Composition::CLIENT) {
+       layer_changes_[hwc_layer->GetId()] = Composition::DEVICE;
+       layer_requests_[hwc_layer->GetId()] = DisplayRequest::LayerRequest::CLEAR_CLIENT_TARGET;
       }
     } else {
-      if (hwc_layer->GetClientRequestedCompositionType() != HWC2::Composition::Client) {
-       layer_changes_[hwc_layer->GetId()] = HWC2::Composition::Client;
+      if (hwc_layer->GetClientRequestedCompositionType() != Composition::CLIENT) {
+       layer_changes_[hwc_layer->GetId()] = Composition::CLIENT;
       }
     }
   }
@@ -108,13 +115,13 @@ HWC2::Error HWCDisplayVirtualGPU::Validate(uint32_t *out_num_types, uint32_t *ou
 
   validated_ = true;
 
-  return ((*out_num_types > 0) ? HWC2::Error::HasChanges : HWC2::Error::None);
+  return ((*out_num_types > 0) ? HWC3::Error::HasChanges : HWC3::Error::None);
 }
 
-HWC2::Error HWCDisplayVirtualGPU::SetOutputBuffer(buffer_handle_t buf,
+HWC3::Error HWCDisplayVirtualGPU::SetOutputBuffer(buffer_handle_t buf,
                                                   shared_ptr<Fence> release_fence) {
-  HWC2::Error error = HWCDisplayVirtual::SetOutputBuffer(buf, release_fence);
-  if (error != HWC2::Error::None) {
+  HWC3::Error error = HWCDisplayVirtual::SetOutputBuffer(buf, release_fence);
+  if (error != HWC3::Error::None) {
     return error;
   }
 
@@ -132,20 +139,20 @@ HWC2::Error HWCDisplayVirtualGPU::SetOutputBuffer(buffer_handle_t buf,
     color_convert_task_.PerformTask(ColorConvertTaskCode::kCodeReset, nullptr);
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtualGPU::Present(shared_ptr<Fence> *out_retire_fence) {
+HWC3::Error HWCDisplayVirtualGPU::Present(shared_ptr<Fence> *out_retire_fence) {
   DTRACE_SCOPED();
 
-  auto status = HWC2::Error::None;
+  auto status = HWC3::Error::None;
 
   if (!validated_) {
-    return HWC2::Error::NotValidated;
+    return HWC3::Error::NotValidated;
   }
 
   if (!output_buffer_.buffer_id) {
-    return HWC2::Error::NoResources;
+    return HWC3::Error::NoResources;
   }
 
   if (active_secure_sessions_.any() || layer_set_.empty()) {
@@ -164,7 +171,7 @@ HWC2::Error HWCDisplayVirtualGPU::Present(shared_ptr<Fence> *out_retire_fence) {
     color_convert_task_.PerformTask(ColorConvertTaskCode::kCodeGetInstance, nullptr);
     if (gl_color_convert_ == nullptr) {
       DLOGE("Failed to get Color Convert Instance");
-      return HWC2::Error::NoResources;
+      return HWC3::Error::NoResources;
     } else {
       DLOGI("Created ColorConvert instance: %p", gl_color_convert_);
     }

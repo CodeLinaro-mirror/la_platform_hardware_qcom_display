@@ -26,45 +26,89 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <hidl/LegacySupport.h>
-#include "QtiComposer.h"
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+#include <android-base/logging.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
+#include <hidl/LegacySupport.h>
+
+#include "AidlComposer.h"
+#include "QtiComposer3Client.h"
+
+using aidl::vendor::qti::hardware::display::composer3::AidlComposer;
+using aidl::vendor::qti::hardware::display::composer3::QtiComposer3Client;
 using android::ProcessState;
 using android::sp;
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
-using android::hardware::graphics::composer::V2_3::IComposer;
-using vendor::qti::hardware::display::composer::V3_0::IQtiComposer;
-using vendor::qti::hardware::display::composer::V3_0::implementation::QtiComposer;
 
 int main(int, char **) {
+  ALOGI("Creating Display HW Composer HAL");
+
   // TODO(user): double-check for SCHED_FIFO logic
   // the conventional HAL might start binder services
   ProcessState::initWithDriver("/dev/vndbinder");
   sp<ProcessState> ps(ProcessState::self());
-  ps->setThreadPoolMaxThreadCount(4);
-  ps->startThreadPool();
+
+  // Explicitly set thread priority in case it isn't inherited correctly
+  setpriority(PRIO_PROCESS, 0, sdm::kThreadPriorityUrgent);
 
   // same as SF main thread
   struct sched_param param = {0};
   param.sched_priority = 2;
   if (sched_setscheduler(0, SCHED_FIFO | SCHED_RESET_ON_FORK, &param) != 0) {
     ALOGE("Couldn't set SCHED_FIFO: %d", errno);
+  } else {
+    ALOGI("Scheduler priority settings completed");
   }
 
-  sp<IQtiComposer> composer = QtiComposer::initialize();
-  if (composer == nullptr) {
-    ALOGE("Cannot initialize composer");
-    return -EINVAL;
-  }
-
+  ALOGI("Configuring RPC threadpool");
   configureRpcThreadpool(4, true /*callerWillJoin*/);
-  if (composer->registerAsService() != android::OK) {
-    ALOGE("Cannot register QTI composer service");
-    return -EINVAL;
+  ALOGI("Configuring RPC threadpool...done!");
+
+  ALOGI("Registering AidlComposer as a service");
+  ABinderProcess_setThreadPoolMaxThreadCount(0);
+  ALOGI("Creating AidlComposer extensions(QtiComposer3Client) service");
+  std::shared_ptr<QtiComposer3Client> qticomposer = ndk::SharedRefBase::make<QtiComposer3Client>();
+  std::shared_ptr<AidlComposer> composer = ndk::SharedRefBase::make<AidlComposer>(qticomposer);
+  const std::string instance = std::string() + AidlComposer::descriptor + "/default";
+  if (!composer->asBinder().get()) {
+    ALOGW("AidlComposer's binder is null");
   }
 
-  ALOGI("Initialized qti-composer");
-  joinRpcThreadpool();
+  ndk::SpAIBinder composerBinder = composer->asBinder();
+  ALOGI("Registering QtiComposer3Client as an AidlComposer extension service");
+  binder_status_t status =
+      AIBinder_setExtension(composerBinder.get(), qticomposer->asBinder().get());
+  if (status != STATUS_OK) {
+    ALOGW("Failed to register QtiComposer3Client as an AidlComposer extension service (status:%d)",
+          status);
+  } else {
+    ALOGI("Successfully registered QtiComposer3Client as an AidlComposer extension service");
+  }
+
+  status = AServiceManager_addService(composerBinder.get(), instance.c_str());
+  if (status != STATUS_OK) {
+    ALOGW("Failed to register AidlComposer as a service (status:%d)", status);
+  } else {
+    ALOGI("Successfully registered AidlComposer as a service");
+  }
+
+  ps->setThreadPoolMaxThreadCount(4);
+  ps->startThreadPool();
+  ALOGI("ProcessState initialization completed");
+
+  ALOGI("Joining RPC threadpool...");
+  ABinderProcess_setThreadPoolMaxThreadCount(5);
+  ABinderProcess_startThreadPool();
+  ABinderProcess_joinThreadPool();
+
   return 0;
 }

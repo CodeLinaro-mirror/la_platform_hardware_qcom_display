@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -111,60 +111,60 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
 
   static int Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks,  HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                    qService::QService *qservice, Display id, int32_t sdm_id,
                     HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
   virtual int Init();
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
-  virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
-  virtual HWC2::Error CommitLayerStack();
-  virtual HWC2::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
-  virtual HWC2::Error SetColorMode(ColorMode mode);
-  virtual HWC2::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
+  virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error CommitLayerStack();
+  virtual HWC3::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
+  virtual HWC3::Error SetColorMode(ColorMode mode);
+  virtual HWC3::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
                                        RenderIntent *out_intents);
-  virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
-  virtual HWC2::Error SetColorModeById(int32_t color_mode_id);
-  virtual HWC2::Error SetColorModeFromClientApi(int32_t color_mode_id);
-  virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
-  virtual HWC2::Error RestoreColorTransform();
+  virtual HWC3::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
+  virtual HWC3::Error SetColorModeById(int32_t color_mode_id);
+  virtual HWC3::Error SetColorModeFromClientApi(int32_t color_mode_id);
+  virtual HWC3::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
+  virtual HWC3::Error RestoreColorTransform();
   virtual int Perform(uint32_t operation, ...);
   virtual int HandleSecureSession(const std::bitset<kSecureMax> &secure_session,
                                   bool *power_on_pending, bool is_active_secure_display);
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms, uint32_t inactive_ms);
-  virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
+  virtual HWC3::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                          int32_t format, bool post_processed);
   virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, bool post_processed);
   virtual int GetFrameCaptureStatus() { return frame_capture_status_; }
   virtual DisplayError SetDetailEnhancerConfig(const DisplayDetailEnhancerData &de_data);
   virtual DisplayError SetHWDetailedEnhancerConfig(void *params);
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending);
-  virtual HWC2::Error SetReadbackBuffer(const native_handle_t *buffer,
+  virtual HWC3::Error SetReadbackBuffer(const native_handle_t *buffer,
                                         shared_ptr<Fence> acquire_fence,
                                         bool post_processed_output, CWBClient client);
-  virtual HWC2::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence);
-  virtual HWC2::Error SetQSyncMode(QSyncMode qsync_mode);
+  virtual HWC3::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence);
+  virtual HWC3::Error SetQSyncMode(QSyncMode qsync_mode);
   virtual DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous);
-  virtual HWC2::Error SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end, uint32_t v_start,
+  virtual HWC3::Error SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end, uint32_t v_start,
                                           uint32_t v_end, uint32_t factor_in, uint32_t factor_out);
   virtual DisplayError SetDynamicDSIClock(uint64_t bitclk);
   virtual DisplayError GetDynamicDSIClock(uint64_t *bitclk);
   virtual DisplayError GetSupportedDSIClock(std::vector<uint64_t> *bitclk_rates);
   virtual DisplayError SetStandByMode(bool enable, bool is_twm);
   virtual DisplayError DelayFirstCommit();
-  virtual HWC2::Error UpdateDisplayId(hwc2_display_t id);
-  virtual HWC2::Error SetPendingRefresh();
-  virtual HWC2::Error SetPanelBrightness(float brightness);
-  virtual HWC2::Error GetPanelBrightness(float *brightness);
-  virtual HWC2::Error GetPanelMaxBrightness(uint32_t *max_brightness_level);
+  virtual HWC3::Error UpdateDisplayId(Display id);
+  virtual HWC3::Error SetPendingRefresh();
+  virtual HWC3::Error SetPanelBrightness(float brightness);
+  virtual HWC3::Error GetPanelBrightness(float *brightness);
+  virtual HWC3::Error GetPanelMaxBrightness(uint32_t *max_brightness_level);
   virtual DisplayError TeardownConcurrentWriteback(void);
   virtual void SetFastPathComposition(bool enable) {
     fast_path_composition_ = enable && !readback_buffer_queued_;
   }
-  virtual HWC2::Error SetFrameTriggerMode(uint32_t mode);
-  virtual HWC2::Error SetBLScale(uint32_t level);
-  virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
-  virtual HWC2::Error SetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
-                                      int32_t dataspace, hwc_region_t damage);
+  virtual HWC3::Error SetFrameTriggerMode(uint32_t mode);
+  virtual HWC3::Error SetBLScale(uint32_t level);
+  virtual HWC3::Error UpdatePowerMode(PowerMode mode);
+  virtual HWC3::Error SetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
+                                      int32_t dataspace, Region damage);
   virtual bool IsSmartPanelConfig(uint32_t config_id);
   virtual bool HasSmartPanelConfig(void);
   virtual int Deinit();
@@ -172,24 +172,24 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
                                      int32_t *qsync_refresh_rate);
   virtual int PostInit();
 
-  virtual HWC2::Error SetDisplayedContentSamplingEnabledVndService(bool enabled);
-  virtual HWC2::Error SetDisplayedContentSamplingEnabled(int32_t enabled, uint8_t component_mask,
+  virtual HWC3::Error SetDisplayedContentSamplingEnabledVndService(bool enabled);
+  virtual HWC3::Error SetDisplayedContentSamplingEnabled(bool enabled, uint8_t component_mask,
                                                          uint64_t max_frames);
-  virtual HWC2::Error GetDisplayedContentSamplingAttributes(int32_t *format, int32_t *dataspace,
+  virtual HWC3::Error GetDisplayedContentSamplingAttributes(int32_t *format, int32_t *dataspace,
                                                             uint8_t *supported_components);
-  virtual HWC2::Error GetDisplayedContentSample(
+  virtual HWC3::Error GetDisplayedContentSample(
       uint64_t max_frames, uint64_t timestamp, uint64_t *numFrames,
       int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
       uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS]);
   void Dump(std::ostringstream *os) override;
-  virtual HWC2::Error SetPowerMode(HWC2::PowerMode mode, bool teardown);
+  virtual HWC3::Error SetPowerMode(PowerMode mode, bool teardown);
   virtual bool HasReadBackBufferSupport();
   virtual bool IsDisplayIdle();
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id);
+                    qService::QService *qservice, Display id, int32_t sdm_id);
   void SetMetaDataRefreshRateFlag(bool enable);
   virtual DisplayError SetDisplayMode(uint32_t mode);
   virtual DisplayError DisablePartialUpdateOneFrame();
@@ -204,7 +204,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool CanSkipCommit();
   DisplayError SetMixerResolution(uint32_t width, uint32_t height);
   DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
-  HWC2::Error CommitStitchLayers();
+  HWC3::Error CommitStitchLayers();
   void AppendStitchLayer();
   bool InitLayerStitch();
   void InitStitchTarget();

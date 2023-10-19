@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <sync/sync.h>
@@ -45,7 +52,7 @@ void HWCDisplayVirtual::Destroy(HWCDisplay *hwc_display) {
 }
 
 HWCDisplayVirtual::HWCDisplayVirtual(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                                     HWCCallbacks *callbacks, hwc2_display_t id, int32_t sdm_id,
+                                     HWCCallbacks *callbacks, Display id, int32_t sdm_id,
                                      uint32_t width, uint32_t height) :
       HWCDisplay(core_intf, buffer_allocator, callbacks, nullptr, nullptr, kVirtual, id, sdm_id,
                  DISPLAY_CLASS_VIRTUAL), width_(width), height_(height)  {
@@ -64,11 +71,11 @@ bool HWCDisplayVirtual::NeedsGPUBypass() {
   return display_paused_ || active_secure_sessions_.any() || layer_set_.empty();
 }
 
-HWC2::Error HWCDisplayVirtual::Present(shared_ptr<Fence> *out_retire_fence) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayVirtual::Present(shared_ptr<Fence> *out_retire_fence) {
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
+HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
   if (dump_frame_count_ && !flush_ && dump_output_layer_) {
     if (output_handle_) {
       BufferInfo buffer_info;
@@ -79,7 +86,7 @@ HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
         error = buffer_allocator_->MapBuffer(output_handle, nullptr);
         if (error != kErrorNone) {
           DLOGE("Failed to map output buffer, error = %d", error);
-          return HWC2::Error::BadParameter;
+          return HWC3::Error::BadParameter;
         }
       }
       buffer_info.buffer_config.width = static_cast<uint32_t>(output_handle->width);
@@ -94,18 +101,18 @@ HWC2::Error HWCDisplayVirtual::DumpVDSBuffer() {
       error = buffer_allocator_->UnmapBuffer(output_handle, &release_fence);
       if (error != kErrorNone) {
         DLOGE("Failed to unmap buffer, error = %d", error);
-        return HWC2::Error::BadParameter;
+        return HWC3::Error::BadParameter;
       }
     }
   }
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
+HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
                                                shared_ptr<Fence> release_fence) {
   if (buf == nullptr) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
   const private_handle_t *output_handle = static_cast<const private_handle_t *>(buf);
 
@@ -120,11 +127,11 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
     LayerBufferFormat new_sdm_format =
         HWCLayer::GetSDMFormat(output_handle_format, output_handle->flags);
     if (new_sdm_format == kFormatInvalid) {
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
     }
 
     if (sdm::SetCSC(output_handle, &color_metadata) != kErrorNone) {
-      return HWC2::Error::BadParameter;
+      return HWC3::Error::BadParameter;
     }
 
     output_buffer_.flags.secure = 0;
@@ -147,30 +154,30 @@ HWC2::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
 
   output_buffer_.acquire_fence = release_fence;
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
+HWC3::Error HWCDisplayVirtual::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                                   int32_t format, bool post_processed) {
   HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, post_processed);
   dump_output_layer_ = ((bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP)) != 0);
 
   DLOGI("output_layer_dump_enable %d", dump_output_layer_);
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::GetDisplayType(int32_t *out_type) {
+HWC3::Error HWCDisplayVirtual::GetDisplayType(int32_t *out_type) {
   if (out_type == nullptr) {
-    return HWC2::Error::BadParameter;
+    return HWC3::Error::BadParameter;
   }
 
-  *out_type = HWC2_DISPLAY_TYPE_VIRTUAL;
+  *out_type = INT32(DisplayBasicType::kVirtual);
 
-  return HWC2::Error::None;
+  return HWC3::Error::None;
 }
 
-HWC2::Error HWCDisplayVirtual::SetColorMode(ColorMode mode) {
-  return HWC2::Error::None;
+HWC3::Error HWCDisplayVirtual::SetColorMode(ColorMode mode) {
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm

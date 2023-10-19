@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_DUMMY_H__
 #define __HWC_DISPLAY_DUMMY_H__
 
@@ -39,24 +46,24 @@ class HWCDisplayDummy : public HWCDisplay {
  public:
   static int Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
+                    qService::QService *qservice, Display id, int32_t sdm_id,
                     HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
-  virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
-  virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
-  virtual HWC2::Error GetActiveConfig(hwc2_config_t *out_config);
-  virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
-  virtual HWC2::Error SetColorMode(ColorMode mode);
-  virtual HWC2::Error SetVsyncEnabled(HWC2::Vsync enabled);
+  virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error GetActiveConfig(Config *out_config);
+  virtual HWC3::Error UpdatePowerMode(PowerMode mode);
+  virtual HWC3::Error SetColorMode(ColorMode mode);
+  virtual HWC3::Error SetVsyncEnabled(bool enabled);
   virtual bool VsyncEnablePending();
-  virtual HWC2::Error SetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
-                                      int32_t dataspace, hwc_region_t damage);
-  virtual HWC2::Error GetDisplayVsyncPeriod(VsyncPeriodNanos *vsync_period);
-  virtual HWC2::Error SetDisplayVsyncPeriod(VsyncPeriodNanos vsync_period);
+  virtual HWC3::Error SetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
+                                      int32_t dataspace, Region damage);
+  virtual HWC3::Error GetDisplayVsyncPeriod(VsyncPeriodNanos *vsync_period);
+  virtual HWC3::Error SetDisplayVsyncPeriod(VsyncPeriodNanos vsync_period);
  private:
   HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                   HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                  qService::QService *qservice, hwc2_display_t id, int32_t sdm_id);
+                  qService::QService *qservice, Display id, int32_t sdm_id);
   DisplayNull display_null_;
   bool vsync_enable_ = false;
   VsyncPeriodNanos vsync_period_ = 16600000;
