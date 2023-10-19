@@ -264,11 +264,9 @@ cc_library_headers {
     vendor: true,
     export_include_dirs: [
         "include",
-        "libdrmutils",
         "libqdutils",
         "libqservice",
         "gpu_tonemapper",
-        "sdm/include",
         "gralloc",
         "libhistogram",
     ],
@@ -276,11 +274,13 @@ cc_library_headers {
         "libhardware_headers",
         "display_intf_headers",
         "display_debug_headers",
+        "display_core_headers",
     ],
     export_header_lib_headers: [
         "libhardware_headers",
         "display_intf_headers",
         "display_debug_headers",
+        "display_core_headers",
     ],
 }
 
