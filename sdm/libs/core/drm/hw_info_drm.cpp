@@ -27,13 +27,19 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <dlfcn.h>
 #include <drm/drm_fourcc.h>
 #include <drm_lib_loader.h>
 #include <drm_master.h>
 #include <drm_res_mgr.h>
 #include <fcntl.h>
-#ifdef __ANDROID_T__
+#ifdef __MIN_ANDROID_VER_T__
 #include <display/media/msm_sde_rotator.h>
 #else
 #include <media/msm_sde_rotator.h>

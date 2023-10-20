@@ -27,9 +27,15 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/utils.h>
 
-#ifndef __ANDROID_T__
+#ifndef __MIN_ANDROID_VER_T__
 #include "fb/hw_info.h"
 #endif
 #include "drm/hw_info_drm.h"
@@ -40,7 +46,7 @@ namespace sdm {
 
 DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
   if (GetDriverType() == DriverType::FB) {
-#ifndef __ANDROID_T__
+#ifndef __MIN_ANDROID_VER_T__
     *intf = new HWInfo();
 #endif
   } else {
