@@ -41,13 +41,13 @@ class QtiComposer3Client : public BnQtiComposer3Client {
                                    const std::vector<QtiDisplayCommand> &in_qtiCommands,
                                    std::vector<CommandResultPayload> *_aidl_return);
   ScopedAStatus qtiTryDrawMethod(int64_t in_display, QtiDrawMethod in_drawMethod);
-  ScopedAStatus init(const std::shared_ptr<AidlComposerClient> &composer_client);
+  ScopedAStatus init(const std::weak_ptr<AidlComposerClient> &composer_client);
 
  protected:
   SpAIBinder createBinder() override;
 
  private:
-  std::shared_ptr<AidlComposerClient> composer_client_;
+  std::weak_ptr<AidlComposerClient> composer_client_;
   sdm::HWCSession *hwc_session_;
 };
 

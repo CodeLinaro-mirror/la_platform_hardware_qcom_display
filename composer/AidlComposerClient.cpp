@@ -100,8 +100,6 @@ AidlComposerClient::~AidlComposerClient() {
     }
   }
 
-  hwc_session_->Deinit();
-
   mDisplayData.clear();
 
   mHandleImporter.cleanup();
@@ -310,6 +308,7 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     hwc_session_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
       aidl_return->push_back(DisplayCapability::DOZE);
+      aidl_return->push_back(DisplayCapability::SUSPEND);
       aidl_return->push_back(DisplayCapability::BRIGHTNESS);
     } else {
       aidl_return->push_back(DisplayCapability::BRIGHTNESS);

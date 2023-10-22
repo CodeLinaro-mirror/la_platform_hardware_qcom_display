@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -56,12 +56,14 @@ class HWCDisplayVirtualDPU : public HWCDisplayVirtual {
   virtual HWC3::Error CommitOrPrepare(bool validate_only, shared_ptr<Fence> *out_retire_fence,
                                       uint32_t *out_num_types, uint32_t *out_num_requests,
                                       bool *needs_commit);
+  virtual HWC3::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
 
  private:
   int SetConfig(uint32_t width, uint32_t height);
 
   float min_lum_ = 0.0f;
   float max_lum_ = 0.0f;
+  bool force_gpu_comp_ = false;
 };
 
 }  // namespace sdm
