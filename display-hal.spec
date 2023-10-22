@@ -28,8 +28,8 @@ header files
 
 %build
 autoreconf -if
-%configure CPPFLAGS="-lbsd -I/usr/include/glib-2.0 -I/usr/include/glib-2.0/include -I/usr/include/glib-2.0/glib -I/usr/lib64/glib-2.0/include/"
-%configure CFLAGS="-lbsd -I/usr/include/glib-2.0 -I/usr/include/glib-2.0/include -I/usr/include/glib-2.0/glib -I/usr/lib64/glib-2.0/include/"
+%configure CPPFLAGS="-I/usr/include/glib-2.0 -I/usr/include/glib-2.0/include -I/usr/include/glib-2.0/glib -I/usr/lib64/glib-2.0/include/"
+%configure CFLAGS="-I/usr/include/glib-2.0 -I/usr/include/glib-2.0/include -I/usr/include/glib-2.0/glib -I/usr/lib64/glib-2.0/include/"
 %make_build
 
 %install
