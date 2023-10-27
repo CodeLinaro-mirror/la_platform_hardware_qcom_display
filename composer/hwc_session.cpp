@@ -574,6 +574,7 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
     if (!disable_skip_validate) {
       outCapabilities[0] = INT32(Capability::SKIP_VALIDATE);
     }
+    outCapabilities[1] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
   }
   *outCount = count;
 }
