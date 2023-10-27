@@ -474,7 +474,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetUnderScanConfig() {}
   int32_t SetClientTargetDataSpace(int32_t dataspace);
   int SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels);
-  int32_t GetDisplayConfigGroup(hwc2_config_t variable_config);
+  int32_t GetDisplayConfigGroup(DisplayConfigGroupInfo variable_config);
   HWC3::Error GetVsyncPeriodByActiveConfig(bool get_real_config, VsyncPeriodNanos *vsync_period);
   bool GetTransientVsyncPeriod(VsyncPeriodNanos *vsync_period);
   std::tuple<int64_t, int64_t> RequestActiveConfigChange(Config config,
