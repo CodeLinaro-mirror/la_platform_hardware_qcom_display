@@ -1206,7 +1206,7 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
       *out_value = INT32(variable_config.y_dpi * 1000.0f);
       break;
     case HwcAttribute::CONFIG_GROUP:
-      *out_value = GetDisplayConfigGroup(config);
+      *out_value = GetDisplayConfigGroup(variable_config);
       break;
     default:
       DLOGW("Spurious attribute type = %s", composer_V3::toString(attribute).c_str());
@@ -2906,9 +2906,9 @@ void HWCDisplay::UpdateActiveConfig() {
   pending_config_ = false;
 }
 
-int32_t HWCDisplay::GetDisplayConfigGroup(hwc2_config_t config) {
+int32_t HWCDisplay::GetDisplayConfigGroup(DisplayConfigGroupInfo variable_config) {
   for (auto &group_config : variable_config_map_) {
-    if (IsSameGroup(config, group_config.first)) {
+    if (variable_config == group_config.second) {
       return INT32(group_config.first);
     }
   }
