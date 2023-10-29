@@ -107,6 +107,7 @@
 #define DROP_SKEWED_VSYNC                    DISPLAY_PROP("drop_skewed_vsync")
 #define DISABLE_FAST_PATH                    DISPLAY_PROP("disable_fast_path")
 #define DISABLE_SYSTEM_LOAD_CHECK            DISPLAY_PROP("disable_system_load_check")
+#define ASPECT_RATIO_THRESHOLD               DISPLAY_PROP("aspect_ratio_threshold")
 // Disable microidle condition
 #define DISABLE_SINGLE_LM_SPLIT_PROP         DISPLAY_PROP("disable_single_lm_split")
 // Enable posted start dynamic
@@ -202,6 +203,12 @@
 
 // Configuration to reserve the writeback blocks for specific usage like CWB, IWE or WFD
 #define RESERVED_WRITEBACK_CONFIG            DISPLAY_PROP("reserved_writeback_config")
+
+// Property to set desired libscale optimization mode on source
+#define SCALING_SOURCE_OPT_MODE              DISPLAY_PROP("scaling_source_opt_mode")
+// Property to set desired libscale optimization mode on destination
+#define SCALING_DEST_OPT_MODE                DISPLAY_PROP("scaling_dest_opt_mode")
+
 
 // Add all vendor.display properties above
 

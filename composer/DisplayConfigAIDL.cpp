@@ -813,13 +813,7 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  // Output buffer dump is not supported, if Virtual display is present.
-  int dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
-  if ((dpy_index != -1) && hwc_session_->hwc_display_[dpy_index]) {
-    ALOGW("Output buffer dump is not supported with Virtual display!");
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
+  int dpy_index = -1;
   Display disp_type = HWC_DISPLAY_PRIMARY;
   if (disp_id == UINT32(DisplayType::PRIMARY)) {
     dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_PRIMARY);
@@ -899,6 +893,18 @@ ScopedAStatus DisplayConfigAIDL::unRegisterCallback(int64_t client_handle) {
   }
 
   ret = hwc_session_->UnregisterCallbackClient(client_handle);
+
+  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+}
+
+ScopedAStatus DisplayConfigAIDL::getDisplayPortId(int32_t disp_id, int32_t *port_id) {
+  int ret = -1;
+
+  if (!port_id) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
+  ret = hwc_session_->GetDisplayPortId(disp_id, port_id);
 
   return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }

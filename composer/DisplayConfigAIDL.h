@@ -135,6 +135,7 @@ class DisplayConfigAIDL : public BnDisplayConfig {
   ScopedAStatus notifyDisplayIdleState(const std::vector<int32_t> &display_ids) {
     return ScopedAStatus::ok();
   }
+  ScopedAStatus getDisplayPortId(int32_t disp_id, int32_t *port_id) override;
 
  private:
   sdm::HWCSession *hwc_session_;

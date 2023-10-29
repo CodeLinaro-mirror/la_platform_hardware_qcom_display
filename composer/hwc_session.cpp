@@ -243,7 +243,7 @@ int HWCSession::Init() {
 
   DLOGI("Getting IQService");
   android::sp<qService::IQService> iqservice = android::interface_cast<qService::IQService>(
-      android::defaultServiceManager()->getService(android::String16(qservice_name)));
+      android::defaultServiceManager()->checkService(android::String16(qservice_name)));
   DLOGI("Getting IQService...done!");
 
   if (iqservice.get()) {
@@ -307,7 +307,6 @@ int HWCSession::Init() {
 
   is_composer_up_ = true;
 
-  StartServices();
   PostInit();
   GetVirtualDisplayList();
   HpdInit();
@@ -749,6 +748,11 @@ HWC3::Error HWCSession::GetDisplayAttribute(Display display, Config config, HwcA
 HWC3::Error HWCSession::GetDisplayConfigs(Display display, uint32_t *out_num_configs,
                                           Config *out_configs) {
   return CallDisplayFunction(display, &HWCDisplay::GetDisplayConfigs, out_num_configs, out_configs);
+}
+
+HWC3::Error HWCSession::GetDisplayConfigurations(Display display,
+                                                 std::vector<DisplayConfiguration> *out_configs) {
+  return CallDisplayFunction(display, &HWCDisplay::GetDisplayConfigurations, out_configs);
 }
 
 HWC3::Error HWCSession::GetDisplayName(Display display, uint32_t *out_size, char *out_name) {
@@ -1223,7 +1227,9 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
   int support = 0;
   auto status = GetDozeSupport(display, &support);
   if (status != HWC3::Error::None) {
-    DLOGE("Failed to get doze support Error = %d", status);
+    if (is_builtin) {
+      DLOGE("Failed to get doze support Error = %d", status);
+    }
     return status;
   }
 
@@ -1289,7 +1295,7 @@ HWC3::Error HWCSession::GetDozeSupport(Display display, int32_t *out_support) {
 
   if (display >= HWCCallbacks::kNumDisplays || (hwc_display_[display] == nullptr)) {
     // display may come as -1  from VTS test case
-    DLOGE("Invalid Display %d ", UINT32(display));
+    DLOGW("Invalid Display %d ", UINT32(display));
     return HWC3::Error::BadDisplay;
   }
 
@@ -1349,7 +1355,7 @@ HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
 
   // Request to get virtual display id corresponds writeback block, which could be used for WFD.
   int32_t display_id = -1;
-  auto err = core_intf_->RequestVirtualDisplayId(active_builtin_disp_id, &display_id);
+  auto err = core_intf_->RequestVirtualDisplayId(&display_id);
   if (err != kErrorNone || display_id == -1) {
     return HWC3::Error::NoResources;
   }
@@ -3031,7 +3037,7 @@ int HWCSession::HandlePluggableDisplays(bool delay_hotplug) {
   HWDisplaysInfo hw_displays_info = {};
   DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
   if (error != kErrorNone) {
-    DLOGE("Failed to get connected display list. Error = %d", error);
+    DLOGW("Failed to get connected display list. Error = %d", error);
     return -EINVAL;
   }
 
@@ -3397,9 +3403,24 @@ void HWCSession::DestroyNonPluggableDisplayLocked(DisplayMapInfo *map_info) {
   map_info->Reset();
 }
 
+void HWCSession::RemoveDisconnectedPluggableDisplays() {
+  SCOPE_LOCK(pluggable_handler_lock_);
+
+  HWDisplaysInfo hw_displays_info = {};
+  DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
+  if (error != kErrorNone) {
+    return;
+  }
+
+  HandleDisconnectedDisplays(&hw_displays_info);
+}
+
 void HWCSession::PerformDisplayPowerReset() {
+  RemoveDisconnectedPluggableDisplays();
+
   // Wait until all commands are flushed.
   std::lock_guard<std::mutex> lock(command_seq_mutex_);
+
   // Acquire lock on all displays.
   for (Display display = HWC_DISPLAY_PRIMARY; display < HWCCallbacks::kNumDisplays; display++) {
     locker_[display].Lock();
@@ -3418,6 +3439,7 @@ void HWCSession::PerformDisplayPowerReset() {
       }
     }
   }
+
   for (Display display = HWC_DISPLAY_PRIMARY; display < HWCCallbacks::kNumDisplays; display++) {
     if (hwc_display_[display] != NULL) {
       PowerMode mode = last_power_mode[display];
@@ -3653,6 +3675,7 @@ void HWCSession::HandlePendingHotplug(Display disp_id, const shared_ptr<Fence> &
       int32_t err = pluggable_handler_lock_.TryLock();
       if (!err) {
         // Do hotplug handling in a different thread to avoid blocking PresentDisplay.
+        pending_hotplug_event_ = kHotPlugProcessing;
         std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
         pluggable_handler_lock_.Unlock();
       } else {
@@ -4023,7 +4046,7 @@ HWC3::Error HWCSession::WaitForResources(bool wait_for_resources, Display active
         std::unique_lock<std::mutex> caller_lock(hotplug_mutex_);
         resource_ready_ = false;
 
-        static constexpr uint32_t min_vsync_period_ms = 500;
+        static constexpr uint32_t min_vsync_period_ms = 5000;
         auto timeout =
             std::chrono::system_clock::now() + std::chrono::milliseconds(min_vsync_period_ms);
 
@@ -4104,7 +4127,22 @@ int HWCSession::WaitForCommitDone(Display display, int client_id) {
     DLOGI("Acquired lock for client %d display %" PRIu64, client_id, display);
     callbacks_.Refresh(display);
     clients_waiting_for_commit_[display].set(client_id);
-    locker_[display].Wait();
+    if (hwc_display_[display]) {
+      uint32_t config = 0;
+      int32_t vsync_period = 0;
+      hwc_display_[display]->GetCachedActiveConfig(0, &config);
+      hwc_display_[display]->GetDisplayAttribute(config, HwcAttribute::VSYNC_PERIOD, &vsync_period);
+      timeout_ms = (kNumDrawCycles * (vsync_period / kDenomNstoMs)) + 100;
+      DLOGI("timeout in ms %d", timeout_ms);
+    }
+    int result = locker_[display].WaitFinite(timeout_ms);
+    if (result) {
+      if (hwc_display_[display]->GetCurrentPowerMode() == PowerMode::OFF) {
+        DLOGW("Display is powered off, bail");
+      }
+      DLOGW("Wait timed out, error=%d", result);
+      return result;
+    }
     if (commit_error_[display] != 0) {
       DLOGE("Commit done failed with error %d for client %d display %" PRIu64,
             commit_error_[display], client_id, display);
@@ -4137,6 +4175,9 @@ int HWCSession::WaitForVmRelease(Display display, int timeout_ms) {
   int re_try = kVmReleaseRetry;
   int ret = 0;
   do {
+    if (hwc_display_[display]->GetCurrentPowerMode() == PowerMode::OFF) {
+      return -ENODEV;
+    }
     ret = vm_release_locker_[display].WaitFinite(timeout_ms + kVmReleaseTimeoutMs);
     if (!ret) {
       break;
@@ -4262,14 +4303,6 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
 
   Display target_display = GetDisplayIndex(disp_id);
   bool needs_refresh = false;
-  if (target_display == -1) {
-    target_display = GetActiveBuiltinDisplay();
-  }
-
-  if (target_display != qdutils::DISPLAY_PRIMARY && target_display != qdutils::DISPLAY_BUILTIN_2) {
-    DLOGE("Display %" PRIu64 " not supported", target_display);
-    return -ENOTSUP;
-  }
 
   HWC3::Error error = TeardownConcurrentWriteback(target_display);
   if (error != HWC3::Error::None) {
@@ -4288,9 +4321,14 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
   int timeout_ms = -1;
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[target_display]);
+    DisplayError err = kErrorNone;
     if (hwc_display_[target_display]) {
-      if (hwc_display_[target_display]->HandleSecureEvent(kTUITransitionStart, &needs_refresh,
-                                                          false) != kErrorNone) {
+      if ((err = hwc_display_[target_display]->HandleSecureEvent(
+               kTUITransitionStart, &needs_refresh, false)) != kErrorNone) {
+        if (err == kErrorPermission) {
+          DLOGW("Bail from Start. Call unprepare");
+          goto end;
+        }
         return -EINVAL;
       }
       uint32_t config = 0;
@@ -4310,6 +4348,11 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
 
     DLOGI("Waiting for device assign");
     int ret = WaitForVmRelease(target_display, timeout_ms);
+    if (ret == -ENODEV) {
+      DLOGW("Unwind TUI");
+      TUITransitionEndLocked(target_display);
+      return ret;
+    }
     if (ret != 0) {
       DLOGE("Device assign failed with error %d", ret);
       return -EINVAL;
@@ -4329,11 +4372,20 @@ android::status_t HWCSession::TUITransitionStart(int disp_id) {
   }
 
   return 0;
+
+end:
+  TUITransitionUnPrepare(disp_id);
+  return -EPERM;
 }
+
 android::status_t HWCSession::TUITransitionEnd(int disp_id) {
   // Hold this lock so that any deferred hotplug events will not be handled during the commit
   // and will be handled at the end of TUITransitionPrepare.
   SCOPE_LOCK(pluggable_handler_lock_);
+  return TUITransitionEndLocked(disp_id);
+}
+
+android::status_t HWCSession::TUITransitionEndLocked(int disp_id) {
   Display target_display = GetDisplayIndex(disp_id);
   bool needs_refresh = false;
   if (target_display == -1) {
@@ -4360,9 +4412,10 @@ android::status_t HWCSession::TUITransitionEnd(int disp_id) {
     }
   }
 
+  //Add check for internal state for bailing out (needs_refresh to false)
   if (needs_refresh) {
     DLOGI("Waiting for device unassign");
-    int ret = WaitForCommitDoneAsync(target_display, kClientTrustedUI);
+    int ret = WaitForCommitDone(target_display, kClientTrustedUI);
     if (ret != 0) {
       if (ret != -ETIMEDOUT) {
         DLOGE("Device unassign failed with error %d", ret);
@@ -4417,14 +4470,16 @@ android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
       trigger_refresh |= needs_refresh;
     }
   }
+
+  if (pending_hotplug_event_ == kHotPlugEvent) {
+    // Do hotplug handling in a different thread to avoid blocking TUI thread.
+    pending_hotplug_event_ = kHotPlugProcessing;
+    std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
+  }
   if (trigger_refresh) {
     callbacks_.Refresh(target_display);
   }
 
-  if (pending_hotplug_event_ == kHotPlugEvent) {
-    // Do hotplug handling in a different thread to avoid blocking TUI thread.
-    std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
-  }
   // Reset tui session state variable.
   DLOGI("End of TUI session on display %d", disp_id);
   return 0;
@@ -4500,15 +4555,22 @@ HWC3::Error HWCSession::TeardownConcurrentWriteback(Display display) {
   }
 
   for (int id = 0; id < HWCCallbacks::kNumRealDisplays; id++) {
-    if (!hwc_display_[id]) {
-      continue;
+    HWCDisplay *disp = nullptr;
+    {
+      SCOPE_LOCK(locker_[id]);
+      if (!hwc_display_[id]) {
+        continue;
+      }
+
+      int32_t display_type = 0;
+      hwc_display_[id]->GetDisplayType(&display_type);
+      if (display_type == INT32(DisplayBasicType::kPhysical)) {
+        disp = hwc_display_[id];
+      }
     }
 
-    int32_t display_type = 0;
-    SCOPE_LOCK(locker_[id]);
-    hwc_display_[id]->GetDisplayType(&display_type);
-    if (display_type == INT32(DisplayBasicType::kPhysical)) {
-      hwc_display_[id]->TeardownConcurrentWriteback();
+    if (disp) {
+      disp->TeardownConcurrentWriteback();
     }
   }
 

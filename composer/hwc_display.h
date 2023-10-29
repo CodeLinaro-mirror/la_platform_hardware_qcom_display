@@ -14,7 +14,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License. 
  */
 
 /*
@@ -56,6 +56,7 @@ using composer_V3::RenderIntent;
 using HwcAttribute = composer_V3::DisplayAttribute;
 using VsyncPeriodChangeConstraints = composer_V3::VsyncPeriodChangeConstraints;
 using ClientTargetProperty = composer_V3::ClientTargetProperty;
+using DisplayConfiguration = composer_V3::DisplayConfiguration;
 using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
 
 typedef uint32_t VsyncPeriodNanos;
@@ -231,6 +232,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual CWBReleaseFenceError GetReadbackBufferFenceForClient(CWBClient client,
                                                                shared_ptr<Fence> *release_fence);
   virtual HWC3::Error GetReadbackBufferFence(shared_ptr<Fence> *release_fence);
+  virtual void ReleaseFrameDumpResources();
   virtual DisplayError TeardownConcurrentWriteback();
   // Captures frame output in the buffer specified by output_buffer_info. The API is
   // non-blocking and the client is expected to check operation status later on.
@@ -345,6 +347,7 @@ class HWCDisplay : public DisplayEventHandler {
     return HWC3::Error::Unsupported;
   }
   virtual HWC3::Error GetDisplayConfigs(uint32_t *out_num_configs, Config *out_configs);
+  virtual HWC3::Error GetDisplayConfigurations(std::vector<DisplayConfiguration> *outConfigs);
   virtual HWC3::Error GetDisplayAttribute(Config config, HwcAttribute attribute,
                                           int32_t *out_value);
   virtual HWC3::Error GetClientTargetSupport(uint32_t width, uint32_t height, int32_t format,
@@ -375,10 +378,7 @@ class HWCDisplay : public DisplayEventHandler {
                                                   AlphaInterpretation *alpha);
   virtual HWC3::Error GetPerFrameMetadataKeys(uint32_t *out_num_keys,
                                               PerFrameMetadataKey *out_keys);
-  virtual HWC3::Error SetDisplayAnimating(bool animating) {
-    animating_ = animating;
-    return HWC3::Error::None;
-  }
+  virtual HWC3::Error SetDisplayAnimating(bool animating);
   virtual bool IsDisplayCommandMode();
   virtual HWC3::Error SetQSyncMode(QSyncMode qsync_mode) { return HWC3::Error::Unsupported; }
   virtual DisplayError ControlIdlePowerCollapse(bool enable, bool synchronous) {
@@ -440,6 +440,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void Abort();
   virtual void MarkClientActive(bool is_client_up);
   virtual void SetExpectedPresentTime(uint64_t time) { expected_present_time_ = time; }
+  HWC3::Error GetCachedActiveConfig(bool get_real_config, Config *config);
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -475,7 +476,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetUnderScanConfig() {}
   int32_t SetClientTargetDataSpace(int32_t dataspace);
   int SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels);
-  int32_t GetDisplayConfigGroup(hwc2_config_t variable_config);
+  int32_t GetDisplayConfigGroup(DisplayConfigGroupInfo variable_config);
   HWC3::Error GetVsyncPeriodByActiveConfig(bool get_real_config, VsyncPeriodNanos *vsync_period);
   bool GetTransientVsyncPeriod(VsyncPeriodNanos *vsync_period);
   std::tuple<int64_t, int64_t> RequestActiveConfigChange(Config config,
@@ -490,7 +491,6 @@ class HWCDisplay : public DisplayEventHandler {
   bool AllowSeamless(Config request_config);
   void SetVsyncsApplyRateChange(uint32_t vsyncs) { vsyncs_to_apply_rate_change_ = vsyncs; }
   HWC3::Error SubmitDisplayConfig(Config config);
-  HWC3::Error GetCachedActiveConfig(bool get_real_config, Config *config);
   void SetActiveConfigIndex(int active_config_index);
   HWC3::Error PostPrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests);
   HWC3::Error HandlePrepareError(DisplayError error);
@@ -602,6 +602,7 @@ class HWCDisplay : public DisplayEventHandler {
   std::condition_variable cwb_cv_;
   std::map<CWBClient, CWBCaptureResponse> cwb_capture_status_map_;
   static constexpr unsigned int kCwbWaitMs = 100;
+  bool validate_done_ = false;
 
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
@@ -625,7 +626,6 @@ class HWCDisplay : public DisplayEventHandler {
   bool game_supported_ = false;
   uint64_t elapse_timestamp_ = 0;
   bool draw_method_set_ = false;
-  bool validate_done_ = false;
   bool client_target_3_1_set_ = false;
   bool is_client_up_ = false;
   uint64_t expected_present_time_ = 0;  // Expected Present time for current frame

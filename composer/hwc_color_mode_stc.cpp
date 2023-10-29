@@ -102,9 +102,18 @@ HWC3::Error HWCColorModeStc::DeInit() {
 }
 
 void HWCColorModeStc::PopulateColorModes() {
+  bool allow_tonemap_native = 0;
+  int32_t prop = 0;
+
+  if (Debug::Get()->GetProperty(ALLOW_TONEMAP_NATIVE, &prop) == kErrorNone) {
+    allow_tonemap_native = (prop == 1);
+  }
+
   if (!stc_mode_list_.list.size()) {
     snapdragoncolor::ColorMode color_mode = {};
     color_mode.intent = snapdragoncolor::kNative;
+    color_mode.gamut = allow_tonemap_native ? ColorPrimaries_BT709_5 : ColorPrimaries_Max;
+    color_mode.gamma = allow_tonemap_native ? Transfer_sRGB : Transfer_Max;
     color_mode_map_[ColorMode::NATIVE][RenderIntent::COLORIMETRIC][kSdrType] = color_mode;
     DLOGI("No color mode supported, add Native mode");
     return;
@@ -114,8 +123,8 @@ void HWCColorModeStc::PopulateColorModes() {
     snapdragoncolor::ColorMode stc_mode = stc_mode_list_.list[i];
     if (stc_mode.intent == snapdragoncolor::kNative) {
       // Setting Max for native mode gamut and gamma
-      stc_mode.gamut = ColorPrimaries_Max;
-      stc_mode.gamma = Transfer_Max;
+      stc_mode.gamut = allow_tonemap_native ? ColorPrimaries_BT709_5 : ColorPrimaries_Max;
+      stc_mode.gamma = allow_tonemap_native ? Transfer_sRGB : Transfer_Max;
       color_mode_map_[ColorMode::NATIVE][RenderIntent::COLORIMETRIC][kSdrType] = stc_mode;
       DLOGI("Color mode NATIVE supported");
     } else {

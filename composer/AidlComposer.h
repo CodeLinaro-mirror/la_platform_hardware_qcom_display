@@ -36,6 +36,7 @@ namespace display {
 namespace composer3 {
 using aidl::android::hardware::graphics::composer3::BnComposer;
 using aidl::android::hardware::graphics::composer3::Capability;
+using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
 using aidl::android::hardware::graphics::composer3::IComposerClient;
 
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;

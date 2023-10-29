@@ -693,7 +693,7 @@ int HWCDisplayBuiltIn::GetActiveSecureSession(std::bitset<kSecureMax> *secure_se
       secure_sessions->set(kSecureDisplay);
     }
   }
-  if (secure_event_ == kTUITransitionStart || secure_event_ == kTUITransitionPrepare) {
+  if (secure_event_ != kSecureEventMax) {
     secure_sessions->set(kSecureTUI);
   }
   return 0;

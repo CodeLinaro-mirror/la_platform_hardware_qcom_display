@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #define DEBUG 0
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #include <cstdlib>
@@ -75,7 +82,8 @@ static ssize_t read_node(const char *path, char *data)
     if (!err) {
         fp = fopen(path, "r");
         if (fp) {
-            err = fread(data, sizeof(char), MAX_SYSFS_DATA ,fp);
+            memset(data, 0, MAX_SYSFS_DATA);
+            err = fread(data, sizeof(char), MAX_SYSFS_DATA - 1 ,fp);
             fclose(fp);
         }
     }

@@ -489,7 +489,7 @@ int HWCDisplay::Init() {
 
   error = core_intf_->CreateDisplay(sdm_id_, this, &display_intf_);
   if (error != kErrorNone) {
-    if (kErrorResources == error) {
+    if (kErrorResources == error || kErrorCriticalResource == error) {
       return -ENODEV;
     }
 
@@ -1206,7 +1206,7 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
       *out_value = INT32(variable_config.y_dpi * 1000.0f);
       break;
     case HwcAttribute::CONFIG_GROUP:
-      *out_value = GetDisplayConfigGroup(config);
+      *out_value = GetDisplayConfigGroup(variable_config);
       break;
     default:
       DLOGW("Spurious attribute type = %s", composer_V3::toString(attribute).c_str());
@@ -1214,6 +1214,30 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
       return HWC3::Error::BadParameter;
   }
 
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
+  out_configs->clear();
+  out_configs->reserve(variable_config_map_.size());
+  for (const auto &[config_id, variable_config] : variable_config_map_) {
+    DisplayConfiguration display_configuration;
+    display_configuration.configId = config_id;
+    display_configuration.width = variable_config.x_pixels;
+    display_configuration.height = variable_config.y_pixels;
+    display_configuration.dpi = {static_cast<float>(variable_config.x_dpi),
+                                 static_cast<float>(variable_config.y_dpi)};
+    display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
+    display_configuration.configGroup = GetDisplayConfigGroup(variable_config);
+    display_configuration.vrrConfig = {
+        static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
+    DLOGI(
+        "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, minFrameInterval= "
+        "%d",
+        config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
+        display_configuration.vrrConfig->minFrameIntervalNs);
+    out_configs->emplace_back(display_configuration);
+  }
   return HWC3::Error::None;
 }
 
@@ -1286,6 +1310,16 @@ HWC3::Error HWCDisplay::GetPerFrameMetadataKeys(uint32_t *out_num_keys,
       out_keys[i] = static_cast<PerFrameMetadataKey>(i);
     }
   }
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplay::SetDisplayAnimating(bool animating) {
+  // Trigger refresh, when animation ends.
+  if (!animating) {
+    callbacks_->Refresh(id_);
+  }
+
+  animating_ = animating;
   return HWC3::Error::None;
 }
 
@@ -1439,6 +1473,11 @@ HWC3::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
                                            int32_t format, CwbConfig &cwb_config) {
   bool dump_output_to_file = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
   DLOGI("Requested o/p dump enable = %d", dump_output_to_file);
+
+  if (secure_event_ != kSecureEventMax) {
+    DLOGW("Frame dump is not supported as TUI transition is in progress.");
+    return HWC3::Error::None;
+  }
 
   if (!count) {
     DLOGW("No frame will dump as requested output frame count = 0.");
@@ -1976,8 +2015,7 @@ HWC3::Error HWCDisplay::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence
     display_paused_ = true;
     display_pause_pending_ = false;
   }
-  if (secure_event_ == kTUITransitionEnd || secure_event_ == kSecureDisplayEnd ||
-      secure_event_ == kTUITransitionUnPrepare) {
+  if (secure_event_ == kSecureDisplayEnd || secure_event_ == kTUITransitionUnPrepare) {
     secure_event_ = kSecureEventMax;
   }
 
@@ -2868,9 +2906,9 @@ void HWCDisplay::UpdateActiveConfig() {
   pending_config_ = false;
 }
 
-int32_t HWCDisplay::GetDisplayConfigGroup(hwc2_config_t config) {
+int32_t HWCDisplay::GetDisplayConfigGroup(DisplayConfigGroupInfo variable_config) {
   for (auto &group_config : variable_config_map_) {
-    if (IsSameGroup(config, group_config.first)) {
+    if (variable_config == group_config.second) {
       return INT32(group_config.first);
     }
   }
@@ -3245,6 +3283,7 @@ DisplayError HWCDisplay::ValidateTUITransition(SecureEvent secure_event) {
 DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh,
                                            bool update_event_only) {
   if (secure_event == secure_event_) {
+    DLOGW("Same requested secure_event=%d", secure_event);
     return kErrorNone;
   }
 
@@ -3264,7 +3303,11 @@ DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs
 
   err = display_intf_->HandleSecureEvent(secure_event, needs_refresh);
   if (err != kErrorNone) {
-    DLOGE("Handle secure event failed");
+    if (err == kErrorPermission) {
+      DLOGW("Handle secure event failed");
+    } else {
+      DLOGE("Handle secure event failed");
+    }
     return err;
   }
 
@@ -3274,6 +3317,7 @@ DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs
   if (secure_event == kTUITransitionEnd || secure_event == kTUITransitionUnPrepare) {
     DLOGI("Resume display %d-%d", sdm_id_, type_);
     display_paused_ = false;
+    display_pause_pending_ = false;
     if (*needs_refresh == false) {
       secure_event_ = kSecureEventMax;
       return kErrorNone;
@@ -3296,8 +3340,10 @@ DisplayError HWCDisplay::PostHandleSecureEvent(SecureEvent secure_event) {
   DisplayError err = display_intf_->PostHandleSecureEvent(secure_event);
   if (err == kErrorNone) {
     if (secure_event == kTUITransitionEnd || secure_event == kTUITransitionUnPrepare) {
+      secure_event_ = kSecureEventMax;
       return kErrorNone;
     }
+    DLOGV("Set secure_event to %d", secure_event);
     secure_event_ = secure_event;
   }
   return err;
@@ -3316,6 +3362,31 @@ int HWCDisplay::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels
   return 0;
 }
 
+void HWCDisplay::ReleaseFrameDumpResources() {
+  std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
+  if (output_buffer_info_.alloc_buffer_info.fd < 0 && !output_buffer_base_ && !dump_frame_count_) {
+    return;
+  }
+
+  if (output_buffer_base_ &&
+      munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
+    DLOGW("unmap failed with err %d", errno);
+  }
+
+  if (output_buffer_info_.alloc_buffer_info.fd > 0 && buffer_allocator_ &&
+      buffer_allocator_->FreeBuffer(&output_buffer_info_) != 0) {
+    DLOGW("FreeBuffer failed");
+  }
+
+  output_buffer_info_ = {};
+  output_buffer_cwb_config_ = {};
+  output_buffer_base_ = nullptr;
+  dump_frame_count_ = 0;
+  dump_frame_index_ = 0;
+  dump_output_to_file_ = false;
+  DLOGI("Output Frame dumping buffer is freed for display %d-%d!", sdm_id_, type_);
+}
+
 DisplayError HWCDisplay::TeardownConcurrentWriteback() {
   if (!display_intf_->HandleCwbTeardown()) {
     return kErrorNotSupported;
@@ -3328,24 +3399,9 @@ DisplayError HWCDisplay::TeardownConcurrentWriteback() {
   }
 
   if (!pending_cwb_request) {
-    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
-    dump_frame_count_ = 0;
-    dump_frame_index_ = 0;
-    dump_output_to_file_ = false;
-    if (output_buffer_base_ != nullptr) {
-      if (munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
-        DLOGW("unmap failed with err %d", errno);
-      }
-    }
-
-    if (buffer_allocator_ && buffer_allocator_->FreeBuffer(&output_buffer_info_) != 0) {
-      DLOGW("FreeBuffer failed");
-    }
-    output_buffer_info_ = {};
-    output_buffer_base_ = nullptr;
     frame_capture_buffer_queued_ = false;
     frame_capture_status_ = 0;
-    DLOGI("Output Frame dumping buffer is freed!");
+    ReleaseFrameDumpResources();
   }
 
   return kErrorNone;
@@ -3751,23 +3807,7 @@ void HWCDisplay::HandleFrameDump() {
   }
 
   if (stop_frame_dump) {
-    std::unique_lock<std::mutex> lock(frame_dump_config_lock_);
-    dump_output_to_file_ = false;
-    // Unmap and Free buffer
-    if (munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
-      DLOGE("unmap failed with err %d", errno);
-    }
-
-    if (buffer_allocator_->FreeBuffer(&output_buffer_info_) != 0) {
-      DLOGE("FreeBuffer failed");
-    }
-
-    output_buffer_info_ = {};
-    output_buffer_base_ = nullptr;
-    output_buffer_cwb_config_ = {};
-    dump_frame_count_ = 0;
-    dump_frame_index_ = 0;
-    DLOGI("Output Frame dumping buffer is freed!");
+    ReleaseFrameDumpResources();
   }
 }
 
