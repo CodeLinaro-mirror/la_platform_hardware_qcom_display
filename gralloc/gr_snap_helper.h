@@ -309,6 +309,14 @@ class GrallocSnapHelper {
            HAL_PIXEL_FORMAT_RAW_OPAQUE},
           {{.format = SnapPixelFormat::YCBCR_422_I, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_YCBCR_422_I},
+          {{.format = SnapPixelFormat::IMPLEMENTATION_DEFINED, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           static_cast<int>(PixelFormat::IMPLEMENTATION_DEFINED)},
+          {{.format = SnapPixelFormat::IMPLEMENTATION_DEFINED, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
+           static_cast<int>(PixelFormat::IMPLEMENTATION_DEFINED)},
+          {{.format = SnapPixelFormat::IMPLEMENTATION_DEFINED, .modifier = PIXEL_FORMAT_MODIFIER_ENCODEABLE},
+           static_cast<int>(PixelFormat::IMPLEMENTATION_DEFINED)},
+          {{.format = SnapPixelFormat::IMPLEMENTATION_DEFINED, .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
+           static_cast<int>(PixelFormat::IMPLEMENTATION_DEFINED)},
   };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -756,6 +764,10 @@ class GrallocSnapHelper {
                            void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                            SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
                            int32_t *mapper_return = nullptr);
+  SnapError PixelFormatAllocatedHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                         void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                         SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                         int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -821,6 +833,7 @@ class GrallocSnapHelper {
           {IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
           {IS_TILE_RENDERED, &GrallocSnapHelper::IsTileRenderedHelper},
           {IS_CACHED, &GrallocSnapHelper::IsCachedHelper},
+          {PIXEL_FORMAT_ALLOCATED, &GrallocSnapHelper::PixelFormatAllocatedHelper},
   };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -864,7 +877,8 @@ class GrallocSnapHelper {
        {QTI_YUV_PLANE_INFO, &GrallocSnapHelper::YuvPlaneInfoHelper},
        {SnapMetadataType::IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
        {SnapMetadataType::IS_CACHED, &GrallocSnapHelper::IsCachedHelper},
-       {SnapMetadataType::IS_TILE_RENDERED, &GrallocSnapHelper::IsTileRenderedHelper}
+       {SnapMetadataType::IS_TILE_RENDERED, &GrallocSnapHelper::IsTileRenderedHelper},
+       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &GrallocSnapHelper::PixelFormatAllocatedHelper},
       };
 };
 
