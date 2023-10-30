@@ -45,6 +45,11 @@ AC_ARG_ENABLE([sdmhaldrm],
 
 AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
 
+AC_ARG_ENABLE([displayle],
+    AC_HELP_STRING([--enable-displayle],
+      [enable enabledisplayle, build display-hal-linux with displayle]),
+      [CPPFLAGS="$CPPFLAGS -DDISPLAY_LE"])
+
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O

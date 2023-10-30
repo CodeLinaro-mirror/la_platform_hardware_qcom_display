@@ -49,7 +49,7 @@ class Sys {
 #endif
 
   // Pointers to system calls which are either mapped to actual system call or virtual driver.
-#ifdef TRUSTED_VM
+#if defined(TRUSTED_VM) || defined(DISPLAY_LE)
   typedef int (*ioctl)(int, unsigned long int, ...);  // NOLINT
 #else
   typedef int (*ioctl)(int, int, ...);
@@ -67,7 +67,7 @@ class Sys {
   typedef int (*eventfd)(unsigned int, int);
   typedef int (*inotify_init)(void);
   typedef int (*inotify_add_watch)(int, const char *, uint32_t);
-#ifdef TRUSTED_VM
+#if defined(TRUSTED_VM) || defined(DISPLAY_LE)
   typedef int (*inotify_rm_watch)(int, int);
 #else
   typedef int (*inotify_rm_watch)(int, uint32_t);
