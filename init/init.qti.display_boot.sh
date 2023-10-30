@@ -55,6 +55,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.timed_render_enable 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
         ;;
     esac
     ;;
@@ -76,6 +77,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.timed_render_enable 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
         ;;
       614|632)
         # SOC ID for Palawan is 614
