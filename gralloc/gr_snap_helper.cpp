@@ -855,22 +855,27 @@ SnapError GrallocSnapHelper::PixelFormatRequestedHelper(SnapHandle *hnd, bool hi
   SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
   SnapUsage snap_usage = static_cast<SnapUsage>(0);
   uint64_t modifier = 0;
+  // Gralloc4 expects PIXEL_FORMAT_ALLOCATED vs Gralloc5 expecting PIXEL_FORMAT_REQUESTED
+  SnapMetadataType metadata_type = SnapMetadataType::PIXEL_FORMAT_ALLOCATED;
+  if (aidl_size) {
+    metadata_type = SnapMetadataType::PIXEL_FORMAT_REQUESTED;
+  }
+
   if (gralloc_in_set != nullptr) {
     return SnapError::BAD_VALUE;
   }
   if (buf_des != nullptr) {
-    error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PIXEL_FORMAT_REQUESTED,
-                                                 &snap_pixel_format);
-    error = CheckMetadataSet(SnapMetadataType::PIXEL_FORMAT_REQUESTED, error, check_metadata_set);
+    error = snapmapper_->GetFromBufferDescriptor(*buf_des, metadata_type, &snap_pixel_format);
+    error = CheckMetadataSet(metadata_type, error, check_metadata_set);
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::USAGE, &snap_usage);
     error = CheckMetadataSet(SnapMetadataType::USAGE, error, check_metadata_set);
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::FORMAT_MODIFIER,
                                                  &modifier);
     error = CheckMetadataSet(SnapMetadataType::FORMAT_MODIFIER, error, check_metadata_set);
   } else if (gralloc_out_get != nullptr) {
-    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PIXEL_FORMAT_REQUESTED,
+    error = snapmapper_->GetMetadata(*hnd, metadata_type,
                                      &snap_pixel_format);
-    error = CheckMetadataSet(SnapMetadataType::PIXEL_FORMAT_REQUESTED, error, check_metadata_set);
+    error = CheckMetadataSet(metadata_type, error, check_metadata_set);
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::USAGE, &snap_usage);
     error = CheckMetadataSet(SnapMetadataType::USAGE, error, check_metadata_set);
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::FORMAT_MODIFIER, &modifier);
@@ -898,6 +903,51 @@ SnapError GrallocSnapHelper::PixelFormatRequestedHelper(SnapHandle *hnd, bool hi
   } else {
     *static_cast<PixelFormat *>(gralloc_out_get) = static_cast<PixelFormat>(gr_format);
   }
+  return error;
+}
+
+SnapError GrallocSnapHelper::PixelFormatAllocatedHelper(SnapHandle *hnd, bool hidl_bytestream,
+                                                        uint32_t aidl_size, void *gralloc_in_set,
+                                                        void *gralloc_out_get,
+                                                        SnapDescriptor *buf_des,
+                                                        bool check_metadata_set,
+                                                        int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
+  SnapUsage snap_usage = static_cast<SnapUsage>(0);
+  uint64_t modifier = 0;
+
+  if (gralloc_in_set != nullptr) {
+    return SnapError::BAD_VALUE;
+  }
+  if (buf_des != nullptr) {
+    error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &snap_pixel_format);
+    error = CheckMetadataSet(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, error, check_metadata_set);
+    error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::USAGE, &snap_usage);
+    error = CheckMetadataSet(SnapMetadataType::USAGE, error, check_metadata_set);
+    error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::FORMAT_MODIFIER,
+                                                 &modifier);
+    error = CheckMetadataSet(SnapMetadataType::FORMAT_MODIFIER, error, check_metadata_set);
+  } else if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED,
+                                     &snap_pixel_format);
+    error = CheckMetadataSet(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, error, check_metadata_set);
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::USAGE, &snap_usage);
+    error = CheckMetadataSet(SnapMetadataType::USAGE, error, check_metadata_set);
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::FORMAT_MODIFIER, &modifier);
+    error = CheckMetadataSet(SnapMetadataType::FORMAT_MODIFIER, error, check_metadata_set);
+  }
+  SnapFormatDescriptor snap_fmt_desc = {.format = snap_pixel_format,
+                                        .modifier = static_cast<SnapPixelFormatModifier>(modifier)};
+  int gr_format = 0;
+  GetGrallocFormat(snap_fmt_desc, snap_usage, &gr_format);
+  if (!gr_format) {
+    gr_format = static_cast<int>(snap_pixel_format);
+  }
+
+  // This type is only supported as a vendor metadata type in Gralloc5
+  *static_cast<PixelFormat *>(gralloc_out_get) = static_cast<PixelFormat>(gr_format);
+
   return error;
 }
 

@@ -3525,7 +3525,7 @@ HWC3::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
     output_buffer.unaligned_height = static_cast<uint32_t>(tmp_height);
   }
   int format, flag;
-  err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::PIXEL_FORMAT_REQUESTED, &format,
+  err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &format,
                                             sizeof(format));
   if (err) {
     DLOGE("Failed to retrieve format");
