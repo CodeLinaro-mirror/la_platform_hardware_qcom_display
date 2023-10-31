@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -729,22 +729,24 @@ void HWCDisplay::BuildLayerStack() {
     bool is_video = false;
     void *hdl = reinterpret_cast<native_handle_t *>(layer->input_buffer.buffer_id);
     if (hdl) {
-      int buffer_type;
-      gralloc::GetMetaDataValue(hdl, QTI_BUFFER_TYPE, &buffer_type);
+      uint32_t buffer_type;
+      buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::BUFFER_TYPE, &buffer_type,
+                                          sizeof(buffer_type));
       if (buffer_type == BUFFER_TYPE_VIDEO) {
         layer_stack_.flags.video_present = true;
         is_video = true;
       }
       // TZ Protected Buffer - L1
-      // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
-      int32_t handle_flags;
-      gralloc::GetMetaDataValue(hdl, QTI_PRIVATE_FLAGS, &handle_flags);
-      if (handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
+      // SnapAlloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
+      SnapUsage handle_flags;
+      buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::USAGE, &handle_flags,
+                                          sizeof(handle_flags));
+      if (handle_flags & SnapUsage::PROTECTED) {
         layer_stack_.flags.secure_present = true;
         is_secure = true;
       }
       // UBWC PI format
-      if (handle_flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED_PI) {
+      if (handle_flags & SnapUsage::QTI_PRIVATE_ALLOC_UBWC_PI) {
         layer->input_buffer.flags.ubwc_pi = true;
       }
     }
@@ -1069,11 +1071,11 @@ HWC3::Error HWCDisplay::GetColorModes(uint32_t *out_num_modes, ColorMode *out_mo
   return HWC3::Error::None;
 }
 
-HWC3::Error HWCDisplay::getDisplayDecorationSupport(PixelFormat_V3 *format,
+HWC3::Error HWCDisplay::getDisplayDecorationSupport(APixelFormat *format,
                                                     AlphaInterpretation *alpha) {
   // ScreenDecoration layers supported even if RC HW is disabled since its coming from framework
   // and is independent of RC HW support.
-  *format = PixelFormat_V3::R_8;
+  *format = APixelFormat::R_8;
   *alpha = AlphaInterpretation::COVERAGE;
   return HWC3::Error::None;
 }
@@ -1152,7 +1154,7 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
       *out_value = GetDisplayConfigGroup(variable_config);
       break;
     default:
-      DLOGW("Spurious attribute type = %s", composer_V3::toString(attribute).c_str());
+      DLOGW("Spurious attribute type = %s", composer3::toString(attribute).c_str());
       *out_value = -1;
       return HWC3::Error::BadParameter;
   }
@@ -2219,7 +2221,7 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   int aligned_width;
   int aligned_height;
   uint32_t usage = GRALLOC_USAGE_HW_FB;
-  int format = static_cast<int>(PixelFormat_V3::RGBA_8888);
+  int format = static_cast<int>(APixelFormat::RGBA_8888);
   int ubwc_disabled = 0;
   int flags = 0;
 
@@ -3311,57 +3313,60 @@ HWC3::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   }
 
   int fd;
-  gralloc::GetMetaDataValue(hdl, (int64_t)qtigralloc::MetadataType_FD.value, &fd);
+  buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::FD, &fd, sizeof(fd));
   if (fd < 0) {
     DLOGE("Bad parameter: fd is null");
     return HWC3::Error::BadParameter;
   }
 
   LayerBuffer output_buffer = {};
+  output_buffer.planes[0].fd = fd;
   // Configure the output buffer as Readback buffer
-  auto err = gralloc::GetMetaDataValue(
-      hdl, (int64_t)qtigralloc::MetadataType_AlignedWidthInPixels.value, &output_buffer.width);
-  if (err != gralloc::Error::NONE) {
+  auto err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::STRIDE,
+                                                 &output_buffer.width, sizeof(output_buffer.width));
+  if (err) {
     DLOGE("Failed to retrieve aligned width");
   }
-  err = gralloc::GetMetaDataValue(
-      hdl, (int64_t)qtigralloc::MetadataType_AlignedHeightInPixels.value, &output_buffer.height);
-  if (err != gralloc::Error::NONE) {
+  output_buffer.planes[0].stride = output_buffer.width;
+  err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS,
+                                            &output_buffer.height, sizeof(output_buffer.height));
+  if (err) {
     DLOGE("Failed to retrieve aligned height");
   }
-  err = gralloc::GetMetaDataValue(hdl, (int64_t)StandardMetadataType::WIDTH,
-                                  &output_buffer.unaligned_width);
-  if (err != gralloc::Error::NONE) {
+  uint64_t tmp_width, tmp_height;
+  err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::WIDTH, &tmp_width,
+                                            sizeof(tmp_width));
+  if (err) {
     DLOGE("Failed to retrieve unaligned width");
+  } else {
+    output_buffer.unaligned_width = static_cast<uint32_t>(tmp_width);
   }
-  err = gralloc::GetMetaDataValue(hdl, (int64_t)StandardMetadataType::HEIGHT,
-                                  &output_buffer.unaligned_height);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::HEIGHT, &tmp_height,
+                                            sizeof(tmp_height));
+  if (err) {
     DLOGE("Failed to retrieve unaligned height");
+  } else {
+    output_buffer.unaligned_height = static_cast<uint32_t>(tmp_height);
   }
   int format, flag;
-  err = gralloc::GetMetaDataValue(hdl, (int64_t)StandardMetadataType::PIXEL_FORMAT_REQUESTED,
-                                  &format);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::PIXEL_FORMAT_REQUESTED, &format,
+                                            sizeof(format));
+  if (err) {
     DLOGE("Failed to retrieve format");
   }
-  err = gralloc::GetMetaDataValue(hdl, (int64_t)QTI_PRIVATE_FLAGS, &flag);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetPrivateFlags(hdl, flag);
+  if (err) {
     DLOGE("Failed to retrieve flag");
   }
   output_buffer.format = HWCLayer::GetSDMFormat(format, flag);
-  err = gralloc::GetMetaDataValue(hdl, (int64_t)QTI_FD, &output_buffer.planes[0].fd);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::FD, &output_buffer.planes[0].fd,
+                                            sizeof(output_buffer.planes[0].fd));
+  if (err) {
     DLOGE("Failed to retrieve file descriptor");
   }
-  err = gralloc::GetMetaDataValue(hdl, (int64_t)QTI_ALIGNED_WIDTH_IN_PIXELS,
-                                  &output_buffer.planes[0].stride);
-  if (err != gralloc::Error::NONE) {
-    DLOGE("Failed to retrieve stride");
-  }
-  err = gralloc::GetMetaDataValue(hdl, (int64_t)StandardMetadataType::BUFFER_ID,
-                                  &output_buffer.handle_id);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(
+      hdl, SnapMetadataType::BUFFER_ID, &output_buffer.handle_id, sizeof(output_buffer.handle_id));
+  if (err) {
     DLOGE("Failed to retrieve buffer id");
   }
 
@@ -3678,7 +3683,7 @@ HWC3::Error HWCDisplay::GetClientTargetProperty(ClientTargetProperty *out_client
     return HWC3::Error::BadParameter;
   }
   out_client_target_property->dataspace = dataspace;
-  out_client_target_property->pixelFormat = (PixelFormat_V3)format;
+  out_client_target_property->pixelFormat = (APixelFormat)format;
 
   return HWC3::Error::None;
 }

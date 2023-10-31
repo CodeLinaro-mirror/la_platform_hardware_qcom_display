@@ -17,7 +17,7 @@
  * limitations under the License.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -55,7 +55,11 @@ class BufferManager {
   static BufferManager *GetInstance();
   void SetGrallocDebugProperties(gralloc::GrallocProperties props);
   Error GetMetadata(private_handle_t *handle, int64_t metadatatype_value, hidl_vec<uint8_t> *out);
+  int GetMetadata(private_handle_t *handle, int64_t metadatatype_value, void *outData,
+                  size_t outDataSize);
   Error SetMetadata(private_handle_t *handle, int64_t metadatatype_value, hidl_vec<uint8_t> in);
+  Error SetMetadata(private_handle_t *handle, int64_t metadatatype_value, const void *metadata,
+                    size_t metadataSize);
   Error GetReservedRegion(private_handle_t *handle, void **reserved_region,
                           uint64_t *reserved_region_size);
   Error GetCustomContentMdRegion(private_handle_t *handle, void **custom_content_md_region,
@@ -89,6 +93,9 @@ class BufferManager {
     // and unused in the mapping process
     int ion_handle_main = -1;
     int ion_handle_meta = -1;
+
+    // Lock count to ensure nested lock/unlock situation are handled correctly
+    int lock_count = 0;
 
     Buffer() = delete;
     explicit Buffer(const private_handle_t *h, int ih_main = -1, int ih_meta = -1)

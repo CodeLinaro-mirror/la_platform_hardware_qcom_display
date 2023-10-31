@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1115,9 +1115,9 @@ int32_t HWCSession::CWB::PostBuffer(std::shared_ptr<IDisplayConfigCallback> call
   std::shared_ptr<QueueNode> node = nullptr;
   uint64_t node_handle_id = 0;
   void *hdl = const_cast<native_handle_t *>(buffer);
-  auto err =
-      gralloc::GetMetaDataValue(hdl, (int64_t)StandardMetadataType::BUFFER_ID, &node_handle_id);
-  if (err != gralloc::Error::NONE || node_handle_id == 0) {
+  auto err = hwc_session_->buffer_allocator_.GetMetadataValue(
+      hdl, SnapMetadataType::BUFFER_ID, &node_handle_id, sizeof(node_handle_id));
+  if (err || node_handle_id == 0) {
     error = HWC3::Error::BadLayer;
     DLOGE("Buffer handle id retrieval failed!");
   }

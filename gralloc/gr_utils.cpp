@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -2351,6 +2351,7 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
     case (int64_t)StandardMetadataType::PIXEL_FORMAT_MODIFIER:
     case (int64_t)StandardMetadataType::PROTECTED_CONTENT:
     case (int64_t)StandardMetadataType::ALLOCATION_SIZE:
+    case (int64_t)StandardMetadataType::STRIDE:
     case QTI_FD:
     case QTI_PRIVATE_FLAGS:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
@@ -3188,6 +3189,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
         *out = &handle->flags;
       }
       break;
+    case (int64_t)StandardMetadataType::STRIDE:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
       if (copy) {
         *(reinterpret_cast<uint32_t *>(in)) = handle->width;
@@ -3401,6 +3403,7 @@ void setGralloc4Array(MetaData_t *metadata, int64_t paramType, bool isSet) {
     case (int64_t)StandardMetadataType::PIXEL_FORMAT_MODIFIER:
     case (int64_t)StandardMetadataType::PROTECTED_CONTENT:
     case (int64_t)StandardMetadataType::ALLOCATION_SIZE:
+    case (int64_t)StandardMetadataType::STRIDE:
     case QTI_FD:
     case QTI_PRIVATE_FLAGS:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:

@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -150,8 +150,8 @@ HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
     buffer_allocator_->GetFormat((void *)output_handle, output_handle_format);
     ColorMetaData color_metadata = {};
 
-    if (output_handle_format == static_cast<int>(PixelFormat_V3::RGBA_8888)) {
-      output_handle_format = static_cast<int>(PixelFormat_V3::RGBX_8888);
+    if (output_handle_format == static_cast<int>(APixelFormat::RGBA_8888)) {
+      output_handle_format = static_cast<int>(APixelFormat::RGBX_8888);
     }
 
     LayerBufferFormat new_sdm_format =

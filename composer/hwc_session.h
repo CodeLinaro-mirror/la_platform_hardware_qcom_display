@@ -70,11 +70,11 @@ using ::android::hardware::hidl_string;
 using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
-namespace composer_V3 = aidl::android::hardware::graphics::composer3;
-using HwcDisplayCapability = composer_V3::DisplayCapability;
-using HwcDisplayConnectionType = composer_V3::DisplayConnectionType;
-using DisplayConfiguration = composer_V3::DisplayConfiguration;
-using HwcClientTargetProperty = composer_V3::ClientTargetProperty;
+namespace composer3 = aidl::android::hardware::graphics::composer3;
+using DisplayConfiguration = composer3::DisplayConfiguration;
+using HwcDisplayCapability = composer3::DisplayCapability;
+using HwcDisplayConnectionType = composer3::DisplayConnectionType;
+using HwcClientTargetProperty = composer3::ClientTargetProperty;
 using ::aidl::vendor::qti::hardware::display::config::Attributes;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
@@ -88,7 +88,7 @@ class DisplayConfigAIDL;
 
 namespace sdm {
 
-using composer_V3::IComposerClient;
+using composer3::IComposerClient;
 
 int32_t GetDataspaceFromColorMode(ColorMode mode);
 
@@ -224,7 +224,7 @@ class HWCSession : public HWCUEvent,
   HWC3::Error SetColorModeWithRenderIntent(Display display, int32_t /*ColorMode*/ int_mode,
                                            int32_t /*RenderIntent*/ int_render_intent);
   HWC3::Error SetColorTransform(Display display, const std::vector<float> &matrix);
-  HWC3::Error getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
+  HWC3::Error getDisplayDecorationSupport(Display display, APixelFormat *format,
                                           AlphaInterpretation *alpha);
   HWC3::Error GetReadbackBufferAttributes(Display display, int32_t *format, int32_t *dataspace);
   HWC3::Error SetReadbackBuffer(Display display, const native_handle_t *buffer,

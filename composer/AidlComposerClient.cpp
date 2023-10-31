@@ -549,7 +549,7 @@ ScopedAStatus AidlComposerClient::getSupportedContentTypes(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::getDisplayDecorationSupport(
     int64_t in_display, std::optional<DisplayDecorationSupport> *aidl_return) {
-  PixelFormat_V3 format;
+  APixelFormat format;
   AlphaInterpretation alpha;
   auto error = hwc_session_->getDisplayDecorationSupport(in_display, &format, &alpha);
   if (error == Error::None) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -54,6 +54,7 @@
 #include <aidl/android/hardware/common/NativeHandle.h>
 #include <aidl/android/hardware/graphics/common/Dataspace.h>
 #include <aidl/android/hardware/graphics/common/BufferUsage.h>
+#include <aidl/android/hardware/graphics/common/PixelFormat.h>
 
 #include "gr_buf_descriptor.h"
 
@@ -77,6 +78,7 @@ using SnapPlaneLayoutComponent = vendor_qti_hardware_display_common_PlaneLayoutC
 using SnapPlaneLayoutComponentType = vendor_qti_hardware_display_common_PlaneLayoutComponentType;
 using aidl::android::hardware::common::NativeHandle;
 using GrallocBufferUsage = ::aidl::android::hardware::graphics::common::BufferUsage;
+using GrallocPixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
 using GrallocPlaneLayout = aidl::android::hardware::graphics::common::PlaneLayout;
 using GrallocPlaneLayoutComponent = aidl::android::hardware::graphics::common::PlaneLayoutComponent;
 using GrallocPlaneLayoutComponentType =
@@ -154,13 +156,20 @@ class GrallocSnapHelper {
   int FlushLockedBuffer(native_handle_t *gr_hnd);
   int RereadLockedBuffer(native_handle_t *gr_hnd);
   int IsSupported(gralloc::BufferDescriptor gr_desc, bool *is_supported);
+  // aidl_size acts as an aidl_convert_bytestream flag encoding to std::vector<uint8_t> for standard
+  // metadata. mapper_return is the required size for output buffer, if a smaller buffer is provided
+  // GetMetadata needs to be called again with appropriate size to obtain the standard metadata.
   int GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata_type, void *out,
-                  bool convert_bytestream, bool check_metadata_set = true);
+                  bool convert_bytestream, bool check_metadata_set = true, uint32_t aidl_size = 0,
+                  int32_t *mapper_return = nullptr);
   int GetMetadataState(native_handle_t *gr_hnd, SnapMetadataType gr_metadata_type, bool *out);
   int SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata_type, hidl_vec<uint8_t> in);
-  int SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata_type, void *in);
+  // aidl_size here is size of the aidl / std::vector<uint8_t> bytestream to decode for standard
+  // metadata
+  int SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata_type, void *in, uint32_t aidl_size);
   int GetFromBufferDescriptor(gralloc::BufferDescriptor gr_desc, uint64_t gr_metadata_type,
                               void *out, bool convert_to_hidl_bytestream);
+  int GetAllHandles(std::vector<buffer_handle_t> *out_handle_list);
 
   bool IsSnapAllocEnabled() { return snap_alloc_enable_; };
 
@@ -463,6 +472,8 @@ class GrallocSnapHelper {
     {static_cast<uint64_t>(
          aidl::android::hardware::graphics::common::StandardMetadataType::COMPRESSION),
      SnapMetadataType::COMPRESSION},
+    {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::STRIDE),
+     SnapMetadataType::STRIDE},
     {QTI_GRAPHICS_METADATA, SnapMetadataType::GRAPHICS_METADATA},
     {QTI_STANDARD_METADATA_STATUS, SnapMetadataType::STANDARD_METADATA_STATUS},
     {QTI_VENDOR_METADATA_STATUS, SnapMetadataType::VENDOR_METADATA_STATUS},
@@ -493,198 +504,258 @@ class GrallocSnapHelper {
 };
 
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(SnapHandle *, bool hidl_bytestream,
-                                                         void *gralloc_in_set,
+                                                         uint32_t aidl_size, void *gralloc_in_set,
                                                          void *gralloc_out_get,
                                                          SnapDescriptor *buf_des,
-                                                         bool check_metadata_set);
+                                                         bool check_metadata_set,
+                                                         int32_t *mapper_return);
 
-  SnapError BufferIDHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                           void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                           bool check_metadata_set = true);
-  SnapError UsageHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                        void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                        bool check_metadata_set = true);
-  SnapError DataspaceHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                            void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                            bool check_metadata_set = true);
-  SnapError NameHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                       void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                       bool check_metadata_set = true);
-  SnapError WidthHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                        void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                        bool check_metadata_set = true);
-  SnapError HeightHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                         void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                         bool check_metadata_set = true);
-  SnapError LayerCountHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                             void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                             bool check_metadata_set = true);
-  SnapError PixelFormatRequestedHelper(SnapHandle *, bool hidl_bytestream,
+  SnapError BufferIDHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                           void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                           SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                           int32_t *mapper_return = nullptr);
+  SnapError UsageHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                        void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                        SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                        int32_t *mapper_return = nullptr);
+  SnapError DataspaceHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                            void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                            SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                            int32_t *mapper_return = nullptr);
+  SnapError NameHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                       void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                       SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                       int32_t *mapper_return = nullptr);
+  SnapError WidthHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                        void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                        SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                        int32_t *mapper_return = nullptr);
+  SnapError HeightHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                         void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                         SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                         int32_t *mapper_return = nullptr);
+  SnapError LayerCountHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                             void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                             SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                             int32_t *mapper_return = nullptr);
+  SnapError PixelFormatRequestedHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                        void *gralloc_in_set = nullptr,
                                        void *gralloc_out_get = nullptr,
                                        SnapDescriptor *buf_des = nullptr,
-                                       bool check_metadata_set = true);
-  SnapError PixelFormatFourCCHelper(SnapHandle *, bool hidl_bytestream,
+                                       bool check_metadata_set = true,
+                                       int32_t *mapper_return = nullptr);
+  SnapError PixelFormatFourCCHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                     void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                     SnapDescriptor *buf_des = nullptr,
-                                    bool check_metadata_set = true);
-  SnapError DRMPixelFormatModifierHelper(SnapHandle *, bool hidl_bytestream,
+                                    bool check_metadata_set = true,
+                                    int32_t *mapper_return = nullptr);
+  SnapError DRMPixelFormatModifierHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                          void *gralloc_in_set = nullptr,
                                          void *gralloc_out_get = nullptr,
                                          SnapDescriptor *buf_des = nullptr,
-                                         bool check_metadata_set = true);
-  SnapError AllocationSizeHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                                 void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                                 bool check_metadata_set = true);
-  SnapError ProtectedContentHelper(SnapHandle *, bool hidl_bytestream,
+                                         bool check_metadata_set = true,
+                                         int32_t *mapper_return = nullptr);
+  SnapError AllocationSizeHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                 void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                                 SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                 int32_t *mapper_return = nullptr);
+  SnapError ProtectedContentHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                    void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                    SnapDescriptor *buf_des = nullptr,
-                                   bool check_metadata_set = true);
-  SnapError CompressionHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                              void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                              bool check_metadata_set = true);
-  SnapError InterlacedHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                             void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                             bool check_metadata_set = true);
-  SnapError ChromaSitingHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                               bool check_metadata_set = true);
-  SnapError PlaneLayoutsHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                               bool check_metadata_set = true);
-  SnapError CropHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                       void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                       bool check_metadata_set = true);
-  SnapError BlendModeHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                            void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                            bool check_metadata_set = true);
-  SnapError VTTimestampHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                              void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                              bool check_metadata_set = true);
-  SnapError PPParamInterlacedHelper(SnapHandle *, bool hidl_bytestream,
+                                   bool check_metadata_set = true,
+                                   int32_t *mapper_return = nullptr);
+  SnapError CompressionHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                              void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                              SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                              int32_t *mapper_return = nullptr);
+  SnapError InterlacedHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                             void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                             SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                             int32_t *mapper_return = nullptr);
+  SnapError ChromaSitingHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                               void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                               SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                               int32_t *mapper_return = nullptr);
+  SnapError PlaneLayoutsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                               void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                               SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                               int32_t *mapper_return = nullptr);
+  SnapError CropHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                       void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                       SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                       int32_t *mapper_return = nullptr);
+  SnapError BlendModeHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                            void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                            SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                            int32_t *mapper_return = nullptr);
+  SnapError VTTimestampHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                              void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                              SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                              int32_t *mapper_return = nullptr);
+  SnapError PPParamInterlacedHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                     void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                     SnapDescriptor *buf_des = nullptr,
-                                    bool check_metadata_set = true);
-  SnapError VideoPerfModeHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                                void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                                bool check_metadata_set = true);
-  SnapError GraphicsMetadataHelper(SnapHandle *, bool hidl_bytestream,
+                                    bool check_metadata_set = true,
+                                    int32_t *mapper_return = nullptr);
+  SnapError VideoPerfModeHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                                SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                int32_t *mapper_return = nullptr);
+  SnapError GraphicsMetadataHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                    void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                    SnapDescriptor *buf_des = nullptr,
-                                   bool check_metadata_set = true);
-  SnapError UBWCCRStatsInfoHelper(SnapHandle *, bool hidl_bytestream,
+                                   bool check_metadata_set = true,
+                                   int32_t *mapper_return = nullptr);
+  SnapError UBWCCRStatsInfoHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                   void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
-                                  SnapDescriptor *buf_des = nullptr,
-                                  bool check_metadata_set = true);
-  SnapError RefreshRateHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                              void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                              bool check_metadata_set = true);
-  SnapError MapSecureBufferHelper(SnapHandle *, bool hidl_bytestream,
+                                  SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                  int32_t *mapper_return = nullptr);
+  SnapError RefreshRateHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                              void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                              SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                              int32_t *mapper_return = nullptr);
+  SnapError MapSecureBufferHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                   void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
-                                  SnapDescriptor *buf_des = nullptr,
-                                  bool check_metadata_set = true);
-  SnapError LinearFormatHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                               bool check_metadata_set = true);
-  SnapError SingleBufferModeHelper(SnapHandle *, bool hidl_bytestream,
+                                  SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                  int32_t *mapper_return = nullptr);
+  SnapError LinearFormatHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                               void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                               SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                               int32_t *mapper_return = nullptr);
+  SnapError SingleBufferModeHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                    void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                    SnapDescriptor *buf_des = nullptr,
-                                   bool check_metadata_set = true);
-  SnapError CVPMetadataHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                              void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                              bool check_metadata_set = true);
-  SnapError VideoHistogramStatsHelper(SnapHandle *, bool hidl_bytestream,
+                                   bool check_metadata_set = true,
+                                   int32_t *mapper_return = nullptr);
+  SnapError CVPMetadataHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                              void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                              SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                              int32_t *mapper_return = nullptr);
+  SnapError VideoHistogramStatsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                       void *gralloc_in_set = nullptr,
                                       void *gralloc_out_get = nullptr,
                                       SnapDescriptor *buf_des = nullptr,
-                                      bool check_metadata_set = true);
-  SnapError FDHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                     void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                     bool check_metadata_set = true);
-  SnapError AlignedWidthInPixelsHelper(SnapHandle *, bool hidl_bytestream,
+                                      bool check_metadata_set = true,
+                                      int32_t *mapper_return = nullptr);
+  SnapError FDHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                     void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                     SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                     int32_t *mapper_return = nullptr);
+  SnapError AlignedWidthInPixelsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                        void *gralloc_in_set = nullptr,
                                        void *gralloc_out_get = nullptr,
                                        SnapDescriptor *buf_des = nullptr,
-                                       bool check_metadata_set = true);
-  SnapError AlignedHeightInPixelsHelper(SnapHandle *, bool hidl_bytestream,
+                                       bool check_metadata_set = true,
+                                       int32_t *mapper_return = nullptr);
+  SnapError AlignedHeightInPixelsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                         void *gralloc_in_set = nullptr,
                                         void *gralloc_out_get = nullptr,
                                         SnapDescriptor *buf_des = nullptr,
-                                        bool check_metadata_set = true);
-  SnapError StandardMetadataStatusHelper(SnapHandle *, bool hidl_bytestream,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
+  SnapError StandardMetadataStatusHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                          void *gralloc_in_set = nullptr,
                                          void *gralloc_out_get = nullptr,
                                          SnapDescriptor *buf_des = nullptr,
-                                         bool check_metadata_set = true);
-  SnapError VendorMetadataStatusHelper(SnapHandle *, bool hidl_bytestream,
+                                         bool check_metadata_set = true,
+                                         int32_t *mapper_return = nullptr);
+  SnapError VendorMetadataStatusHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                        void *gralloc_in_set = nullptr,
                                        void *gralloc_out_get = nullptr,
                                        SnapDescriptor *buf_des = nullptr,
-                                       bool check_metadata_set = true);
-  SnapError BufferTypeHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                             void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                             bool check_metadata_set = true);
-  SnapError VideoTSInfoHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                              void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                              bool check_metadata_set = true);
-  SnapError CustomDimensionsStrideHelper(SnapHandle *, bool hidl_bytestream,
+                                       bool check_metadata_set = true,
+                                       int32_t *mapper_return = nullptr);
+  SnapError BufferTypeHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                             void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                             SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                             int32_t *mapper_return = nullptr);
+  SnapError VideoTSInfoHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                              void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                              SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                              int32_t *mapper_return = nullptr);
+  SnapError CustomDimensionsStrideHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                          void *gralloc_in_set = nullptr,
                                          void *gralloc_out_get = nullptr,
                                          SnapDescriptor *buf_des = nullptr,
-                                         bool check_metadata_set = true);
-  SnapError CustomDimensionsHeightHelper(SnapHandle *, bool hidl_bytestream,
+                                         bool check_metadata_set = true,
+                                         int32_t *mapper_return = nullptr);
+  SnapError CustomDimensionsHeightHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                          void *gralloc_in_set = nullptr,
                                          void *gralloc_out_get = nullptr,
                                          SnapDescriptor *buf_des = nullptr,
-                                         bool check_metadata_set = true);
-  SnapError RGBDataAddressHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                                 void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                                 bool check_metadata_set = true);
-  SnapError BufferPermissionHelper(SnapHandle *, bool hidl_bytestream,
+                                         bool check_metadata_set = true,
+                                         int32_t *mapper_return = nullptr);
+  SnapError RGBDataAddressHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                 void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                                 SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                 int32_t *mapper_return = nullptr);
+  SnapError BufferPermissionHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                    void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                    SnapDescriptor *buf_des = nullptr,
-                                   bool check_metadata_set = true);
-  SnapError MemHandleHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                            void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                            bool check_metadata_set = true);
-  SnapError TimedRenderingHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                                 void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                                 bool check_metadata_set = true);
-  SnapError CustomContentMetadataHelper(SnapHandle *, bool hidl_bytestream,
+                                   bool check_metadata_set = true,
+                                   int32_t *mapper_return = nullptr);
+  SnapError MemHandleHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                            void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                            SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                            int32_t *mapper_return = nullptr);
+  SnapError TimedRenderingHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                 void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                                 SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                 int32_t *mapper_return = nullptr);
+  SnapError CustomContentMetadataHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                         void *gralloc_in_set = nullptr,
                                         void *gralloc_out_get = nullptr,
                                         SnapDescriptor *buf_des = nullptr,
-                                        bool check_metadata_set = true);
-  SnapError VideoTranscodeStatsHelper(SnapHandle *, bool hidl_bytestream,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
+  SnapError VideoTranscodeStatsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                       void *gralloc_in_set = nullptr,
                                       void *gralloc_out_get = nullptr,
                                       SnapDescriptor *buf_des = nullptr,
-                                      bool check_metadata_set = true);
-  SnapError MasteringDisplayHelper(SnapHandle *, bool hidl_bytestream,
+                                      bool check_metadata_set = true,
+                                      int32_t *mapper_return = nullptr);
+  SnapError MasteringDisplayHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                    void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                    SnapDescriptor *buf_des = nullptr,
-                                   bool check_metadata_set = true);
-  SnapError ContentLightLevelHelper(SnapHandle *, bool hidl_bytestream,
+                                   bool check_metadata_set = true,
+                                   int32_t *mapper_return = nullptr);
+  SnapError ContentLightLevelHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                     void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                                     SnapDescriptor *buf_des = nullptr,
-                                    bool check_metadata_set = true);
-  SnapError DynamicMetadataHelper(SnapHandle *, bool hidl_bytestream,
+                                    bool check_metadata_set = true,
+                                    int32_t *mapper_return = nullptr);
+  SnapError DynamicMetadataHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                   void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
-                                  SnapDescriptor *buf_des = nullptr,
-                                  bool check_metadata_set = true);
-  SnapError MatrixCoefficientsHelper(SnapHandle *, bool hidl_bytestream,
+                                  SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                  int32_t *mapper_return = nullptr);
+  SnapError MatrixCoefficientsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                      void *gralloc_in_set = nullptr,
                                      void *gralloc_out_get = nullptr,
                                      SnapDescriptor *buf_des = nullptr,
-                                     bool check_metadata_set = true);
-  SnapError ColorRemappingInfoHelper(SnapHandle *, bool hidl_bytestream,
+                                     bool check_metadata_set = true,
+                                     int32_t *mapper_return = nullptr);
+  SnapError ColorRemappingInfoHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                      void *gralloc_in_set = nullptr,
                                      void *gralloc_out_get = nullptr,
                                      SnapDescriptor *buf_des = nullptr,
-                                     bool check_metadata_set = true);
-  SnapError HeapNameHelper(SnapHandle *, bool hidl_bytestream, void *gralloc_in_set = nullptr,
-                           void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
-                           bool check_metadata_set = true);
+                                     bool check_metadata_set = true,
+                                     int32_t *mapper_return = nullptr);
+  SnapError HeapNameHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                           void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                           SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                           int32_t *mapper_return = nullptr);
+  SnapError IsUBWCHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                         void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                         SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                         int32_t *mapper_return = nullptr);
+  SnapError IsTileRenderedHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                 void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                                 SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                 int32_t *mapper_return = nullptr);
+  SnapError IsCachedHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                           void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                           SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                           int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -719,6 +790,7 @@ class GrallocSnapHelper {
           {VIDEO_HISTOGRAM_STATS, &GrallocSnapHelper::VideoHistogramStatsHelper},
           {FD, &GrallocSnapHelper::FDHelper},
           {ALIGNED_WIDTH_IN_PIXELS, &GrallocSnapHelper::AlignedWidthInPixelsHelper},
+          {STRIDE, &GrallocSnapHelper::AlignedWidthInPixelsHelper},
           {ALIGNED_HEIGHT_IN_PIXELS, &GrallocSnapHelper::AlignedHeightInPixelsHelper},
           {STANDARD_METADATA_STATUS, &GrallocSnapHelper::StandardMetadataStatusHelper},
           {VENDOR_METADATA_STATUS, &GrallocSnapHelper::VendorMetadataStatusHelper},
@@ -733,10 +805,22 @@ class GrallocSnapHelper {
           {CUSTOM_CONTENT_METADATA, &GrallocSnapHelper::CustomContentMetadataHelper},
           {VIDEO_TRANSCODE_STATS, &GrallocSnapHelper::VideoTranscodeStatsHelper},
           {MASTERING_DISPLAY, &GrallocSnapHelper::MasteringDisplayHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2086),
+           &GrallocSnapHelper::MasteringDisplayHelper},
           {CONTENT_LIGHT_LEVEL, &GrallocSnapHelper::ContentLightLevelHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::CTA861_3),
+           &GrallocSnapHelper::ContentLightLevelHelper},
           {DYNAMIC_METADATA, &GrallocSnapHelper::DynamicMetadataHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2094_40),
+           &GrallocSnapHelper::DynamicMetadataHelper},
           {COLOR_REMAPPING_INFO, &GrallocSnapHelper::ColorRemappingInfoHelper},
           {HEAP_NAME, &GrallocSnapHelper::HeapNameHelper},
+          {IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
+          {IS_TILE_RENDERED, &GrallocSnapHelper::IsTileRenderedHelper},
+          {IS_CACHED, &GrallocSnapHelper::IsCachedHelper},
   };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -755,24 +839,32 @@ class GrallocSnapHelper {
           {ALIGNED_WIDTH_IN_PIXELS, &GrallocSnapHelper::AlignedWidthInPixelsHelper},
           {ALIGNED_HEIGHT_IN_PIXELS, &GrallocSnapHelper::AlignedHeightInPixelsHelper},
   };
-  SnapError ColorMetadataHelper(SnapHandle *hnd, bool hidl_bytestream, void *gralloc_in_set,
-                                void *gralloc_out_get, SnapDescriptor *buf_des = nullptr,
-                                bool check_metadata_set = true);
-  SnapError PrivateFlagsHelper(SnapHandle *hnd, bool hidl_bytestream, void *gralloc_in_set,
-                               void *gralloc_out_get, SnapDescriptor *buf_des = nullptr,
-                               bool check_metadata_set = true);
-  SnapError ColorspaceHelper(SnapHandle *hnd, bool hidl_bytestream, void *gralloc_in_set,
-                             void *gralloc_out_get, SnapDescriptor *buf_des = nullptr,
-                             bool check_metadata_set = true);
-  SnapError YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl_bytestream, void *gralloc_in_set,
-                               void *gralloc_out_get, SnapDescriptor *buf_des = nullptr,
-                               bool check_metadata_set = true);
+
+  SnapError ColorMetadataHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                                void *gralloc_in_set, void *gralloc_out_get,
+                                SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                int32_t *mapper_return = nullptr);
+  SnapError PrivateFlagsHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                               void *gralloc_in_set, void *gralloc_out_get,
+                               SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                               int32_t *mapper_return = nullptr);
+  SnapError ColorspaceHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                             void *gralloc_in_set, void *gralloc_out_get,
+                             SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                             int32_t *mapper_return = nullptr);
+  SnapError YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                               void *gralloc_in_set, void *gralloc_out_get,
+                               SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                               int32_t *mapper_return = nullptr);
 
   std::unordered_map<uint64_t, MetadataHelper> deprecated_metadata_conversion_helper_function_map_ =
       {{QTI_COLOR_METADATA, &GrallocSnapHelper::ColorMetadataHelper},
        {QTI_PRIVATE_FLAGS, &GrallocSnapHelper::PrivateFlagsHelper},
        {QTI_COLORSPACE, &GrallocSnapHelper::ColorspaceHelper},
        {QTI_YUV_PLANE_INFO, &GrallocSnapHelper::YuvPlaneInfoHelper},
+       {SnapMetadataType::IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
+       {SnapMetadataType::IS_CACHED, &GrallocSnapHelper::IsCachedHelper},
+       {SnapMetadataType::IS_TILE_RENDERED, &GrallocSnapHelper::IsTileRenderedHelper}
       };
 };
 
