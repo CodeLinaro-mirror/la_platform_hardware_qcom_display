@@ -770,9 +770,6 @@ void HWCDisplay::BuildLayerStack() {
       if (handle_flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED_PI) {
         layer->input_buffer.flags.ubwc_pi = true;
       }
-      if (hwc_layer->IsRotationPresent()) {
-        layer->flags.skip = true;
-      }
     }
 
     if (layer->input_buffer.flags.secure_display) {
