@@ -61,6 +61,7 @@ QtiMapper::QtiMapper() {
   enable_logs = property_get_bool(ENABLE_LOGS_PROP, 0);
   ALOGD_IF(enable_logs, "Created QtiMapper instance");
   snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+  ALOGW("QtiMapper4 is deprecated, please use QtiMapper5!");
 }
 
 bool QtiMapper::ValidDescriptor(const BufferDescriptorInfo_4_0 &bd) {

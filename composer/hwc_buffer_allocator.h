@@ -45,24 +45,19 @@
 #include <sys/mman.h>
 #include <QtiGrallocMetadata.h>
 
-#include <android/hardware/graphics/common/1.2/types.h>
 #include <aidl/android/hardware/graphics/allocator/AllocationError.h>
 #include <aidl/android/hardware/graphics/allocator/AllocationResult.h>
 #include <aidl/android/hardware/graphics/allocator/IAllocator.h>
 #include <android/binder_manager.h>
 #include <aidlcommonsupport/NativeHandle.h>
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
-#include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
-#include <vendor/qti/hardware/display/mapperextensions/1.3/IQtiMapperExtensions.h>
 #include <QtiGrallocPriv.h>
+
+#include "QtiMapper5.h"
+#include <android/hardware/graphics/mapper/IMapper.h>
+#include <android/hardware/graphics/mapper/utils/IMapperMetadataTypes.h>
 
 using aidl::android::hardware::graphics::allocator::AllocationResult;
 using aidl::android::hardware::graphics::allocator::IAllocator;
-using android::hardware::graphics::common::V1_1::BufferUsage;
-using android::hardware::graphics::mapper::V4_0::IMapper;
-using vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
-using IQtiMapperExtensions_v1_3 =
-    vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
 
 namespace sdm {
 
@@ -100,13 +95,14 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetBufferType(void *buf, uint32_t &buffer_type);
   int GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height);
   int GetCustomContentMetadata(void *buf, CustomContentMetadata *dest);
+  int GetMetadataValue(void *buf, SnapMetadataType type, void *dest, size_t dest_size);
 
  private:
   int GetGrallocInstance();
   void SetBufferAccessControlInfo(std::bitset<kBufferPermMax> perm, BufferPermission *buf_perm);
-  android::sp<IMapper> mapper_;
+  AIMapper *mapper_;
   std::shared_ptr<IAllocator> allocator_;
-  android::sp<IQtiMapperExtensions_v1_3> mapper_ext_;
+  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
 };
 
 }  // namespace sdm
