@@ -30,7 +30,8 @@ PRODUCT_PACKAGES += \
     vendor.display.config@2.0.vendor \
     vendor.qti.hardware.display.mapper@3.0 \
     vendor.qti.hardware.display.mapper@4.0.vendor \
-    modetest
+    modetest \
+    vendor.qti.hardware.display.snapalloc-impl
 
 SOONG_CONFIG_NAMESPACES += display_config_idl
 # Soong Keys
