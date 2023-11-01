@@ -206,6 +206,8 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
        sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
       {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO), sizeof(ColorRemappingInfo)},
+      {static_cast<uint64_t>(SnapMetadataType::MATRIX_COEFFICIENTS),
+       sizeof(SnapMatrixCoEfficients)},
       {static_cast<uint64_t>(SnapMetadataType::HEAP_NAME), sizeof(std::string)},
       {static_cast<uint64_t>(SnapMetadataType::IS_UBWC), sizeof(int32_t)},
       {static_cast<uint64_t>(SnapMetadataType::IS_TILE_RENDERED), sizeof(int32_t)},
@@ -214,9 +216,9 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(QTI_PRIVATE_FLAGS), sizeof(int32_t)},
       {static_cast<uint64_t>(QTI_COLORSPACE), sizeof(uint32_t)},
       {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
-      // TODO: Address missing SnapMetadataTypes (no helpers in gr_snap_helper)
-      // {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
       {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_ALLOCATED), sizeof(GrallocPixelFormat)},
+      {static_cast<uint64_t>(SnapMetadataType::EARLYNOTIFY_LINECOUNT), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
   };
 };
 
@@ -333,6 +335,8 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
        sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
       {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO), sizeof(ColorRemappingInfo)},
+      {static_cast<uint64_t>(SnapMetadataType::MATRIX_COEFFICIENTS),
+       sizeof(SnapMatrixCoEfficients)},
       {static_cast<uint64_t>(SnapMetadataType::HEAP_NAME), sizeof(std::string)},
       {static_cast<uint64_t>(SnapMetadataType::IS_UBWC), sizeof(int32_t)},
       {static_cast<uint64_t>(SnapMetadataType::IS_TILE_RENDERED), sizeof(int32_t)},
@@ -341,8 +345,8 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(QTI_PRIVATE_FLAGS), sizeof(int32_t)},
       {static_cast<uint64_t>(QTI_COLORSPACE), sizeof(uint32_t)},
       {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
-      // TODO: Address missing SnapMetadataTypes (no helpers in gr_snap_helper)
-      // {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::EARLYNOTIFY_LINECOUNT), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
   };
 };
 
