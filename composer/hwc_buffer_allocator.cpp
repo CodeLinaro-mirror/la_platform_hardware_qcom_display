@@ -439,15 +439,12 @@ int HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, i
   int ret;
   if (handle != nullptr) {
     if (snap_helper_->IsSnapAllocEnabled()) {
-      // TODO: implement this
-      //int snap_ret = snap_helper_->GetCustomDimensions(static_cast<native_handle_t *>(buffer), &stride, &height);
+      ret = GetMetadataValue(const_cast<native_handle_t *>(handle),
+                             SnapMetadataType::CUSTOM_DIMENSIONS_STRIDE, width, sizeof(*width));
 
-      ret = snap_helper_->GetMetadata(const_cast<native_handle_t *>(handle),
-                                      SnapMetadataType::CUSTOM_DIMENSIONS_STRIDE, width,
-                                      false);  // false -> convert_to_hidl_bytestream
       if (ret == 0) {
-        ret = snap_helper_->GetMetadata(const_cast<native_handle_t *>(handle),
-                                        SnapMetadataType::CUSTOM_DIMENSIONS_HEIGHT, height, false);
+        ret = GetMetadataValue(const_cast<native_handle_t *>(handle),
+                               SnapMetadataType::CUSTOM_DIMENSIONS_HEIGHT, height, sizeof(*height));
       }
     } else {
       ret = gralloc::GetCustomDimensions(static_cast<private_handle_t *>(hnd), width, height);
