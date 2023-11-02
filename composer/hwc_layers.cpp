@@ -636,7 +636,7 @@ HWC3::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
   }
 
   //  Conversion of float alpha in range 0.0 to 1.0 similar to the HWC Adapter
-  uint8_t plane_alpha = static_cast<uint8_t>(std::round(255.0f * alpha));
+  uint16_t plane_alpha = static_cast<uint16_t>(std::round(65535.0f * alpha));
 
   if (layer_->plane_alpha != plane_alpha) {
     geometry_changes_ |= kPlaneAlpha;

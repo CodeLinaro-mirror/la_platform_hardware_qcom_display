@@ -2345,7 +2345,7 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   client_target_layer->input_buffer.height = UINT32(aligned_height);
   client_target_layer->input_buffer.unaligned_width = x_pixels;
   client_target_layer->input_buffer.unaligned_height = y_pixels;
-  client_target_layer->plane_alpha = 255;
+  client_target_layer->plane_alpha = 0xffff;
 
   return 0;
 }
