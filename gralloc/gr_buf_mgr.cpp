@@ -86,6 +86,7 @@ using aidl::android::hardware::graphics::common::Smpte2086;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using aidl::android::hardware::graphics::common::XyColor;
 using ::android::hardware::graphics::common::V1_2::PixelFormat;
+using IMapper_4_0_Error =  ::android::hardware::graphics::mapper::V4_0::Error;
 
 static BufferInfo GetBufferInfo(const BufferDescriptor &descriptor) {
   return BufferInfo(descriptor.GetWidth(), descriptor.GetHeight(), descriptor.GetFormat(),
@@ -1891,6 +1892,12 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     case QTI_VIDEO_HISTOGRAM_STATS:
       qtigralloc::decodeVideoHistogramMetadata(in, &metadata->video_histogram_stats);
+      break;
+    case QTI_VIDEO_TS_INFO:
+      if (qtigralloc::decodeVideoTimestampInfo(in, &metadata->videoTsInfo) !=
+                                 IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
       break;
     default:
 #ifdef METADATA_V2
