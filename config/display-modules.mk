@@ -31,5 +31,6 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             libfilefinder \
                             vendor.qti.hardware.display.demura-service \
                             modetest \
-                            libdisplayconfig.qti
+                            libdisplayconfig.qti \
+                            vendor.qti.hardware.display.snapalloc-impl
 endif
