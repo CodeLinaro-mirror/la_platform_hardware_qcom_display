@@ -37,6 +37,28 @@ else
 fi
 
 case "$target" in
+    "sun")
+    #SOC ID for Sun is 618
+    case "$soc_hwid" in
+      618)
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.target.version 4
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_latch_media_content 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.timed_render_enable 1
+        setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
+        ;;
+    esac
+    ;;
     "pineapple")
     #SOC ID for Pineapple is 557
     case "$soc_hwid" in
@@ -55,6 +77,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.timed_render_enable 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
         ;;
       614|632)
         # SOC ID for Palawan is 614
