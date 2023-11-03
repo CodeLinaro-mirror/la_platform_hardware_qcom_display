@@ -71,9 +71,7 @@
 #include <fstream>
 #include "gr_adreno_info.h"
 #include "gr_buf_descriptor.h"
-#include "gr_priv_handle.h"
 #include "gr_utils.h"
-#include "qdMetaData.h"
 #include "qd_utils.h"
 
 namespace gralloc {
@@ -352,7 +350,7 @@ static Error getYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr y
   int ret = 0;
   uint32_t width = UINT(hnd->width);
   uint32_t height = UINT(hnd->height);
-  int format = hnd->format;
+  int32_t format = hnd->format;
   uint64_t usage = hnd->usage;
   int32_t interlaced = 0;
   int plane_count = 0;
@@ -884,9 +882,7 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
   private_handle_t *handle = const_cast<private_handle_t *>(hnd);
   handle->fd = -1;
   handle->fd_metadata = -1;
-  if (!(handle->flags & private_handle_t::PRIV_FLAGS_CLIENT_ALLOCATED)) {
-    delete handle;
-  }
+  free(handle);
   return Error::NONE;
 }
 
@@ -1055,8 +1051,8 @@ Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
   // only read/written in software.
 
   // todo use handle here
-  if (err == Error::NONE && (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION) &&
-      (hnd->flags & private_handle_t::PRIV_FLAGS_CACHED)) {
+  if (err == Error::NONE && (hnd->flags & qtigralloc::PRIV_FLAGS_USES_ION) &&
+      (hnd->flags & qtigralloc::PRIV_FLAGS_CACHED)) {
     if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
                                 buf->ion_handle_main, CACHE_INVALIDATE, hnd->fd)) {
       return Error::BAD_BUFFER;
@@ -1066,7 +1062,7 @@ Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
   // Mark the buffer to be flushed after CPU write.
   if (err == Error::NONE && CpuCanWrite(usage)) {
     private_handle_t *handle = const_cast<private_handle_t *>(hnd);
-    handle->flags |= private_handle_t::PRIV_FLAGS_NEEDS_FLUSH;
+    handle->flags |= qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
   }
 
   return err;
@@ -1118,12 +1114,12 @@ Error BufferManager::UnlockBuffer(const private_handle_t *handle) {
     return Error::BAD_BUFFER;
   }
 
-  if (hnd->flags & private_handle_t::PRIV_FLAGS_NEEDS_FLUSH) {
+  if (hnd->flags & qtigralloc::PRIV_FLAGS_NEEDS_FLUSH) {
     if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
                                 buf->ion_handle_main, CACHE_CLEAN, hnd->fd) != 0) {
       status = Error::BAD_BUFFER;
     }
-    hnd->flags &= ~private_handle_t::PRIV_FLAGS_NEEDS_FLUSH;
+    hnd->flags &= ~qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
   } else {
     if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
                                 buf->ion_handle_main, CACHE_READ_DONE, hnd->fd) != 0) {
@@ -1211,7 +1207,8 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
 
   bool use_adreno_for_size = CanUseAdrenoForSize(buffer_type, usage);
   if (use_adreno_for_size) {
-    setMetaDataAndUnmap(hnd, SET_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
+    SetMetaData(hnd, QTI_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
+    UnmapAndReset(hnd);
   }
 
   auto error = validateAndMap(hnd);

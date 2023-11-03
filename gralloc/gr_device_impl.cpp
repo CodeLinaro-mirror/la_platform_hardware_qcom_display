@@ -75,8 +75,6 @@
 #include "gr_buf_descriptor.h"
 #include "gr_device_impl.h"
 #include "gr_utils.h"
-#include "gralloc_priv.h"
-#include "qdMetaData.h"
 #include "qd_utils.h"
 
 int gralloc_device_open(const struct hw_module_t *module, const char *name, hw_device_t **device);
