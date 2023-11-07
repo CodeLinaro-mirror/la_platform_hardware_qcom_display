@@ -44,7 +44,7 @@
 #include "hwc_common.h"
 
 using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
-using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
+using APixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace sdm {
 

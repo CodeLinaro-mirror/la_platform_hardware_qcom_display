@@ -18,9 +18,12 @@
 #include "android/binder_auto_utils.h"
 #include "gralloctypes/Gralloc4.h"
 #include <aidl/android/hardware/graphics/allocator/AllocationResult.h>
+#include <android/hardware/graphics/mapper/utils/IMapperMetadataTypes.h>
 
 using SnapFence = vendor_qti_hardware_display_common_Fence;
 using SnapAddress = vendor_qti_hardware_display_common_Address;
+
+using android::hardware::graphics::mapper::StandardMetadata;
 
 using std::lock_guard;
 using std::mutex;
@@ -498,12 +501,69 @@ SnapError GrallocSnapHelper::CheckMetadataSet(SnapMetadataType type, SnapError s
   return status;
 }
 
+template <aidl::android::hardware::graphics::common::StandardMetadataType T>
+int32_t Mapper5Encode(const typename StandardMetadata<T>::value_type &value, void *out_buffer,
+                      size_t out_size) {
+  using Value = typename StandardMetadata<T>::value;
+
+  auto size_required = Value::encode(value, nullptr, 0);
+  if (size_required < 0) {
+    ALOGW_IF(-AIMAPPER_ERROR_UNSUPPORTED != size_required,
+             "%s: Unexpected error %d during size calculation for encode (%d) call", __FUNCTION__,
+             -size_required, static_cast<int64_t>(T));
+    return -AIMAPPER_ERROR_UNSUPPORTED;
+  }
+
+  if (out_buffer != nullptr && size_required <= out_size) {
+    size_required = Value::encode(value, out_buffer, out_size);
+    if (size_required < 0 || (size_t)size_required > out_size) {
+      ALOGW("Mapper5Encode (%d) failed, calculated size %d with buffer size %zd",
+            static_cast<int64_t>(T), size_required, out_size);
+    }
+  }
+
+  return size_required;
+}
+
+template <aidl::android::hardware::graphics::common::StandardMetadataType T>
+auto Mapper5Decode(void *bytestream, size_t size)
+    -> decltype(StandardMetadata<T>::value::decode(nullptr, 0)) {
+  using Value = typename StandardMetadata<T>::value;
+  return Value::decode(bytestream, size);
+}
+
+int GrallocSnapHelper::GetAllHandles(std::vector<buffer_handle_t> *out_handle_list) {
+  std::lock_guard<std::mutex> lock(map_lock_);
+  if (handles_map_.empty()) {
+    return SnapError::NO_RESOURCES;
+  }
+  out_handle_list->resize(handles_map_.size());
+  for (auto handle : handles_map_) {
+    out_handle_list->push_back(static_cast<buffer_handle_t>(handle.first));
+  }
+  return SnapError::NONE;
+}
+
 SnapError GrallocSnapHelper::BufferIDHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                            void *gralloc_in_set, void *gralloc_out_get,
-                                            SnapDescriptor *buf_des, bool check_metadata_set) {
+                                            uint32_t aidl_size, void *gralloc_in_set,
+                                            void *gralloc_out_get, SnapDescriptor *buf_des,
+                                            bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      uint64_t snap_buffer_id = 0;
+      error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BUFFER_ID, &snap_buffer_id);
+      if (error) {
+        ALOGW("%s - Error while getting the metadata type %d from snapmapper", __FUNCTION__,
+              static_cast<int>(SnapMetadataType::BUFFER_ID));
+        return error;
+      }
+      *mapper_return = Mapper5Encode<StandardMetadataType::BUFFER_ID>(
+          snap_buffer_id, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       uint64_t snap_buffer_id = 0;
       if (buf_des != nullptr) {
         error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::BUFFER_ID,
@@ -531,9 +591,10 @@ SnapError GrallocSnapHelper::BufferIDHelper(SnapHandle *hnd, bool hidl_bytestrea
   return error;
 }
 
-SnapError GrallocSnapHelper::UsageHelper(SnapHandle *hnd, bool hidl_bytestream,
+SnapError GrallocSnapHelper::UsageHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
                                          void *gralloc_in_set, void *gralloc_out_get,
-                                         SnapDescriptor *buf_des, bool check_metadata_set) {
+                                         SnapDescriptor *buf_des, bool check_metadata_set,
+                                         int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapUsage snap_usage = static_cast<SnapUsage>(0);
@@ -544,7 +605,13 @@ SnapError GrallocSnapHelper::UsageHelper(SnapHandle *hnd, bool hidl_bytestream,
     }
     error = CheckMetadataSet(SnapMetadataType::USAGE, error, check_metadata_set);
     uint64_t gr_usage = GetGrallocUsage(snap_usage);
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::USAGE>(
+          static_cast<GrallocBufferUsage>(gr_usage), gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (android::gralloc4::encodeUsage(gr_usage,
                                          static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
         return SnapError::BAD_VALUE;
@@ -559,8 +626,9 @@ SnapError GrallocSnapHelper::UsageHelper(SnapHandle *hnd, bool hidl_bytestream,
 }
 
 SnapError GrallocSnapHelper::DataspaceHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                             void *gralloc_in_set, void *gralloc_out_get,
-                                             SnapDescriptor *buf_des, bool check_metadata_set) {
+                                             uint32_t aidl_size, void *gralloc_in_set,
+                                             void *gralloc_out_get, SnapDescriptor *buf_des,
+                                             bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapDataspace snap_dataspace = {};
@@ -568,7 +636,13 @@ SnapError GrallocSnapHelper::DataspaceHelper(SnapHandle *hnd, bool hidl_bytestre
     error = CheckMetadataSet(SnapMetadataType::DATASPACE, error, check_metadata_set);
     GrallocDataspace gr_dataspace = {};
     ConvertSnapDataspaceToGrallocDataspace(snap_dataspace, &gr_dataspace);
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::DATASPACE>(gr_dataspace, gralloc_out_get,
+                                                                      *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (android::gralloc4::encodeDataspace(gr_dataspace,
                                              static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
         return SnapError::BAD_VALUE;
@@ -578,7 +652,14 @@ SnapError GrallocSnapHelper::DataspaceHelper(SnapHandle *hnd, bool hidl_bytestre
     }
   } else if (gralloc_in_set != nullptr) {
     SnapDataspace snap_dataspace = {};
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      auto decoded_result =
+          Mapper5Decode<StandardMetadataType::DATASPACE>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value()) {
+        return SnapError::UNSUPPORTED;
+      }
+      ConvertGrallocDataspaceToSnapDataspace(*decoded_result, &snap_dataspace);
+    } else if (hidl_bytestream) {
       GrallocDataspace gr_dataspace = {};
       if (android::gralloc4::decodeDataspace(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
                                              &gr_dataspace)) {
@@ -595,8 +676,9 @@ SnapError GrallocSnapHelper::DataspaceHelper(SnapHandle *hnd, bool hidl_bytestre
 }
 
 SnapError GrallocSnapHelper::ColorspaceHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                              void *gralloc_in_set, void *gralloc_out_get,
-                                              SnapDescriptor *buf_des, bool check_metadata_set) {
+                                              uint32_t aidl_size, void *gralloc_in_set,
+                                              void *gralloc_out_get, SnapDescriptor *buf_des,
+                                              bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapDataspace snap_dataspace = {};
@@ -631,9 +713,10 @@ SnapError GrallocSnapHelper::ColorspaceHelper(SnapHandle *hnd, bool hidl_bytestr
   return error;
 }
 
-SnapError GrallocSnapHelper::NameHelper(SnapHandle *hnd, bool hidl_bytestream, void *gralloc_in_set,
-                                        void *gralloc_out_get, SnapDescriptor *buf_des,
-                                        bool check_metadata_set) {
+SnapError GrallocSnapHelper::NameHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                                        void *gralloc_in_set, void *gralloc_out_get,
+                                        SnapDescriptor *buf_des, bool check_metadata_set,
+                                        int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   std::string name = "";
   if (gralloc_in_set != nullptr) {
@@ -646,7 +729,13 @@ SnapError GrallocSnapHelper::NameHelper(SnapHandle *hnd, bool hidl_bytestream, v
   }
   error = CheckMetadataSet(SnapMetadataType::NAME, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return =
+        Mapper5Encode<StandardMetadataType::NAME>(name, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodeName(name, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
     }
@@ -656,9 +745,10 @@ SnapError GrallocSnapHelper::NameHelper(SnapHandle *hnd, bool hidl_bytestream, v
   return error;
 }
 
-SnapError GrallocSnapHelper::WidthHelper(SnapHandle *hnd, bool hidl_bytestream,
+SnapError GrallocSnapHelper::WidthHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
                                          void *gralloc_in_set, void *gralloc_out_get,
-                                         SnapDescriptor *buf_des, bool check_metadata_set) {
+                                         SnapDescriptor *buf_des, bool check_metadata_set,
+                                         int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint64_t snap_width = 0;
   if (gralloc_in_set != nullptr) {
@@ -671,7 +761,13 @@ SnapError GrallocSnapHelper::WidthHelper(SnapHandle *hnd, bool hidl_bytestream,
   }
   error = CheckMetadataSet(SnapMetadataType::WIDTH, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return =
+        Mapper5Encode<StandardMetadataType::WIDTH>(snap_width, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodeWidth(snap_width,
                                        static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
@@ -682,9 +778,10 @@ SnapError GrallocSnapHelper::WidthHelper(SnapHandle *hnd, bool hidl_bytestream,
   return error;
 }
 
-SnapError GrallocSnapHelper::HeightHelper(SnapHandle *hnd, bool hidl_bytestream,
+SnapError GrallocSnapHelper::HeightHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
                                           void *gralloc_in_set, void *gralloc_out_get,
-                                          SnapDescriptor *buf_des, bool check_metadata_set) {
+                                          SnapDescriptor *buf_des, bool check_metadata_set,
+                                          int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint64_t snap_height = 0;
   if (gralloc_in_set != nullptr) {
@@ -697,7 +794,13 @@ SnapError GrallocSnapHelper::HeightHelper(SnapHandle *hnd, bool hidl_bytestream,
   }
   error = CheckMetadataSet(SnapMetadataType::HEIGHT, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return =
+        Mapper5Encode<StandardMetadataType::HEIGHT>(snap_height, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodeHeight(snap_height,
                                         static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
@@ -709,8 +812,9 @@ SnapError GrallocSnapHelper::HeightHelper(SnapHandle *hnd, bool hidl_bytestream,
 }
 
 SnapError GrallocSnapHelper::LayerCountHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                              void *gralloc_in_set, void *gralloc_out_get,
-                                              SnapDescriptor *buf_des, bool check_metadata_set) {
+                                              uint32_t aidl_size, void *gralloc_in_set,
+                                              void *gralloc_out_get, SnapDescriptor *buf_des,
+                                              bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint64_t layer_count = 0;
   if (gralloc_in_set != nullptr) {
@@ -724,7 +828,13 @@ SnapError GrallocSnapHelper::LayerCountHelper(SnapHandle *hnd, bool hidl_bytestr
   }
   error = CheckMetadataSet(SnapMetadataType::LAYER_COUNT, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::LAYER_COUNT>(layer_count, gralloc_out_get,
+                                                                      *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodeLayerCount(layer_count,
                                             static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
@@ -736,9 +846,11 @@ SnapError GrallocSnapHelper::LayerCountHelper(SnapHandle *hnd, bool hidl_bytestr
 }
 
 SnapError GrallocSnapHelper::PixelFormatRequestedHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                        void *gralloc_in_set, void *gralloc_out_get,
+                                                        uint32_t aidl_size, void *gralloc_in_set,
+                                                        void *gralloc_out_get,
                                                         SnapDescriptor *buf_des,
-                                                        bool check_metadata_set) {
+                                                        bool check_metadata_set,
+                                                        int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
   SnapUsage snap_usage = static_cast<SnapUsage>(0);
@@ -771,7 +883,13 @@ SnapError GrallocSnapHelper::PixelFormatRequestedHelper(SnapHandle *hnd, bool hi
   if (!gr_format) {
     gr_format = static_cast<int>(snap_pixel_format);
   }
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::PIXEL_FORMAT_REQUESTED>(
+        static_cast<GrallocPixelFormat>(gr_format), gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodePixelFormatRequested(
             static_cast<PixelFormat>(gr_format),
             static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
@@ -784,9 +902,10 @@ SnapError GrallocSnapHelper::PixelFormatRequestedHelper(SnapHandle *hnd, bool hi
 }
 
 SnapError GrallocSnapHelper::PixelFormatFourCCHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                     void *gralloc_in_set, void *gralloc_out_get,
-                                                     SnapDescriptor *buf_des,
-                                                     bool check_metadata_set) {
+                                                     uint32_t aidl_size, void *gralloc_in_set,
+                                                     void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                     bool check_metadata_set,
+                                                     int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint32_t pixel_format_fourcc = 0;
   if (gralloc_in_set != nullptr) {
@@ -801,7 +920,13 @@ SnapError GrallocSnapHelper::PixelFormatFourCCHelper(SnapHandle *hnd, bool hidl_
   }
   error = CheckMetadataSet(SnapMetadataType::PIXEL_FORMAT_FOURCC, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::PIXEL_FORMAT_FOURCC>(
+        pixel_format_fourcc, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodePixelFormatFourCC(
             pixel_format_fourcc, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
@@ -813,10 +938,11 @@ SnapError GrallocSnapHelper::PixelFormatFourCCHelper(SnapHandle *hnd, bool hidl_
 }
 
 SnapError GrallocSnapHelper::DRMPixelFormatModifierHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                          void *gralloc_in_set,
+                                                          uint32_t aidl_size, void *gralloc_in_set,
                                                           void *gralloc_out_get,
                                                           SnapDescriptor *buf_des,
-                                                          bool check_metadata_set) {
+                                                          bool check_metadata_set,
+                                                          int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint64_t pixel_format_modifier = 0;
   if (gralloc_in_set != nullptr) {
@@ -831,7 +957,13 @@ SnapError GrallocSnapHelper::DRMPixelFormatModifierHelper(SnapHandle *hnd, bool 
   }
   error = CheckMetadataSet(SnapMetadataType::DRM_PIXEL_FORMAT_MODIFIER, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::PIXEL_FORMAT_MODIFIER>(
+        pixel_format_modifier, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodePixelFormatModifier(
             pixel_format_modifier, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
@@ -843,9 +975,9 @@ SnapError GrallocSnapHelper::DRMPixelFormatModifierHelper(SnapHandle *hnd, bool 
 }
 
 SnapError GrallocSnapHelper::AllocationSizeHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                  void *gralloc_in_set, void *gralloc_out_get,
-                                                  SnapDescriptor *buf_des,
-                                                  bool check_metadata_set) {
+                                                  uint32_t aidl_size, void *gralloc_in_set,
+                                                  void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                  bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint32_t allocation_size = 0;
   if (gralloc_in_set != nullptr) {
@@ -859,7 +991,13 @@ SnapError GrallocSnapHelper::AllocationSizeHelper(SnapHandle *hnd, bool hidl_byt
   }
   error = CheckMetadataSet(SnapMetadataType::ALLOCATION_SIZE, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::ALLOCATION_SIZE>(
+        static_cast<uint64_t>(allocation_size), gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodeAllocationSize(
             static_cast<uint64_t>(allocation_size),
             static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
@@ -872,9 +1010,10 @@ SnapError GrallocSnapHelper::AllocationSizeHelper(SnapHandle *hnd, bool hidl_byt
 }
 
 SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                    void *gralloc_in_set, void *gralloc_out_get,
-                                                    SnapDescriptor *buf_des,
-                                                    bool check_metadata_set) {
+                                                    uint32_t aidl_size, void *gralloc_in_set,
+                                                    void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                    bool check_metadata_set,
+                                                    int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint64_t protect_content = 0;
   if (gralloc_in_set != nullptr) {
@@ -888,7 +1027,13 @@ SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, bool hidl_b
   }
   error = CheckMetadataSet(SnapMetadataType::PROTECTED_CONTENT, error, check_metadata_set);
 
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::PROTECTED_CONTENT>(
+        protect_content, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodeProtectedContent(
             protect_content, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
@@ -900,8 +1045,9 @@ SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, bool hidl_b
 }
 
 SnapError GrallocSnapHelper::CompressionHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                               void *gralloc_in_set, void *gralloc_out_get,
-                                               SnapDescriptor *buf_des, bool check_metadata_set) {
+                                               uint32_t aidl_size, void *gralloc_in_set,
+                                               void *gralloc_out_get, SnapDescriptor *buf_des,
+                                               bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   int64_t snap_compression = 0;
   if (gralloc_in_set != nullptr) {
@@ -920,7 +1066,13 @@ SnapError GrallocSnapHelper::CompressionHelper(SnapHandle *hnd, bool hidl_bytest
   } else {
     gr_compression = qtigralloc::Compression_QtiUBWC;
   }
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::COMPRESSION>(
+        gr_compression, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodeCompression(gr_compression,
                                              static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
@@ -932,8 +1084,9 @@ SnapError GrallocSnapHelper::CompressionHelper(SnapHandle *hnd, bool hidl_bytest
 }
 
 SnapError GrallocSnapHelper::InterlacedHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                              void *gralloc_in_set, void *gralloc_out_get,
-                                              SnapDescriptor *buf_des, bool check_metadata_set) {
+                                              uint32_t aidl_size, void *gralloc_in_set,
+                                              void *gralloc_out_get, SnapDescriptor *buf_des,
+                                              bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
@@ -948,7 +1101,13 @@ SnapError GrallocSnapHelper::InterlacedHelper(SnapHandle *hnd, bool hidl_bytestr
     } else {
       gr_interlaced = qtigralloc::Interlaced_Qti;
     }
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::INTERLACED>(
+          gr_interlaced, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (android::gralloc4::encodeInterlaced(gr_interlaced,
                                               static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
         return SnapError::BAD_VALUE;
@@ -961,8 +1120,9 @@ SnapError GrallocSnapHelper::InterlacedHelper(SnapHandle *hnd, bool hidl_bytestr
 }
 
 SnapError GrallocSnapHelper::ChromaSitingHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                void *gralloc_in_set, void *gralloc_out_get,
-                                                SnapDescriptor *buf_des, bool check_metadata_set) {
+                                                uint32_t aidl_size, void *gralloc_in_set,
+                                                void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
@@ -975,7 +1135,13 @@ SnapError GrallocSnapHelper::ChromaSitingHelper(SnapHandle *hnd, bool hidl_bytes
     if (snap_chroma_siting == vendor_qti_hardware_display_common_ChromaSiting::CHROMA_SITING_NONE) {
       gr_chroma_siting = android::gralloc4::ChromaSiting_None;
     }
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::CHROMA_SITING>(
+          gr_chroma_siting, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (android::gralloc4::encodeChromaSiting(
               gr_chroma_siting, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
         return SnapError::BAD_VALUE;
@@ -988,8 +1154,9 @@ SnapError GrallocSnapHelper::ChromaSitingHelper(SnapHandle *hnd, bool hidl_bytes
 }
 
 SnapError GrallocSnapHelper::PlaneLayoutsHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                void *gralloc_in_set, void *gralloc_out_get,
-                                                SnapDescriptor *buf_des, bool check_metadata_set) {
+                                                uint32_t aidl_size, void *gralloc_in_set,
+                                                void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   SnapBufferLayout snap_buffer_layout = {};
   if (gralloc_in_set != nullptr) {
@@ -998,26 +1165,45 @@ SnapError GrallocSnapHelper::PlaneLayoutsHelper(SnapHandle *hnd, bool hidl_bytes
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PLANE_LAYOUTS,
                                                  &snap_buffer_layout);
+    if (!error) {
+      int64_t ubwc_enabled_in_snap;
+      error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::IS_UBWC,
+                                                   &ubwc_enabled_in_snap);
+      // Added to keep parity with getFormatLayout since sdm, composer and gralloc don't expect
+      // meta planes for this usecase.
+      if ((IsUncompressedRGBFormat(static_cast<int>(buf_des->format)) ||
+           IsCompressedRGBFormat(static_cast<int>(buf_des->format))) &&
+          ubwc_enabled_in_snap) {
+        snap_buffer_layout.plane_count /= 2;
+      }
+    }
   } else if (gralloc_out_get != nullptr) {
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PLANE_LAYOUTS, &snap_buffer_layout);
   }
   error = CheckMetadataSet(SnapMetadataType::PLANE_LAYOUTS, error, check_metadata_set);
   std::vector<GrallocPlaneLayout> gr_plane_layouts;
   ConvertSnapBufferlayoutToGrallocPlaneLayout(hnd, buf_des, snap_buffer_layout, &gr_plane_layouts);
-  if (hidl_bytestream) {
+  if (aidl_size) {
+    *mapper_return = Mapper5Encode<StandardMetadataType::PLANE_LAYOUTS>(
+        gr_plane_layouts, gralloc_out_get, *mapper_return);
+    if (*mapper_return < 0) {
+      return SnapError::BAD_VALUE;
+    }
+  } else if (hidl_bytestream) {
     if (android::gralloc4::encodePlaneLayouts(gr_plane_layouts,
                                               static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
       return SnapError::BAD_VALUE;
     }
   } else {
-    *static_cast<std::vector<GrallocPlaneLayout> *>(gralloc_out_get) = gr_plane_layouts;
+    *static_cast<SnapBufferLayout *>(gralloc_out_get) = snap_buffer_layout;
   }
   return error;
 }
 
 SnapError GrallocSnapHelper::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                void *gralloc_in_set, void *gralloc_out_get,
-                                                SnapDescriptor *buf_des, bool check_metadata_set) {
+                                                uint32_t aidl_size, void *gralloc_in_set,
+                                                void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   SnapBufferLayout snap_buffer_layout = {};
   if (gralloc_in_set != nullptr) {
@@ -1064,9 +1250,10 @@ SnapError GrallocSnapHelper::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl_bytes
   return error;
 }
 
-SnapError GrallocSnapHelper::CropHelper(SnapHandle *hnd, bool hidl_bytestream, void *gralloc_in_set,
-                                        void *gralloc_out_get, SnapDescriptor *buf_des,
-                                        bool check_metadata_set) {
+SnapError GrallocSnapHelper::CropHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                                        void *gralloc_in_set, void *gralloc_out_get,
+                                        SnapDescriptor *buf_des, bool check_metadata_set,
+                                        int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapRect snap_rect = {};
@@ -1074,7 +1261,13 @@ SnapError GrallocSnapHelper::CropHelper(SnapHandle *hnd, bool hidl_bytestream, v
     error = CheckMetadataSet(SnapMetadataType::CROP, error, check_metadata_set);
     std::vector<Rect> out_crop = {
         {snap_rect.left, snap_rect.top, snap_rect.right, snap_rect.bottom}};
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return =
+          Mapper5Encode<StandardMetadataType::CROP>(out_crop, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (android::gralloc4::encodeCrop(out_crop,
                                         static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
         return SnapError::BAD_VALUE;
@@ -1084,7 +1277,16 @@ SnapError GrallocSnapHelper::CropHelper(SnapHandle *hnd, bool hidl_bytestream, v
     }
   } else if (gralloc_in_set != nullptr) {
     SnapRect snap_rect = {};
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      auto decoded_result = Mapper5Decode<StandardMetadataType::CROP>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value() || decoded_result->size() != 1) {
+        return SnapError::UNSUPPORTED;
+      }
+      snap_rect = {.left = decoded_result->at(0).left,
+                   .top = decoded_result->at(0).top,
+                   .right = decoded_result->at(0).right,
+                   .bottom = decoded_result->at(0).bottom};
+    } else if (hidl_bytestream) {
       std::vector<Rect> gr_crop;
       auto status = android::gralloc4::decodeCrop(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
                                                   &gr_crop);
@@ -1109,15 +1311,22 @@ SnapError GrallocSnapHelper::CropHelper(SnapHandle *hnd, bool hidl_bytestream, v
 }
 
 SnapError GrallocSnapHelper::BlendModeHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                             void *gralloc_in_set, void *gralloc_out_get,
-                                             SnapDescriptor *buf_des, bool check_metadata_set) {
+                                             uint32_t aidl_size, void *gralloc_in_set,
+                                             void *gralloc_out_get, SnapDescriptor *buf_des,
+                                             bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapBlendMode snap_blendmode = {};
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BLEND_MODE, &snap_blendmode);
     error = CheckMetadataSet(SnapMetadataType::BLEND_MODE, error, check_metadata_set);
 
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::BLEND_MODE>(
+          static_cast<BlendMode>(snap_blendmode), gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (android::gralloc4::encodeBlendMode(static_cast<BlendMode>(snap_blendmode),
                                              static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
         return SnapError::BAD_VALUE;
@@ -1127,7 +1336,14 @@ SnapError GrallocSnapHelper::BlendModeHelper(SnapHandle *hnd, bool hidl_bytestre
     }
   } else if (gralloc_in_set != nullptr) {
     SnapBlendMode snap_blendmode = {};
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      auto decoded_result =
+          Mapper5Decode<StandardMetadataType::BLEND_MODE>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value()) {
+        return SnapError::UNSUPPORTED;
+      }
+      snap_blendmode = static_cast<SnapBlendMode>(*decoded_result);
+    } else if (hidl_bytestream) {
       aidl::android::hardware::graphics::common::BlendMode blend_mode;
       if (android::gralloc4::decodeBlendMode(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
                                              &blend_mode)) {
@@ -1146,8 +1362,9 @@ SnapError GrallocSnapHelper::BlendModeHelper(SnapHandle *hnd, bool hidl_bytestre
 }
 
 SnapError GrallocSnapHelper::VTTimestampHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                               void *gralloc_in_set, void *gralloc_out_get,
-                                               SnapDescriptor *buf_des, bool check_metadata_set) {
+                                               uint32_t aidl_size, void *gralloc_in_set,
+                                               void *gralloc_out_get, SnapDescriptor *buf_des,
+                                               bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     uint64_t vt_timestamp = 0;
@@ -1178,9 +1395,10 @@ SnapError GrallocSnapHelper::VTTimestampHelper(SnapHandle *hnd, bool hidl_bytest
 }
 
 SnapError GrallocSnapHelper::PPParamInterlacedHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                     void *gralloc_in_set, void *gralloc_out_get,
-                                                     SnapDescriptor *buf_des,
-                                                     bool check_metadata_set) {
+                                                     uint32_t aidl_size, void *gralloc_in_set,
+                                                     void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                     bool check_metadata_set,
+                                                     int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     int32_t pp_param_interlaced = 0;
@@ -1214,8 +1432,9 @@ SnapError GrallocSnapHelper::PPParamInterlacedHelper(SnapHandle *hnd, bool hidl_
 }
 
 SnapError GrallocSnapHelper::VideoPerfModeHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                 void *gralloc_in_set, void *gralloc_out_get,
-                                                 SnapDescriptor *buf_des, bool check_metadata_set) {
+                                                 uint32_t aidl_size, void *gralloc_in_set,
+                                                 void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                 bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     uint32_t video_perf_mode = 0;
@@ -1246,9 +1465,10 @@ SnapError GrallocSnapHelper::VideoPerfModeHelper(SnapHandle *hnd, bool hidl_byte
 }
 
 SnapError GrallocSnapHelper::GraphicsMetadataHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                    void *gralloc_in_set, void *gralloc_out_get,
-                                                    SnapDescriptor *buf_des,
-                                                    bool check_metadata_set) {
+                                                    uint32_t aidl_size, void *gralloc_in_set,
+                                                    void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                    bool check_metadata_set,
+                                                    int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapGraphicsMetadata snap_graphics_metadata = {};
@@ -1256,6 +1476,7 @@ SnapError GrallocSnapHelper::GraphicsMetadataHelper(SnapHandle *hnd, bool hidl_b
                                      &snap_graphics_metadata);
     error = CheckMetadataSet(SnapMetadataType::GRAPHICS_METADATA, error, check_metadata_set);
     GraphicsMetadata gr_graphics_metadata = {};
+    gr_graphics_metadata.size = sizeof(snap_graphics_metadata.data);
     std::memcpy(gr_graphics_metadata.data, snap_graphics_metadata.data,
                 sizeof(snap_graphics_metadata.data));
     if (hidl_bytestream) {
@@ -1265,7 +1486,7 @@ SnapError GrallocSnapHelper::GraphicsMetadataHelper(SnapHandle *hnd, bool hidl_b
         return SnapError::BAD_VALUE;
       }
     } else {
-      memcpy(gralloc_out_get, gr_graphics_metadata.data, sizeof(gr_graphics_metadata.data));
+      memcpy(gralloc_out_get, &gr_graphics_metadata.data, sizeof(gr_graphics_metadata.data));
     }
   } else if (gralloc_in_set != nullptr) {
     SnapGraphicsMetadata snap_graphics_metadata = {};
@@ -1291,8 +1512,9 @@ SnapError GrallocSnapHelper::GraphicsMetadataHelper(SnapHandle *hnd, bool hidl_b
 }
 
 SnapError GrallocSnapHelper::RefreshRateHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                               void *gralloc_in_set, void *gralloc_out_get,
-                                               SnapDescriptor *buf_des, bool check_metadata_set) {
+                                               uint32_t aidl_size, void *gralloc_in_set,
+                                               void *gralloc_out_get, SnapDescriptor *buf_des,
+                                               bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     float refresh_rate = 0.0;
@@ -1323,9 +1545,10 @@ SnapError GrallocSnapHelper::RefreshRateHelper(SnapHandle *hnd, bool hidl_bytest
 }
 
 SnapError GrallocSnapHelper::MapSecureBufferHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                   void *gralloc_in_set, void *gralloc_out_get,
-                                                   SnapDescriptor *buf_des,
-                                                   bool check_metadata_set) {
+                                                   uint32_t aidl_size, void *gralloc_in_set,
+                                                   void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                   bool check_metadata_set,
+                                                   int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     int32_t map_secure_buffer = 0;
@@ -1357,8 +1580,9 @@ SnapError GrallocSnapHelper::MapSecureBufferHelper(SnapHandle *hnd, bool hidl_by
 }
 
 SnapError GrallocSnapHelper::LinearFormatHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                void *gralloc_in_set, void *gralloc_out_get,
-                                                SnapDescriptor *buf_des, bool check_metadata_set) {
+                                                uint32_t aidl_size, void *gralloc_in_set,
+                                                void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     uint32_t linear_format = 0;
@@ -1389,9 +1613,10 @@ SnapError GrallocSnapHelper::LinearFormatHelper(SnapHandle *hnd, bool hidl_bytes
 }
 
 SnapError GrallocSnapHelper::SingleBufferModeHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                    void *gralloc_in_set, void *gralloc_out_get,
-                                                    SnapDescriptor *buf_des,
-                                                    bool check_metadata_set) {
+                                                    uint32_t aidl_size, void *gralloc_in_set,
+                                                    void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                    bool check_metadata_set,
+                                                    int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     uint32_t single_buffer_mode = 0;
@@ -1424,9 +1649,10 @@ SnapError GrallocSnapHelper::SingleBufferModeHelper(SnapHandle *hnd, bool hidl_b
   return error;
 }
 
-SnapError GrallocSnapHelper::FDHelper(SnapHandle *hnd, bool hidl_bytestream, void *gralloc_in_set,
-                                      void *gralloc_out_get, SnapDescriptor *buf_des,
-                                      bool check_metadata_set) {
+SnapError GrallocSnapHelper::FDHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                                      void *gralloc_in_set, void *gralloc_out_get,
+                                      SnapDescriptor *buf_des, bool check_metadata_set,
+                                      int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     int32_t fd = -1;
@@ -1456,9 +1682,11 @@ SnapError GrallocSnapHelper::FDHelper(SnapHandle *hnd, bool hidl_bytestream, voi
 }
 
 SnapError GrallocSnapHelper::AlignedWidthInPixelsHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                        void *gralloc_in_set, void *gralloc_out_get,
+                                                        uint32_t aidl_size, void *gralloc_in_set,
+                                                        void *gralloc_out_get,
                                                         SnapDescriptor *buf_des,
-                                                        bool check_metadata_set) {
+                                                        bool check_metadata_set,
+                                                        int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint32_t aligned_width = 0;
   if (gralloc_out_get != nullptr) {
@@ -1470,7 +1698,13 @@ SnapError GrallocSnapHelper::AlignedWidthInPixelsHelper(SnapHandle *hnd, bool hi
           snapmapper_->GetMetadata(*hnd, SnapMetadataType::ALIGNED_WIDTH_IN_PIXELS, &aligned_width);
     }
     error = CheckMetadataSet(SnapMetadataType::ALIGNED_WIDTH_IN_PIXELS, error, check_metadata_set);
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::STRIDE>(aligned_width, gralloc_out_get,
+                                                                   *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedWidthInPixels,
                                           aligned_width,
                                           static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
@@ -1497,10 +1731,11 @@ SnapError GrallocSnapHelper::AlignedWidthInPixelsHelper(SnapHandle *hnd, bool hi
 }
 
 SnapError GrallocSnapHelper::AlignedHeightInPixelsHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                         void *gralloc_in_set,
+                                                         uint32_t aidl_size, void *gralloc_in_set,
                                                          void *gralloc_out_get,
                                                          SnapDescriptor *buf_des,
-                                                         bool check_metadata_set) {
+                                                         bool check_metadata_set,
+                                                         int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   uint32_t aligned_height = 0;
   if (gralloc_out_get != nullptr) {
@@ -1539,9 +1774,11 @@ SnapError GrallocSnapHelper::AlignedHeightInPixelsHelper(SnapHandle *hnd, bool h
 }
 
 SnapError GrallocSnapHelper::VendorMetadataStatusHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                        void *gralloc_in_set, void *gralloc_out_get,
+                                                        uint32_t aidl_size, void *gralloc_in_set,
+                                                        void *gralloc_out_get,
                                                         SnapDescriptor *buf_des,
-                                                        bool check_metadata_set) {
+                                                        bool check_metadata_set,
+                                                        int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     bool vendor_metadata_state[METADATA_SET_SIZE];
@@ -1575,10 +1812,11 @@ SnapError GrallocSnapHelper::VendorMetadataStatusHelper(SnapHandle *hnd, bool hi
 }
 
 SnapError GrallocSnapHelper::StandardMetadataStatusHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                          void *gralloc_in_set,
+                                                          uint32_t aidl_size, void *gralloc_in_set,
                                                           void *gralloc_out_get,
                                                           SnapDescriptor *buf_des,
-                                                          bool check_metadata_set) {
+                                                          bool check_metadata_set,
+                                                          int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     bool standard_metadata_state[METADATA_SET_SIZE];
@@ -1611,8 +1849,9 @@ SnapError GrallocSnapHelper::StandardMetadataStatusHelper(SnapHandle *hnd, bool 
 }
 
 SnapError GrallocSnapHelper::BufferTypeHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                              void *gralloc_in_set, void *gralloc_out_get,
-                                              SnapDescriptor *buf_des, bool check_metadata_set) {
+                                              uint32_t aidl_size, void *gralloc_in_set,
+                                              void *gralloc_out_get, SnapDescriptor *buf_des,
+                                              bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     uint32_t buffer_type = 0;
@@ -1643,10 +1882,11 @@ SnapError GrallocSnapHelper::BufferTypeHelper(SnapHandle *hnd, bool hidl_bytestr
 }
 
 SnapError GrallocSnapHelper::CustomDimensionsStrideHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                          void *gralloc_in_set,
+                                                          uint32_t aidl_size, void *gralloc_in_set,
                                                           void *gralloc_out_get,
                                                           SnapDescriptor *buf_des,
-                                                          bool check_metadata_set) {
+                                                          bool check_metadata_set,
+                                                          int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     if (hidl_bytestream) {
@@ -1681,10 +1921,11 @@ SnapError GrallocSnapHelper::CustomDimensionsStrideHelper(SnapHandle *hnd, bool 
 }
 
 SnapError GrallocSnapHelper::CustomDimensionsHeightHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                          void *gralloc_in_set,
+                                                          uint32_t aidl_size, void *gralloc_in_set,
                                                           void *gralloc_out_get,
                                                           SnapDescriptor *buf_des,
-                                                          bool check_metadata_set) {
+                                                          bool check_metadata_set,
+                                                          int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     if (hidl_bytestream) {
@@ -1722,9 +1963,9 @@ SnapError GrallocSnapHelper::CustomDimensionsHeightHelper(SnapHandle *hnd, bool 
 }
 
 SnapError GrallocSnapHelper::RGBDataAddressHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                  void *gralloc_in_set, void *gralloc_out_get,
-                                                  SnapDescriptor *buf_des,
-                                                  bool check_metadata_set) {
+                                                  uint32_t aidl_size, void *gralloc_in_set,
+                                                  void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                  bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     uint64_t rgb_data = 0;
@@ -1755,9 +1996,10 @@ SnapError GrallocSnapHelper::RGBDataAddressHelper(SnapHandle *hnd, bool hidl_byt
 }
 
 SnapError GrallocSnapHelper::BufferPermissionHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                    void *gralloc_in_set, void *gralloc_out_get,
-                                                    SnapDescriptor *buf_des,
-                                                    bool check_metadata_set) {
+                                                    uint32_t aidl_size, void *gralloc_in_set,
+                                                    void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                    bool check_metadata_set,
+                                                    int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapBufferPermission snap_buf_perm = {};
@@ -1792,8 +2034,9 @@ SnapError GrallocSnapHelper::BufferPermissionHelper(SnapHandle *hnd, bool hidl_b
 }
 
 SnapError GrallocSnapHelper::MemHandleHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                             void *gralloc_in_set, void *gralloc_out_get,
-                                             SnapDescriptor *buf_des, bool check_metadata_set) {
+                                             uint32_t aidl_size, void *gralloc_in_set,
+                                             void *gralloc_out_get, SnapDescriptor *buf_des,
+                                             bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     int64_t mem_handle = 0;
@@ -1824,9 +2067,9 @@ SnapError GrallocSnapHelper::MemHandleHelper(SnapHandle *hnd, bool hidl_bytestre
 }
 
 SnapError GrallocSnapHelper::TimedRenderingHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                  void *gralloc_in_set, void *gralloc_out_get,
-                                                  SnapDescriptor *buf_des,
-                                                  bool check_metadata_set) {
+                                                  uint32_t aidl_size, void *gralloc_in_set,
+                                                  void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                  bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     uint32_t timed_rendering = 0;
@@ -1857,9 +2100,10 @@ SnapError GrallocSnapHelper::TimedRenderingHelper(SnapHandle *hnd, bool hidl_byt
 }
 
 SnapError GrallocSnapHelper::UBWCCRStatsInfoHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                   void *gralloc_in_set, void *gralloc_out_get,
-                                                   SnapDescriptor *buf_des,
-                                                   bool check_metadata_set) {
+                                                   uint32_t aidl_size, void *gralloc_in_set,
+                                                   void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                   bool check_metadata_set,
+                                                   int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapUBWCStats snap_ubwc_stats[QTI_UBWC_STATS_ARRAY_SIZE] = {};
@@ -1894,8 +2138,9 @@ SnapError GrallocSnapHelper::UBWCCRStatsInfoHelper(SnapHandle *hnd, bool hidl_by
 }
 
 SnapError GrallocSnapHelper::CVPMetadataHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                               void *gralloc_in_set, void *gralloc_out_get,
-                                               SnapDescriptor *buf_des, bool check_metadata_set) {
+                                               uint32_t aidl_size, void *gralloc_in_set,
+                                               void *gralloc_out_get, SnapDescriptor *buf_des,
+                                               bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapCVPMetadata snap_cvp_metadata = {};
@@ -1930,9 +2175,11 @@ SnapError GrallocSnapHelper::CVPMetadataHelper(SnapHandle *hnd, bool hidl_bytest
 }
 
 SnapError GrallocSnapHelper::VideoTranscodeStatsHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                       void *gralloc_in_set, void *gralloc_out_get,
+                                                       uint32_t aidl_size, void *gralloc_in_set,
+                                                       void *gralloc_out_get,
                                                        SnapDescriptor *buf_des,
-                                                       bool check_metadata_set) {
+                                                       bool check_metadata_set,
+                                                       int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapVideoTranscodeStatsMetadata snap_videotranscode_stats = {};
@@ -1970,8 +2217,9 @@ SnapError GrallocSnapHelper::VideoTranscodeStatsHelper(SnapHandle *hnd, bool hid
 }
 
 SnapError GrallocSnapHelper::VideoTSInfoHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                               void *gralloc_in_set, void *gralloc_out_get,
-                                               SnapDescriptor *buf_des, bool check_metadata_set) {
+                                               uint32_t aidl_size, void *gralloc_in_set,
+                                               void *gralloc_out_get, SnapDescriptor *buf_des,
+                                               bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapVideoTimestampInfo snap_video_timestamp_info = {};
@@ -2008,9 +2256,11 @@ SnapError GrallocSnapHelper::VideoTSInfoHelper(SnapHandle *hnd, bool hidl_bytest
 }
 
 SnapError GrallocSnapHelper::VideoHistogramStatsHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                       void *gralloc_in_set, void *gralloc_out_get,
+                                                       uint32_t aidl_size, void *gralloc_in_set,
+                                                       void *gralloc_out_get,
                                                        SnapDescriptor *buf_des,
-                                                       bool check_metadata_set) {
+                                                       bool check_metadata_set,
+                                                       int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapVideoHistogramMetadata snap_video_histogram_metadata = {};
@@ -2050,10 +2300,11 @@ SnapError GrallocSnapHelper::VideoHistogramStatsHelper(SnapHandle *hnd, bool hid
 }
 
 SnapError GrallocSnapHelper::CustomContentMetadataHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                         void *gralloc_in_set,
+                                                         uint32_t aidl_size, void *gralloc_in_set,
                                                          void *gralloc_out_get,
                                                          SnapDescriptor *buf_des,
-                                                         bool check_metadata_set) {
+                                                         bool check_metadata_set,
+                                                         int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapCustomContentMetadata snap_customcontent_metadata = {};
@@ -2092,9 +2343,10 @@ SnapError GrallocSnapHelper::CustomContentMetadataHelper(SnapHandle *hnd, bool h
 }
 
 SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                    void *gralloc_in_set, void *gralloc_out_get,
-                                                    SnapDescriptor *buf_des,
-                                                    bool check_metadata_set) {
+                                                    uint32_t aidl_size, void *gralloc_in_set,
+                                                    void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                    bool check_metadata_set,
+                                                    int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapMasteringDisplay snap_mastering_display_values = {};
@@ -2104,16 +2356,31 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, bool hidl_b
     std::optional<GrallocSmpte2086> mastering_display_values = {};
     memcpy(&mastering_display_values, &snap_mastering_display_values,
            sizeof(snap_mastering_display_values));
-    if (hidl_bytestream) {
-      android::gralloc4::encodeSmpte2086(mastering_display_values,
-                                         static_cast<hidl_vec<uint8_t> *>(gralloc_out_get));
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2086>(
+          mastering_display_values, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
+      if (android::gralloc4::encodeSmpte2086(mastering_display_values,
+                                             static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+        return SnapError::BAD_VALUE;
+      }
     } else {
       *static_cast<std::optional<GrallocSmpte2086> *>(gralloc_out_get) = mastering_display_values;
     }
   } else if (gralloc_in_set != nullptr) {
     SnapMasteringDisplay snap_mastering_display_values = {};
     std::optional<GrallocSmpte2086> mastering_display_values = {};
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      auto decoded_result =
+          Mapper5Decode<StandardMetadataType::SMPTE2086>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value()) {
+        return SnapError::UNSUPPORTED;
+      }
+      mastering_display_values = *decoded_result;
+    } else if (hidl_bytestream) {
       if (android::gralloc4::decodeSmpte2086(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
                                              &mastering_display_values)) {
         return SnapError::UNSUPPORTED;
@@ -2134,9 +2401,10 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, bool hidl_b
 }
 
 SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                     void *gralloc_in_set, void *gralloc_out_get,
-                                                     SnapDescriptor *buf_des,
-                                                     bool check_metadata_set) {
+                                                     uint32_t aidl_size, void *gralloc_in_set,
+                                                     void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                     bool check_metadata_set,
+                                                     int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapContentLightLevel snap_content_light_level = {};
@@ -2145,16 +2413,31 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, bool hidl_
     error = CheckMetadataSet(SnapMetadataType::CONTENT_LIGHT_LEVEL, error, check_metadata_set);
     std::optional<GrallocCta861_3> content_light_level = {};
     memcpy(&content_light_level, &snap_content_light_level, sizeof(snap_content_light_level));
-    if (hidl_bytestream) {
-      android::gralloc4::encodeCta861_3(content_light_level,
-                                        static_cast<hidl_vec<uint8_t> *>(gralloc_out_get));
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::CTA861_3>(
+          content_light_level, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
+      if (android::gralloc4::encodeCta861_3(content_light_level,
+                                            static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+        return SnapError::BAD_VALUE;
+      }
     } else {
       *static_cast<std::optional<GrallocCta861_3> *>(gralloc_out_get) = content_light_level;
     }
   } else if (gralloc_in_set != nullptr) {
     SnapContentLightLevel snap_content_light_level = {};
     std::optional<GrallocCta861_3> content_light_level = {};
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      auto decoded_result =
+          Mapper5Decode<StandardMetadataType::CTA861_3>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value()) {
+        return SnapError::UNSUPPORTED;
+      }
+      content_light_level = *decoded_result;
+    } else if (hidl_bytestream) {
       if (android::gralloc4::decodeCta861_3(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
                                             &content_light_level)) {
         return SnapError::UNSUPPORTED;
@@ -2174,9 +2457,10 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, bool hidl_
 }
 
 SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                   void *gralloc_in_set, void *gralloc_out_get,
-                                                   SnapDescriptor *buf_des,
-                                                   bool check_metadata_set) {
+                                                   uint32_t aidl_size, void *gralloc_in_set,
+                                                   void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                   bool check_metadata_set,
+                                                   int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapDynamicMetadata snap_dynamic_metadata = {};
@@ -2187,14 +2471,24 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, bool hidl_by
     dynamic_metadata_payload.resize(sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
     memcpy(dynamic_metadata_payload.data(), &snap_dynamic_metadata.dynamicMetaDataPayload,
            sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
+          dynamic_metadata_payload, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    } else if (hidl_bytestream) {
       if (snap_dynamic_metadata.dynamicMetaDataValid &&
           snap_dynamic_metadata.dynamicMetaDataLen <= HDR_DYNAMIC_META_DATA_SZ) {
-        android::gralloc4::encodeSmpte2094_40(dynamic_metadata_payload,
-                                              static_cast<hidl_vec<uint8_t> *>(gralloc_out_get));
+        if (android::gralloc4::encodeSmpte2094_40(
+                dynamic_metadata_payload, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+          return SnapError::BAD_VALUE;
+        }
       } else {
-        android::gralloc4::encodeSmpte2094_40(std::nullopt,
-                                              static_cast<hidl_vec<uint8_t> *>(gralloc_out_get));
+        if (android::gralloc4::encodeSmpte2094_40(
+                std::nullopt, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+          return SnapError::BAD_VALUE;
+        }
       }
     } else {
       *static_cast<std::vector<uint8_t> *>(gralloc_out_get) = dynamic_metadata_payload;
@@ -2202,7 +2496,14 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, bool hidl_by
   } else if (gralloc_in_set != nullptr) {
     SnapDynamicMetadata snap_dynamic_metadata = {};
     std::optional<std::vector<uint8_t>> dynamic_metadata_payload = {};
-    if (hidl_bytestream) {
+    if (aidl_size) {
+      auto decoded_result =
+          Mapper5Decode<StandardMetadataType::SMPTE2094_40>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value()) {
+        return SnapError::UNSUPPORTED;
+      }
+      dynamic_metadata_payload = *decoded_result;
+    } else if (hidl_bytestream) {
       if (android::gralloc4::decodeSmpte2094_40(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
                                                 &dynamic_metadata_payload)) {
         return SnapError::UNSUPPORTED;
@@ -2226,9 +2527,11 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, bool hidl_by
 }
 
 SnapError GrallocSnapHelper::ColorRemappingInfoHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                      void *gralloc_in_set, void *gralloc_out_get,
+                                                      uint32_t aidl_size, void *gralloc_in_set,
+                                                      void *gralloc_out_get,
                                                       SnapDescriptor *buf_des,
-                                                      bool check_metadata_set) {
+                                                      bool check_metadata_set,
+                                                      int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     SnapColorRemappingInfo snap_color_remapping_info = {};
@@ -2260,8 +2563,9 @@ SnapError GrallocSnapHelper::ColorRemappingInfoHelper(SnapHandle *hnd, bool hidl
 }
 
 SnapError GrallocSnapHelper::HeapNameHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                            void *gralloc_in_set, void *gralloc_out_get,
-                                            SnapDescriptor *buf_des, bool check_metadata_set) {
+                                            uint32_t aidl_size, void *gralloc_in_set,
+                                            void *gralloc_out_get, SnapDescriptor *buf_des,
+                                            bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   std::string heap_name = "";
   if (gralloc_in_set != nullptr) {
@@ -2283,7 +2587,8 @@ SnapError GrallocSnapHelper::HeapNameHelper(SnapHandle *hnd, bool hidl_bytestrea
 }
 
 int GrallocSnapHelper::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata_type, void *out,
-                                   bool convert_bytestream, bool check_metadata_set) {
+                                   bool convert_bytestream, bool check_metadata_set,
+                                   uint32_t aidl_size, int32_t *mapper_return) {
   if (gr_hnd == nullptr) {
     ALOGE("Invalid gralloc handle");
     return SnapError::BAD_BUFFER;
@@ -2307,8 +2612,8 @@ int GrallocSnapHelper::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
           deprecated_metadata_conversion_helper_function_map_.end()) {
         MetadataHelper metadata_helper_func =
             deprecated_metadata_conversion_helper_function_map_[gr_metadata_type];
-        return ((this->*metadata_helper_func)(hnd, convert_bytestream, nullptr, out, nullptr,
-                                              check_metadata_set));
+        return ((this->*metadata_helper_func)(hnd, convert_bytestream, 0, nullptr, out, nullptr,
+                                              check_metadata_set, mapper_return));
       } else {
         ALOGE("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
@@ -2319,8 +2624,8 @@ int GrallocSnapHelper::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
         metadata_conversion_helper_function_map.end()) {
       MetadataHelper metadata_helper_func =
           metadata_conversion_helper_function_map[snap_metadata_type];
-      auto error = ((this->*metadata_helper_func)(hnd, convert_bytestream, nullptr, out, nullptr,
-                                                  check_metadata_set));
+      auto error = ((this->*metadata_helper_func)(hnd, convert_bytestream, aidl_size, nullptr, out,
+                                                  nullptr, check_metadata_set, mapper_return));
       if (error == SnapError::METADATA_NOT_SET && !check_metadata_set) {
         ALOGI("Metadata type %d is not set.Returning default values as check_metadata_set is %d",
               gr_metadata_type, check_metadata_set);
@@ -2395,7 +2700,7 @@ int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
           deprecated_metadata_conversion_helper_function_map_.end()) {
         MetadataHelper metadata_helper_func =
             deprecated_metadata_conversion_helper_function_map_[gr_metadata_type];
-        return ((this->*metadata_helper_func)(hnd, true, &in, nullptr, nullptr, false));
+        return ((this->*metadata_helper_func)(hnd, true, 0, &in, nullptr, nullptr, false, nullptr));
       } else {
         ALOGE("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
@@ -2406,7 +2711,8 @@ int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
         metadata_conversion_helper_function_map.end()) {
       MetadataHelper metadata_helper_func =
           metadata_conversion_helper_function_map[snap_metadata_type];
-      auto error = ((this->*metadata_helper_func)(hnd, true, &in, nullptr, nullptr, false));
+      auto error =
+          ((this->*metadata_helper_func)(hnd, true, 0, &in, nullptr, nullptr, false, nullptr));
       if (error == SnapError::BAD_VALUE || error == SnapError::UNSUPPORTED) {
         ALOGE("Trying to set metadata that cant be set - gralloc metadata type %d - error %d",
               snap_metadata_type, static_cast<int>(error));
@@ -2421,7 +2727,8 @@ int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
   return SnapError::BAD_BUFFER;
 }
 
-int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata_type, void *in) {
+int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata_type, void *in,
+                                   uint32_t aidl_size) {
   if (gr_hnd == nullptr) {
     ALOGE("Invalid gralloc handle");
     return SnapError::BAD_BUFFER;
@@ -2445,7 +2752,8 @@ int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
           deprecated_metadata_conversion_helper_function_map_.end()) {
         MetadataHelper metadata_helper_func =
             deprecated_metadata_conversion_helper_function_map_[gr_metadata_type];
-        return ((this->*metadata_helper_func)(hnd, false, in, nullptr, nullptr, false));
+        return ((this->*metadata_helper_func)(hnd, false, aidl_size, in, nullptr, nullptr, false,
+                                              nullptr));
       } else {
         ALOGE("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
@@ -2456,7 +2764,8 @@ int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
         metadata_conversion_helper_function_map.end()) {
       MetadataHelper metadata_helper_func =
           metadata_conversion_helper_function_map[snap_metadata_type];
-      auto error = ((this->*metadata_helper_func)(hnd, true, &in, nullptr, nullptr, false));
+      auto error = ((this->*metadata_helper_func)(hnd, false, aidl_size, in, nullptr, nullptr,
+                                                  false, nullptr));
       if (error == SnapError::BAD_VALUE || error == SnapError::UNSUPPORTED) {
         ALOGE("Trying to set metadata that cant be set - gralloc metadata type %d",
               snap_metadata_type);
@@ -2472,8 +2781,9 @@ int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
 }
 
 SnapError GrallocSnapHelper::ColorMetadataHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                 void *gralloc_in_set, void *gralloc_out_get,
-                                                 SnapDescriptor *buf_des, bool check_metadata_set) {
+                                                 uint32_t aidl_size, void *gralloc_in_set,
+                                                 void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                 bool check_metadata_set, int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     ColorMetaData color_metadata;
@@ -2756,10 +3066,11 @@ SnapError GrallocSnapHelper::ColorMetadataHelper(SnapHandle *hnd, bool hidl_byte
 }
 
 SnapError GrallocSnapHelper::PrivateFlagsHelper(SnapHandle *hnd, bool hidl_bytestream,
-                                                void *gralloc_in_set, void *gralloc_out_get,
-                                                SnapDescriptor *buf_des, bool check_metadata_set) {
+                                                uint32_t aidl_size, void *gralloc_in_set,
+                                                void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                bool check_metadata_set, int32_t *mapper_return) {
   int64_t snap_private_flags = 0;
-  int64_t value = 0, is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
+  int64_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
   // Get usage flags
   SnapUsage snap_usage;
   auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::USAGE, &snap_usage);
@@ -2774,13 +3085,13 @@ SnapError GrallocSnapHelper::PrivateFlagsHelper(SnapHandle *hnd, bool hidl_bytes
   }
 
   status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::IS_TILE_RENDERED, &is_tile_rendered);
-  if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
-    ALOGE("%s Unable to get IS_UBWC from snap", __FUNCTION__);
+  if (status != SnapError::NONE) {
+    ALOGE("%s Unable to get IS_TILE_RENDERED from snap", __FUNCTION__);
     return status;
   }
   status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::IS_CACHED, &is_cached);
-  if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
-    ALOGE("%s Unable to get IS_UBWC from snap", __FUNCTION__);
+  if (status != SnapError::NONE) {
+    ALOGE("%s Unable to get IS_CACHED from snap", __FUNCTION__);
     return status;
   }
 
@@ -2791,6 +3102,55 @@ SnapError GrallocSnapHelper::PrivateFlagsHelper(SnapHandle *hnd, bool hidl_bytes
     android::gralloc4::encodeInt32(qtigralloc::MetadataType_PrivateFlags, gr_priv_flags,
                                    static_cast<hidl_vec<uint8_t> *>(gralloc_out_get));
   }
+  return SnapError::NONE;
+}
+
+SnapError GrallocSnapHelper::IsUBWCHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                                          void *gralloc_in_set, void *gralloc_out_get,
+                                          SnapDescriptor *buf_des, bool check_metadata_set,
+                                          int32_t *mapper_return) {
+  int64_t is_ubwc = 0;
+
+  auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::IS_UBWC, &is_ubwc);
+  if (status != SnapError::NONE) {
+    ALOGE("%s Unable to get IS_UBWC from snap", __FUNCTION__);
+    return status;
+  }
+
+  *static_cast<int32_t *>(gralloc_out_get) = is_ubwc;
+  return SnapError::NONE;
+}
+
+SnapError GrallocSnapHelper::IsTileRenderedHelper(SnapHandle *hnd, bool hidl_bytestream,
+                                                  uint32_t aidl_size, void *gralloc_in_set,
+                                                  void *gralloc_out_get, SnapDescriptor *buf_des,
+                                                  bool check_metadata_set, int32_t *mapper_return) {
+  int64_t is_tile_rendered = 0;
+
+  auto status =
+      snapmapper_->GetMetadata(*hnd, SnapMetadataType::IS_TILE_RENDERED, &is_tile_rendered);
+  if (status != SnapError::NONE) {
+    ALOGE("%s Unable to get IS_TILE_RENDERED from snap", __FUNCTION__);
+    return status;
+  }
+
+  *static_cast<int32_t *>(gralloc_out_get) = is_tile_rendered;
+  return SnapError::NONE;
+}
+
+SnapError GrallocSnapHelper::IsCachedHelper(SnapHandle *hnd, bool hidl_bytestream,
+                                            uint32_t aidl_size, void *gralloc_in_set,
+                                            void *gralloc_out_get, SnapDescriptor *buf_des,
+                                            bool check_metadata_set, int32_t *mapper_return) {
+  int64_t is_cached = 0;
+
+  auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::IS_CACHED, &is_cached);
+  if (status != SnapError::NONE) {
+    ALOGE("%s Unable to get IS_CACHED from snap", __FUNCTION__);
+    return status;
+  }
+
+  *static_cast<int32_t *>(gralloc_out_get) = is_cached;
   return SnapError::NONE;
 }
 
@@ -2808,8 +3168,8 @@ int GrallocSnapHelper::GetFromBufferDescriptor(gralloc::BufferDescriptor gr_desc
       bufferdescription_conversion_helper_function_map.end()) {
     MetadataHelper metadata_helper_func =
         bufferdescription_conversion_helper_function_map[snap_metadata_type];
-    return ((this->*metadata_helper_func)(nullptr, convert_to_hidl_bytestream, nullptr, out,
-                                          &snap_desc, false));
+    return ((this->*metadata_helper_func)(nullptr, convert_to_hidl_bytestream, 0, nullptr, out,
+                                          &snap_desc, false, nullptr));
   } else {
     return SnapError::UNSUPPORTED;
   }
