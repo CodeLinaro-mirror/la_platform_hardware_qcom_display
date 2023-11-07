@@ -395,11 +395,14 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
   buffer_allocator_->GetCustomWidthAndHeight(reinterpret_cast<const native_handle_t *>(buffer),
                                              &aligned_width, &aligned_height);
   int fmt, flag;
+  int64_t compression_type;
   buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &fmt,
                                       sizeof(fmt));
   buffer_allocator_->GetPrivateFlags(hnd, flag);
-  ALOGW("%s: format: %d, flags: %d", __FUNCTION__, fmt, flag);
-  LayerBufferFormat format = GetSDMFormat(fmt, flag);
+  buffer_allocator_->GetCompressionType(hnd, compression_type);
+  ALOGW("%s: format: %d, flags: %d, compression_type %d", __FUNCTION__, fmt, flag,
+        compression_type);
+  LayerBufferFormat format = GetSDMFormat(fmt, flag, compression_type);
   if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
       (UINT32(aligned_height) != layer_buffer->height)) {
     // Layer buffer geometry has changed.
@@ -910,12 +913,19 @@ uint32_t HWCLayer::GetUint32Color(const Color &source) {
   return color;
 }
 
-LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags) {
+LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags,
+                                         const int64_t compression_type) {
   LayerBufferFormat format = kFormatInvalid;
   if (flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED) {
     switch (source) {
       case static_cast<int>(PixelFormat::RGBA_8888):
-        format = kFormatRGBA8888Ubwc;
+        if (compression_type == QTI_COMPRESSION_UBWC_LOSSY_2_TO_1) {
+          format = kFormatRGBA8888UbwcLossy2To1;
+        } else if (compression_type == QTI_COMPRESSION_UBWC_LOSSY_8_TO_5) {
+          format = kFormatRGBA8888UbwcLossy8To5;
+        } else {
+          format = kFormatRGBA8888Ubwc;
+        }
         break;
       case static_cast<int>(PixelFormat::RGBX_8888):
         format = kFormatRGBX8888Ubwc;
@@ -1059,14 +1069,16 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
   return format;
 }
 
-void HWCLayer::GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec) {
+void HWCLayer::GetUBWCStatsFromMetaData(vendor_qti_hardware_display_common_UBWCStats *cr_stats,
+                                        UbwcCrStatsVector *cr_vec) {
   // TODO(user): Check if we can use UBWCStats directly
   // in layer_buffer or copy directly to Vector
   if (cr_stats->bDataValid) {
     switch (cr_stats->version) {
-      case UBWC_4_0:
-      case UBWC_3_0:
-      case UBWC_2_0:
+      case UBWC_VERSION_5_0:
+      case UBWC_VERSION_4_0:
+      case UBWC_VERSION_3_0:
+      case UBWC_VERSION_2_0:
         cr_vec->push_back(std::make_pair(32, cr_stats->ubwc_stats.nCRStatsTile32));
         cr_vec->push_back(std::make_pair(64, cr_stats->ubwc_stats.nCRStatsTile64));
         cr_vec->push_back(std::make_pair(96, cr_stats->ubwc_stats.nCRStatsTile96));
@@ -1111,7 +1123,8 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   uint32_t linear_format = 0;
   if (!buffer_allocator_->GetMetadataValue(handle, SnapMetadataType::LINEAR_FORMAT, &linear_format,
                                            sizeof(linear_format))) {
-    layer_buffer->format = GetSDMFormat(INT32(linear_format), 0);
+    layer_buffer->format = GetSDMFormat(
+        INT32(linear_format), 0, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
   }
 
   if ((interlace != layer_buffer->flags.interlace) || (frame_rate != layer->frame_rate)) {
@@ -1122,7 +1135,7 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   }
 
   // Check if metadata is set
-  struct UBWCStats cr_stats[NUM_UBWC_CR_STATS_LAYERS] = {};
+  struct vendor_qti_hardware_display_common_UBWCStats cr_stats[NUM_UBWC_CR_STATS_LAYERS] = {};
 
   for (int i = 0; i < NUM_UBWC_CR_STATS_LAYERS; i++) {
     layer_buffer->ubwc_crstats[i].clear();

@@ -1109,7 +1109,8 @@ HWC3::Error HWCDisplay::GetClientTargetSupport(uint32_t width, uint32_t height, 
     GetRange(dataspace, &(color_metadata.range));
   }
 
-  LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(format, 0);
+  LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(
+      format, 0, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
   if (display_intf_->GetClientTargetSupport(width, height, sdm_format, color_metadata) !=
       kErrorNone) {
     return HWC3::Error::Unsupported;
@@ -1513,7 +1514,8 @@ HWC3::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
            output_buffer_info_.buffer_config.width, output_buffer_info_.buffer_config.height,
            UINT32(tap_point) ? (UINT32(tap_point) == 1) ? "DSPP" : "DEMURA" : "LM");
 
-  output_buffer_info_.buffer_config.format = HWCLayer::GetSDMFormat(format, 0);
+  output_buffer_info_.buffer_config.format = HWCLayer::GetSDMFormat(
+      format, 0, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
   output_buffer_info_.buffer_config.buffer_count = 1;
   if (buffer_allocator_->AllocateBuffer(&output_buffer_info_) != 0) {
     DLOGE("Buffer allocation failed");
@@ -2337,7 +2339,8 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
 
   // TODO(user): How does the dirty region get set on the client target? File bug on Google
   client_target_layer->composition = kCompositionGPUTarget;
-  client_target_layer->input_buffer.format = HWCLayer::GetSDMFormat(format, flags);
+  client_target_layer->input_buffer.format = HWCLayer::GetSDMFormat(
+      format, flags, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
   client_target_layer->input_buffer.width = UINT32(aligned_width);
   client_target_layer->input_buffer.height = UINT32(aligned_height);
   client_target_layer->input_buffer.unaligned_width = x_pixels;
@@ -3525,6 +3528,7 @@ HWC3::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
     output_buffer.unaligned_height = static_cast<uint32_t>(tmp_height);
   }
   int format, flag;
+  int64_t compression_type;
   err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &format,
                                             sizeof(format));
   if (err) {
@@ -3534,7 +3538,13 @@ HWC3::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   if (err) {
     DLOGE("Failed to retrieve flag");
   }
-  output_buffer.format = HWCLayer::GetSDMFormat(format, flag);
+
+  err = buffer_allocator_->GetCompressionType(hdl, compression_type);
+  if (err) {
+    DLOGE("Failed to retrieve compression type");
+  }
+
+  output_buffer.format = HWCLayer::GetSDMFormat(format, flag, compression_type);
   err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::FD, &output_buffer.planes[0].fd,
                                             sizeof(output_buffer.planes[0].fd));
   if (err) {
