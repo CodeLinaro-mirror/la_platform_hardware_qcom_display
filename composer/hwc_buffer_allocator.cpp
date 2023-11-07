@@ -45,6 +45,7 @@
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <gr_utils.h>
+#include <BufferUsage.h>
 
 #include "hwc_buffer_allocator.h"
 #include "hwc_debugger.h"
@@ -388,8 +389,21 @@ int HWCBufferAllocator::GetPrivateFlags(void *buf, int32_t &flags) {
   return kErrorParameters;
 }
 
+int HWCBufferAllocator::GetCompressionType(void *buf, int64_t &compression_type) {
+  auto result = GetStandardMetadata<StandardMetadataType::COMPRESSION>(
+      mapper_, static_cast<buffer_handle_t>(buf));
+
+  if (result.has_value()) {
+    ExtendableType temp_compression_type = static_cast<ExtendableType>(*result);
+    compression_type = static_cast<int64_t>(temp_compression_type.value);
+    return kErrorNone;
+  }
+  return kErrorParameters;
+}
+
 int HWCBufferAllocator::GetSDMFormat(void *buf, LayerBufferFormat &sdm_format) {
   int32_t tmp_format, tmp_flags, err;
+  int64_t tmp_compression_type;
   err = GetFormat(buf, tmp_format);
   if (err != kErrorNone)
     return kErrorUndefined;
@@ -398,7 +412,11 @@ int HWCBufferAllocator::GetSDMFormat(void *buf, LayerBufferFormat &sdm_format) {
   if (err != kErrorNone)
     return kErrorUndefined;
 
-  sdm_format = HWCLayer::GetSDMFormat(tmp_format, tmp_flags);
+  err = GetCompressionType(buf, tmp_compression_type);
+  if (err != kErrorNone)
+    return kErrorUndefined;
+
+  sdm_format = HWCLayer::GetSDMFormat(tmp_format, tmp_flags, tmp_compression_type);
   return kErrorNone;
 }
 
@@ -695,6 +713,14 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
     case kFormatRGBA16161616FUbwc:
       *target = HAL_PIXEL_FORMAT_RGBA_FP16;
       *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+      break;
+    case kFormatRGBA8888UbwcLossy8To5:
+      *target = static_cast<int>(APixelFormat::RGBA_8888);
+      *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC_L_8_TO_5;
+      break;
+    case kFormatRGBA8888UbwcLossy2To1:
+      *target = static_cast<int>(APixelFormat::RGBA_8888);
+      *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC_L_2_TO_1;
       break;
     default:
       DLOGW("Unsupported format = 0x%x", format);

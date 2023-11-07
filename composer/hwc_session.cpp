@@ -2178,7 +2178,8 @@ android::status_t HWCSession::SetFrameDumpConfig(const android::Parcel *input_pa
     output_format = input_parcel->readInt32();
   }
 
-  LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(output_format, 0);
+  LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(
+      output_format, 0, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
   if (sdm_format == kFormatInvalid) {
     DLOGW("Format %d is not supported by SDM", output_format);
     return -EINVAL;

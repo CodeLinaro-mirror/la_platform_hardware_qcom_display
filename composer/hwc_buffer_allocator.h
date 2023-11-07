@@ -58,6 +58,7 @@
 
 using aidl::android::hardware::graphics::allocator::AllocationResult;
 using aidl::android::hardware::graphics::allocator::IAllocator;
+using aidl::android::hardware::graphics::common::ExtendableType;
 
 namespace sdm {
 
@@ -96,6 +97,7 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height);
   int GetCustomContentMetadata(void *buf, CustomContentMetadata *dest);
   int GetMetadataValue(void *buf, SnapMetadataType type, void *dest, size_t dest_size);
+  int GetCompressionType(void *buf, int64_t &compression_type);
 
  private:
   int GetGrallocInstance();

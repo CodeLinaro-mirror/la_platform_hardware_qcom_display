@@ -35,6 +35,9 @@
 #include <core/layer_stack.h>
 #include <core/layer_buffer.h>
 #include <utils/utils.h>
+#include <Compression.h>
+#include <UBWCVersion.h>
+#include <UBWCStats.h>
 
 #include <map>
 #include <set>
@@ -45,6 +48,7 @@
 
 using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
 using APixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
+using aidl::android::hardware::graphics::common::ExtendableType;
 
 namespace sdm {
 
@@ -111,7 +115,8 @@ class HWCLayer {
   bool IsRotationPresent();
   bool IsDataSpaceSupported();
   bool IsProtected() { return secure_; }
-  static LayerBufferFormat GetSDMFormat(const int32_t &source, const int flags);
+  static LayerBufferFormat GetSDMFormat(const int32_t &source, const int flags,
+                                        const int64_t compression_type);
   bool IsSurfaceUpdated() { return surface_updated_; }
   bool IsNonIntegralSourceCrop() { return non_integral_source_crop_; }
   bool HasMetaDataRefreshRate() { return has_metadata_refresh_rate_; }
@@ -160,7 +165,8 @@ class HWCLayer {
   void SetRect(const Rect &source, LayerRect *target);
   void SetRect(const FRect &source, LayerRect *target);
   uint32_t GetUint32Color(const Color &source);
-  void GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec);
+  void GetUBWCStatsFromMetaData(vendor_qti_hardware_display_common_UBWCStats *cr_stats,
+                                UbwcCrStatsVector *cr_vec);
   DisplayError SetMetaData(const native_handle_t *pvt_handle, Layer *layer);
   uint32_t RoundToStandardFPS(float fps);
   void ValidateAndSetCSC(const native_handle_t *handle);
