@@ -386,6 +386,7 @@ class GrallocSnapHelper {
       {(uint64_t)GrallocBufferUsage::GPU_CUBE_MAP, SnapUsage::GPU_CUBE_MAP},
       {(uint64_t)GrallocBufferUsage::GPU_MIPMAP_COMPLETE, SnapUsage::GPU_MIPMAP_COMPLETE},
       {(uint64_t)GrallocBufferUsage::HW_IMAGE_ENCODER, SnapUsage::HW_IMAGE_ENCODER},
+      {(uint64_t)GrallocBufferUsage::FRONT_BUFFER, SnapUsage::FRONT_BUFFER},
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC, SnapUsage::QTI_ALLOC_UBWC},
       {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_PI, SnapUsage::QTI_PRIVATE_ALLOC_UBWC_PI},
@@ -397,6 +398,8 @@ class GrallocSnapHelper {
       {GRALLOC_USAGE_PRIVATE_WFD, SnapUsage::QTI_PRIVATE_WFD},
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_TRUSTED_VM, SnapUsage::QTI_PRIVATE_TRUSTED_VM},
+      {SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
+      {SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
@@ -422,94 +425,111 @@ class GrallocSnapHelper {
   std::unordered_map<SnapUBWCVersion, UBWC_Version> snap_to_gralloc_ubwc_version_;
 
   std::unordered_map<uint64_t, SnapMetadataType> metadata_type_map = {
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::BUFFER_ID),
-     SnapMetadataType::BUFFER_ID},
-    {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::NAME),
-     SnapMetadataType::NAME},
-    {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::WIDTH),
-     SnapMetadataType::WIDTH},
-    {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::HEIGHT),
-     SnapMetadataType::HEIGHT},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::LAYER_COUNT),
-     SnapMetadataType::LAYER_COUNT},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::PIXEL_FORMAT_REQUESTED),
-     SnapMetadataType::PIXEL_FORMAT_REQUESTED},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::PIXEL_FORMAT_FOURCC),
-     SnapMetadataType::PIXEL_FORMAT_FOURCC},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::PIXEL_FORMAT_MODIFIER),
-     SnapMetadataType::DRM_PIXEL_FORMAT_MODIFIER},
-    {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::USAGE),
-     SnapMetadataType::USAGE},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::PLANE_LAYOUTS),
-     SnapMetadataType::PLANE_LAYOUTS},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::PROTECTED_CONTENT),
-     SnapMetadataType::PROTECTED_CONTENT},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::ALLOCATION_SIZE),
-     SnapMetadataType::ALLOCATION_SIZE},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::BLEND_MODE),
-     SnapMetadataType::BLEND_MODE},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::DATASPACE),
-     SnapMetadataType::DATASPACE},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2086),
-     SnapMetadataType::MASTERING_DISPLAY},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::CTA861_3),
-     SnapMetadataType::CONTENT_LIGHT_LEVEL},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_40),
-     SnapMetadataType::DYNAMIC_METADATA},
-    {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::CROP),
-     SnapMetadataType::CROP},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::CHROMA_SITING),
-     SnapMetadataType::CHROMA_SITING},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::INTERLACED),
-     SnapMetadataType::INTERLACED},
-    {static_cast<uint64_t>(
-         aidl::android::hardware::graphics::common::StandardMetadataType::COMPRESSION),
-     SnapMetadataType::COMPRESSION},
-    {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::STRIDE),
-     SnapMetadataType::STRIDE},
-    {QTI_GRAPHICS_METADATA, SnapMetadataType::GRAPHICS_METADATA},
-    {QTI_STANDARD_METADATA_STATUS, SnapMetadataType::STANDARD_METADATA_STATUS},
-    {QTI_VENDOR_METADATA_STATUS, SnapMetadataType::VENDOR_METADATA_STATUS},
-    {QTI_CUSTOM_DIMENSIONS_STRIDE, SnapMetadataType::CUSTOM_DIMENSIONS_STRIDE},
-    {QTI_CUSTOM_DIMENSIONS_HEIGHT, SnapMetadataType::CUSTOM_DIMENSIONS_HEIGHT},
-    {QTI_RGB_DATA_ADDRESS, SnapMetadataType::RGB_DATA_ADDRESS},
-    {QTI_ALIGNED_WIDTH_IN_PIXELS, SnapMetadataType::ALIGNED_WIDTH_IN_PIXELS},
-    {QTI_ALIGNED_HEIGHT_IN_PIXELS, SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS},
-    {QTI_BUFFER_TYPE, SnapMetadataType::BUFFER_TYPE},
-    {QTI_MEM_HANDLE, SnapMetadataType::MEM_HANDLE},
-    {QTI_FD, SnapMetadataType::FD},
-    {QTI_PP_PARAM_INTERLACED, SnapMetadataType::PP_PARAM_INTERLACED},
-    {QTI_REFRESH_RATE, SnapMetadataType::REFRESH_RATE},
-    {QTI_MAP_SECURE_BUFFER, SnapMetadataType::MAP_SECURE_BUFFER},
-    {QTI_LINEAR_FORMAT, SnapMetadataType::LINEAR_FORMAT},
-    {QTI_SINGLE_BUFFER_MODE, SnapMetadataType::SINGLE_BUFFER_MODE},
-    {QTI_VT_TIMESTAMP, SnapMetadataType::VT_TIMESTAMP},
-    {QTI_UBWC_CR_STATS_INFO, SnapMetadataType::UBWC_CR_STATS_INFO},
-    {QTI_VIDEO_PERF_MODE, SnapMetadataType::VIDEO_PERF_MODE},
-    {QTI_CVP_METADATA, SnapMetadataType::CVP_METADATA},
-    {QTI_VIDEO_HISTOGRAM_STATS, SnapMetadataType::VIDEO_HISTOGRAM_STATS},
-    {QTI_VIDEO_TRANSCODE_STATS, SnapMetadataType::VIDEO_TRANSCODE_STATS},
-    {QTI_VIDEO_TS_INFO, SnapMetadataType::VIDEO_TS_INFO},
-    {QTI_TIMED_RENDERING, SnapMetadataType::TIMED_RENDERING},
-    {QTI_BUFFER_PERMISSION, SnapMetadataType::BUFFER_PERMISSION},
-    {QTI_CUSTOM_CONTENT_METADATA, SnapMetadataType::CUSTOM_CONTENT_METADATA},
-    {QTI_HEAP_NAME, SnapMetadataType::HEAP_NAME},
-};
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::BUFFER_ID),
+       SnapMetadataType::BUFFER_ID},
+      {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::NAME),
+       SnapMetadataType::NAME},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::WIDTH),
+       SnapMetadataType::WIDTH},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::HEIGHT),
+       SnapMetadataType::HEIGHT},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::LAYER_COUNT),
+       SnapMetadataType::LAYER_COUNT},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::PIXEL_FORMAT_REQUESTED),
+       SnapMetadataType::PIXEL_FORMAT_REQUESTED},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::PIXEL_FORMAT_FOURCC),
+       SnapMetadataType::PIXEL_FORMAT_FOURCC},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::PIXEL_FORMAT_MODIFIER),
+       SnapMetadataType::DRM_PIXEL_FORMAT_MODIFIER},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::USAGE),
+       SnapMetadataType::USAGE},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::PLANE_LAYOUTS),
+       SnapMetadataType::PLANE_LAYOUTS},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::PROTECTED_CONTENT),
+       SnapMetadataType::PROTECTED_CONTENT},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::ALLOCATION_SIZE),
+       SnapMetadataType::ALLOCATION_SIZE},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::BLEND_MODE),
+       SnapMetadataType::BLEND_MODE},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::DATASPACE),
+       SnapMetadataType::DATASPACE},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2086),
+       SnapMetadataType::MASTERING_DISPLAY},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::CTA861_3),
+       SnapMetadataType::CONTENT_LIGHT_LEVEL},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_40),
+       SnapMetadataType::DYNAMIC_METADATA},
+      {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::CROP),
+       SnapMetadataType::CROP},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::CHROMA_SITING),
+       SnapMetadataType::CHROMA_SITING},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::INTERLACED),
+       SnapMetadataType::INTERLACED},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::COMPRESSION),
+       SnapMetadataType::COMPRESSION},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::STRIDE),
+       SnapMetadataType::STRIDE},
+      {QTI_GRAPHICS_METADATA, SnapMetadataType::GRAPHICS_METADATA},
+      {QTI_STANDARD_METADATA_STATUS, SnapMetadataType::STANDARD_METADATA_STATUS},
+      {QTI_VENDOR_METADATA_STATUS, SnapMetadataType::VENDOR_METADATA_STATUS},
+      {QTI_CUSTOM_DIMENSIONS_STRIDE, SnapMetadataType::CUSTOM_DIMENSIONS_STRIDE},
+      {QTI_CUSTOM_DIMENSIONS_HEIGHT, SnapMetadataType::CUSTOM_DIMENSIONS_HEIGHT},
+      {QTI_RGB_DATA_ADDRESS, SnapMetadataType::RGB_DATA_ADDRESS},
+      {QTI_ALIGNED_WIDTH_IN_PIXELS, SnapMetadataType::ALIGNED_WIDTH_IN_PIXELS},
+      {QTI_ALIGNED_HEIGHT_IN_PIXELS, SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS},
+      {QTI_BUFFER_TYPE, SnapMetadataType::BUFFER_TYPE},
+      {QTI_MEM_HANDLE, SnapMetadataType::MEM_HANDLE},
+      {QTI_FD, SnapMetadataType::FD},
+      {QTI_PP_PARAM_INTERLACED, SnapMetadataType::PP_PARAM_INTERLACED},
+      {QTI_REFRESH_RATE, SnapMetadataType::REFRESH_RATE},
+      {QTI_MAP_SECURE_BUFFER, SnapMetadataType::MAP_SECURE_BUFFER},
+      {QTI_LINEAR_FORMAT, SnapMetadataType::LINEAR_FORMAT},
+      {QTI_SINGLE_BUFFER_MODE, SnapMetadataType::SINGLE_BUFFER_MODE},
+      {QTI_VT_TIMESTAMP, SnapMetadataType::VT_TIMESTAMP},
+      {QTI_UBWC_CR_STATS_INFO, SnapMetadataType::UBWC_CR_STATS_INFO},
+      {QTI_VIDEO_PERF_MODE, SnapMetadataType::VIDEO_PERF_MODE},
+      {QTI_CVP_METADATA, SnapMetadataType::CVP_METADATA},
+      {QTI_VIDEO_HISTOGRAM_STATS, SnapMetadataType::VIDEO_HISTOGRAM_STATS},
+      {QTI_VIDEO_TRANSCODE_STATS, SnapMetadataType::VIDEO_TRANSCODE_STATS},
+      {QTI_VIDEO_TS_INFO, SnapMetadataType::VIDEO_TS_INFO},
+      {QTI_TIMED_RENDERING, SnapMetadataType::TIMED_RENDERING},
+      {QTI_BUFFER_PERMISSION, SnapMetadataType::BUFFER_PERMISSION},
+      {QTI_CUSTOM_CONTENT_METADATA, SnapMetadataType::CUSTOM_CONTENT_METADATA},
+      {QTI_HEAP_NAME, SnapMetadataType::HEAP_NAME},
+      {QTI_EARLYNOTIFY_LINECOUNT, SnapMetadataType::EARLYNOTIFY_LINECOUNT},
+      // New enum entries
+      {SnapMetadataType::HEAP_NAME, SnapMetadataType::HEAP_NAME},
+      {SnapMetadataType::IS_UBWC, SnapMetadataType::IS_UBWC},
+      {SnapMetadataType::IS_TILE_RENDERED, SnapMetadataType::IS_TILE_RENDERED},
+      {SnapMetadataType::IS_CACHED, SnapMetadataType::IS_CACHED},
+      {SnapMetadataType::MASTERING_DISPLAY, SnapMetadataType::MASTERING_DISPLAY},
+      {SnapMetadataType::CONTENT_LIGHT_LEVEL, SnapMetadataType::CONTENT_LIGHT_LEVEL},
+      {SnapMetadataType::DYNAMIC_METADATA, SnapMetadataType::DYNAMIC_METADATA},
+      {SnapMetadataType::MATRIX_COEFFICIENTS, SnapMetadataType::MATRIX_COEFFICIENTS},
+      {SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::COLOR_REMAPPING_INFO},
+      {SnapMetadataType::BASE_ADDRESS, SnapMetadataType::BASE_ADDRESS},
+      {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
+  };
 
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(SnapHandle *, bool hidl_bytestream,
                                                          uint32_t aidl_size, void *gralloc_in_set,
@@ -768,6 +788,16 @@ class GrallocSnapHelper {
                          void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                          SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
                          int32_t *mapper_return = nullptr);
+  SnapError BaseAddressHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                              void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                              SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                              int32_t *mapper_return = nullptr);
+  SnapError EarlyNotifyLineCountHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                       void *gralloc_in_set = nullptr,
+                                       void *gralloc_out_get = nullptr,
+                                       SnapDescriptor *buf_des = nullptr,
+                                       bool check_metadata_set = true,
+                                       int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -834,6 +864,9 @@ class GrallocSnapHelper {
           {IS_TILE_RENDERED, &GrallocSnapHelper::IsTileRenderedHelper},
           {IS_CACHED, &GrallocSnapHelper::IsCachedHelper},
           {PIXEL_FORMAT_ALLOCATED, &GrallocSnapHelper::PixelFormatAllocatedHelper},
+          {BASE_ADDRESS, &GrallocSnapHelper::BaseAddressHelper},
+          {MATRIX_COEFFICIENTS, &GrallocSnapHelper::MatrixCoefficientsHelper},
+          {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelper::EarlyNotifyLineCountHelper},
   };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -875,10 +908,6 @@ class GrallocSnapHelper {
        {QTI_PRIVATE_FLAGS, &GrallocSnapHelper::PrivateFlagsHelper},
        {QTI_COLORSPACE, &GrallocSnapHelper::ColorspaceHelper},
        {QTI_YUV_PLANE_INFO, &GrallocSnapHelper::YuvPlaneInfoHelper},
-       {SnapMetadataType::IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
-       {SnapMetadataType::IS_CACHED, &GrallocSnapHelper::IsCachedHelper},
-       {SnapMetadataType::IS_TILE_RENDERED, &GrallocSnapHelper::IsTileRenderedHelper},
-       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &GrallocSnapHelper::PixelFormatAllocatedHelper},
       };
 };
 
