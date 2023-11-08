@@ -31,25 +31,47 @@
 #include <utility>
 #include <cmath>
 #include <gr_utils.h>
+#include "gr_snap_helper.h"
+#include "mapper_utils.h"
+
+#include <android/hardware/graphics/mapper/IMapper.h>
 
 #define __CLASS__ "HWCLayer"
 using aidl::android::hardware::graphics::common::StandardMetadataType;
+using mapper::GetMapperInstance;
+using mapper::GetMetadataState;
+using mapper::GetStandardMetadata;
 
 namespace sdm {
 
 std::atomic<LayerId> HWCLayer::next_id_(1);
 
 DisplayError SetCSC(const native_handle_t *handle, ColorMetaData *color_metadata) {
-  void *hnd = const_cast<native_handle_t *>(handle);
-
-  auto error =
-      gralloc::GetMetaDataValue(hnd, qtigralloc::MetadataType_ColorMetadata.value, color_metadata);
-
-  if (error != gralloc::Error::NONE) {
+  int32_t error = 0;
+  bool metadata_set = false;
+  //TODO: Investigate performance hit of moving to fetching smaller color metadata structs
+  auto mapper = GetMapperInstance();
+  if (!mapper) {
+    return kErrorResources;
+  }
+  auto mapper_err =
+      GetMetadataState(static_cast<buffer_handle_t>(handle),
+                       static_cast<SnapMetadataType>(QTI_COLOR_METADATA), &metadata_set);
+  if (metadata_set) {
+    error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
+                                             VENDOR_QTI_METADATA(QTI_COLOR_METADATA),
+                                             color_metadata, sizeof(*color_metadata));
+  }
+  if (error >= 0) {
     int csc = HAL_CSC_ITU_R_601;
-    error = gralloc::GetMetaDataValue(hnd, qtigralloc::MetadataType_ColorSpace.value, &csc);
-
-    if (error == gralloc::Error::NONE) {
+    mapper_err = GetMetadataState(static_cast<buffer_handle_t>(handle),
+                                  static_cast<SnapMetadataType>(QTI_COLORSPACE), &metadata_set);
+    if (metadata_set) {
+      error =
+          STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
+                                           VENDOR_QTI_METADATA(QTI_COLORSPACE), &csc, sizeof(csc));
+    }
+    if (error >= 0) {
       if (csc == HAL_CSC_ITU_R_601_FR || csc == HAL_CSC_ITU_R_709_FR ||
           csc == HAL_CSC_ITU_R_2020_FR) {
         color_metadata->range = Range_Full;
@@ -362,7 +384,7 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
   const native_handle_t *handle = reinterpret_cast<const native_handle_t *>(buffer);
   void *hnd = const_cast<native_handle_t *>(handle);
   int fd;
-  gralloc::GetMetaDataValue(hnd, qtigralloc::MetadataType_FD.value, &fd);
+  buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::FD, &fd, sizeof(fd));
 
   if (fd < 0) {
     return HWC3::Error::BadParameter;
@@ -373,9 +395,14 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
   buffer_allocator_->GetCustomWidthAndHeight(reinterpret_cast<const native_handle_t *>(buffer),
                                              &aligned_width, &aligned_height);
   int fmt, flag;
-  gralloc::GetMetaDataValue(hnd, (int64_t)StandardMetadataType::PIXEL_FORMAT_REQUESTED, &fmt);
-  gralloc::GetMetaDataValue(hnd, (int64_t)qtigralloc::MetadataType_PrivateFlags.value, &flag);
-  LayerBufferFormat format = GetSDMFormat(fmt, flag);
+  int64_t compression_type;
+  buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &fmt,
+                                      sizeof(fmt));
+  buffer_allocator_->GetPrivateFlags(hnd, flag);
+  buffer_allocator_->GetCompressionType(hnd, compression_type);
+  ALOGW("%s: format: %d, flags: %d, compression_type %d", __FUNCTION__, fmt, flag,
+        compression_type);
+  LayerBufferFormat format = GetSDMFormat(fmt, flag, compression_type);
   if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
       (UINT32(aligned_height) != layer_buffer->height)) {
     // Layer buffer geometry has changed.
@@ -386,18 +413,24 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
   layer_buffer->width = UINT32(aligned_width);
   layer_buffer->height = UINT32(aligned_height);
 
-  auto err_w = gralloc::GetMetaDataValue(hnd, (int64_t)StandardMetadataType::WIDTH,
-                                         &layer_buffer->unaligned_width);
-  if (err_w != gralloc::Error::NONE) {
+  uint64_t tmp_width, tmp_height;
+  auto err = buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::WIDTH, &tmp_width,
+                                                 sizeof(tmp_width));
+  if (err) {
     DLOGE("Failed to retrieve unaligned width");
+  } else {
+    layer_buffer->unaligned_width = tmp_width;
   }
-  auto err_h = gralloc::GetMetaDataValue(hnd, (int64_t)StandardMetadataType::HEIGHT,
-                                         &layer_buffer->unaligned_height);
-  if (err_h != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::HEIGHT, &tmp_height,
+                                            sizeof(tmp_height));
+  if (err) {
     DLOGE("Failed to retrieve unaligned height");
+  } else {
+    layer_buffer->unaligned_height = tmp_height;
   }
-  int32_t buffer_type;
-  gralloc::GetMetaDataValue(hnd, (int64_t)qtigralloc::MetadataType_BufferType.value, &buffer_type);
+  uint32_t buffer_type;
+  buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::BUFFER_TYPE, &buffer_type,
+                                      sizeof(buffer_type));
 
   layer_buffer->flags.video = (buffer_type == BUFFER_TYPE_VIDEO) ? true : false;
   if (SetMetaData(handle, layer_) != kErrorNone) {
@@ -428,28 +461,30 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
 
   layer_buffer->planes[0].fd = buffer_fd_;
   layer_buffer->planes[0].offset = 0;
-  auto err =
-      gralloc::GetMetaDataValue(hnd, QTI_ALIGNED_WIDTH_IN_PIXELS, &layer_buffer->planes[0].stride);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::STRIDE,
+                                            &layer_buffer->planes[0].stride,
+                                            sizeof(layer_buffer->planes[0].stride));
+  if (err) {
     DLOGW("Failed to retrieve aligned width");
   }
 
-  err = gralloc::GetMetaDataValue(hnd, (int64_t)StandardMetadataType::ALLOCATION_SIZE,
-                                  &layer_buffer->size);
+  err = buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::ALLOCATION_SIZE,
+                                            &layer_buffer->size, sizeof(layer_buffer->size));
 
-  if (err != gralloc::Error::NONE) {
+  if (err) {
     DLOGW("Failed to retrieve allocation size");
   }
   buffer_flipped_ = reinterpret_cast<uint64_t>(handle) != layer_buffer->buffer_id;
   layer_buffer->buffer_id = reinterpret_cast<uint64_t>(handle);
   int64_t hd_id, hd_usage;
-  err = gralloc::GetMetaDataValue(hnd, (int64_t)StandardMetadataType::BUFFER_ID,
-                                  &layer_buffer->handle_id);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(
+      hnd, SnapMetadataType::BUFFER_ID, &layer_buffer->handle_id, sizeof(layer_buffer->handle_id));
+  if (err) {
     DLOGW("Failed to retrieve buffer id");
   }
-  err = gralloc::GetMetaDataValue(hnd, (int64_t)StandardMetadataType::USAGE, &layer_buffer->usage);
-  if (err != gralloc::Error::NONE) {
+  err = buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::USAGE, &layer_buffer->usage,
+                                            sizeof(layer_buffer->usage));
+  if (err) {
     DLOGW("Failed to retrieve handle usage");
   }
   return HWC3::Error::None;
@@ -878,12 +913,19 @@ uint32_t HWCLayer::GetUint32Color(const Color &source) {
   return color;
 }
 
-LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags) {
+LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags,
+                                         const int64_t compression_type) {
   LayerBufferFormat format = kFormatInvalid;
   if (flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED) {
     switch (source) {
       case static_cast<int>(PixelFormat::RGBA_8888):
-        format = kFormatRGBA8888Ubwc;
+        if (compression_type == QTI_COMPRESSION_UBWC_LOSSY_2_TO_1) {
+          format = kFormatRGBA8888UbwcLossy2To1;
+        } else if (compression_type == QTI_COMPRESSION_UBWC_LOSSY_8_TO_5) {
+          format = kFormatRGBA8888UbwcLossy8To5;
+        } else {
+          format = kFormatRGBA8888Ubwc;
+        }
         break;
       case static_cast<int>(PixelFormat::RGBX_8888):
         format = kFormatRGBX8888Ubwc;
@@ -1016,7 +1058,7 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
     case static_cast<int>(PixelFormat::RGBA_FP16):
       format = kFormatRGBA16161616F;
       break;
-    case static_cast<int>(PixelFormat_V3::R_8):
+    case static_cast<int>(APixelFormat::R_8):
       format = kFormatA8;
       break;
     default:
@@ -1027,14 +1069,16 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
   return format;
 }
 
-void HWCLayer::GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec) {
+void HWCLayer::GetUBWCStatsFromMetaData(vendor_qti_hardware_display_common_UBWCStats *cr_stats,
+                                        UbwcCrStatsVector *cr_vec) {
   // TODO(user): Check if we can use UBWCStats directly
   // in layer_buffer or copy directly to Vector
   if (cr_stats->bDataValid) {
     switch (cr_stats->version) {
-      case UBWC_4_0:
-      case UBWC_3_0:
-      case UBWC_2_0:
+      case UBWC_VERSION_5_0:
+      case UBWC_VERSION_4_0:
+      case UBWC_VERSION_3_0:
+      case UBWC_VERSION_2_0:
         cr_vec->push_back(std::make_pair(32, cr_stats->ubwc_stats.nCRStatsTile32));
         cr_vec->push_back(std::make_pair(64, cr_stats->ubwc_stats.nCRStatsTile64));
         cr_vec->push_back(std::make_pair(96, cr_stats->ubwc_stats.nCRStatsTile96));
@@ -1055,19 +1099,20 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   void *handle = const_cast<native_handle_t *>(pvt_handle);
 
   std::string name = "";
-  gralloc::GetMetaDataValue(handle, android::gralloc4::MetadataType_Name.value, &name);
+  buffer_allocator_->GetMetadataValue(handle, SnapMetadataType::NAME, &name, sizeof(name));
   name_ = name;
 
   float fps = 0;
   uint32_t frame_rate = layer->frame_rate;
-  if (gralloc::GetMetaDataValue(handle, qtigralloc::MetadataType_RefreshRate.value, &fps) ==
-      gralloc::Error::NONE) {
+  if (!buffer_allocator_->GetMetadataValue(handle, SnapMetadataType::REFRESH_RATE, &fps,
+                                           sizeof(fps))) {
     frame_rate = (fps != 0) ? RoundToStandardFPS(fps) : layer->frame_rate;
     has_metadata_refresh_rate_ = true;
   }
 
   int32_t interlaced = 0;
-  gralloc::GetMetaDataValue(handle, qtigralloc::MetadataType_PPParamInterlaced.value, &interlaced);
+  buffer_allocator_->GetMetadataValue(handle, SnapMetadataType::PP_PARAM_INTERLACED, &interlaced,
+                                      sizeof(interlaced));
   bool interlace = interlaced ? true : false;
 
   if (interlace != layer_buffer->flags.interlace) {
@@ -1076,9 +1121,10 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   }
 
   uint32_t linear_format = 0;
-  if (gralloc::GetMetaDataValue(handle, qtigralloc::MetadataType_LinearFormat.value,
-                                &linear_format) == gralloc::Error::NONE) {
-    layer_buffer->format = GetSDMFormat(INT32(linear_format), 0);
+  if (!buffer_allocator_->GetMetadataValue(handle, SnapMetadataType::LINEAR_FORMAT, &linear_format,
+                                           sizeof(linear_format))) {
+    layer_buffer->format = GetSDMFormat(
+        INT32(linear_format), 0, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
   }
 
   if ((interlace != layer_buffer->flags.interlace) || (frame_rate != layer->frame_rate)) {
@@ -1089,28 +1135,30 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   }
 
   // Check if metadata is set
-  struct UBWCStats cr_stats[NUM_UBWC_CR_STATS_LAYERS] = {};
+  struct vendor_qti_hardware_display_common_UBWCStats cr_stats[NUM_UBWC_CR_STATS_LAYERS] = {};
 
   for (int i = 0; i < NUM_UBWC_CR_STATS_LAYERS; i++) {
     layer_buffer->ubwc_crstats[i].clear();
   }
 
-  if (gralloc::GetMetaDataValue(handle, qtigralloc::MetadataType_UBWCCRStatsInfo.value, cr_stats) ==
-      gralloc::Error::NONE) {
+  if (!buffer_allocator_->GetMetadataValue(handle, SnapMetadataType::UBWC_CR_STATS_INFO, cr_stats,
+                                           sizeof(cr_stats))) {
     // Only copy top layer for now as only top field for interlaced is used
     GetUBWCStatsFromMetaData(&cr_stats[0], &(layer_buffer->ubwc_crstats[0]));
   }
 
   uint32_t single_buffer = 0;
-  gralloc::GetMetaDataValue(handle, qtigralloc::MetadataType_SingleBufferMode.value,
-                            &single_buffer);
+  buffer_allocator_->GetMetadataValue(handle, SnapMetadataType::SINGLE_BUFFER_MODE, &single_buffer,
+                                      sizeof(single_buffer));
   single_buffer_ = (single_buffer == 1);
 
   // Handle colorMetaData / Dataspace handling now
   ValidateAndSetCSC(static_cast<native_handle_t *>(handle));
 
-  int extended_md_set = qtigralloc::getMetadataState(handle, QTI_CUSTOM_CONTENT_METADATA);
-  if (extended_md_set > 0) {
+  bool extended_md_set = false;
+  mapper::GetMetadataState(static_cast<buffer_handle_t>(handle),
+                           SnapMetadataType::CUSTOM_CONTENT_METADATA, &extended_md_set);
+  if (extended_md_set) {
     std::shared_ptr<CustomContentMetadata> dv_md = std::make_shared<CustomContentMetadata>();
     int err = buffer_allocator_->GetCustomContentMetadata(handle, dv_md.get());
 
@@ -1133,9 +1181,9 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
       IsHdr(layer_buffer->color_metadata.colorPrimaries, layer_buffer->color_metadata.transfer)) {
     VideoHistogramMetadata histogram = {};
     if (layer_->update_mask.test(kContentMetadata) == false &&
-        gralloc::GetMetaDataValue(static_cast<native_handle_t *>(handle),
-                                  qtigralloc::MetadataType_VideoHistogramStats.value,
-                                  &histogram) == gralloc::Error::NONE) {
+        !buffer_allocator_->GetMetadataValue(static_cast<native_handle_t *>(handle),
+                                             SnapMetadataType::VIDEO_HISTOGRAM_STATS, &histogram,
+                                             sizeof(histogram))) {
       uint32_t bins = histogram.stat_len / sizeof(histogram.stats_info[0]);
       layer_buffer->hist_data.display_width = layer_buffer->unaligned_width;
       layer_buffer->hist_data.display_height = layer_buffer->unaligned_height;
@@ -1154,12 +1202,19 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
 
   layer_buffer->timestamp_data.valid = false;
 
-  int timestamp_set = qtigralloc::getMetadataState(handle, QTI_VIDEO_TS_INFO);
-  if (timestamp_set > 0) {
+  bool timestamp_set = false;
+  mapper::GetMetadataState(static_cast<buffer_handle_t>(handle), SnapMetadataType::VIDEO_TS_INFO,
+                           &timestamp_set);
+  if (timestamp_set) {
     VideoTimestampInfo timestamp_info = {};
-    int err = static_cast<int>(qtigralloc::get(handle, QTI_VIDEO_TS_INFO, &timestamp_info));
-
-    if (!err && timestamp_info.enable) {
+    auto mapper = GetMapperInstance();
+    if (!mapper) {
+      return kErrorResources;
+    }
+    auto err = STABLEMAPPER(mapper).getMetadata(
+        static_cast<buffer_handle_t>(handle), VENDOR_QTI_METADATA(SnapMetadataType::VIDEO_TS_INFO),
+        &timestamp_info, sizeof(timestamp_info));
+    if (err >= 0 && timestamp_info.enable) {
       layer_buffer->timestamp_data.valid = true;
       layer_buffer->timestamp_data.frame_number = timestamp_info.frame_number;
       layer_buffer->timestamp_data.frame_timestamp_us = timestamp_info.frame_timestamp_us;

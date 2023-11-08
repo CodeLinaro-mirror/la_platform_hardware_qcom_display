@@ -29,6 +29,7 @@ namespace graphics {
 namespace allocator {
 namespace impl {
 
+using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 using ::android::sp;
 using ::android::hardware::hidl_array;
 using ::android::hardware::hidl_memory;

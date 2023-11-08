@@ -28,7 +28,6 @@
 #define __HWC_DISPLAY_H__
 
 #include <QService.h>
-#include <android/hardware/graphics/common/1.2/types.h>
 #include <aidl/android/hardware/graphics/common/BufferUsage.h>
 #include <core/core_interface.h>
 #include <private/color_params.h>
@@ -48,16 +47,16 @@
 #include "hwc_layers.h"
 #include "hwc_buffer_sync_handler.h"
 
-namespace composer_V3 = aidl::android::hardware::graphics::composer3;
+namespace composer3 = aidl::android::hardware::graphics::composer3;
 using aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::Hdr;
-using composer_V3::ColorMode;
-using composer_V3::RenderIntent;
-using HwcAttribute = composer_V3::DisplayAttribute;
-using VsyncPeriodChangeConstraints = composer_V3::VsyncPeriodChangeConstraints;
-using ClientTargetProperty = composer_V3::ClientTargetProperty;
-using DisplayConfiguration = composer_V3::DisplayConfiguration;
-using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
+using DisplayConfiguration = composer3::DisplayConfiguration;
+using composer3::ColorMode;
+using composer3::RenderIntent;
+using HwcAttribute = composer3::DisplayAttribute;
+using VsyncPeriodChangeConstraints = composer3::VsyncPeriodChangeConstraints;
+using ClientTargetProperty = composer3::ClientTargetProperty;
+using APixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
 
 typedef uint32_t VsyncPeriodNanos;
 
@@ -374,8 +373,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC3::Error GetHdrCapabilities(uint32_t *out_num_types, int32_t *out_types,
                                          float *out_max_luminance, float *out_max_average_luminance,
                                          float *out_min_luminance);
-  virtual HWC3::Error getDisplayDecorationSupport(PixelFormat_V3 *format,
-                                                  AlphaInterpretation *alpha);
+  virtual HWC3::Error getDisplayDecorationSupport(APixelFormat *format, AlphaInterpretation *alpha);
   virtual HWC3::Error GetPerFrameMetadataKeys(uint32_t *out_num_keys,
                                               PerFrameMetadataKey *out_keys);
   virtual HWC3::Error SetDisplayAnimating(bool animating);

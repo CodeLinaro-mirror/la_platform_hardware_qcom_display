@@ -647,7 +647,8 @@ ScopedAStatus DisplayConfigAIDL::isRotatorSupportedFormat(int hal_format, bool u
 
   int flag = ubwc ? qtigralloc::PRIV_FLAGS_UBWC_ALIGNED : 0;
 
-  sdm::LayerBufferFormat sdm_format = sdm::HWCLayer::GetSDMFormat(hal_format, flag);
+  sdm::LayerBufferFormat sdm_format = sdm::HWCLayer::GetSDMFormat(
+      hal_format, flag, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
 
   *supported = hwc_session_->core_intf_->IsRotatorSupportedFormat(sdm_format);
   return ScopedAStatus::ok();

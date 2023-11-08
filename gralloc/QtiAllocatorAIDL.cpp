@@ -16,9 +16,16 @@
 #include <fstream>
 
 #include "QtiMapper4.h"
+#include "QtiMapper5.h"
 #include "gr_utils.h"
+#include "mapper_utils.h"
+
+#include <dlfcn.h>
+#include <vndksupport/linker.h>
 
 using gralloc::Error;
+using mapper::GetStandardMetadata;
+using mapper::GetVendorMetadata;
 
 namespace aidl {
 namespace android {
@@ -26,6 +33,8 @@ namespace hardware {
 namespace graphics {
 namespace allocator {
 namespace impl {
+
+typedef AIMapper_Error (*AIMapper_loadIMapperFn)(AIMapper *_Nullable *_Nonnull outImplementation);
 
 static void GetProperties(gralloc::GrallocProperties *props) {
   props->use_system_heap_for_sensors = property_get_bool(USE_SYSTEM_HEAP_FOR_SENSORS_PROP, 1);
@@ -101,14 +110,32 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
                                          AllocationResult *result, gralloc::BufferDescriptor desc,
                                          int32_t count) {
   // Getting the mapper service
-  sp<IMapper_v4> mapper_ = IMapper_v4::getService();
-  if (!mapper_.get()) {
-    ALOGE("Falied to get mapper service");
-    return 0;
+  static AIMapper *mapper_ = nullptr;
+
+  if (!mapper_) {
+    std::string suffix;
+    if (!getIMapperLibrarySuffix(&suffix).isOk()) {
+      suffix = "qti";
+    }
+    std::string lib_name = "mapper." + suffix + ".so";
+    void *so = android_load_sphal_library(lib_name.c_str(), RTLD_LOCAL | RTLD_NOW);
+    if (!so) {
+      ALOGE("Failed to load %s", lib_name.c_str());
+      return 0;
+    }
+
+    auto loadIMapper = (AIMapper_loadIMapperFn)dlsym(so, "AIMapper_loadIMapper");
+    AIMapper_Error error = loadIMapper(&mapper_);
+    if (error != AIMAPPER_ERROR_NONE) {
+      ALOGE("AIMapper_loadIMapper failed %d", error);
+      return 0;
+    }
   }
+
   ALOGD_IF(enable_logs_, "Mapper service obtained successfully");
   uint64_t id, size_from_get, usage_from_get, reserved_region_size = 0;
-  uint32_t width_from_get, height_from_get, fd, flags;
+  int64_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
+  uint32_t width_from_get, height_from_get, fd;
   PixelFormat format_from_get;
   std::string heap_name;
   std::vector<AidlPlaneLayout> plane_layouts;
@@ -117,6 +144,7 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
   std::streamoff filesize;
   std::string json_string;
   std::fstream fs;
+  void *reserved_region_ptr = nullptr;
 
   native_handle_t *hnd = ::android::makeFromAidl(result->buffers[0]);
   if (!hnd) {
@@ -125,159 +153,122 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
   }
   ALOGD_IF(enable_logs_, "Successfully retrieved the handle");
 
-  ::android::hardware::hidl_handle pass_in_hnd = ::android::hardware::hidl_handle(hnd);
-  native_handle_t *buf_hnd = nullptr;
+  buffer_handle_t buf_hnd = nullptr;
 
-  Error_v4 tmp_error;
-  mapper_->importBuffer(pass_in_hnd, [&](const auto &_error, const auto &_buffer) {
-    if (_error != Error_v4::NONE) {
-      ALOGE("Failed to import the buffer %d", _error);
-      tmp_error = _error;
-    } else {
-      buf_hnd = static_cast<native_handle_t *>(_buffer);
+  auto mapper_err = STABLEMAPPER(mapper_).importBuffer(hnd, &buf_hnd);
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    ALOGW("Failed to import buffer.");
+    goto end;
+  }
+
+  // Get pixel format
+  {
+    auto result =
+        GetStandardMetadata<StandardMetadataType::PIXEL_FORMAT_REQUESTED>(mapper_, buf_hnd);
+    if (!result.has_value()) {
+      ALOGW("Failed to get Metadata - PixelFormatRequested");
+      goto end;
     }
-  });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_PixelFormatRequested,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - PixelFormatRequested");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodePixelFormatRequested(_bytestream, &format_from_get);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_BufferId,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - BufferId");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeBufferId(_bytestream, &id);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-  mapper_->get(buf_hnd, qtigralloc::MetadataType_AlignedWidthInPixels,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - AlignedWidthInPixels");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_AlignedWidthInPixels,
-                                                     _bytestream, &width_from_get);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-  mapper_->get(buf_hnd, qtigralloc::MetadataType_AlignedHeightInPixels,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - AlignedHeightInPixels");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_AlignedHeightInPixels,
-                                                     _bytestream, &height_from_get);
-                 }
-               });
-
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_AllocationSize,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - AllocationSize");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeAllocationSize(_bytestream, &size_from_get);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-  mapper_->get(buf_hnd, qtigralloc::MetadataType_FD,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - FD");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_FD, _bytestream, &fd);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
+    format_from_get = static_cast<PixelFormat>(*result);
   }
 
-  mapper_->get(buf_hnd, qtigralloc::MetadataType_PrivateFlags,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - PrivateFlags");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_PrivateFlags,
-                                                     _bytestream, &flags);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-
-  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_Usage,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - Usage");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeUsage(_bytestream, &usage_from_get);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
-    goto end;
-  }
-
-  mapper_->getReservedRegion(buf_hnd, [&](const auto &_error, const auto _ptr, const auto &_size) {
-    if (_error != Error_v4::NONE) {
-      ALOGE("Failed to get Reserved Region");
-    } else {
-      reserved_region_size = _size;
+  // Get buffer id
+  {
+    auto result = GetStandardMetadata<StandardMetadataType::BUFFER_ID>(mapper_, buf_hnd);
+    if (!result.has_value()) {
+      ALOGW("Failed to get Metadata - BufferId");
+      goto end;
     }
-  });
+    id = static_cast<uint64_t>(*result);
+  }
 
-  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_PlaneLayouts,
-               [&](const auto &_error, const auto &_bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - PlaneLayouts");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodePlaneLayouts(_bytestream, &plane_layouts);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
+  // Get stride
+  {
+    auto result = GetStandardMetadata<StandardMetadataType::STRIDE>(mapper_, buf_hnd);
+    if (!result.has_value()) {
+      ALOGW("Failed to get Metadata - Stride/AlignedWidthInPixels");
+      goto end;
+    }
+    width_from_get = static_cast<uint32_t>(*result);
+  }
+
+  // Get aligned height
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS,
+                                 static_cast<void *>(&height_from_get), sizeof(height_from_get));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
     goto end;
+  }
+
+  // Get allocation size
+  {
+    auto result = GetStandardMetadata<StandardMetadataType::ALLOCATION_SIZE>(mapper_, buf_hnd);
+    if (!result.has_value()) {
+      ALOGW("Failed to get Metadata - AllocationSize");
+      goto end;
+    }
+    size_from_get = static_cast<uint64_t>(*result);
+  }
+
+  // Get FD
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::FD, static_cast<void *>(&fd),
+                                 sizeof(fd));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
+
+  // Get private flags
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::IS_UBWC,
+                                 static_cast<void *>(&is_ubwc), sizeof(is_ubwc));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::IS_TILE_RENDERED,
+                                 static_cast<void *>(&is_tile_rendered), sizeof(is_tile_rendered));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::IS_CACHED,
+                                 static_cast<void *>(&is_cached), sizeof(is_cached));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
+
+  // Get usage
+  {
+    auto result = GetStandardMetadata<StandardMetadataType::USAGE>(mapper_, buf_hnd);
+    if (!result.has_value()) {
+      ALOGW("Failed to get Metadata - AllocationSize");
+      goto end;
+    }
+    usage_from_get = static_cast<uint64_t>(*result);
+  }
+
+  // Get reserved region size
+  mapper_err =
+      STABLEMAPPER(mapper_).getReservedRegion(buf_hnd, &reserved_region_ptr, &reserved_region_size);
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    ALOGW("Failed to get Reserved Region");
+    goto end;
+  }
+
+  // Get plane layouts
+  {
+    auto result = GetStandardMetadata<StandardMetadataType::PLANE_LAYOUTS>(mapper_, buf_hnd);
+    if (!result.has_value()) {
+      ALOGW("Failed to get Metadata - PlaneLayouts");
+      goto end;
+    }
+    plane_layouts = static_cast<std::vector<AidlPlaneLayout>>(*result);
   }
 
 #ifdef QTI_HEAP_NAME
-  mapper_->get(buf_hnd, qtigralloc::MetadataType_HeapName,
-               [&](const auto _error, const auto _bytestream) {
-                 if (_error != Error_v4::NONE) {
-                   ALOGE("Failed to get Metadata - Heap Name");
-                   tmp_error = _error;
-                 } else {
-                   ::android::gralloc4::decodeString(qtigralloc::MetadataType_HeapName, _bytestream,
-                                                     &heap_name);
-                 }
-               });
-  if (tmp_error != Error_v4::NONE) {
+  // Get heap name
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::HEAP_NAME,
+                                 static_cast<void *>(&heap_name), sizeof(heap_name));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
     goto end;
   }
+
   json_entry["heapName"] = heap_name.c_str();
 #endif
 
@@ -288,7 +279,9 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
   json_entry["requestedHeight"] = desc.GetHeight();
   json_entry["size"] = size_from_get;
   json_entry["fd"] = fd;
-  json_entry["flags"] = flags;
+  json_entry["isUBWC"] = is_ubwc;
+  json_entry["isTileRendered"] = is_tile_rendered;
+  json_entry["isCached"] = is_cached;
   json_entry["usage"] = usage_from_get;
   json_entry["format"] = static_cast<int32_t>(format_from_get);
   json_entry["layerCount"] = desc.GetLayerCount();
@@ -341,7 +334,7 @@ end:
   if (!snap_helper_->IsSnapAllocEnabled()) {
     buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buf_hnd));
   } else {
-    auto status = snap_helper_->Free(static_cast<native_handle_t *>(buf_hnd));
+    auto status = snap_helper_->Free(const_cast<native_handle_t *>(buf_hnd));
   }
   native_handle_delete(hnd);
   hnd = nullptr;

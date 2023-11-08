@@ -103,15 +103,17 @@ HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
       }
       uint32_t width, height, alloc_size = 0;
       int32_t format, flags = 0;
+      int64_t compression_type;
       buffer_allocator_->GetWidth((void *)output_handle, width);
       buffer_allocator_->GetHeight((void *)output_handle, height);
       buffer_allocator_->GetFormat((void *)output_handle, format);
       buffer_allocator_->GetPrivateFlags((void *)output_handle, flags);
       buffer_allocator_->GetAllocationSize((void *)output_handle, alloc_size);
+      buffer_allocator_->GetCompressionType((void *)output_handle, compression_type);
 
       buffer_info.buffer_config.width = width;
       buffer_info.buffer_config.height = height;
-      buffer_info.buffer_config.format = HWCLayer::GetSDMFormat(format, flags);
+      buffer_info.buffer_config.format = HWCLayer::GetSDMFormat(format, flags, compression_type);
       buffer_info.alloc_buffer_info.aligned_width = width;
       buffer_info.alloc_buffer_info.aligned_height = height;
       buffer_info.alloc_buffer_info.size = alloc_size;
@@ -146,16 +148,18 @@ HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
 
   if (output_handle) {
     int output_handle_format, output_handle_flags = 0;
+    int64_t output_compression_type;
     buffer_allocator_->GetPrivateFlags((void *)output_handle, output_handle_flags);
     buffer_allocator_->GetFormat((void *)output_handle, output_handle_format);
+    buffer_allocator_->GetCompressionType((void *)output_handle, output_compression_type);
     ColorMetaData color_metadata = {};
 
-    if (output_handle_format == static_cast<int>(PixelFormat_V3::RGBA_8888)) {
-      output_handle_format = static_cast<int>(PixelFormat_V3::RGBX_8888);
+    if (output_handle_format == static_cast<int>(APixelFormat::RGBA_8888)) {
+      output_handle_format = static_cast<int>(APixelFormat::RGBX_8888);
     }
 
     LayerBufferFormat new_sdm_format =
-        HWCLayer::GetSDMFormat(output_handle_format, output_handle_flags);
+        HWCLayer::GetSDMFormat(output_handle_format, output_handle_flags, output_compression_type);
     if (new_sdm_format == kFormatInvalid) {
       return HWC3::Error::BadParameter;
     }

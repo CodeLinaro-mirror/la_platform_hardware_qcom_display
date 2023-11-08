@@ -288,7 +288,7 @@ Return<Error> QtiMapperExtensions::setSingleBufferMode(void *buffer, bool enable
     ALOGE("%s is not yet implemented for SnapAlloc", __FUNCTION__);
     // TODO: Dheepthi - change this to encode helper or update once SetMetadata uploaded [Done]
     int snap_ret = snap_helper_->SetMetadata(static_cast<native_handle_t *>(buffer),
-                                             QTI_SINGLE_BUFFER_MODE, &enable);
+                                             QTI_SINGLE_BUFFER_MODE, &enable, 0);
     err = (snap_ret == 0) ? Error::NONE : Error::UNSUPPORTED;
   } else {
     if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {

@@ -785,7 +785,7 @@ HWC3::Error HWCSession::GetReleaseFences(Display display, uint32_t *out_num_elem
                              out_fences);
 }
 
-HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
+HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, APixelFormat *format,
                                                     AlphaInterpretation *alpha) {
   if (disable_get_screen_decorator_support_) {
     return HWC3::Error::Unsupported;
@@ -2178,7 +2178,8 @@ android::status_t HWCSession::SetFrameDumpConfig(const android::Parcel *input_pa
     output_format = input_parcel->readInt32();
   }
 
-  LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(output_format, 0);
+  LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(
+      output_format, 0, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
   if (sdm_format == kFormatInvalid) {
     DLOGW("Format %d is not supported by SDM", output_format);
     return -EINVAL;
@@ -4654,10 +4655,10 @@ HWC3::Error HWCSession::SetExpectedPresentTime(Display display, uint64_t expecte
 
 HWC3::Error HWCSession::GetOverlaySupport(OverlayProperties *supported_props) {
   // All individually supported properties by hardware
-  static std::vector<PixelFormat_V3> pixel_formats{
-      PixelFormat_V3::RGBA_8888,    PixelFormat_V3::RGBX_8888,    PixelFormat_V3::RGB_888,
-      PixelFormat_V3::RGB_565,      PixelFormat_V3::BGRA_8888,    PixelFormat_V3::YV12,
-      PixelFormat_V3::YCRCB_420_SP, PixelFormat_V3::RGBA_1010102, PixelFormat_V3::RGBA_FP16};
+  static std::vector<APixelFormat> pixel_formats{
+      APixelFormat::RGBA_8888,    APixelFormat::RGBX_8888,    APixelFormat::RGB_888,
+      APixelFormat::RGB_565,      APixelFormat::BGRA_8888,    APixelFormat::YV12,
+      APixelFormat::YCRCB_420_SP, APixelFormat::RGBA_1010102, APixelFormat::RGBA_FP16};
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
