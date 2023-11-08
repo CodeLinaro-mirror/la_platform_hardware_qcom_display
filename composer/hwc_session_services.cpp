@@ -696,31 +696,26 @@ int HWCSession::DisplayConfigImpl::queueTunnelledBuffer(const native_handle_t* b
     hwc_session_->tunneled_layer_ = -1;
     return error;
   }
-
-  if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
-    error = hwc_session_->ValidateDisplay(hwc_session_->tunneled_display_id_, &types_count,
-                                          &reqs_count);
-    if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
-      DLOGE("ValidateDisplay failed! Exiting queueTunnelledBuffer.\n");
+  {
+    SCOPE_LOCK(tunnel_lock);
+    if (hwc_display->IsSkipValidateState() && !hwc_display->CanSkipValidate()) {
+      error = hwc_session_->ValidateDisplay(hwc_session_->tunneled_display_id_, &types_count,
+                                            &reqs_count);
+      if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
+        DLOGE("ValidateDisplay failed! Exiting queueTunnelledBuffer.\n");
+        hwc_session_->tunneled_layer_ = -1;
+        return error;
+      }
+    }
+    shared_ptr<Fence> presentfence = nullptr;
+    error = hwc_session_->PresentDisplay(hwc_session_->tunneled_display_id_, &presentfence);
+    if (error != HWC2_ERROR_NONE) {
+      DLOGE("PresentDisplay failed! Exiting queueTunnelledBuffer.\n");
       hwc_session_->tunneled_layer_ = -1;
       return error;
     }
+    close(std::stoi(Fence::GetStr(presentfence)));
   }
-  hwc_session_->IsTunnelledLayerPresent(hwc_session_->tunneled_display_id_,
-                                        &tunneled_layer_present);
-  if (tunneled_layer_present == false || hwc_session_->tunneled_layer_ == -1) {
-    hwc_session_->tunneled_layer_ = -1;
-    DLOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
-    return EINVAL;
-  }
-  shared_ptr<Fence> presentfence = nullptr;
-  error = hwc_session_->PresentDisplay(hwc_session_->tunneled_display_id_, &presentfence);
-  if (error != HWC2_ERROR_NONE) {
-    DLOGE("PresentDisplay failed! Exiting queueTunnelledBuffer.\n");
-    hwc_session_->tunneled_layer_ = -1;
-    return error;
-  }
-  close(std::stoi(Fence::GetStr(presentfence)));
   auto hwc_layer = hwc_display->GetHWCLayer(hwc_session_->tunneled_layer_);
   if (hwc_layer == nullptr) {
     DLOGE("Unable to fetch corresponding hwc_layer for tunneled layer");

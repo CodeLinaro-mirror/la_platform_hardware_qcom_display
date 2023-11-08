@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -220,14 +220,16 @@ DisplayError DisplayBuiltIn::CreatePanelfeatures() {
 
   if (!GetPanelFeatureFactoryIntfFunc_) {
     DynLib feature_impl_lib;
-    if (feature_impl_lib.Open(EXTENSION_LIBRARY_NAME)) {
+    if (feature_impl_lib.Open(EXTENSION_TE_LIBRARY_NAME) ||
+        feature_impl_lib.Open(EXTENSION_LIBRARY_NAME)) {
       if (!feature_impl_lib.Sym("GetPanelFeatureFactoryIntf",
                                 reinterpret_cast<void **>(&GetPanelFeatureFactoryIntfFunc_))) {
         DLOGE("Unable to load symbols, error = %s", feature_impl_lib.Error());
         return kErrorUndefined;
       }
     } else {
-      DLOGW("Unable to load = %s, error = %s", EXTENSION_LIBRARY_NAME, feature_impl_lib.Error());
+      DLOGW("Unable to load = %s or %s, error = %s", EXTENSION_TE_LIBRARY_NAME,
+            EXTENSION_LIBRARY_NAME, feature_impl_lib.Error());
       DLOGW("Panel features are not supported");
       return kErrorNotSupported;
     }

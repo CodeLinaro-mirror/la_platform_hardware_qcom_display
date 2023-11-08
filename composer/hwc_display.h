@@ -344,6 +344,7 @@ class HWCDisplay : public DisplayEventHandler {
   }
   bool IsFirstCommitDone() { return !first_cycle_; }
   virtual void ProcessActiveConfigChange();
+  bool IsValidated() { return validated_; }
 
   // HWC2 APIs
   virtual HWC2::Error AcceptDisplayChanges(void);

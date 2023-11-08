@@ -106,6 +106,7 @@ static const int kSolidFillDelay = 100 * 1000;
 int HWCSession::null_display_mode_ = 0;
 static const uint32_t kBrightnessScaleMax = 100;
 static const uint32_t kSvBlScaleMax = 65535;
+Locker HWCSession::tunnel_lock;
 
 // Map the known color modes to dataspace.
 int32_t GetDataspaceFromColorMode(ColorMode mode) {
@@ -1479,7 +1480,8 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
       return HWC2::Error::Unsupported;
     }
   }
-  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+  // CWB is not supported for pluggable primary displays.
+  if (hwc_display_[HWC_DISPLAY_PRIMARY] && !pluggable_is_primary_) {
     DisplayError error = hwc_display_[HWC_DISPLAY_PRIMARY]->TeardownCwbForVirtualDisplay();
     if (error) {
       return HWC2::Error::NoResources;
@@ -3843,7 +3845,8 @@ int32_t HWCSession::GetDisplayConnectionType(hwc2_display_t display,
     return HWC2_ERROR_BAD_DISPLAY;
   }
   *type = HwcDisplayConnectionType::EXTERNAL;
-  if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN) {
+  if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN ||
+      (display == HWC_DISPLAY_PRIMARY && pluggable_is_primary_)) {
     *type = HwcDisplayConnectionType::INTERNAL;
   }
 

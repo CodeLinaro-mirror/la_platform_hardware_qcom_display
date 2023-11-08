@@ -71,8 +71,8 @@ namespace sdm {
 
 DisplayError DisplayNull::Init() {
   default_variable_config_.vsync_period_ns = 16600000;
-  default_variable_config_.x_pixels = 1080;
-  default_variable_config_.y_pixels = 1920;
+  default_variable_config_.x_pixels = 1920;
+  default_variable_config_.y_pixels = 1080;
   default_variable_config_.x_dpi = 300;
   default_variable_config_.y_dpi = 300;
   default_variable_config_.fps = 60;
