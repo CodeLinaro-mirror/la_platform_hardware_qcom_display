@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -201,7 +201,7 @@ int HWCColorManager::SetSolidFill(const void *params, bool enable, HWCDisplay *h
   solid_fill_color.red = solid_fill_params_.color.r;
   solid_fill_color.blue = solid_fill_params_.color.b;
   solid_fill_color.green = solid_fill_params_.color.g;
-  solid_fill_color.alpha = 0x3ff;
+  solid_fill_color.alpha = 0xffff;
 
   if (enable) {
     LayerRect solid_fill_rect = {
