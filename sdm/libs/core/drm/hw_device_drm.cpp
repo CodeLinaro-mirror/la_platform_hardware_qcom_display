@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -335,6 +335,11 @@ HWDeviceDRM::Registry::Registry(BufferAllocator *buffer_allocator) :
 }
 
 void HWDeviceDRM::Registry::Register(HWLayers *hw_layers) {
+  Register(hw_layers, false);
+}
+
+void HWDeviceDRM::Registry::Register(HWLayers *hw_layers, bool is_custom_intf_format) {
+  is_custom_intf_format_ = is_custom_intf_format;
   HWLayersInfo &hw_layer_info = hw_layers->info;
   uint32_t hw_layer_count = UINT32(hw_layer_info.hw_layers.size());
 
@@ -358,6 +363,46 @@ void HWDeviceDRM::Registry::Register(HWLayers *hw_layers) {
   }
 }
 
+int HWDeviceDRM::Registry::GetCustomIntfFormatWidth(LayerBufferFormat in_format,
+                                                    LayerBufferFormat out_format,
+                                                    int width) {
+  if (!is_custom_intf_format_) {
+    return width;
+  }
+
+  int in_bpp = 4, out_bpp = 3;
+
+  // Can extend for other formats
+  switch (in_format) {
+    case kFormatRGBA8888:
+      in_bpp = 4;
+      break;
+    default:
+      in_bpp = 4;
+      break;
+  }
+
+  // Can extend for other formats
+  switch (out_format) {
+    case kFormatRGB888:
+      out_bpp = 3;
+      break;
+    default:
+      out_bpp = 3;
+      break;
+  }
+
+  if (out_bpp == 0) {
+    DLOGE("Incorrect arguments for custom width calculation.");
+    return width;
+  }
+
+  // Expected value for remain is zero as per resolution requirements
+  int remain = (width * in_bpp) % out_bpp;
+  int padding = remain ? out_bpp - remain : 0;
+  return (width * in_bpp) / out_bpp + padding;
+}
+
 int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id) {
   DRMMaster *master = nullptr;
   DRMMaster::GetInstance(&master);
@@ -371,9 +416,18 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id
   DRMBuffer layout{};
   AllocatedBufferInfo buf_info{};
   buf_info.fd = layout.fd = buffer.planes[0].fd;
-  buf_info.aligned_width = layout.width = buffer.width;
+  LayerBufferFormat custom_format = kFormatRGB888;
+  buf_info.aligned_width = layout.width = GetCustomIntfFormatWidth(buf_info.format,
+                                                                   custom_format,
+                                                                   buffer.width);
   buf_info.aligned_height = layout.height = buffer.height;
-  buf_info.format = buffer.format;
+
+  if (is_custom_intf_format_ && buffer.format == kFormatRGBA8888) {
+    buf_info.format = custom_format;
+  } else {
+    buf_info.format = buffer.format;
+  }
+
   GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier);
   buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset, &layout.num_planes);
   ret = master->CreateFbId(layout, fb_id);
@@ -495,6 +549,14 @@ DisplayError HWDeviceDRM::Init() {
   Debug::GetProperty(DISABLE_CONT_SPLASH_HANDOFF, &disable_cont_splash_handoff_);
   DLOGI("Disable continuous splash handoff = %d", disable_cont_splash_handoff_);
 
+  Debug::GetProperty(USE_CUSTOM_INTF_FORMAT, &use_custom_intf_format_);
+  DLOGD("Enable custom interface format property value = %d", use_custom_intf_format_);
+
+  if (use_custom_intf_format_) {
+    Debug::GetProperty(CUSTOM_INTF_WIDTH, &custom_intf_width_);
+    DLOGI("Custom intf width = %d", custom_intf_width_);
+  }
+
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {
       DLOGE("RegisterDisplay (by type) failed for %s", device_name_);
@@ -565,6 +627,13 @@ DisplayError HWDeviceDRM::Init() {
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr(new HWColorManagerDrm());
   hw_color_mgr_ = std::move(hw_color_mgr);
 
+  use_custom_intf_format_ = use_custom_intf_format_ &&
+                            connector_info_.type == DRM_MODE_CONNECTOR_DisplayPort;
+
+  if (use_custom_intf_format_) {
+    DLOGI("Enabled custom interface format support for DP interface.");
+  }
+
   return kErrorNone;
 }
 
@@ -627,8 +696,15 @@ void HWDeviceDRM::InitializeConfigs() {
 
   uint32_t width = connector_info_.modes[current_mode_index_].mode.hdisplay;
   uint32_t height = connector_info_.modes[current_mode_index_].mode.vdisplay;
+  bool custom_index_set = false;
   for (uint32_t i = 0; i < connector_info_.modes.size(); i++) {
     auto &mode = connector_info_.modes[i].mode;
+    if (use_custom_intf_format_ && !custom_index_set &&
+        mode.hdisplay == custom_intf_width_) {
+      custom_intf_mode_index_ = i;
+      custom_index_set = true;
+      DLOGI("Custom interface mode index: %d", custom_intf_mode_index_);
+    }
     if (mode.hdisplay != width || mode.vdisplay != height) {
       resolution_switch_enabled_ = true;
     }
@@ -1144,6 +1220,7 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
   DRMSecurityLevel crtc_security_level = DRMSecurityLevel::SECURE_NON_SECURE;
   uint32_t index = current_mode_index_;
   drmModeModeInfo current_mode = connector_info_.modes[index].mode;
+  drmModeModeInfo custom_mode = connector_info_.modes[custom_intf_mode_index_].mode;
   uint64_t current_bit_clk = connector_info_.modes[index].bit_clk_rate;
   DRMTopology topology = connector_info_.modes[index].topology;
 
@@ -1397,7 +1474,11 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
   // Set CRTC mode, only if display config changes
   if (first_cycle_ || vrefresh_ || update_mode_ || panel_mode_changed_) {
-    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &current_mode);
+    if (use_custom_intf_format_) {
+      drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &custom_mode);
+    } else {
+      drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &current_mode);
+    }
   }
 
   if (!validate && (hw_layer_info.set_idle_time_ms >= 0)) {
@@ -1455,7 +1536,7 @@ DisplayError HWDeviceDRM::Validate(HWLayers *hw_layers) {
   DTRACE_SCOPED();
 
   DisplayError err = kErrorNone;
-  registry_.Register(hw_layers);
+  registry_.Register(hw_layers, use_custom_intf_format_);
   SetupAtomic(hw_layers, true /* validate */);
 
   int ret = drm_atomic_intf_->Validate();
@@ -1474,7 +1555,7 @@ DisplayError HWDeviceDRM::Commit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
 
   DisplayError err = kErrorNone;
-  registry_.Register(hw_layers);
+  registry_.Register(hw_layers, use_custom_intf_format_);
 
   if (default_mode_) {
     err = DefaultCommit(hw_layers);

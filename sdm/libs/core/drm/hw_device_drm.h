@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -227,6 +227,13 @@ class HWDeviceDRM : public HWInterface {
     explicit Registry(BufferAllocator *buffer_allocator);
     // Called on each Validate and Commit to map the handle_id to fb_id of each layer buffer.
     void Register(HWLayers *hw_layers);
+    // Same as "void Register(HWLayers *hw_layers)" but contains additional logic
+    // to handle custom intf format scenarios
+    void Register(HWLayers *hw_layers, bool is_custom_intf_format);
+    // To get correct format width (either original or custom)
+    int GetCustomIntfFormatWidth(LayerBufferFormat in_format,
+                                 LayerBufferFormat out_format,
+                                 int width);
     // Called on display disconnect to clear output buffer map and remove fb_ids.
     void Clear();
     // Create the fd_id for the given buffer.
@@ -245,6 +252,7 @@ class HWDeviceDRM : public HWInterface {
     std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> output_buffer_map_ {};
     BufferAllocator *buffer_allocator_ = {};
     uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
+    bool is_custom_intf_format_ = false;
   };
 
  protected:
@@ -264,6 +272,7 @@ class HWDeviceDRM : public HWInterface {
   sde_drm::DRMAtomicReqInterface *drm_atomic_intf_ = {};
   std::vector<HWDisplayAttributes> display_attributes_ = {};
   uint32_t current_mode_index_ = 0;
+  uint32_t custom_intf_mode_index_ = 0;
   sde_drm::DRMConnectorInfo connector_info_ = {};
   bool first_cycle_ = true;
   bool first_null_cycle_ = true;
@@ -286,6 +295,8 @@ class HWDeviceDRM : public HWInterface {
   uint32_t dest_scaler_blocks_used_ = 0;  // Dest scaler blocks in use by this HWDeviceDRM instance.
   // Destination scaler blocks in use by all HWDeviceDRM instances.
   static std::atomic<uint32_t> hw_dest_scaler_blocks_used_;
+  int use_custom_intf_format_ = 0;
+  int custom_intf_width_ = 5120;
   int disable_cont_splash_handoff_ = 0;
 
  private:
