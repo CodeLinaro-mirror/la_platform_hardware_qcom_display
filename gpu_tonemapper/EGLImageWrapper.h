@@ -17,11 +17,19 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __TONEMAPPER_EGLIMAGEWRAPPER_H__
 #define __TONEMAPPER_EGLIMAGEWRAPPER_H__
 
 #include <utils/LruCache.h>
+#ifndef TARGET_ION_ABI_VERSION
 #include <linux/msm_ion.h>
+#endif
 #include <string>
 #include <map>
 #include "EGLImageBuffer.h"

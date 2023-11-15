@@ -27,10 +27,16 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GR_ADRENO_INFO_H__
 #define __GR_ADRENO_INFO_H__
 
-#ifdef __ANDROID_T__
+#ifdef __MIN_ANDROID_VER_T__
 #include <display/media/mmm_color_fmt.h>
 #else
 #include <media/msm_media_info.h>
