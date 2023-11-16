@@ -13,6 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/compiler.h>
 #include <log/log.h>
 #include <unistd.h>
@@ -52,8 +60,9 @@ void histogram::Ringbuffer::update_cumulative(nsecs_t now, uint64_t &count,
   for (auto i = 0u; i < bins.size(); i++) {
     ALOGI("histogram.data[%d]: %u\n", i, ringbuffer.front().histogram.data[i]);
     auto const increment = ringbuffer.front().histogram.data[i] * delta.count();
-    if (CC_UNLIKELY((bins[i] + increment < bins[i]) ||
-                    (increment < ringbuffer.front().histogram.data[i]))) {
+    // Check increment non-0 to avoid overflow in the next hist event
+    if (CC_UNLIKELY(increment && ((bins[i] + increment < bins[i]) ||
+                                  (increment < ringbuffer.front().histogram.data[i])))) {
       bins[i] = std::numeric_limits<uint64_t>::max();
     } else {
       bins[i] += increment;

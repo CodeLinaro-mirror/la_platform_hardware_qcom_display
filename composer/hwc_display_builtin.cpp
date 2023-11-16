@@ -1320,7 +1320,10 @@ void HWCDisplayBuiltIn::AppendStitchLayer() {
 }
 
 DisplayError HWCDisplayBuiltIn::HistogramEvent(int fd, uint32_t blob_id) {
-  histogram.notify_histogram_event(fd, blob_id);
+  uint32_t panel_width = 0;
+  uint32_t panel_height = 0;
+  GetPanelResolution(&panel_width, &panel_height);
+  histogram.notify_histogram_event(fd, blob_id, panel_width, panel_height);
   return kErrorNone;
 }
 
