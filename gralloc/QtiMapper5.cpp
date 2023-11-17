@@ -232,6 +232,9 @@ int32_t QtiMapper5::getMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metada
     return getStandardMetadata(buffer, metadataType.value, outData, outDataSize);
   } else if (isVendorMetadata(metadataType)) {
     auto expected_size = GetExpectedSize(metadataType.value);
+    if (expected_size == 0) {
+      return -AIMAPPER_ERROR_UNSUPPORTED;
+    }
     if (expected_size != outDataSize) {
       ALOGW(
           "Metadata output size %d not equal to expected size %d. Returning without fetching "
@@ -273,6 +276,9 @@ Error QtiMapper5::setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metadata
     return setStandardMetadata(buffer, metadataType.value, metadata, metadataSize);
   } else if (metadataType.name == qtigralloc::VENDOR_QTI) {
     auto expected_size = GetExpectedSize(metadataType.value);
+    if (expected_size == 0) {
+      return AIMAPPER_ERROR_UNSUPPORTED;
+    }
     if (expected_size != metadataSize) {
       ALOGW(
           "Metadata size %d not equal to expected size %d. Returning without setting "
@@ -446,7 +452,7 @@ Error QtiMapper5::dumpAllBuffers(AIMapper_BeginDumpBufferCallback _Nonnull begin
                                  AIMapper_DumpBufferCallback _Nonnull dumpBufferCallback,
                                  void *_Null_unspecified context) {
   REQUIRE_DRIVER()
-  std::vector<buffer_handle_t> handle_list;
+  std::vector<buffer_handle_t> handle_list{};
   if (snap_helper_->GetAllHandles(&handle_list)) {
     return AIMAPPER_ERROR_UNSUPPORTED;
   }
@@ -454,7 +460,9 @@ Error QtiMapper5::dumpAllBuffers(AIMapper_BeginDumpBufferCallback _Nonnull begin
   Error error = AIMAPPER_ERROR_NONE;
   for (auto handle : handle_list) {
     beginDumpBufferCallback(context);
-    if (DumpBufferMetadata(handle, dumpBufferCallback, context) != AIMAPPER_ERROR_NONE) {
+    // Ignore other errors since some vendor metadata types like RGB address and custom metadata
+    // aren't supported for all cases
+    if (DumpBufferMetadata(handle, dumpBufferCallback, context) == AIMAPPER_ERROR_BAD_BUFFER) {
       error = AIMAPPER_ERROR_BAD_BUFFER;
     }
   }

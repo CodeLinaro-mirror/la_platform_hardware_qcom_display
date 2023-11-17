@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -60,7 +60,7 @@ using ::android::hardware::graphics::common::V1_2::PixelFormat;
 using ::android::hidl::base::V1_0::DebugInfo;
 using ::android::hidl::base::V1_0::IBase;
 using gralloc::BufferManager;
-using gralloc::GrallocSnapHelper;
+using gralloc::GrallocSnapHelperLegacy;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::Error;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::PlaneLayout;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::YCbCrLayout;
@@ -106,7 +106,7 @@ class QtiMapperExtensions : public IQtiMapperExtensions {
 
  private:
   BufferManager *buf_mgr_ = nullptr;
-  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+  gralloc::GrallocSnapHelperLegacy *snap_helper_ = nullptr;
   bool enable_logs_ = false;
 };
 

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -221,7 +221,7 @@ class QtiMapper : public IQtiMapper {
 
  private:
   BufferManager *buf_mgr_ = nullptr;
-  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+  gralloc::GrallocSnapHelperLegacy *snap_helper_ = nullptr;
 
   Error CreateDescriptor(const BufferDescriptorInfo_4_0 &descriptor_info,
                          IMapperBufferDescriptor *descriptor);

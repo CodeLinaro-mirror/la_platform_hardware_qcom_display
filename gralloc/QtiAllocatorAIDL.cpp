@@ -35,6 +35,7 @@ namespace allocator {
 namespace impl {
 
 typedef AIMapper_Error (*AIMapper_loadIMapperFn)(AIMapper *_Nullable *_Nonnull outImplementation);
+static AIMapper *mapper_ = nullptr;
 
 static void GetProperties(gralloc::GrallocProperties *props) {
   props->use_system_heap_for_sensors = property_get_bool(USE_SYSTEM_HEAP_FOR_SENSORS_PROP, 1);
@@ -64,13 +65,41 @@ static inline ndk::ScopedAStatus ToBinderStatus(Error error) {
   return ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(ret));
 }
 
+void QtiAllocatorAIDL::LoadQtiMapper5() {
+  if (!mapper_) {
+    std::string suffix;
+    if (!getIMapperLibrarySuffix(&suffix).isOk()) {
+      suffix = "qti";
+    }
+    std::string lib_name = "mapper." + suffix + ".so";
+    void *so = android_load_sphal_library(lib_name.c_str(), RTLD_LOCAL | RTLD_NOW);
+    if (!so) {
+      ALOGW("Failed to load %s", lib_name.c_str());
+      return;
+    }
+
+    auto loadIMapper = (AIMapper_loadIMapperFn)dlsym(so, "AIMapper_loadIMapper");
+    AIMapper_Error error = loadIMapper(&mapper_);
+    if (error != AIMAPPER_ERROR_NONE) {
+      ALOGW("AIMapper_loadIMapper failed %d", error);
+    }
+  }
+}
+
 QtiAllocatorAIDL::QtiAllocatorAIDL() {
+  // Attempt to load IMapper5
+  LoadQtiMapper5();
+
   gralloc::GrallocProperties properties;
   GetProperties(&properties);
   buf_mgr_ = BufferManager::GetInstance();
   buf_mgr_->SetGrallocDebugProperties(properties);
   enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
-  snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+  if (mapper_) {
+    snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+  } else {
+    snap_helper_ = gralloc::GrallocSnapHelperLegacy::GetInstance();
+  }
   enable_allocation_data_dumping_ = property_get_bool(ENABLE_ALLOCATION_DATA_DUMPING, 0);
   if (enable_allocation_data_dumping_) {
     // check if the json file exists
@@ -109,27 +138,10 @@ QtiAllocatorAIDL::QtiAllocatorAIDL() {
 int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
                                          AllocationResult *result, gralloc::BufferDescriptor desc,
                                          int32_t count) {
-  // Getting the mapper service
-  static AIMapper *mapper_ = nullptr;
-
+  // Get the mapper service if not already obtained
+  LoadQtiMapper5();
   if (!mapper_) {
-    std::string suffix;
-    if (!getIMapperLibrarySuffix(&suffix).isOk()) {
-      suffix = "qti";
-    }
-    std::string lib_name = "mapper." + suffix + ".so";
-    void *so = android_load_sphal_library(lib_name.c_str(), RTLD_LOCAL | RTLD_NOW);
-    if (!so) {
-      ALOGE("Failed to load %s", lib_name.c_str());
-      return 0;
-    }
-
-    auto loadIMapper = (AIMapper_loadIMapperFn)dlsym(so, "AIMapper_loadIMapper");
-    AIMapper_Error error = loadIMapper(&mapper_);
-    if (error != AIMAPPER_ERROR_NONE) {
-      ALOGE("AIMapper_loadIMapper failed %d", error);
-      return 0;
-    }
+    return 0;
   }
 
   ALOGD_IF(enable_logs_, "Mapper service obtained successfully");
