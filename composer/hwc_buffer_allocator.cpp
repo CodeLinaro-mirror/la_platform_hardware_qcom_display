@@ -359,11 +359,13 @@ int HWCBufferAllocator::GetBufferId(void *buf, uint64_t &id) {
 }
 
 int HWCBufferAllocator::GetFormat(void *buf, int32_t &format) {
-  auto result = GetStandardMetadata<StandardMetadataType::PIXEL_FORMAT_REQUESTED>(
-      mapper_, static_cast<buffer_handle_t>(buf));
+  int32_t ret_format;
+  int err =
+      GetVendorMetadata(mapper_, static_cast<buffer_handle_t>(buf),
+                        SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &ret_format, sizeof(ret_format));
 
-  if (result.has_value()) {
-    format = static_cast<uint32_t>(*result);
+  if (err == AIMAPPER_ERROR_NONE) {
+    format = ret_format;
     return kErrorNone;
   }
   return kErrorParameters;
