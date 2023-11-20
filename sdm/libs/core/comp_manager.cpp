@@ -1,7 +1,7 @@
 /*
 * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -912,6 +912,12 @@ DisplayError CompManager::SetBacklightLevel(Handle display_ctx,
   return resource_intf_->Perform(ResourceInterface::kCmdSetBacklightLevel,
                                   display_comp_ctx->display_resource_ctx,
                                   backlight_level);
+}
+
+DisplayError CompManager::SetCpuPerfHint(bool isReset, const uint32_t &cpu_hint_freq) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  return resource_intf_->Perform(ResourceInterface::kCmdSetCpuPerfHint, &isReset, cpu_hint_freq);
 }
 
 DisplayError CompManager::ForceToneMapConfigure(Handle display_ctx,
