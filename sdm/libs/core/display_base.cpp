@@ -3206,6 +3206,12 @@ DisplayError DisplayBase::SetCompositionState(LayerComposition composition_type,
   return comp_manager_->SetCompositionState(display_comp_ctx_, composition_type, enable);
 }
 
+DisplayError DisplayBase::SetHDRSupportOnClient(bool supported) {
+  ClientLock lock(disp_mutex_);
+
+  return comp_manager_->SetHDRSupportOnClient(display_comp_ctx_, supported);
+}
+
 void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
   if (!layer_stack) {
     DLOGW("Invalid layer stack found");

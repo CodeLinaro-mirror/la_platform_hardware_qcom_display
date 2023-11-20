@@ -177,6 +177,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   virtual DisplayError GetDisplayType(DisplayType *display_type);
   virtual bool IsPrimaryDisplay();
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
+  virtual DisplayError SetHDRSupportOnClient(bool supported);
   virtual DisplayError GetClientTargetSupport(uint32_t width, uint32_t height,
                                               LayerBufferFormat format,
                                               const ColorMetaData &color_metadata);

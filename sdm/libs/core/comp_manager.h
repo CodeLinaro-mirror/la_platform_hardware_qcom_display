@@ -95,6 +95,7 @@ class CompManager : public CwbCallback {
   DisplayError SetDetailEnhancerData(Handle display_ctx, const DisplayDetailEnhancerData &de_data);
   DisplayError SetCompositionState(Handle display_ctx, LayerComposition composition_type,
                                    bool enable);
+  DisplayError SetHDRSupportOnClient(Handle display_ctx, bool supported);
   DisplayError ControlDpps(bool enable);
   DisplayError SetColorModesInfo(Handle display_ctx,
                                  const std::vector<PrimariesTransfer> &colormodes_cs);

@@ -58,6 +58,7 @@ class Strategy {
                            const HWMixerAttributes &mixer_attributes,
                            const DisplayConfigVariableInfo &fb_config);
   DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
+  DisplayError SetHDRSupportOnClient(bool supported);
   DisplayError Purge();
   DisplayError SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms);
   DisplayError SetColorModesInfo(const std::vector<PrimariesTransfer> &colormodes_cs);

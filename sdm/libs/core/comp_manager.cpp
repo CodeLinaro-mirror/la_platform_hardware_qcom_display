@@ -638,6 +638,15 @@ DisplayError CompManager::SetCompositionState(Handle display_ctx,
   return display_comp_ctx->strategy->SetCompositionState(composition_type, enable);
 }
 
+DisplayError CompManager::SetHDRSupportOnClient(Handle display_ctx, bool supported) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  DisplayCompositionContext *display_comp_ctx =
+                             reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+
+  return display_comp_ctx->strategy->SetHDRSupportOnClient(supported);
+}
+
 DisplayError CompManager::ControlDpps(bool enable) {
   std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
   // DPPS feature and HDR using SSPP tone mapping can co-exist

@@ -987,6 +987,18 @@ class DisplayInterface {
   */
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;
 
+    /*! @brief Method to toggle HDR Support on GPU/Client.
+
+    @details client shall call this method to notify no HDR support
+    on Client/GPU.
+
+    @param[in] enable \link enable hdr support \endlink
+
+    @return \link DisplayError \endlink
+
+  */
+  virtual DisplayError SetHDRSupportOnClient(bool supported) = 0;
+
   /*! @brief Method to check whether a client target with the given properties
       can be supported/handled by hardware.
 

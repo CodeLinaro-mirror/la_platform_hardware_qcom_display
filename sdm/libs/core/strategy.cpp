@@ -256,6 +256,17 @@ DisplayError Strategy::SetCompositionState(LayerComposition composition_type, bo
   return kErrorNone;
 }
 
+DisplayError Strategy::SetHDRSupportOnClient(bool supported) {
+  DLOGI("HDR Support on Client = %d for display %d-%d", supported,
+        display_id_, display_type_);
+
+  if (strategy_intf_) {
+    return strategy_intf_->SetHDRSupportOnClient(supported);
+  }
+
+  return kErrorNone;
+}
+
 DisplayError Strategy::Purge() {
   if (strategy_intf_) {
     return strategy_intf_->Purge();
