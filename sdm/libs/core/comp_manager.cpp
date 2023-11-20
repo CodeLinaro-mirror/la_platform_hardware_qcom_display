@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -902,6 +902,12 @@ DisplayError CompManager::SetBacklightLevel(Handle display_ctx,
   return resource_intf_->Perform(ResourceInterface::kCmdSetBacklightLevel,
                                   display_comp_ctx->display_resource_ctx,
                                   backlight_level);
+}
+
+DisplayError CompManager::SetCpuPerfHint(bool isReset, const uint32_t &cpu_hint_freq) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  return resource_intf_->Perform(ResourceInterface::kCmdSetCpuPerfHint, &isReset, cpu_hint_freq);
 }
 
 DisplayError CompManager::ForceToneMapConfigure(Handle display_ctx,
