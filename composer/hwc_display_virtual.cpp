@@ -79,8 +79,8 @@ HWC3::Error HWCDisplayVirtual::DumpVDSBuffer() {
   if (dump_frame_count_ && !flush_ && dump_output_layer_) {
     if (output_handle_) {
       BufferInfo buffer_info;
-      const private_handle_t *output_handle =
-        reinterpret_cast<const private_handle_t *>(output_buffer_.buffer_id);
+      const qtigralloc::private_handle_t *output_handle =
+        reinterpret_cast<const qtigralloc::private_handle_t *>(output_buffer_.buffer_id);
       DisplayError error = kErrorNone;
       if (!output_handle->base) {
         error = buffer_allocator_->MapBuffer(output_handle, nullptr);
@@ -114,7 +114,8 @@ HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
   if (buf == nullptr) {
     return HWC3::Error::BadParameter;
   }
-  const private_handle_t *output_handle = static_cast<const private_handle_t *>(buf);
+  const qtigralloc::private_handle_t *output_handle =
+        static_cast<const qtigralloc::private_handle_t *>(buf);
 
   if (output_handle) {
     int output_handle_format = output_handle->format;
@@ -142,7 +143,7 @@ HWC3::Error HWCDisplayVirtual::SetOutputBuffer(buffer_handle_t buf,
     output_handle_ = output_handle;
 
     // TZ Protected Buffer - L1
-    if (output_handle->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
+    if (output_handle->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
       output_buffer_.flags.secure = 1;
     }
 

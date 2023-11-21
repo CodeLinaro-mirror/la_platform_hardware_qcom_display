@@ -37,8 +37,6 @@
 #ifndef __HWC_DISPLAY_VIRTUAL_H__
 #define __HWC_DISPLAY_VIRTUAL_H__
 
-#include <qdMetaData.h>
-#include <gralloc_priv.h>
 #include "hwc_display.h"
 #include "hwc_display_event_handler.h"
 
@@ -65,7 +63,7 @@ class HWCDisplayVirtual : public HWCDisplay {
   uint32_t width_ = 0;
   uint32_t height_ = 0;
   LayerBuffer output_buffer_ = {};
-  const private_handle_t *output_handle_ = nullptr;
+  const qtigralloc::private_handle_t *output_handle_ = nullptr;
 
  private:
   bool dump_output_layer_ = false;

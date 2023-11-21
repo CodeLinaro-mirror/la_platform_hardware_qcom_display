@@ -34,11 +34,14 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include <gralloc_priv.h>
+#include <QtiGralloc.h>
 
+#include <gralloctypes/Gralloc4.h>
 #include <core/buffer_allocator.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
+#include <errno.h>
+#include <QtiGrallocDefs.h>
 
 #include "gr_utils.h"
 #include "hwc_buffer_allocator.h"
@@ -184,6 +187,22 @@ DisplayError HWCBufferAllocator::FreeBuffer(BufferInfo *buffer_info) {
   alloc_buffer_info.size = 0;
   buffer_info->private_data = NULL;
   return err;
+}
+
+int HWCBufferAllocator::GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height) {
+  auto err = Error::UNSUPPORTED;
+  std::vector<aidl::android::hardware::graphics::common::Rect> tmp_crop;
+  mapper_->get(buf, android::gralloc4::MetadataType_Crop,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error == Error::NONE)
+                   err = static_cast<Error>(android::gralloc4::decodeCrop(_bytestream, &tmp_crop));
+               });
+  if (err == Error::NONE) {
+    slice_width = tmp_crop[0].right;
+    slice_height = tmp_crop[0].bottom;
+    return kErrorNone;
+  }
+  return kErrorParameters;
 }
 
 void HWCBufferAllocator::GetCustomWidthAndHeight(const private_handle_t *handle, int *width,
@@ -407,7 +426,7 @@ DisplayError HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_
                                                  uint32_t stride[4], uint32_t offset[4],
                                                  uint32_t *num_planes) {
   // TODO(user): Transition APIs to not need a private handle
-  private_handle_t hnd(-1, 0, 0, 0, 0, 0, 0);
+  qtigralloc::private_handle_t hnd(-1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   int format = HAL_PIXEL_FORMAT_RGBA_8888;
   uint64_t flags = 0;
 
@@ -417,7 +436,7 @@ DisplayError HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_
   hnd.width = INT32(buf_info.aligned_width);
   hnd.height = INT32(buf_info.aligned_height);
   if (flags & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) {
-    hnd.flags = private_handle_t::PRIV_FLAGS_UBWC_ALIGNED;
+    hnd.flags = qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
   }
 
   int ret = gralloc::GetBufferLayout(&hnd, stride, offset, num_planes);
