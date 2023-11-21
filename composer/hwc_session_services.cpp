@@ -617,14 +617,17 @@ int HWCSession::DisplayConfigImpl::dequeueTunnelledBuffer(const native_handle_t*
     DLOGE("Invalid native handle");
     return EINVAL;
   }
-  shared_ptr<Fence> release_fence =
-  hwc_session_->tunneling_map_buffer_release_fence_[private_handle->id];
+  shared_ptr<Fence> release_fence = nullptr;
+  if (private_handle->id == hwc_session_->tunnel_buffer_id_) {
+    release_fence = hwc_session_->tunneled_layer_rf_;
+  }
 
   if (release_fence) {
-    hwc_session_->tunneled_layer_rf_ = release_fence;
     native_handle_t* temp_rf =  native_handle_create(1,0);
     temp_rf->data[0] = std::stoi(Fence::GetStr(release_fence));
     release_fence_handle = temp_rf;
+  } else {
+    DLOGV("Release fence not returned for buffer Id %lu", private_handle->id);
   }
 
   DLOGV("dequeueTunnelledBuffer successful.\n");
@@ -732,9 +735,8 @@ int HWCSession::DisplayConfigImpl::queueTunnelledBuffer(const native_handle_t* b
   }
   shared_ptr<Fence> release_fence = nullptr;
   hwc_layer->PopBackReleaseFence(&release_fence);
-  close(std::stoi(Fence::GetStr(hwc_session_->tunneled_layer_rf_)));
-  hwc_session_->tunneling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id]
-                                                   = release_fence;
+  hwc_session_->tunneled_layer_rf_ = release_fence;
+  hwc_session_->tunnel_buffer_id_ = ((private_handle_t *)native_handle)->id;
 
   DLOGV("queueTunnelledBuffer successful.\n");
 
@@ -746,11 +748,9 @@ int HWCSession::DisplayConfigImpl::tunnellingDeinit() {
   for (auto i : hwc_session_->tunneling_map_buffer_native_handle_) {
     native_handle_close(i.second);
   }
-  for (auto i : hwc_session_->tunneling_map_buffer_release_fence_) {
-    close(std::stoi(Fence::GetStr(i.second)));
-  }
   hwc_session_->tunneling_map_buffer_native_handle_.clear();
-  hwc_session_->tunneling_map_buffer_release_fence_.clear();
+  hwc_session_->tunneled_layer_rf_ = nullptr;
+  hwc_session_->tunnel_buffer_id_ = -1;
   return 0;
 }
 
