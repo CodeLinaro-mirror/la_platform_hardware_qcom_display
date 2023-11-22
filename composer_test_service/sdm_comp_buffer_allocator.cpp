@@ -902,9 +902,14 @@ int SDMCompBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<
   NATIVE_HANDLE_DECLARE_STORAGE(acquire_fence_storage, 1, 0);
   hidl_handle acquire_fence_handle;
   if (acquire_fence) {
-    auto h = native_handle_init(acquire_fence_storage, 1, 0);
-    h->data[0] = scoped_ref.Get(acquire_fence);
-    acquire_fence_handle = h;
+    auto handle = native_handle_init(acquire_fence_storage, 1, 0);
+    if (handle == NULL) {
+      DLOGW("Native Handle init returned NULL");
+      return kErrorUndefined;
+    }
+
+    handle->data[0] = scoped_ref.Get(acquire_fence);
+    acquire_fence_handle = handle;
   }
 
   auto hnd = const_cast<native_handle_t *>(handle);

@@ -146,9 +146,10 @@ class AllocInterface {
     @param[out] alloc_size - align the size to be allocated based on alignment requirement of heap
 
   */
-  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *heap_name,
-                           std::vector<std::string> *vm_names, unsigned int *alloc_type,
-                           unsigned int *flags, unsigned int *alloc_size) = 0;
+  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, bool use_uncached,
+                           std::string *heap_name, std::vector<std::string> *vm_names,
+                           unsigned int *alloc_type, unsigned int *flags,
+                           unsigned int *alloc_size) = 0;
 
   virtual int SetBufferPermission(int fd, BufferPermission *buffer_perm, int64_t *mem_hdl) = 0;
 

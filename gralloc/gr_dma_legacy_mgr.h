@@ -58,9 +58,10 @@ class DmaLegacyManager : public AllocInterface {
   virtual int CleanBuffer(void *base, unsigned int size, unsigned int offset, int handle, int op,
                           int fd);
   virtual int SecureMemPerms(AllocData *data);
-  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *heap_name,
-                           std::vector<std::string> *vm_names, unsigned int *alloc_type,
-                           unsigned int *flags, unsigned int *alloc_size);
+  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, bool use_uncached,
+                           std::string *heap_name, std::vector<std::string> *vm_names,
+                           unsigned int *alloc_type, unsigned int *flags,
+                           unsigned int *alloc_size);
   virtual int SetBufferPermission(int fd, BufferPermission *buf_perm, int64_t *mem_hdl);
 
   static DmaLegacyManager *GetInstance();
