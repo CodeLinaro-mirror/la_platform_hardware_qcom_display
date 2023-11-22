@@ -145,7 +145,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_color_transformation=1
 
-ifeq ($(TARGET_BOARD_PLATFORM), msmnile)
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), msmnile gen4),$(TARGET_BOARD_PLATFORM))
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
 endif
 
