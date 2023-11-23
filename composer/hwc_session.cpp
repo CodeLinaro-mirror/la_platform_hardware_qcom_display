@@ -568,13 +568,14 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   if (Debug::Get()->GetProperty(DISABLE_SKIP_VALIDATE_PROP, &value) == kErrorNone) {
     disable_skip_validate = (value == 1);
   }
-  uint32_t count = disable_skip_validate ? 0 : 1;
+  uint32_t count = disable_skip_validate ? 1 : 2;
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
+    int index = count - 1;
     if (!disable_skip_validate) {
-      outCapabilities[0] = INT32(Capability::SKIP_VALIDATE);
+      outCapabilities[index--] = INT32(Capability::SKIP_VALIDATE);
     }
-    outCapabilities[1] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
+    outCapabilities[index--] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
   }
   *outCount = count;
 }
