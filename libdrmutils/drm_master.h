@@ -92,7 +92,7 @@ class DRMMaster {
 
  private:
   DRMMaster() {}
-  int Init(int card);
+  int Init(uint32_t card);
 
   int dev_fd_ = -1;              // Master fd for DRM
   uint32_t card_ = 0;            // Master card index
