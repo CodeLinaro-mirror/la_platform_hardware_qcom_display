@@ -309,9 +309,11 @@ class DisplayBase : public DisplayInterface {
   bool StartDisplayPowerReset();
   void EndDisplayPowerReset();
   void SetRCData(LayerStack *layer_stack);
+  void CacheDisplayComposition();
   unsigned int rc_cached_res_width_ = 0;
   unsigned int rc_cached_res_height_ = 0;
   std::unique_ptr<RCIntf> rc_core_ = nullptr;
+  bool gpu_comp_frame_ = false;
 };
 
 }  // namespace sdm

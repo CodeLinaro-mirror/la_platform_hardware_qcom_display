@@ -356,6 +356,17 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
   return kErrorNone;
 }
 
+void DisplayBase::CacheDisplayComposition() {
+  // Bail out if GPU composed layers aren't present.
+  gpu_comp_frame_ = false;
+  for (auto &layer : hw_layers_.info.stack->layers) {
+    if (layer->composition == kCompositionGPU) {
+      gpu_comp_frame_ = true;
+      break;
+    }
+  }
+}
+
 DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
@@ -435,6 +446,8 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     color_mgr_->Validate(&hw_layers_);
 
   comp_manager_->PostPrepare(display_comp_ctx_, &hw_layers_);
+
+  CacheDisplayComposition();
 
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
   return error;
@@ -522,8 +535,10 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
     return error;
   }
 
-  // TODO: Revisit logic to trigger commit based on draw outcome.
-  //       Currently falling back to original flow.
+  if (!gpu_comp_frame_) {
+    return Commit(layer_stack);
+  }
+
   return kErrorNeedsCommit;
 }
 
