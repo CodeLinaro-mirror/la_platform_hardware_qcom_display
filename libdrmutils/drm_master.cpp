@@ -98,32 +98,40 @@ void DRMMaster::DestroyInstance(uint32_t card) {
   }
 }
 
-int DRMMaster::Init(int card) {
+int DRMMaster::Init(uint32_t card) {
   if (card == 0) {
     dev_fd_ = drmOpen("msm_drm", nullptr);
   } else {
     drmVersionPtr ver;
     int fd;
-    int card_cnt = 0;
+    int itr = 0;
+    bool first_match = false;
 
-    for (int i = 0; i < 16; i++) {
+    for (int i = itr; i < 16; i++) {
       snprintf(path_, sizeof(path_), "/dev/dri/card%d", i);
       fd = open(path_, O_RDWR | O_CLOEXEC, 0);
-      if (fd < 0)
-        break;
+      if (fd < 0) {
+        itr++;
+        continue;
+      }
 
       ver = drmGetVersion(fd);
       if (ver) {
         bool match = !strcmp(ver->name, "msm_drm");
         drmFreeVersion(ver);
         if (match) {
-          if (card == card_cnt) {
+          if (!first_match)
+            first_match = true;
             dev_fd_ = fd;
             card_ = card;
-            break;
-          }
-          card_cnt++;
+            itr++;
+           /* Revisit the exit logic for more than 2 DPUs*/
+            if (first_match)
+              continue;
+            else
+              break;
         }
+        itr++;
       }
 
       close(fd);
