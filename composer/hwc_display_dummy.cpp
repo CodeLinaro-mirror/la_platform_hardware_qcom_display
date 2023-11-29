@@ -44,7 +44,8 @@ int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_al
                             qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
                             HWCDisplay **hwc_display) {
   return Create(core_intf, buffer_allocator, callbacks, event_handler,
-                qservice, id, sdm_id, 3840, 2160, hwc_display); // Default resolution 3840x2160 (4K)
+                qservice, id, sdm_id, 1920, 1080, hwc_display); // Default resolution 1920x1080
+                                                                // (1080p)
 }
 
 int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,

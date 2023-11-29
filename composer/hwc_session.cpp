@@ -2926,7 +2926,7 @@ int HWCSession::CreatePrimaryDisplay() {
                                          qservice_, client_id, info.display_id, hwc_display);
     } else if (info.display_type == kPluggable) {
       status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
-                                           qservice_, client_id, info.display_id, 0, 0, false,
+                                           qservice_, client_id, info.display_id, 1920, 1080, true,
                                            hwc_display);
       pluggable_primary_connected_ = true;
     } else {
@@ -3446,7 +3446,7 @@ int HWCSession::RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info
 
       if (info.display_type == kPluggable) {
         status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
-                                            qservice_, client_id, info.display_id, 0, 0, false,
+                                            qservice_, client_id, info.display_id, 1920, 1080, true,
                                             hwc_display_new);
         pluggable_primary_connected_ = true;
       } else {
