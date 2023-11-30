@@ -32,10 +32,28 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.mapper@4.0.vendor \
     modetest
 
-ifneq ($(TARGET_IS_HEADLESS),true)
-PRODUCT_PACKAGES += \
-    android.hardware.graphics.composer@2.4-service \
+SOONG_CONFIG_NAMESPACES += display_config_idl
+# Soong Keys
+SOONG_CONFIG_display_config_idl += target_aidl_or_hidl
+# Soong Values
 
+ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
+$(warning "Android-U compiling AIDL")
+SOONG_CONFIG_display_config_idl_target_aidl_or_hidl := target_aidl
+else
+$(warning "Non-Android-U compiling HIDL")
+SOONG_CONFIG_display_config_idl_target_aidl_or_hidl := target_hidl
+endif
+
+
+ifneq ($(TARGET_IS_HEADLESS),true)
+ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
+PRODUCT_PACKAGES += \
+    vendor.qti.hardware.display.composer-service
+else
+PRODUCT_PACKAGES += \
+    android.hardware.graphics.composer@2.4-service
+endif
 endif #TARGET_IS_HEADLESS
 
 #Enable AIDL Hal for S
@@ -127,7 +145,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_color_transformation=1
 
-ifeq ($(TARGET_BOARD_PLATFORM), msmnile)
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), msmnile gen4),$(TARGET_BOARD_PLATFORM))
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
 endif
 
