@@ -639,9 +639,8 @@ void HWCSession::Dump(uint32_t *out_size, char *out_buffer) {
 uint32_t HWCSession::GetMaxVirtualDisplayCount() {
   return map_info_virtual_.size();
 }
-
 int32_t HWCSession::GetActiveConfig(hwc2_display_t display, hwc2_config_t *out_config) {
-  return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, out_config);
+  return CallDisplayFunction(display, &HWCDisplay::GetActiveConfigSF, out_config);
 }
 
 int32_t HWCSession::GetChangedCompositionTypes(hwc2_display_t display, uint32_t *out_num_elements,

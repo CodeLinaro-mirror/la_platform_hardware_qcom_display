@@ -1258,6 +1258,22 @@ HWC2::Error HWCDisplay::GetPerFrameMetadataKeys(uint32_t *out_num_keys,
   return HWC2::Error::None;
 }
 
+HWC2::Error HWCDisplay::GetActiveConfigSF(hwc2_config_t *out_config) {
+  if (out_config == nullptr) {
+    return HWC2::Error::BadDisplay;
+  }
+  if (pending_config_) {
+    *out_config = pending_config_index_;
+  } else {
+    GetActiveDisplayConfigSF(out_config);
+  }
+
+  if (*out_config < hwc_config_map_.size()) {
+    *out_config = hwc_config_map_.at(*out_config);
+  }
+  return HWC2::Error::None;
+}
+
 HWC2::Error HWCDisplay::GetActiveConfig(hwc2_config_t *out_config) {
   if (out_config == nullptr) {
     return HWC2::Error::BadDisplay;
@@ -2359,6 +2375,10 @@ int HWCDisplay::SetActiveDisplayConfig(uint32_t config) {
 
   SetActiveConfigIndex(config);
   return 0;
+}
+
+int HWCDisplay::GetActiveDisplayConfigSF(uint32_t *config) {
+  return display_intf_->GetActiveConfigSF(config) == kErrorNone ? 0 : -1;
 }
 
 int HWCDisplay::GetActiveDisplayConfig(uint32_t *config) {

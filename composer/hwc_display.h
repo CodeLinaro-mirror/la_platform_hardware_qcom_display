@@ -301,6 +301,7 @@ class HWCDisplay : public DisplayEventHandler {
               { HWCDisplay::throttling_refresh_rate_ = newRefreshRate; }
   virtual int SetActiveDisplayConfig(uint32_t config);
   virtual int GetActiveDisplayConfig(uint32_t *config);
+  virtual int GetActiveDisplayConfigSF(uint32_t *config);
   virtual int GetDisplayConfigCount(uint32_t *count);
   virtual int GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes);
@@ -349,6 +350,7 @@ class HWCDisplay : public DisplayEventHandler {
   // HWC2 APIs
   virtual HWC2::Error AcceptDisplayChanges(void);
   virtual HWC2::Error GetActiveConfig(hwc2_config_t *out_config);
+  virtual HWC2::Error GetActiveConfigSF(hwc2_config_t *out_config);
   virtual HWC2::Error SetActiveConfig(hwc2_config_t config);
   virtual HWC2::Error SetPanelLuminanceAttributes(float min_lum, float max_lum) {
     return HWC2::Error::Unsupported;

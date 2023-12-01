@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -608,6 +608,7 @@ DisplayError HWDeviceDRM::GetDisplayId(int32_t *display_id) {
 
 void HWDeviceDRM::InitializeConfigs() {
   current_mode_index_ = 0;
+  sf_mode_index_ = 0;
   // Update current mode with preferred mode
   for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
       if (connector_info_.modes[mode_index].mode.type & DRM_MODE_TYPE_PREFERRED) {
@@ -616,6 +617,13 @@ void HWDeviceDRM::InitializeConfigs() {
         current_mode_index_ = mode_index;
         break;
       }
+  }
+
+  for (uint32_t mode_index = 0; mode_index < connector_info_.modes.size(); mode_index++) {
+    if (connector_info_.modes[mode_index].mode.hdisplay < max_fbt_width_) {
+      sf_mode_index_ = mode_index;
+      break;
+    }
   }
 
   display_attributes_.resize(connector_info_.modes.size());
@@ -878,6 +886,15 @@ void HWDeviceDRM::GetHWDisplayPortAndMode() {
   }
 
   return;
+}
+
+DisplayError HWDeviceDRM::GetActiveConfigSF(uint32_t *active_config) {
+  if (hw_panel_info_.is_primary_panel == true) {
+    *active_config = sf_mode_index_;
+  } else {
+    *active_config = current_mode_index_;
+  }
+  return kErrorNone;
 }
 
 DisplayError HWDeviceDRM::GetActiveConfig(uint32_t *active_config) {

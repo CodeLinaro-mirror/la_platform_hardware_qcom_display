@@ -144,6 +144,10 @@ DisplayError DisplayNull::GetRefreshRateRange(uint32_t *min_refresh_rate,
   return kErrorNone;
 }
 
+DisplayError DisplayNull::GetActiveConfigSF(uint32_t *config) {
+  return GetActiveConfig(config);
+}
+
 DisplayError DisplayNull::GetActiveConfig(uint32_t *config) {
   if (!config) {
     return kErrorParameters;

@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -113,6 +113,7 @@ class HWDeviceDRM : public HWInterface {
   // From HWInterface
   virtual DisplayError GetDisplayId(int32_t *display_id);
   virtual DisplayError GetActiveConfig(uint32_t *active_config);
+  virtual DisplayError GetActiveConfigSF(uint32_t *active_config);
   virtual DisplayError GetDefaultConfig(uint32_t *default_config) { return kErrorNotSupported; }
   virtual DisplayError GetNumDisplayAttributes(uint32_t *count);
   virtual DisplayError GetDisplayAttributes(uint32_t index,
@@ -208,6 +209,7 @@ class HWDeviceDRM : public HWInterface {
   static const int kTimeoutMsPowerOff = 3000;
   static const int kTimeoutMsDoze = kTimeoutMsPowerOff;
   static const int kTimeoutMsDozeSuspend = kTimeoutMsPowerOff;
+  static const int max_fbt_width_ = 2560;
 
   DisplayError SetFormat(const LayerBufferFormat &source, uint32_t *target);
   DisplayError SetStride(HWDeviceType device_type, LayerBufferFormat format, uint32_t width,
@@ -296,6 +298,7 @@ class HWDeviceDRM : public HWInterface {
   sde_drm::DRMAtomicReqInterface *drm_atomic_intf_ = {};
   std::vector<HWDisplayAttributes> display_attributes_ = {};
   uint32_t current_mode_index_ = 0;
+  uint32_t sf_mode_index_ = 0;
   sde_drm::DRMConnectorInfo connector_info_ = {};
   bool first_cycle_ = true;
   bool first_null_cycle_ = true;
