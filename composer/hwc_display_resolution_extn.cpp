@@ -63,26 +63,45 @@ DisplayError HWCDisplayResolutionExtn::GetExtendedDisplayResolutions(uint32_t pa
         const int p_height = std::atoi(height);
 
         if (p_width == panel_width && p_height == panel_height) {
-          XMLElement* scaling_factor_node = panel_res_node->FirstChildElement("ScalingFactor");
-          while (scaling_factor_node != nullptr) {
-            const char *x = scaling_factor_node->Attribute("x");
-            const char *y = scaling_factor_node->Attribute("y");
-            if (x == nullptr || y == nullptr) {
+          XMLElement* scaling_node = panel_res_node->FirstChildElement();
+          while (scaling_node != nullptr) {
+            double res_x = 0.0, res_y = 0.0;
+            if (!strcmp(scaling_node->Name(), "ScalingFactor")) {
+              const char *x = scaling_node->Attribute("x");
+              const char *y = scaling_node->Attribute("y");
+              if (x == nullptr || y == nullptr) {
+                scaling_node = scaling_node->NextSiblingElement();
+                continue;
+              }
+              const double x_factor = std::atof(x);
+              const double y_factor = std::atof(y);
+
+              res_x = panel_width / x_factor;
+              res_y = panel_height / y_factor;
+            } else if (!strcmp(scaling_node->Name(), "ScalingResolution")) {
+              const char *w = scaling_node->Attribute("w");
+              const char *h = scaling_node->Attribute("h");
+              if (w == nullptr || h == nullptr) {
+                scaling_node = scaling_node->NextSiblingElement();
+                continue;
+              }
+              res_x = std::atof(w);
+              res_y = std::atof(h);
+            }
+
+            scaling_node = scaling_node->NextSiblingElement();
+
+            if (!res_x || !res_y) {
               continue;
             }
-            const double x_factor = std::atof(x);
-            const double y_factor = std::atof(y);
 
-            double res_x = panel_width / x_factor;
-            double res_y = panel_height / y_factor;
             if ((floor(res_x) == res_x) && (floor(res_y) == res_y) &&
-                (UINT32(res_x) % 2 == 0) && (UINT32(res_y) % 2 == 0)) {
+                (UINT32(res_x) % 2 == 0) && (UINT32(res_y) % 2 == 0) &&
+                ((p_width / res_x) == (p_height / res_y))) {
               extended_disp_res->push_back(std::make_pair(UINT32(res_x), UINT32(res_y)));
             } else {
-              DLOGI("scaling factor: %f x %f is invalid", x_factor, y_factor);
+              DLOGI("scaling resolution: %f x %f is invalid", res_x, res_y);
             }
-
-            scaling_factor_node = scaling_factor_node->NextSiblingElement("ScalingFactor");
           }
           configuration_found = true;
           break;
