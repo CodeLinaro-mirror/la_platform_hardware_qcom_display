@@ -40,7 +40,6 @@ namespace sdm {
 
 class HWInfo: public HWInfoInterface {
  public:
-  virtual DisplayError Init() { return kErrorNone; }
   virtual ~HWInfo() { delete hw_resource_; }
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
@@ -48,12 +47,10 @@ class HWInfo: public HWInfoInterface {
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
   virtual DisplayError GetPipesStatus(HWPipesStateInfo *hw_pipes_info, bool update);
   virtual DisplayError SetPipeHandoff(uint32_t pipe_id);
+  virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
+  virtual DisplayError UnsetScaleLutConfig();
 
  private:
-  virtual DisplayError GetHWRotatorInfo(HWResourceInfo *hw_resource);
-  virtual DisplayError GetMDSSRotatorInfo(HWResourceInfo *hw_resource);
-  virtual DisplayError GetV4L2RotatorInfo(HWResourceInfo *hw_resource);
-
   // TODO(user): Read Mdss version from the driver
   static const int kHWMdssVersion5 = 500;  // MDSS_V5
   static const int kMaxStringLength = 1024;
@@ -69,13 +66,10 @@ class HWInfo: public HWInfoInterface {
 
   static int ParseString(const char *input, char *tokens[], const uint32_t max_token,
                          const char *delim, uint32_t *count);
-  DisplayError GetDynamicBWLimits(HWResourceInfo *hw_resource);
   LayerBufferFormat GetSDMFormat(int mdp_format);
   void InitSupportedFormatMap(HWResourceInfo *hw_resource);
   void ParseFormats(char *tokens[], uint32_t token_count, HWSubBlockType sub_block_type,
                     HWResourceInfo *hw_resource);
-  void PopulateSupportedFormatMap(const std::bitset<8> *format_supported, uint32_t format_count,
-                                  HWSubBlockType sub_blk_type, HWResourceInfo *hw_resource);
   HWResourceInfo *hw_resource_ = NULL;
 };
 

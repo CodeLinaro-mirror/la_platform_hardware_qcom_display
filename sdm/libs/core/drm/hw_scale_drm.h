@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HW_SCALE_DRM_H__
 #define __HW_SCALE_DRM_H__
 
@@ -36,7 +42,7 @@
 // The 3 headers above are a workaround to prevent kernel drm.h from being used that has the
 // "virtual" keyword used for a variable. In future replace libdrm version drm.h with kernel
 // version drm/drm.h
-#ifdef __ANDROID_T__
+#ifdef __MIN_ANDROID_VER_T__
 #include <display/drm/sde_drm.h>
 #else
 #include <drm/sde_drm.h>

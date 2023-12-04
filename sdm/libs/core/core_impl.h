@@ -68,9 +68,10 @@ class CoreImpl : public CoreInterface {
   Locker locker_;
   BufferAllocator *buffer_allocator_ = NULL;
   BufferSyncHandler *buffer_sync_handler_ = NULL;
-  HWResourceInfo hw_resource_;
+  std::vector<HWResourceInfo> hw_resource_;
   CompManager comp_mgr_;
-  HWInfoInterface *hw_info_intf_ = NULL;
+  std::vector<HWInfoInterface*> hw_info_intf_;
+  uint32_t primary_card_id_ = 0;
   DynLib extension_lib_;
   ExtensionInterface *extension_intf_ = NULL;
   CreateExtensionInterface create_extension_intf_ = NULL;

@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <gralloc_priv.h>
 
 #include <core/buffer_allocator.h>
@@ -316,10 +322,10 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
       *target = HAL_PIXEL_FORMAT_RGB_888;
       break;
     case kFormatRGB565:
-      *target = HAL_PIXEL_FORMAT_RGB_565;
+      *target = HAL_PIXEL_FORMAT_BGR_565;
       break;
     case kFormatBGR565:
-      *target = HAL_PIXEL_FORMAT_BGR_565;
+      *target = HAL_PIXEL_FORMAT_RGB_565;
       break;
     case kFormatBGR888:
       *target = HAL_PIXEL_FORMAT_BGR_888;
