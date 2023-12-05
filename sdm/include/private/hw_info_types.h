@@ -20,6 +20,10 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __HW_INFO_TYPES_H__
@@ -334,6 +338,7 @@ struct HWResourceInfo {
   bool has_concurrent_writeback = false;
   bool has_ppp = false;
   bool has_excl_rect = false;
+  bool has_in_fence = false;
   uint32_t writeback_index = kHWBlockMax;
   HWDynBwLimitInfo dyn_bw_info;
   std::vector<HWPipeCaps> hw_pipes;

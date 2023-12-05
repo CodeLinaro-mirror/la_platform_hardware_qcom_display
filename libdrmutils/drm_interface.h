@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #ifndef __DRM_INTERFACE_H__
@@ -128,6 +132,13 @@ enum struct DRMOps {
    *      uint32_t - Input fence
    */
   PLANE_SET_INPUT_FENCE,
+  /*
+   * Op: Sets acquire fence for this plane's buffer. Set together with FB_ID, CRTC.
+   * This property is simlar as PLNAE_SET_INPUT_FENCE, it's the open-source drm property
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - Input fence fd
+   */
+  PLANE_SET_IN_FENCE_FD,
   /*
    * Op: Sets scaler config on this plane.
    * Arg: uint32_t - Plane ID
@@ -564,6 +575,8 @@ struct DRMPlaneTypeInfo {
   // Allow all planes to be usable on all displays by default
   std::bitset<32> hw_block_mask = std::bitset<32>().set();
   bool has_handoff = false;
+  //has "IN_FENCE_FD" drm property
+  bool has_in_fence = false;
 };
 
 // All DRM Planes as map<Plane_id , plane_type_info> listed from highest to lowest priority
