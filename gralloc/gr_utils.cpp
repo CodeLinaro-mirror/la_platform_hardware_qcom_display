@@ -2470,6 +2470,7 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
     case QTI_VIDEO_TS_INFO:
     case QTI_S3D_FORMAT:
     case QTI_BUFFER_PERMISSION:
+    case QTI_BUFFER_DEQUEUE_DURATION:
       return metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(paramType)];
     case QTI_COLORSPACE:
       // QTI_COLORSPACE is derived from QTI_COLOR_METADATA
@@ -3502,6 +3503,15 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
       }
       break;
     }
+#endif
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
+    case QTI_BUFFER_DEQUEUE_DURATION:
+      if (copy) {
+        *(reinterpret_cast<int64_t *>(in)) = data->bufferDequeueDuration;
+      } else {
+        *out = &data->bufferDequeueDuration;
+      }
+      break;
 #endif
     default:
       ALOGD_IF(DEBUG, "Unsupported metadata type %d", type);
