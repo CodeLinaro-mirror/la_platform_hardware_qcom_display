@@ -243,6 +243,9 @@
 #define TRANSIENT_FPS_CYCLE_COUNT            DISPLAY_PROP("transient_fps_cycle_count")
 #define CORE_ID_MASK                         DISPLAY_PROP("core_id_mask")
 #define XR_VARIANT                           DISPLAY_PROP("xr_variant")
+#define ENABLE_ROUNDED_CORNER_CONFIG_DUMP    DISPLAY_PROP("enable_rounded_corner_config_dump")
+#define DISABLE_ROUNDED_CORNER_DEST_SCALER   DISPLAY_PROP("disable_rounded_corner_dest_scaler")
+#define DISABLE_ROUNDED_CORNER_TUI           DISPLAY_PROP("disable_rounded_corner_tui")
 
 // Add all other.properties above
 // End of property
