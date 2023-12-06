@@ -210,6 +210,7 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   }
 
   uint32_t tmp_width;
+  void *buf_handle = reinterpret_cast<void *>(const_cast<native_handle *>(buf));
 
   if (!buffer_config.access_control.empty()) {
     mapper_err = STABLEMAPPER(mapper_).setMetadata(
@@ -220,41 +221,41 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
       goto cleanup;
     }
     auto error =
-        GetMetadataValue(static_cast<void *>(raw_handle), SnapMetadataType::MEM_HANDLE,
-                         &alloc_buffer_info->mem_handle, sizeof(alloc_buffer_info->mem_handle));
+        GetMetadataValue(buf_handle, SnapMetadataType::MEM_HANDLE, &alloc_buffer_info->mem_handle,
+                         sizeof(alloc_buffer_info->mem_handle));
     if (error) {
       err = -EINVAL;
       goto cleanup;
     }
   }
 
-  err = GetFd(raw_handle, alloc_buffer_info->fd);
+  err = GetFd(buf_handle, alloc_buffer_info->fd);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetWidth(raw_handle, tmp_width);
+  err = GetWidth(buf_handle, tmp_width);
   if (err != kErrorNone)
     goto cleanup;
   alloc_buffer_info->stride = tmp_width;
   alloc_buffer_info->aligned_width = tmp_width;
 
-  err = GetHeight(raw_handle, alloc_buffer_info->aligned_height);
+  err = GetHeight(buf_handle, alloc_buffer_info->aligned_height);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetAllocationSize(raw_handle, alloc_buffer_info->size);
+  err = GetAllocationSize(buf_handle, alloc_buffer_info->size);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetBufferId(raw_handle, alloc_buffer_info->id);
+  err = GetBufferId(buf_handle, alloc_buffer_info->id);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetSDMFormat(raw_handle, alloc_buffer_info->format);
+  err = GetSDMFormat(buf_handle, alloc_buffer_info->format);
   if (err != kErrorNone)
     goto cleanup;
 
-  buffer_info->private_data = reinterpret_cast<void *>(raw_handle);
+  buffer_info->private_data = buf_handle;
   return 0;
 
 cleanup:
