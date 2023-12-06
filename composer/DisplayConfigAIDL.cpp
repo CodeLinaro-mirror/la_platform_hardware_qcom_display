@@ -727,9 +727,9 @@ ScopedAStatus DisplayConfigAIDL::isRCSupported(int disp_id, bool *supported) {
 
 ScopedAStatus DisplayConfigAIDL::controlIdleStatusCallback(bool enable) {
   if (enable) {
-    hwc_session_->idle_callback_ = callback_;
+    hwc_session_->enable_aidl_idle_notification_ = true;
   } else {
-    hwc_session_->idle_callback_.reset();
+    hwc_session_->enable_aidl_idle_notification_ = false;
   }
 
   return ScopedAStatus::ok();

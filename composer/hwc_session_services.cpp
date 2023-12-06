@@ -494,6 +494,21 @@ int HWCSession::NotifyResolutionChange(int32_t disp_id, Attributes &attr) {
   return 0;
 }
 
+int HWCSession::NotifyIdleStatus(bool idle_status) {
+  if (!enable_aidl_idle_notification_) {
+    return 0;
+  }
+
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyIdleStatus(idle_status);
+    }
+  }
+
+  return 0;
+}
+
 int HWCSession::NotifyTUIEventDone(int disp_id, TUIEventType event_type) {
   int ret = 0;
   {
