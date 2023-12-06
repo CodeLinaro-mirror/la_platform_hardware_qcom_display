@@ -1006,7 +1006,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     GetValueOfModeAttribute(it_mode->second, kDynamicRangeAttribute, &dynamic_range);
   }
 
-  comp_manager_->ControlDpps(dynamic_range != kHdr);
+  comp_manager_->ControlDpps(display_comp_ctx_, dynamic_range != kHdr);
 
   current_color_mode_ = color_mode;
   PrimariesTransfer blend_space = {};
@@ -1436,7 +1436,7 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
   // Set rotate90 to false since this is taken care of during regular composition.
   bool rotate90 = false;
 
-  DisplayError error = comp_manager_->ValidateScaling(crop, dst, rotate90);
+  DisplayError error = comp_manager_->ValidateScaling(display_comp_ctx_, crop, dst, rotate90);
   if (error != kErrorNone) {
     DLOGE("Unsupported resolution: (%dx%d)", width, height);
     return kErrorParameters;

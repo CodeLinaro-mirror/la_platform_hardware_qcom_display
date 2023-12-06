@@ -42,6 +42,7 @@ namespace sdm {
 
 class HWInfoDRM: public HWInfoInterface {
  public:
+  HWInfoDRM(uint32_t card_id = 0) : card_id_(card_id) {};
   virtual DisplayError Init();
   virtual ~HWInfoDRM();
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
@@ -77,7 +78,8 @@ class HWInfoDRM: public HWInfoInterface {
   static const int kMaxStringLength = 1024;
   static const int kKiloUnit = 1000;
 
-  static HWResourceInfo *hw_resource_;
+  HWResourceInfo *hw_resource_ = nullptr;
+  uint32_t card_id_ = 0;
 };
 
 }  // namespace sdm
