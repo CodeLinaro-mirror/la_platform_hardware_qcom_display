@@ -370,6 +370,9 @@ class HWDeviceDRM : public HWInterface {
   HWCwbConfig cwb_config_ = {};
   static std::mutex cwb_state_lock_;  // cwb state lock. Set before accesing or updating cwb_config_
   uint32_t transfer_time_updated_ = 0;
+  bool enable_brightness_drm_prop_ = false;
+  int cached_brightness_level_ = -1;
+  int current_brightness_ = -1;
 
  private:
   void GetCWBCapabilities();
