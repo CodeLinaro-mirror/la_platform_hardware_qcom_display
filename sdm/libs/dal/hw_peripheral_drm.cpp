@@ -732,13 +732,21 @@ DisplayError HWPeripheralDRM::SetPanelBrightness(int level) {
   }
 #endif
 
+  if (!active_) {
+    return kErrorNone;
+  }
+
+  if (enable_brightness_drm_prop_) {
+    // set brightness through drm property
+    cached_brightness_level_ = level;
+    return kErrorNone;
+  }
+
+  // set brightness through sysfs node
   char buffer[kMaxSysfsCommandLength] = {0};
 
   if (brightness_base_path_.empty()) {
     return kErrorHardware;
-  }
-  if (!active_) {
-    return kErrorNone;
   }
 
   std::string brightness_node(brightness_base_path_ + "brightness");
@@ -776,6 +784,11 @@ DisplayError HWPeripheralDRM::GetPanelBrightness(int *level) {
   if (!level) {
     DLOGE("Invalid input, null pointer.");
     return kErrorParameters;
+  }
+
+  if (enable_brightness_drm_prop_) {
+    *level = current_brightness_;
+    return kErrorNone;
   }
 
   if (brightness_base_path_.empty()) {
