@@ -28,8 +28,7 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -40,7 +39,6 @@
 #include <utils/debug.h>
 #include <utils/fence.h>
 
-#include "hwc_debugger.h"
 #include "hwc_buffer_sync_handler.h"
 
 #define __CLASS__ "HWCBufferSyncHandler"

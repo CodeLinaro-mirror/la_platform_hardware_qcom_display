@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -19,14 +19,15 @@ namespace hardware {
 namespace display {
 namespace composer3 {
 
-QtiComposer3Client::QtiComposer3Client() : hwc_session_(HWCSession::GetInstance()) {
-  if (!hwc_session_) {
-    ALOGE("%s: hwc_session:%p is invalid", __FUNCTION__, hwc_session_);
-  }
-}
+QtiComposer3Client::QtiComposer3Client() {}
 
 ScopedAStatus QtiComposer3Client::init(const std::weak_ptr<AidlComposerClient> &composer_client) {
   composer_client_ = composer_client;
+
+  SDMInterfaceFactory *sdm_factory = nullptr;
+  sdm_factory = sdm::GetSDMInterfaceFactory();
+  lifecycle_ = sdm_factory->CreateLifeCycleIntf();
+
   return ScopedAStatus::ok();
 }
 
@@ -53,8 +54,12 @@ ScopedAStatus QtiComposer3Client::qtiExecuteCommands(
 
 ScopedAStatus QtiComposer3Client::qtiTryDrawMethod(int64_t in_display,
                                                    QtiDrawMethod in_drawMethod) {
-  if (hwc_session_) {
-    auto error = hwc_session_->TryDrawMethod(in_display, in_drawMethod);
+  if (lifecycle_) {
+    sdm::DisplayDrawMethod draw_method = sdm::kDrawDefault;
+    if (in_drawMethod == QtiDrawMethod::UNIFIED_DRAW) {
+      draw_method = sdm::kDrawUnified;
+    }
+    auto error = lifecycle_->TryDrawMethod(in_display, draw_method);
     return TO_BINDER_STATUS(INT32(error));
   }
   return ScopedAStatus::ok();

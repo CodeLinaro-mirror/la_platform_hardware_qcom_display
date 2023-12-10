@@ -18,8 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -50,10 +49,19 @@ void ComposerHandleImporter::initialize() {
     return;
   }
 
-  mMapper = GetMapperInstance();
-  if (mMapper == nullptr) {
-    ALOGE("%s: cannnot access QtiMapper5!", __FUNCTION__);
-    return;
+  const std::string snapalloc_lib_name = "vendor.qti.hardware.display.snapalloc-impl.so";
+  void *snap_impl_lib_ = ::dlopen(snapalloc_lib_name.c_str(), RTLD_NOW);
+  if (!snap_impl_lib_) {
+    ALOGE("Dlopen error for snapalloc impl: %s", dlerror());
+  }
+
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
+  *reinterpret_cast<void **>(&LINK_FETCH_ISnapMapper) =
+      ::dlsym(snap_impl_lib_, "FETCH_ISnapMapper");
+  if (LINK_FETCH_ISnapMapper) {
+    snapmapper_ = LINK_FETCH_ISnapMapper();
+  } else {
+    ALOGE("Failed to get snapalloc instance");
   }
 
   int value = 0;  // Default value when property is not present.
@@ -65,7 +73,7 @@ void ComposerHandleImporter::initialize() {
 }
 
 void ComposerHandleImporter::cleanup() {
-  mMapper = nullptr;
+  snapmapper_ = nullptr;
   mInitialized = false;
 }
 
@@ -109,12 +117,12 @@ void ComposerHandleImporter::InoFdMapRemove(int fd) {
 // In IComposer, any buffer_handle_t is owned by the caller and we need to
 // make a clone for hwcomposer2.  We also need to translate empty handle
 // to nullptr.  This function does that, in-place.
-bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
+bool ComposerHandleImporter::importBuffer(const SnapHandle *handle) {
   if (!handle) {
     return true;
   }
 
-  if (!handle->numFds && !handle->numInts) {
+  if (!handle->num_fds && !handle->num_ints) {
     handle = nullptr;
     return true;
   }
@@ -124,53 +132,50 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
     initialize();
   }
 
-  if (mMapper == nullptr) {
-    ALOGE("%s: mMapper is null!", __FUNCTION__);
+  if (snapmapper_ == nullptr) {
+    ALOGE("%s: SnapMapper is null!", __FUNCTION__);
     return false;
   }
 
-  buffer_handle_t importedHandle;
+  auto ret = snapmapper_->Retain(*handle);
 
-  auto ret = STABLEMAPPER(mMapper).importBuffer(handle, &importedHandle);
-
-  if (ret != AIMAPPER_ERROR_NONE) {
-    ALOGE("%s: mapper importBuffer failed: %d", __FUNCTION__, ret);
+  if (ret != SnapError::NONE) {
+    ALOGE("%s: SnapMapper retain failed: %d", __FUNCTION__, ret);
     return false;
   }
-
-  handle = importedHandle;
 
   if (enable_memory_mapping_) {
-    for (int i = 0; i < handle->numFds; i++) {
+    for (int i = 0; i < handle->num_fds; i++) {
       // handle->data is the int array of fds. run insert on all fds.
-      InoFdMapInsert(handle->data[i]);
+      InoFdMapInsert(handle->buffer_data[i]);
     }
   }
 
   return true;
 }
 
-void ComposerHandleImporter::freeBuffer(buffer_handle_t handle) {
+void ComposerHandleImporter::freeBuffer(const SnapHandle *handle) {
   if (!handle) {
     return;
   }
 
   Mutex::Autolock lock(mLock);
 
-  if (mMapper == nullptr) {
-    ALOGE("%s: mMapper is null!", __FUNCTION__);
+  if (snapmapper_ == nullptr) {
+    ALOGE("%s: SnapMapper is null!", __FUNCTION__);
     return;
   }
 
   if (enable_memory_mapping_) {
-    for (int i = 0; i < handle->numFds; i++) {
+    for (int i = 0; i < handle->num_fds; i++) {
       // handle->data is the int array of fds. run remove on all fds.
-      InoFdMapRemove(handle->data[i]);
+      InoFdMapRemove(handle->buffer_data[i]);
     }
   }
 
-  auto ret = STABLEMAPPER(mMapper).freeBuffer(handle);
-  if (ret != AIMAPPER_ERROR_NONE) {
+  //auto ret = STABLEMAPPER(mMapper).freeBuffer(handle);
+  auto ret = snapmapper_->Release(*handle);
+  if (ret != SnapError::NONE) {
     ALOGE("%s: mapper freeBuffer failed: %d", __FUNCTION__, ret);
   }
 }

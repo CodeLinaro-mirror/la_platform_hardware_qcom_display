@@ -28,8 +28,7 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -42,8 +41,41 @@
 #include <binder/Status.h>
 #include <log/log.h>
 #include <utils/locker.h>
+#include <config/device_interface.h>
+#include <display_config.h>
 
-#include "hwc_session.h"
+#include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
+#include <aidl/android/hardware/graphics/composer3/IComposer.h>
+#include <binder/Status.h>
+#include <hidl/HidlSupport.h>
+
+#include <core/core_interface.h>
+#include <core/ipc_interface.h>
+#include <utils/locker.h>
+#include <utils/constants.h>
+#include <display_config.h>
+#include <vector>
+#include <queue>
+#include <utility>
+#include <future>  // NOLINT
+#include <map>
+#include <unordered_map>
+#include <string>
+#include <memory>
+#include <atomic>
+#include <core/display_interface.h>
+#include "hwc_common.h"
+
+#include "sdm_display_intf_caps.h"
+#include "sdm_display_intf_settings.h"
+#include "sdm_display_intf_lifecycle.h"
+#include "sdm_display_intf_drawcycle.h"
+#include "sdm_display_intf_sideband.h"
+#include "sdm_display_intf_layer_builder.h"
+
+namespace aidl::vendor::qti::hardware::display::config {
+class DisplayConfigAIDL;
+}
 
 namespace aidl {
 namespace vendor {
@@ -52,10 +84,36 @@ namespace hardware {
 namespace display {
 namespace config {
 
+typedef DisplayConfig::DisplayType DispType;
+
+using ::android::sp;
+using ::android::hardware::hidl_handle;
+using ::android::hardware::hidl_string;
+using ::android::hardware::hidl_vec;
+using ::android::hardware::Return;
+using ::android::hardware::Void;
+namespace composer3 = aidl::android::hardware::graphics::composer3;
+using DisplayConfiguration = composer3::DisplayConfiguration;
+using HwcDisplayCapability = composer3::DisplayCapability;
+using HwcDisplayConnectionType = composer3::DisplayConnectionType;
+using HwcClientTargetProperty = composer3::ClientTargetProperty;
+using ::aidl::vendor::qti::hardware::display::config::Attributes;
+using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
+using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
+using ::aidl::vendor::qti::hardware::display::config::IDisplayConfig;
+using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
+using ::aidl::vendor::qti::hardware::display::config::TUIEventType;
+
 using ::android::binder::Status;
 using ndk::ScopedAStatus;
 using sdm::Display;
-using sdm::HWCSession;
+using sdm::SDMDisplayCapsIntf;
+using sdm::SDMDisplayDrawCycleIntf;
+using sdm::SDMDisplayLayerBuilderIntf;
+using sdm::SDMDisplayLifeCycleIntf;
+using sdm::SDMDisplaySettingsIntf;
+using sdm::SDMDisplaySideBandIntf;
+using sdm::SDMSideBandCompositorCbIntf;
 using sdm::HWC3::Error;
 
 class DisplayConfigCallback : public BnDisplayConfigCallback {
@@ -66,10 +124,9 @@ class DisplayConfigCallback : public BnDisplayConfigCallback {
   std::function<void()> m_callback_;
 };
 
-class DisplayConfigAIDL : public BnDisplayConfig {
+class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCbIntf {
  public:
   DisplayConfigAIDL();
-  DisplayConfigAIDL(sdm::HWCSession *hwc_session);
   int IsPowerModeOverrideSupported(uint32_t disp_id, bool *supported);
   int GetDispTypeFromPhysicalId(uint64_t physical_disp_id, DisplayType *disp_type);
   ScopedAStatus isDisplayConnected(DisplayType dpy, bool *connected) override;
@@ -137,9 +194,33 @@ class DisplayConfigAIDL : public BnDisplayConfig {
   }
   ScopedAStatus getDisplayPortId(int32_t disp_id, int32_t *port_id) override;
 
+  void NotifyQsyncChange(uint64_t display_id, bool qsync_enabled, uint32_t refresh_rate,
+                         uint32_t qsync_refresh_rate) override;
+  void NotifyCameraSmoothInfo(sdm::SDMCameraSmoothOp op, int32_t fps) override;
+  void NotifyResolutionChange(uint64_t display_id, sdm::SDMConfigAttributes &attr) override;
+  void NotifyTUIEventDone(uint32_t ret, uint32_t disp_id, sdm::SDMTUIEventType type) override;
+  void NotifyIdleStatus(bool status) override;
+  void NotifyCWBStatus(int32_t status, void *buffer) override;
+  void OnHdmiHotplug(bool connected) override;
+
  private:
-  sdm::HWCSession *hwc_session_;
+  std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
+  std::weak_ptr<DisplayConfig::ConfigCallback> idle_callback_;
+
   std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
+  std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
+  std::mutex callbacks_lock_;
+  uint64_t callback_client_id_ = 0;
+
+  SDMDisplayCapsIntf *caps_ = nullptr;
+  SDMDisplaySettingsIntf *settings_ = nullptr;
+  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
+  SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
+  SDMDisplaySideBandIntf *sideband_ = nullptr;
+  SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
+  sdm::Locker *locker_ = nullptr;
+
+  std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
 };
 
 }  // namespace config

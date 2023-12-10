@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -12,7 +12,6 @@
 #include <utils/locker.h>
 
 #include "aidl/android/hardware/graphics/composer3/DisplayCommand.h"
-#include "hwc_session.h"
 #include "AidlComposerClient.h"
 
 namespace aidl {
@@ -30,8 +29,10 @@ using aidl::vendor::qti::hardware::display::composer3::QtiDrawMethod;
 using ::android::binder::Status;
 using ndk::ScopedAStatus;
 using sdm::Display;
-using sdm::HWCSession;
 using sdm::HWC3::Error;
+
+using sdm::SDMDisplayLifeCycleIntf;
+using sdm::SDMInterfaceFactory;
 
 class QtiComposer3Client : public BnQtiComposer3Client {
  public:
@@ -48,7 +49,7 @@ class QtiComposer3Client : public BnQtiComposer3Client {
 
  private:
   std::weak_ptr<AidlComposerClient> composer_client_;
-  sdm::HWCSession *hwc_session_;
+  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
 };
 
 }  // namespace composer3
