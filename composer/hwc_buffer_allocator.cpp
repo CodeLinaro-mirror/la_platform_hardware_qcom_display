@@ -372,7 +372,7 @@ int HWCBufferAllocator::GetFormat(void *buf, int32_t &format) {
 }
 
 int HWCBufferAllocator::GetPrivateFlags(void *buf, int32_t &flags) {
-  int32_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
+  int64_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
   auto err = STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
                                                VENDOR_QTI_METADATA(SnapMetadataType::IS_UBWC),
                                                &is_ubwc, sizeof(is_ubwc));
