@@ -65,7 +65,7 @@ class QtiAllocatorAIDL : public BnAllocator {
   ndk::ScopedAStatus AllocateBuffer(gralloc::BufferDescriptor desc, int32_t count,
                                     AllocationResult *result);
   BufferManager *buf_mgr_ = nullptr;
-  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+  gralloc::GrallocSnapHelperIntf *snap_helper_ = nullptr;
   bool enable_logs_;
   bool enable_allocation_data_dumping_;
   std::string json_file_name_;
@@ -73,6 +73,7 @@ class QtiAllocatorAIDL : public BnAllocator {
   bool is_json_first_entry_ = true;
   int dumpAllocationData(std::vector<buffer_handle_t> buffers, AllocationResult *result,
                          gralloc::BufferDescriptor desc, int32_t count);
+  void LoadQtiMapper5();
 };
 
 }  // namespace impl

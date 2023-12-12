@@ -400,8 +400,8 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
                                       sizeof(fmt));
   buffer_allocator_->GetPrivateFlags(hnd, flag);
   buffer_allocator_->GetCompressionType(hnd, compression_type);
-  ALOGW("%s: format: %d, flags: %d, compression_type %d", __FUNCTION__, fmt, flag,
-        compression_type);
+  DLOGW_IF(kTagClient, "%s: format: %d, flags: %d, compression_type %d", __FUNCTION__, fmt, flag,
+           compression_type);
   LayerBufferFormat format = GetSDMFormat(fmt, flag, compression_type);
   if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
       (UINT32(aligned_height) != layer_buffer->height)) {

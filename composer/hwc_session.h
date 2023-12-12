@@ -315,6 +315,7 @@ class HWCSession : public HWCUEvent,
                                     uint32_t qsync_refresh_rate);
   virtual void VmReleaseDone(Display display);
   virtual int NotifyCwbDone(int dpy_index, int32_t status, uint64_t handle_id);
+  virtual int NotifyIdleStatus(bool idle_status);
 
   HWC3::Error SetVsyncEnabled(Display display, bool enabled);
   HWC3::Error GetDozeSupport(Display display, int32_t *out_support);
@@ -608,6 +609,7 @@ class HWCSession : public HWCUEvent,
   std::future<int> tui_event_handler_future_;
   std::future<int> tui_callback_handler_future_;
   bool disable_get_screen_decorator_support_ = false;
+  bool enable_aidl_idle_notification_ = false;
 
   // hpd handling
   void HpdInit() override;
