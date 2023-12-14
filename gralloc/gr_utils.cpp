@@ -2470,7 +2470,9 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
     case QTI_VIDEO_TS_INFO:
     case QTI_S3D_FORMAT:
     case QTI_BUFFER_PERMISSION:
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
     case QTI_BUFFER_DEQUEUE_DURATION:
+#endif
       return metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(paramType)];
     case QTI_COLORSPACE:
       // QTI_COLORSPACE is derived from QTI_COLOR_METADATA
