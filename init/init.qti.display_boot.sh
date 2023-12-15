@@ -73,14 +73,6 @@ if [ -f /sys/devices/soc0/platform_subtype_id ]; then
     subtype_id=`cat /sys/devices/soc0/platform_subtype_id`
 fi
 
-# Disable HWC for VDS except wfd.
-current_sdk_version=`getprop ro.build.version.sdk`
-android_t_sdk_version=33
-if [ "$current_sdk_version" -ge "$android_t_sdk_version" ]; then
-    setprop debug.sf.enable_hwc_vds 0
-    setprop vendor.display.vds_allow_hwc 1
-fi
-
 # Enable camera smooth for all targets
 setprop vendor.display.enable_camera_smooth 1
 
