@@ -1890,9 +1890,8 @@ SnapError GrallocSnapHelper::ColorMetadataHelper(SnapHandle *hnd, uint32_t aidl_
     }
 
     SnapColorRemappingInfo snap_color_remapping_info;
-    std::vector<uint8_t> color_remapping_info_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::COLOR_REMAPPING_INFO,
-                                      &color_remapping_info_bytestream);
+                                      &snap_color_remapping_info);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGW("Unable to get COLOR_REMAPPING_INFO from snap");
     } else {
@@ -5695,9 +5694,8 @@ SnapError GrallocSnapHelperLegacy::ColorMetadataHelper(SnapHandle *hnd, bool hid
     }
 
     SnapColorRemappingInfo snap_color_remapping_info;
-    std::vector<uint8_t> color_remapping_info_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::COLOR_REMAPPING_INFO,
-                                      &color_remapping_info_bytestream);
+                                      &snap_color_remapping_info);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGW("Unable to get COLOR_REMAPPING_INFO from snap");
     } else {
