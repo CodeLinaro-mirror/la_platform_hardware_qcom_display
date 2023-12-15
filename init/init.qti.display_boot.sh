@@ -181,6 +181,7 @@ case "$target" in
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.disable_get_screen_decorator_support 1
         setprop vendor.gralloc.secure_preview_only 1
+        setprop vendor.display.perf.version 2
         ;;
         507|565|578)
         # Set property for blair
@@ -201,6 +202,7 @@ case "$target" in
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.disable_get_screen_decorator_support 1
         setprop vendor.gralloc.secure_preview_only 1
+        setprop vendor.display.perf.version 2
         ;;
     esac
 esac
