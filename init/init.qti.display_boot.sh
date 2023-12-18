@@ -166,10 +166,10 @@ case "$target" in
     case "$soc_hwid" in
         454)
         # Set property for holi
-        setprop vendor.display.target.version 2
+        setprop vendor.display.target.version 3
         setprop vendor.display.disable_offline_rotator 0
         setprop vendor.display.disable_rotator_ubwc 1
-        setprop vendor.display.enable_perf_hint_large_comp_cycle 0
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_posted_start_dyn 1
         setprop vendor.display.enable_allow_idle_fallback 1
         setprop vendor.display.enable_rc_support 1
