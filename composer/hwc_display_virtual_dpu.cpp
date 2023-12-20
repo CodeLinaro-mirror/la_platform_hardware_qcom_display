@@ -102,7 +102,8 @@ HWC3::Error HWCDisplayVirtualDPU::SetOutputBuffer(buffer_handle_t buf,
     return error;
   }
 
-  const private_handle_t *output_handle = static_cast<const private_handle_t *>(buf);
+  const qtigralloc::private_handle_t *output_handle =
+        static_cast<const qtigralloc::private_handle_t *>(buf);
   if (output_handle) {
     int output_handle_format = output_handle->format;
     int active_aligned_w, active_aligned_h;

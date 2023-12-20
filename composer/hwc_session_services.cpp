@@ -1249,7 +1249,7 @@ int HWCSession::DisplayConfigImpl::IsRotatorSupportedFormat(int hal_format, bool
     *supported = false;
     return -EINVAL;
   }
-  int flag = ubwc ? private_handle_t::PRIV_FLAGS_UBWC_ALIGNED : 0;
+  int flag = ubwc ? qtigralloc::PRIV_FLAGS_UBWC_ALIGNED : 0;
 
   LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(hal_format, flag);
 

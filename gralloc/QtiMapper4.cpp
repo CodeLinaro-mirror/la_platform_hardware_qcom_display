@@ -27,12 +27,47 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #define DEBUG 0
 #include "QtiMapper4.h"
 
 #include <cutils/trace.h>
-#include <qdMetaData.h>
 #include <sync/sync.h>
 
 #include <vector>
@@ -114,7 +149,7 @@ Return<void> QtiMapper::importBuffer(const hidl_handle &raw_handle, importBuffer
   }
 
   auto error =
-      static_cast<IMapper_4_0_Error>(buf_mgr_->RetainBuffer(PRIV_HANDLE_CONST(buffer_handle)));
+      static_cast<IMapper_4_0_Error>(buf_mgr_->RetainBuffer(QTI_HANDLE_CONST(buffer_handle)));
   if (error != Error::NONE) {
     ALOGE("%s: Unable to retain handle: %p", __FUNCTION__, buffer_handle);
     native_handle_close(buffer_handle);
@@ -124,7 +159,7 @@ Return<void> QtiMapper::importBuffer(const hidl_handle &raw_handle, importBuffer
     return Void();
   }
   ALOGD_IF(DEBUG, "Imported handle: %p id: %" PRIu64, buffer_handle,
-           PRIV_HANDLE_CONST(buffer_handle)->id);
+           QTI_HANDLE_CONST(buffer_handle)->id);
   hidl_cb(Error::NONE, buffer_handle);
   return Void();
 }
@@ -133,7 +168,7 @@ Return<Error> QtiMapper::freeBuffer(void *buffer) {
   if (!buffer) {
     return Error::BAD_BUFFER;
   }
-  return static_cast<IMapper_4_0_Error>(buf_mgr_->ReleaseBuffer(PRIV_HANDLE_CONST(buffer)));
+  return static_cast<IMapper_4_0_Error>(buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buffer)));
 }
 
 bool QtiMapper::GetFenceFd(const hidl_handle &fence_handle, int *outFenceFd) {
@@ -177,7 +212,7 @@ Error QtiMapper::LockBuffer(void *buffer, uint64_t usage, const hidl_handle &acq
     WaitFenceFd(fence_fd);
   }
 
-  auto hnd = PRIV_HANDLE_CONST(buffer);
+  auto hnd = QTI_HANDLE_CONST(buffer);
 
   if (access_region.top < 0 || access_region.left < 0 || access_region.width < 0 ||
       access_region.height < 0 || access_region.width > hnd->width ||
@@ -195,7 +230,7 @@ Return<void> QtiMapper::lock(void *buffer, uint64_t cpu_usage, const IMapper::Re
     return Void();
   }
 
-  auto hnd = PRIV_HANDLE_CONST(buffer);
+  auto hnd = QTI_HANDLE_CONST(buffer);
   auto *out_data = reinterpret_cast<void *>(hnd->base);
 
   hidl_cb(err, out_data);
@@ -205,7 +240,7 @@ Return<void> QtiMapper::lock(void *buffer, uint64_t cpu_usage, const IMapper::Re
 Return<void> QtiMapper::unlock(void *buffer, unlock_cb hidl_cb) {
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->UnlockBuffer(PRIV_HANDLE_CONST(buffer)));
+    err = static_cast<IMapper_4_0_Error>(buf_mgr_->UnlockBuffer(QTI_HANDLE_CONST(buffer)));
   }
   // We don't have a release fence
   hidl_cb(err, hidl_handle(nullptr));
@@ -332,7 +367,7 @@ Return<void> QtiMapper::getFromBufferDescriptorInfo(const BufferDescriptorInfo &
       uint32_t drm_format;
       uint64_t drm_format_modifier;
       if (gralloc::IsUBwcEnabled(format, description.usage)) {
-        gralloc::GetDRMFormat(format, private_handle_t::PRIV_FLAGS_UBWC_ALIGNED, &drm_format,
+        gralloc::GetDRMFormat(format, qtigralloc::PRIV_FLAGS_UBWC_ALIGNED, &drm_format,
                               &drm_format_modifier);
       } else {
         gralloc::GetDRMFormat(format, 0, &drm_format, &drm_format_modifier);
@@ -356,7 +391,7 @@ Return<void> QtiMapper::getFromBufferDescriptorInfo(const BufferDescriptorInfo &
 Return<void> QtiMapper::flushLockedBuffer(void *buffer, flushLockedBuffer_cb hidl_cb) {
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->FlushBuffer(PRIV_HANDLE_CONST(buffer)));
+    err = static_cast<IMapper_4_0_Error>(buf_mgr_->FlushBuffer(QTI_HANDLE_CONST(buffer)));
   }
   // We don't have a release fence
   hidl_cb(err, hidl_handle(nullptr));
@@ -366,7 +401,7 @@ Return<void> QtiMapper::flushLockedBuffer(void *buffer, flushLockedBuffer_cb hid
 Return<Error> QtiMapper::rereadLockedBuffer(void *buffer) {
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->RereadBuffer(PRIV_HANDLE_CONST(buffer)));
+    err = static_cast<IMapper_4_0_Error>(buf_mgr_->RereadBuffer(QTI_HANDLE_CONST(buffer)));
   }
   return err;
 }
@@ -402,7 +437,7 @@ Error QtiMapper::DumpBufferMetadata(const private_handle_t *buffer, BufferDump *
 }
 Return<void> QtiMapper::dumpBuffer(void *buffer, dumpBuffer_cb hidl_cb) {
   BufferDump buffer_dump;
-  auto hnd = PRIV_HANDLE_CONST(buffer);
+  auto hnd = QTI_HANDLE_CONST(buffer);
   if (buffer != nullptr) {
     if (DumpBufferMetadata(hnd, &buffer_dump) == Error::NONE) {
       hidl_cb(Error::NONE, buffer_dump);

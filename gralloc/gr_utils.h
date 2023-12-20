@@ -67,11 +67,16 @@
 #define __GR_UTILS_H__
 
 #include <android/hardware/graphics/common/1.2/types.h>
+#include <aidl/android/hardware/graphics/common/PixelFormat.h>
 
 #include <limits>
-
-#include "gralloc_priv.h"
-#include "qdMetaData.h"
+#include <utils/debug.h>
+#include <QtiGralloc.h>
+#include <QtiGrallocPriv.h>
+#include <hardware/gralloc.h>
+#include <QtiGrallocMetadata.h>
+#include <QtiGrallocDefs.h>
+#include <gralloctypes/Gralloc4.h>
 
 #define SZ_2M 0x200000
 #define SZ_1M 0x100000
@@ -89,7 +94,15 @@
 #define INT(exp) static_cast<int>(exp)
 #define UINT(exp) static_cast<unsigned int>(exp)
 
+#define ROUND_UP_PAGESIZE(x) roundUpToPageSize(x)
+inline size_t roundUpToPageSize(size_t x) {
+  return (x + (getpagesize() - 1)) & ~(getpagesize() - 1);
+}
+
 using android::hardware::graphics::common::V1_1::BufferUsage;
+using android::hardware::graphics::common::V1_2::PixelFormat;
+using aidl::android::hardware::graphics::common::PlaneLayoutComponent;
+using private_handle_t = qtigralloc::private_handle_t;
 
 namespace gralloc {
 struct BufferInfo {
@@ -168,6 +181,10 @@ enum PlaneComponent {
 
   /* meta information plane */
   PLANE_COMPONENT_META = 1 << 31,
+};
+
+enum {
+  LAYOUT_INTERLACED_FLAG = 1 << 0,
 };
 
 struct PlaneLayoutInfo {
@@ -265,6 +282,16 @@ bool HasAlphaComponent(int32_t format);
 void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
                   uint64_t *drm_format_modifier);
 bool CanAllocateZSLForSecureCamera();
+
+Error GetMetaDataValue(void *buffer, int64_t type, void *in);
+Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out);
+Error SetMetaData(private_handle_t *handle, uint64_t paramType, void *param);
+void UnmapAndReset(private_handle_t *handle);
+int ValidateAndMap(private_handle_t *handle);
+Error GetColorSpaceFromColorMetaData(ColorMetaData color_metadata, uint32_t *color_space);
+bool getGralloc4Array(MetaData_t *metadata, int64_t paramType);
+Error GetPlaneLayout(private_handle_t *handle,
+                     std::vector<aidl::android::hardware::graphics::common::PlaneLayout> *out);
 }  // namespace gralloc
 
 #endif  // __GR_UTILS_H__

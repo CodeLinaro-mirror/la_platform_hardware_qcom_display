@@ -46,7 +46,7 @@
 #include <android/binder_manager.h>
 #include <aidlcommonsupport/NativeHandle.h>
 #include <android/hardware/graphics/mapper/4.0/IMapper.h>
-#include "gralloc_priv.h"
+#include <QtiGrallocPriv.h>
 
 using aidl::android::hardware::graphics::allocator::AllocationResult;
 using aidl::android::hardware::graphics::allocator::IAllocator;
@@ -64,7 +64,8 @@ class HWCBufferAllocator : public BufferAllocator {
   DisplayError FreeBuffer(BufferInfo *buffer_info);
   uint32_t GetBufferSize(BufferInfo *buffer_info);
 
-  void GetCustomWidthAndHeight(const private_handle_t *handle, int *width, int *height);
+  void GetCustomWidthAndHeight(const qtigralloc::private_handle_t *handle, int *width, int *height);
+  int GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height);
   void GetAlignedWidthAndHeight(int width, int height, int format, uint32_t alloc_type,
                                 int *aligned_width, int *aligned_height);
   DisplayError GetAllocatedBufferInfo(const BufferConfig &buffer_config,
@@ -72,8 +73,9 @@ class HWCBufferAllocator : public BufferAllocator {
   DisplayError GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4],
                                uint32_t offset[4], uint32_t *num_planes);
   int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
-  DisplayError MapBuffer(const private_handle_t *handle, shared_ptr<Fence> acquire_fence);
-  DisplayError UnmapBuffer(const private_handle_t *handle, int *release_fence);
+  DisplayError MapBuffer(const qtigralloc::private_handle_t *handle,
+                         shared_ptr<Fence> acquire_fence);
+  DisplayError UnmapBuffer(const qtigralloc::private_handle_t *handle, int *release_fence);
 
  private:
   DisplayError GetGrallocInstance();

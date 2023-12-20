@@ -37,7 +37,7 @@
 #include "hwc_display_virtual_gpu.h"
 #include "hwc_session.h"
 
-#include <qdMetaData.h>
+#include <QtiGralloc.h>
 
 #define __CLASS__ "HWCDisplayVirtualGPU"
 
@@ -124,19 +124,21 @@ HWC3::Error HWCDisplayVirtualGPU::SetOutputBuffer(buffer_handle_t buf,
   if (error != HWC3::Error::None) {
     return error;
   }
-
-  const private_handle_t *hnd = static_cast<const private_handle_t *>(buf);
-  output_buffer_.width = hnd->width;
-  output_buffer_.height = hnd->height;
+  native_handle_t *hnd = const_cast<native_handle_t *>(buf);
+  const private_handle_t *hnd2 = QTI_HANDLE_CONST(buf);
+  output_buffer_.width = hnd2->width;
+  output_buffer_.height = hnd2->height;
   output_buffer_.unaligned_width = width_;
   output_buffer_.unaligned_height = height_;
 
   // Update active dimensions.
-  BufferDim_t buffer_dim;
-  if (getMetaData(const_cast<private_handle_t *>(hnd), GET_BUFFER_GEOMETRY, &buffer_dim) == 0) {
-    output_buffer_.unaligned_width = buffer_dim.sliceWidth;
-    output_buffer_.unaligned_height = buffer_dim.sliceHeight;
-    color_convert_task_.PerformTask(ColorConvertTaskCode::kCodeReset, nullptr);
+  if (qtigralloc::getMetadataState(hnd, android::gralloc4::MetadataType_Crop.value)) {
+    int32_t slice_width = 0, slice_height = 0;
+    if (!buffer_allocator_->GetBufferGeometry(hnd, slice_width, slice_height)) {
+      output_buffer_.unaligned_width = slice_width;
+      output_buffer_.unaligned_height = slice_height;
+      color_convert_task_.PerformTask(ColorConvertTaskCode::kCodeReset, nullptr);
+    }
   }
 
   return HWC3::Error::None;

@@ -9,6 +9,7 @@
 #include <log/log.h>
 #include <aidlcommonsupport/NativeHandle.h>
 #include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
+#include <display_properties.h>
 
 #include <vector>
 

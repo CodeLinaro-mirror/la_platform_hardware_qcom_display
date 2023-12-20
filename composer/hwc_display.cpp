@@ -36,6 +36,8 @@
 #include <utils/formats.h>
 #include <utils/rect.h>
 #include <qd_utils.h>
+#include <QtiGralloc.h>
+#include <QtiGrallocMetadata.h>
 
 #include <algorithm>
 #include <iomanip>
@@ -727,13 +729,12 @@ void HWCDisplay::BuildLayerStack() {
       }
       // TZ Protected Buffer - L1
       // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
-      if (handle->flags & private_handle_t::PRIV_FLAGS_PROTECTED_BUFFER ||
-          handle->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
+      if (handle->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
         layer_stack_.flags.secure_present = true;
         is_secure = true;
       }
       // UBWC PI format
-      if (handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED_PI) {
+      if (handle->flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED_PI) {
         layer->input_buffer.flags.ubwc_pi = true;
       }
     }
@@ -1997,7 +1998,7 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   HWCDebugHandler::Get()->GetProperty(DISABLE_UBWC_PROP, &ubwc_disabled);
   if (!ubwc_disabled) {
     usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
-    flags |= private_handle_t::PRIV_FLAGS_UBWC_ALIGNED;
+    flags |= qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
   }
 
   buffer_allocator_->GetAlignedWidthAndHeight(INT(x_pixels), INT(y_pixels), format, usage,

@@ -30,8 +30,8 @@
 /* This class translates HWC3 Layer functions to the SDM LayerStack
  */
 
-#include <gralloc_priv.h>
-#include <qdMetaData.h>
+#include <QtiGralloc.h>
+#include <QtiGrallocDefs.h>
 #include <core/layer_stack.h>
 #include <core/layer_buffer.h>
 #include <utils/utils.h>
@@ -48,7 +48,7 @@ using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
 
 namespace sdm {
 
-DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_metadata);
+DisplayError SetCSC(const qtigralloc::private_handle_t *pvt_handle, ColorMetaData *color_metadata);
 bool GetColorPrimary(const int32_t &dataspace, ColorPrimaries *color_primary);
 bool GetTransfer(const int32_t &dataspace, GammaTransfer *gamma_transfer);
 bool GetRange(const int32_t &dataspace, ColorRange *color_range);
@@ -144,7 +144,7 @@ class HWCLayer {
   static std::atomic<LayerId> next_id_;
   std::deque<shared_ptr<Fence>> release_fences_;
   HWCBufferAllocator *buffer_allocator_ = NULL;
-  int32_t dataspace_ =  HAL_DATASPACE_UNKNOWN;
+  int32_t dataspace_ = INT32(Dataspace::UNKNOWN);
   LayerTransform layer_transform_ = {};
   LayerRect dst_rect_ = {};
   bool single_buffer_ = false;
@@ -170,9 +170,9 @@ class HWCLayer {
   void SetRect(const FRect &source, LayerRect *target);
   uint32_t GetUint32Color(const Color &source);
   void GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec);
-  DisplayError SetMetaData(const private_handle_t *pvt_handle, Layer *layer);
+  DisplayError SetMetaData(const qtigralloc::private_handle_t *pvt_handle, Layer *layer);
   uint32_t RoundToStandardFPS(float fps);
-  void ValidateAndSetCSC(const private_handle_t *handle);
+  void ValidateAndSetCSC(const qtigralloc::private_handle_t *handle);
   void SetDirtyRegions(Region surface_damage);
 };
 
