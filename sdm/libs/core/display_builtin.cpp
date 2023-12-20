@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -1410,6 +1410,9 @@ DisplayError DisplayBuiltIn::VSync(int64_t timestamp) {
 void DisplayBuiltIn::SetVsyncStatus(bool enable) {
   string trace_name = enable ? "enable" : "disable";
   DTRACE_BEGIN(trace_name.c_str());
+  if (hw_events_intf_ == nullptr) {
+    return;
+  }
   if (enable) {
     // Enable if vsync is still enabled.
     hw_events_intf_->SetEventState(HWEvent::VSYNC, vsync_enable_);
