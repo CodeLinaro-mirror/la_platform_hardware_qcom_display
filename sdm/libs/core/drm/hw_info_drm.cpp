@@ -846,6 +846,7 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
       case DRM_MODE_CONNECTOR_HDMIB:
       case DRM_MODE_CONNECTOR_DisplayPort:
       case DRM_MODE_CONNECTOR_VGA:
+      case DRM_MODE_CONNECTOR_eDP:
         hw_info.display_type = kPluggable;
         break;
       case DRM_MODE_CONNECTOR_VIRTUAL:
