@@ -406,6 +406,7 @@ void DRMConnectorManager::GetConnectorList(std::vector<uint32_t> *conn_ids) {
 static bool IsTVConnector(uint32_t type) {
   return (type == DRM_MODE_CONNECTOR_TV || type == DRM_MODE_CONNECTOR_HDMIA ||
           type == DRM_MODE_CONNECTOR_HDMIB || type == DRM_MODE_CONNECTOR_DisplayPort ||
+          type == DRM_MODE_CONNECTOR_eDP ||
           type == DRM_MODE_CONNECTOR_VGA);
 }
 
