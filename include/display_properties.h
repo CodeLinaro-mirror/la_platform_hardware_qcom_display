@@ -29,7 +29,7 @@
 
 /* Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -81,6 +81,7 @@
 #define IDLE_TIME_INACTIVE_PROP              DISPLAY_PROP("idle_time_inactive")
 #define DISABLE_ROTATOR_DOWNSCALE_PROP       DISPLAY_PROP("disable_rotator_downscale")
 #define ENABLE_TUNNELLING                    DISPLAY_PROP("enable_tunnelling")
+#define ENABLE_DRS                           DISPLAY_PROP("enable_drs")
 // Enables rotator for UI
 #define ENABLE_ROTATOR_UI_PROP               DISPLAY_PROP("enable_rotator_ui")
 #define DISABLE_DECIMATION_PROP              DISPLAY_PROP("disable_decimation")

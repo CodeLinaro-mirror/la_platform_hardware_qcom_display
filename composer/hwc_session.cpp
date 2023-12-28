@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -249,6 +249,11 @@ int HWCSession::Init() {
   Debug::Get()->GetProperty(ENABLE_ASYNC_VDS_CREATION, &value);
   async_vds_creation_ = (value == 1);
   DLOGI("async_vds_creation: %d", async_vds_creation_);
+
+  value = 0;
+  Debug::Get()->GetProperty(ENABLE_DRS, &value);
+  enable_drs_ = (value == 1);
+  DLOGI("enable_drs_: %d", enable_drs_);
 
   DLOGI("Initializing supported display slots");
   InitSupportedDisplaySlots();
@@ -640,7 +645,11 @@ uint32_t HWCSession::GetMaxVirtualDisplayCount() {
   return map_info_virtual_.size();
 }
 int32_t HWCSession::GetActiveConfig(hwc2_display_t display, hwc2_config_t *out_config) {
-  return CallDisplayFunction(display, &HWCDisplay::GetActiveConfigSF, out_config);
+  if (enable_drs_) {
+    return CallDisplayFunction(display, &HWCDisplay::GetActiveConfigSF, out_config);
+  } else {
+    return CallDisplayFunction(display, &HWCDisplay::GetActiveConfig, out_config);
+  }
 }
 
 int32_t HWCSession::GetChangedCompositionTypes(hwc2_display_t display, uint32_t *out_num_elements,
@@ -2924,9 +2933,15 @@ int HWCSession::CreatePrimaryDisplay() {
       status = HWCDisplayBuiltIn::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
                                          qservice_, client_id, info.display_id, hwc_display);
     } else if (info.display_type == kPluggable) {
-      status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
-                                           qservice_, client_id, info.display_id, 1920, 1080, true,
-                                           hwc_display);
+      if (enable_drs_) {
+        status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
+                                             qservice_, client_id, info.display_id, 1920, 1080,
+                                             true, hwc_display);
+      } else {
+        status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
+                                             qservice_, client_id, info.display_id, 0, 0, false,
+                                             hwc_display);
+      }
       pluggable_primary_connected_ = true;
     } else {
       DLOGE("Spurious primary display type = %d", info.display_type);
@@ -3444,9 +3459,15 @@ int HWCSession::RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info
       }
 
       if (info.display_type == kPluggable) {
-        status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
-                                            qservice_, client_id, info.display_id, 1920, 1080, true,
-                                            hwc_display_new);
+        if (enable_drs_) {
+          status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
+                                               qservice_, client_id, info.display_id, 1920, 1080,
+                                               true, hwc_display_new);
+        } else {
+          status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
+                                               qservice_, client_id, info.display_id, 0, 0, false,
+                                               hwc_display_new);
+        }
         pluggable_primary_connected_ = true;
       } else {
         DLOGE("Spurious primary display type = %d", info.display_type);
