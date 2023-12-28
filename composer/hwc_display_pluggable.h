@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -89,6 +89,9 @@ class HWCDisplayPluggable : public HWCDisplay {
   virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
   virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
+  bool IsTunnellingFeasible() {
+    return is_tunnelling_feasible_;
+  }
 
  private:
   HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
@@ -104,6 +107,7 @@ class HWCDisplayPluggable : public HWCDisplay {
   int underscan_height_ = 0;
   bool has_color_tranform_ = false;
   static const int max_fbt_width_ = 2560;
+  static bool is_tunnelling_feasible_;
 };
 
 }  // namespace sdm
