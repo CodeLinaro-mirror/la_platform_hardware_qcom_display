@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -44,6 +44,7 @@
 
 namespace sdm {
 
+bool HWCDisplayPluggable::is_tunnelling_feasible_ = true;
 int HWCDisplayPluggable::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                                qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
@@ -71,6 +72,7 @@ int HWCDisplayPluggable::Create(CoreInterface *core_intf, HWCBufferAllocator *bu
     // use_primary_res means HWCDisplayPluggable should directly set framebuffer resolution to the
     // provided primary_width and primary_height
     if (use_primary_res && (pluggable_width > max_fbt_width_)) {
+      is_tunnelling_feasible_ = false;
       pluggable_width = primary_width;
       pluggable_height = primary_height;
     } else {
@@ -257,6 +259,16 @@ int HWCDisplayPluggable::SetState(bool connected) {
       SetVsyncEnabled(HWC2::Vsync::Enable);
 
       display_null_.SetActive(false);
+
+      uint32_t config_index = 0;
+      GetActiveDisplayConfig(&config_index);
+      DisplayConfigVariableInfo attr = {};
+      GetDisplayAttributesForConfig(INT(config_index), &attr);
+      if (attr.x_pixels != fb_config.x_pixels || attr.y_pixels != fb_config.y_pixels) {
+        is_tunnelling_feasible_ = false;
+      } else {
+        is_tunnelling_feasible_ = true;
+      }
       DLOGI("Display is connected successfully.");
     } else {
       DLOGI("Display is already connected.");

@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -575,6 +575,11 @@ int HWCSession::DisplayConfigImpl::tunnellingInit() {
   property_get(ENABLE_TUNNELLING, property, "0");
   if (!(strncmp(property, "0", PROPERTY_VALUE_MAX))) {
     DLOGE("Tunnelling property not set. Exiting tunnellingInit!\n");
+    return EINVAL;
+  }
+
+  if (!hwc_session_->hwc_display_[hwc_session_->tunneled_display_id_]->IsTunnellingFeasible()) {
+    DLOGE("Tunnelling is not supported as scaling is present due to DRS. Exiting!\n");
     return EINVAL;
   }
 
