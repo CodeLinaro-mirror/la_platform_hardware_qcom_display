@@ -404,6 +404,7 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, LayerBuffer* buffer) {
   }
 
   uint64_t handle_id = buffer->handle_id;
+
   if (!handle_id || disable_fbid_cache_) {
     // In legacy path, clear fb_id map in each frame.
     layer->buffer_map->buffer_map.clear();
@@ -420,8 +421,14 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, LayerBuffer* buffer) {
       }
     }
 
-    if (layer->buffer_map->buffer_map.size() >= fbid_cache_limit_) {
-      // Clear fb_id map, if the size reaches cache limit.
+    if (layer->buffer_map->buffer_map.size() == fbid_cache_limit_) {
+      // Erase the first buffer from fb_id map if current buffer is mismatch
+      // and the size reaches cache limit.
+      DLOGI_IF(kTagDisplay, "Erase the first cache buffer from fb_id map");
+      layer->buffer_map->buffer_map.erase(layer->buffer_map->buffer_map.begin());
+    } else if (layer->buffer_map->buffer_map.size() > fbid_cache_limit_) {
+      // Clear fb_id map, if the size reaches cache limit more than one.
+      DLOGI_IF(kTagDisplay, "Size reaches cache limit more than one, clear the fb_id map");
       layer->buffer_map->buffer_map.clear();
     }
   }
