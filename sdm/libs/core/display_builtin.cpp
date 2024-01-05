@@ -2797,4 +2797,15 @@ DisplayError DisplayBuiltIn::PerformCacConfig(CacConfig config, bool enable) {
   return kErrorNone;
 }
 
+DisplayError DisplayBuiltIn::SetDPUFoveation(int int_enabled) {
+  if (enable_cac_) {
+    DLOGW("DPU CAC has been enabled, DPU foveation is not supported");
+    return kErrorNotSupported;
+  }
+
+   enable_dpu_foveation_ = int_enabled;
+   DLOGV_IF(kTagDisplay, "dpu foveation composition enable: %d", enable_dpu_foveation_);
+   return kErrorNone;
+}
+
 }  // namespace sdm

@@ -188,6 +188,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
                                uint32_t min_refresh_rate);
   DisplayError PerformCacConfig(CacConfig config, bool enable) override;
   bool IsCacV2Supported() override;
+  DisplayError SetDPUFoveation(int int_enabled) override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;

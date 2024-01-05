@@ -29,7 +29,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -1639,6 +1639,18 @@ void HWCDisplayBuiltIn::ReqPerfHintRelease() {
     return;
   }
   cpu_hint_->ReqHintRelease();
+}
+
+HWC2::Error HWCDisplayBuiltIn::SetDPUFoveation(int int_enabled) {
+  DLOGV("Display ID: %" PRId64 " enabled: %d", id_, int_enabled);
+  DisplayError error = display_intf_->SetDPUFoveation(int_enabled);
+
+  if (error != kErrorNone) {
+    DLOGE("Failed. enabled = %d, error = %d", int_enabled, error);
+    return HWC2::Error::Unsupported;
+  }
+
+  return HWC2::Error::None;
 }
 
 }  // namespace sdm

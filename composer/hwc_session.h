@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -306,6 +306,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t PerformCacConfig(const android::Parcel *input_parcel);
   int32_t GetClientTargetProperty(hwc2_display_t display,
                                   HwcClientTargetProperty *outClientTargetProperty);
+  int32_t SetDPUFoveation(hwc2_display_t display, int32_t int_enabled);
 
   // Layer functions
   int32_t SetLayerBuffer(hwc2_display_t display, hwc2_layer_t layer, buffer_handle_t buffer,
