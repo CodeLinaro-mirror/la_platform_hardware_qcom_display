@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -606,8 +606,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool update_vsync_on_doze_ = false;
   std::vector<bool> is_hdr_display_;    // info on HDR supported
   std::map <hwc2_display_t, hwc2_display_t> map_hwc_display_;  // Real and dummy display pairs.
-  std::map <uint64_t, shared_ptr<Fence>> tunneling_map_buffer_release_fence_; // stores mapping
-                                                              // between buffer id and release fence
   // stores mapping between buffer id and native handle
   std::map <uint64_t, const native_handle_t *> tunneling_map_buffer_native_handle_;
   bool reset_panel_ = false;
@@ -657,6 +655,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   hwc2_layer_t tunneled_layer_ = -1;
   shared_ptr<Fence> tunneled_layer_rf_ = nullptr; // tunneled layer's release fence
   int tunneled_display_id_ = HWC_DISPLAY_PRIMARY;
+  uint64_t tunnel_buffer_id_ = -1;
+  bool enable_drs_ = false; // enable dynamic resolution switch feature
 };
 }  // namespace sdm
 
