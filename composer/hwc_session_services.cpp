@@ -596,6 +596,7 @@ int HWCSession::DisplayConfigImpl::dequeueTunnelledBuffer(const native_handle_t*
   buffer_handle_t buffer_handle = buffer;
   if (!buffer_handle) {
     DLOGE("Invalid native handle");
+    return EINVAL;
   }
 
   uint64_t buffer_id = ((private_handle_t *)buffer)->id;
@@ -604,11 +605,18 @@ int HWCSession::DisplayConfigImpl::dequeueTunnelledBuffer(const native_handle_t*
     native_handle = hwc_session_->tunneling_map_buffer_native_handle_[buffer_id];
   } else {
     native_handle = hwc_session_->buffer_allocator_.ImportBuffer(buffer);
+    if (native_handle == nullptr) {
+      DLOGE("Invalid native handle");
+      return EINVAL;
+    }
     hwc_session_->tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id]
                                                      = native_handle;
   }
   private_handle_t *private_handle = (private_handle_t *)native_handle;
-
+  if (private_handle == nullptr) {
+    DLOGE("Invalid native handle");
+    return EINVAL;
+  }
   shared_ptr<Fence> release_fence =
   hwc_session_->tunneling_map_buffer_release_fence_[private_handle->id];
 

@@ -44,7 +44,8 @@ int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_al
                             qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
                             HWCDisplay **hwc_display) {
   return Create(core_intf, buffer_allocator, callbacks, event_handler,
-                qservice, id, sdm_id, 1920, 1080, hwc_display);
+                qservice, id, sdm_id, 1920, 1080, hwc_display); // Default resolution 1920x1080
+                                                                // (1080p)
 }
 
 int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
@@ -55,6 +56,7 @@ int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_al
   HWCDisplay *hwc_display_dummy = new HWCDisplayDummy(core_intf, buffer_allocator, callbacks,
                                                       event_handler, qservice, id, sdm_id,
                                                       primary_width, primary_height);
+  hwc_display_dummy->SetValidationState(HWCDisplay::kSkipValidate);
   *hwc_display = hwc_display_dummy;
   return kErrorNone;
 }
@@ -64,6 +66,10 @@ void HWCDisplayDummy::Destroy(HWCDisplay *hwc_display) {
 }
 
 HWC2::Error HWCDisplayDummy::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  for (auto hwc_layer : layer_set_) {
+    if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Cursor)
+      layer_stack_.flags.cursor_present = true;
+  }
   return HWC2::Error::None;
 }
 
@@ -83,8 +89,8 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
                                  qService::QService *qservice, hwc2_display_t id,
                                  int32_t sdm_id, uint32_t primary_width,
                                  uint32_t primary_height) :HWCDisplay(core_intf, buffer_allocator,
-                                 callbacks, event_handler, qservice, kBuiltIn, id, sdm_id,
-                                 DISPLAY_CLASS_BUILTIN) {
+                                 callbacks, event_handler, qservice, kPluggable, id, sdm_id,
+                                 DISPLAY_CLASS_PLUGGABLE) {
   DisplayConfigVariableInfo config;
   config.x_pixels = primary_width;
   config.y_pixels = primary_height;
@@ -92,7 +98,6 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   config.y_dpi = 300.0f;
   config.fps = 60;
   config.vsync_period_ns = 16600000;
-  display_null_.SetFrameBufferConfig(config);
   num_configs_ = 1;
   display_intf_ = &display_null_;
   client_target_ = new HWCLayer(id_, buffer_allocator_);
@@ -100,6 +105,11 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   hwc_config_map_.resize(num_configs_);
   variable_config_map_[0] = config;
   hwc_config_map_.at(0) = 0;
+  int status = SetFrameBufferResolution(config.x_pixels, config.y_pixels);
+  if (status) {
+    DLOGW("Set frame buffer config failed. Error = %d", status);
+    return;
+  }
 }
 
 HWC2::Error HWCDisplayDummy::GetActiveConfig(hwc2_config_t *out_config) {

@@ -70,7 +70,7 @@ int HWCDisplayPluggable::Create(CoreInterface *core_intf, HWCBufferAllocator *bu
   if (primary_width && primary_height) {
     // use_primary_res means HWCDisplayPluggable should directly set framebuffer resolution to the
     // provided primary_width and primary_height
-    if (use_primary_res) {
+    if (use_primary_res && (pluggable_width > max_fbt_width_)) {
       pluggable_width = primary_width;
       pluggable_height = primary_height;
     } else {

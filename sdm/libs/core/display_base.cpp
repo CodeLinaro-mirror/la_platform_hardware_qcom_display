@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -836,6 +836,11 @@ DisplayError DisplayBase::GetRealConfig(uint32_t index, DisplayConfigVariableInf
   }
 
   return kErrorNotSupported;
+}
+
+DisplayError DisplayBase::GetActiveConfigSF(uint32_t *index) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  return hw_intf_->GetActiveConfigSF(index);
 }
 
 DisplayError DisplayBase::GetActiveConfig(uint32_t *index) {

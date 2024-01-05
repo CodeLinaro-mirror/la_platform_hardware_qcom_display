@@ -24,7 +24,7 @@
 
 /*
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted (subject to the limitations in the
@@ -521,6 +521,14 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError GetActiveConfig(uint32_t *index) = 0;
+
+  /*! @brief Method to get index of sf configuration.
+
+    @param[out] index index of the mode corresponding to variable properties.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetActiveConfigSF(uint32_t *index) = 0;
 
   /*! @brief Method to get VSync event state. Default event state is disabled.
 
