@@ -70,25 +70,32 @@
 
 namespace sdm {
 
-DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
+DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
   DisplayError error = kErrorNone;
 
-  *intf = new HWInfoDRM();
-  if (*intf) {
-      error = (*intf)->Init();
+  for (uint32_t i = 0; i < 16; i++) {
+    HWInfoInterface *hw_info = new HWInfoDRM(i);
+    if (hw_info) {
+      error = hw_info->Init();
       if (error != kErrorNone) {
-        delete *intf;
-        *intf = nullptr;
+        delete hw_info;
+        return intfs->size() ? kErrorNone : error;
       }
-  } else {
-      error = kErrorCriticalResource;
+      intfs->push_back(hw_info);
+    } else {
+      DLOGE("Failed allocating HWInfoDRM(%d)", i);
+      return kErrorCriticalResource;
+    }
   }
 
-  return error;
+  return kErrorNone;
 }
 
 DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {
+  intf->UnsetScaleLutConfig();
+
   if (intf) {
+    intf->UnsetScaleLutConfig();
     delete intf;
   }
 

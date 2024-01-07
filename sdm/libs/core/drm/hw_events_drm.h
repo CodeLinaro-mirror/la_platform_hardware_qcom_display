@@ -93,6 +93,7 @@ class HWEventsDRM : public HWEventsInterface {
   HWEventHandler *event_handler_{};
   vector<HWEventData> event_data_list_{};
   vector<pollfd> poll_fds_{};
+  uint32_t card_id_ = 0;
   pthread_t event_thread_{};
   std::string event_thread_name_ = "SDM_EventThread";
   bool exit_threads_ = false;
