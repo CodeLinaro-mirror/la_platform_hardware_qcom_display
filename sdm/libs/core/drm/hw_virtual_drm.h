@@ -27,12 +27,18 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HW_VIRTUAL_DRM_H__
 #define __HW_VIRTUAL_DRM_H__
 
 #include "hw_device_drm.h"
 #include <drm/msm_drm.h>
-#ifdef __ANDROID_T__
+#ifdef __MIN_ANDROID_VER_T__
 #include <display/drm/sde_drm.h>
 #else
 #include <drm/sde_drm.h>
