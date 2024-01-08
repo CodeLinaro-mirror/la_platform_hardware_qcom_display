@@ -787,6 +787,7 @@ struct DRMSubModeInfo {
   uint32_t panel_compression_mode;
   DRMTopology topology;
   std::vector<uint64_t> dyn_bitclk_list;
+  uint32_t pixel_clk_khz;
 };
 
 enum DynamicFrontPorchType {
