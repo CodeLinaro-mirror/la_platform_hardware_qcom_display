@@ -157,23 +157,21 @@ static InlineRotationVersion GetInRotVersion(sde_drm::InlineRotationVersion drm_
   }
 }
 
-HWResourceInfo *HWInfoDRM::hw_resource_ = nullptr;
-
 DisplayError HWInfoDRM::Init() {
   default_mode_ = (DRMLibLoader::GetInstance()->IsLoaded() == false);
   if (!default_mode_) {
     DRMMaster *drm_master = {};
     int dev_fd = -1;
-    DRMMaster::GetInstance(&drm_master);
+    DRMMaster::GetInstance(&drm_master, card_id_);
     if (!drm_master) {
-      DLOGE("Failed to acquire DRMMaster instance");
+      DLOGI("Failed to acquire DRMMaster instance %d", card_id_);
       return kErrorCriticalResource;
     }
     drm_master->GetHandle(&dev_fd);
     DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (!drm_mgr_intf_) {
       DRMLibLoader::Destroy();
-      DRMMaster::DestroyInstance();
+      DRMMaster::DestroyInstance(card_id_);
       DLOGE("Failed to get DRMManagerInterface");
       return kErrorCriticalResource;
     }
@@ -197,7 +195,7 @@ void HWInfoDRM::Deinit() {
   }
 
   DRMLibLoader::Destroy();
-  DRMMaster::DestroyInstance();
+  DRMMaster::DestroyInstance(card_id_);
 }
 
 HWInfoDRM::~HWInfoDRM() {
@@ -870,8 +868,8 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
 
   for (auto &iter : conns_info) {
     HWDisplayInfo hw_info = {};
-    hw_info.display_id =
-        ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 : (int32_t)(iter.first);
+    hw_info.display_id = ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 :
+                                               (int32_t)(MAKE_DISPLAY_ID(card_id_, iter.first));
     switch (iter.second.type) {
       case DRM_MODE_CONNECTOR_DSI:
         hw_info.display_type = kBuiltIn;
@@ -1010,6 +1008,25 @@ DisplayError HWInfoDRM::SetPipeHandoff(uint32_t pipe_id) {
   } else {
     return kErrorNone;
   }
+}
+
+DisplayError HWInfoDRM::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
+  sde_drm::DRMScalerLUTInfo drm_lut_info = {};
+  drm_lut_info.cir_lut = lut_info->cir_lut;
+  drm_lut_info.dir_lut = lut_info->dir_lut;
+  drm_lut_info.sep_lut = lut_info->sep_lut;
+  drm_lut_info.cir_lut_size = lut_info->cir_lut_size;
+  drm_lut_info.dir_lut_size = lut_info->dir_lut_size;
+  drm_lut_info.sep_lut_size = lut_info->sep_lut_size;
+  drm_mgr_intf_->SetScalerLUT(drm_lut_info);
+
+  return kErrorNone;
+}
+
+DisplayError HWInfoDRM::UnsetScaleLutConfig() {
+  drm_mgr_intf_->UnsetScalerLUT();
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

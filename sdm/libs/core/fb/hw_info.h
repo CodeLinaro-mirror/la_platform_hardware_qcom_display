@@ -42,6 +42,13 @@ class HWInfo: public HWInfoInterface {
  public:
   virtual ~HWInfo() { delete hw_resource_; }
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
+  virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
+  virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info);
+  virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
+  virtual DisplayError GetPipesStatus(HWPipesStateInfo *hw_pipes_info, bool update);
+  virtual DisplayError SetPipeHandoff(uint32_t pipe_id);
+  virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
+  virtual DisplayError UnsetScaleLutConfig();
 
  private:
   // TODO(user): Read Mdss version from the driver

@@ -64,12 +64,6 @@ class HWVirtualDRM : public HWDeviceDRM {
   virtual DisplayError Flush(HWLayers *hw_layers);
   virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
   virtual DisplayError PowerOn(const HWQosData &qos_data, int *release_fence);
-  virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info) {
-    return kErrorNotSupported;
-  }
-  virtual DisplayError UnsetScaleLutConfig() {
-    return kErrorNotSupported;
-  }
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data);
 

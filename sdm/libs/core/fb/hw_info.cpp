@@ -168,5 +168,13 @@ DisplayError HWInfo::SetPipeHandoff(uint32_t pipe_id) {
   return kErrorNotSupported;
 }
 
+DisplayError HWInfo::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
+  return kErrorNone;
+}
+
+DisplayError HWInfo::UnsetScaleLutConfig() {
+  return kErrorNone;
+}
+
 }  // namespace sdm
 

@@ -47,8 +47,8 @@ namespace sdm {
 
 class HWCCallbacks {
  public:
-  static const int kNumBuiltIn = 4;
-  static const int kNumPluggable = 4;
+  static const int kNumBuiltIn = 16;
+  static const int kNumPluggable = 16;
   static const int kNumVirtual = 4;
   // Add 1 primary display which can be either a builtin or pluggable.
   // Async powermode update requires dummy hwc displays.

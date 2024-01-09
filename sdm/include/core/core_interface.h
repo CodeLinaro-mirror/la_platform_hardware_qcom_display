@@ -113,6 +113,10 @@ struct HWDisplayInfo {
   bool is_wb_ubwc_supported = true;            //!< check hardware wb ubwc support
 };
 
+#define GET_CARD_ID(display_id) ((uint32_t) (((display_id) < 0) ? 0 : ((display_id) >> 16)))
+#define GET_CONN_ID(display_id) (((display_id) < 0) ? 0 : ((display_id) & 0xFFFF))
+#define MAKE_DISPLAY_ID(card_id, conn_id) (((card_id) << 16) | (conn_id & 0xFFFF))
+
 /*! @brief Information on all displays as a map with display_id as key.
 
   @details This map returns the display configuration and status of all displays.
