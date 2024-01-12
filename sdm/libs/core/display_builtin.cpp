@@ -207,12 +207,25 @@ DisplayError DisplayBuiltIn::Init() {
   DebugHandler::Get()->GetProperty(DISABLE_CWB_IDLE_FALLBACK, &value);
   disable_cwb_idle_fallback_ = (value == 1);
 
+  value = 0;
+  DebugHandler::Get()->GetProperty(ENABLE_BRIGHTNESS_DRM_PROP, &value);
+  enable_brightness_drm_prop_ = (value == 1);
+
 #ifdef TRUSTED_VM
   disable_cwb_idle_fallback_ = 1;
 #endif
 
+  value = 0;
+  DebugHandler::Get()->GetProperty(FORCE_LM_TO_FB_CONFIG, &value);
+  force_lm_to_fb_config_ = (value == 1);
+
   NoiseInit();
   InitCWBBuffer();
+
+  if (event_proxy_info_.Init(hw_panel_info_.panel_name, this, extension_lib_) != kErrorNone) {
+    DLOGW("Failed to initialize event proxy info");
+    event_proxy_info_.Deinit();
+  }
 
   return error;
 }
@@ -244,6 +257,7 @@ DisplayError DisplayBuiltIn::Deinit() {
     DeinitCWBBuffer();
   }
   dpps_info_.Deinit();
+  event_proxy_info_.Deinit();
   return DisplayBase::Deinit();
 }
 
@@ -692,15 +706,6 @@ void DisplayBuiltIn::PreCommit(LayerStack *layer_stack) {
     }
   }
 
-  if (vsync_enable_) {
-    DTRACE_BEGIN("RegisterVsync");
-    // wait for previous frame's retire fence to signal.
-    Fence::Wait(retire_fence_);
-
-    // Register for vsync and then commit the frame.
-    hw_events_intf_->SetEventState(HWEvent::VSYNC, true);
-    DTRACE_END();
-  }
   // effectively drmModeAtomicAddProperty for SDE_DSPP_HIST_IRQ_V1
   if (histogramSetup) {
     SetDppsFeatureLocked(&histogramIRQ, sizeof(histogramIRQ));
@@ -1247,6 +1252,9 @@ DisplayError DisplayBuiltIn::SetPanelBrightness(float brightness) {
   }
 
   DisplayError err = hw_intf_->SetPanelBrightness(level);
+  if (enable_brightness_drm_prop_) {
+    event_handler_->Refresh();
+  }
   if (err == kErrorNone) {
     level_remainder_ = level_remainder;
     pending_brightness_ = false;
@@ -3273,6 +3281,95 @@ DisplayError DisplayBuiltIn::SetDemuraConfig(int demura_idx) {
 
   // disable partial update for one frame
   DisablePartialUpdateOneFrame();
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBuiltIn::PanelOprInfo(const std::string &client_name, bool enable,
+                                          SdmDisplayCbInterface<PanelOprPayload> *cb_intf) {
+  return event_proxy_info_.PanelOprInfo(client_name, enable, cb_intf);
+}
+
+DisplayError EventProxyInfo::Init(const std::string &panel_name, DisplayInterface *intf,
+                                  DynLib &extension_lib) {
+  std::lock_guard<std::mutex> guard(lock_);
+
+  if (!intf) {
+    DLOGE("Invalid display interface");
+    return kErrorParameters;
+  }
+
+  if (event_proxy_intf_.get()) {
+    DLOGV("Event proxy interface is already created");
+    return kErrorNone;
+  }
+
+  typedef DispEventProxyFactIntf *(*GetDispEventProxyFactFunc)();
+  GetDispEventProxyFactFunc get_disp_event_proxy_fact_func;
+
+  if (!extension_lib.Sym("GetDispEventProxyFactIntf",
+                         reinterpret_cast<void **>(&get_disp_event_proxy_fact_func))) {
+    DLOGW("Fail to retrieve GetDispEventProxyFactIntf from %s", EXTENSION_LIBRARY_NAME);
+    return kErrorUndefined;
+  }
+
+  DispEventProxyFactIntf *factory_intf = get_disp_event_proxy_fact_func();
+  if (!factory_intf) {
+    DLOGW("Failed to get display event proxy factory interface");
+    return kErrorUndefined;
+  }
+
+  std::shared_ptr<DisplayEventProxyIntf> proxy_intf =
+      factory_intf->CreateDispEventProxyIntf(panel_name, intf);
+  if (!proxy_intf) {
+    DLOGW("Failed to create display event proxy interface");
+    return kErrorMemory;
+  }
+
+  int ret = proxy_intf->Init();
+  if (ret) {
+    DLOGW("Failed to initialize event proxy interface, ret %d", ret);
+    return kErrorUndefined;
+  }
+
+  event_proxy_intf_ = proxy_intf;
+  return kErrorNone;
+}
+
+DisplayError EventProxyInfo::Deinit() {
+  std::lock_guard<std::mutex> guard(lock_);
+  if (event_proxy_intf_) {
+    event_proxy_intf_->Deinit();
+    event_proxy_intf_.reset();
+    event_proxy_intf_ = nullptr;
+  }
+  return kErrorNone;
+}
+
+DisplayError EventProxyInfo::PanelOprInfo(const std::string &client_name, bool enable,
+                                          SdmDisplayCbInterface<PanelOprPayload> *cb_intf) {
+  if (!event_proxy_intf_.get()) {
+    DLOGW("Event proxy intf is not available");
+    return kErrorParameters;
+  }
+
+  PanelOprInfoParam *opr_info = nullptr;
+  GenericPayload payload;
+  int ret = payload.CreatePayload(opr_info);
+  if (ret || !opr_info) {
+    DLOGE("Failed to create payload for OPR info, ret %d", ret);
+    return kErrorParameters;
+  }
+
+  opr_info->name = client_name;
+  opr_info->enable = enable;
+  opr_info->cb_intf = cb_intf;
+
+  ret = event_proxy_intf_->SetParameter(kSetPanelOprInfoEnable, payload);
+  if (ret) {
+    DLOGE("Failed to set panel Opr info enablement, ret %d", ret);
+    return kErrorUndefined;
+  }
 
   return kErrorNone;
 }

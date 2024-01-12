@@ -136,6 +136,14 @@ class DisplayConfigAIDL : public BnDisplayConfig {
     return ScopedAStatus::ok();
   }
   ScopedAStatus getDisplayPortId(int32_t disp_id, int32_t *port_id) override;
+  ScopedAStatus isCacV2Supported(int dispId, bool *supported) override;
+  ScopedAStatus configureCacV2(int32_t dispId, const CacV2Config &config, bool enable) override;
+  ScopedAStatus configureCacV2PerEye(int32_t dispId, const CacV2Config &leftConfig,
+                                     const CacV2Config &rightConfig, bool enable) override;
+  ScopedAStatus configureCacV2ExtPerEye(int32_t dispId, const CacV2ConfigExt &leftConfig,
+                                        const CacV2ConfigExt &rightConfig, bool enable) override;
+
+  ScopedAStatus allowIdleFallback() override;
 
  private:
   sdm::HWCSession *hwc_session_;

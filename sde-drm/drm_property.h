@@ -241,6 +241,7 @@ enum struct DRMProperty {
   SPR_INIT_CFG_V2,
   SPR_UDC_CFG_V2,
   EPT,
+  BRIGHTNESS,
 
   // Insert above
   MAX

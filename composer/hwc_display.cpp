@@ -760,6 +760,8 @@ void HWCDisplay::BuildLayerStack() {
       // Dont honor HDR when its handling is disabled
       layer->input_buffer.flags.hdr = true;
       layer_stack_.flags.hdr_present = true;
+    } else {
+      layer->input_buffer.flags.hdr = false;
     }
 
     if (game_supported_ && (hwc_layer->GetType() == kLayerGame) && !hdr_layer) {
@@ -1221,6 +1223,16 @@ HWC3::Error HWCDisplay::GetPerFrameMetadataKeys(uint32_t *out_num_keys,
   return HWC3::Error::None;
 }
 
+HWC3::Error HWCDisplay::SetDisplayAnimating(bool animating) {
+  // Trigger refresh, when animation ends.
+  if (!animating) {
+    callbacks_->Refresh(id_);
+  }
+
+  animating_ = animating;
+  return HWC3::Error::None;
+}
+
 HWC3::Error HWCDisplay::GetActiveConfig(Config *out_config) {
   if (out_config == nullptr) {
     return HWC3::Error::BadDisplay;
@@ -1600,7 +1612,9 @@ HWC3::Error HWCDisplay::PostPrepareLayerStack(uint32_t *out_num_types, uint32_t 
 
   validate_done_ = true;
 
-  return ((*out_num_types > 0) ? HWC3::Error::HasChanges : HWC3::Error::None);
+  return (((*out_num_types > 0) || (has_client_composition_ && *out_num_requests > 0))
+              ? HWC3::Error::HasChanges
+              : HWC3::Error::None);
 }
 
 HWC3::Error HWCDisplay::AcceptDisplayChanges() {
@@ -1621,6 +1635,11 @@ HWC3::Error HWCDisplay::AcceptDisplayChanges() {
       DLOGW("Invalid layer: %" PRIu64, change.first);
     }
   }
+
+  // Clear layer changes, so that they don't get applied in next commit ie;
+  // cases where Prepare doesn't go through.
+  layer_changes_.clear();
+
   return HWC3::Error::None;
 }
 
@@ -1903,8 +1922,7 @@ HWC3::Error HWCDisplay::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence
     display_paused_ = true;
     display_pause_pending_ = false;
   }
-  if (secure_event_ == kTUITransitionEnd || secure_event_ == kSecureDisplayEnd ||
-      secure_event_ == kTUITransitionUnPrepare) {
+  if (secure_event_ == kSecureDisplayEnd || secure_event_ == kTUITransitionUnPrepare) {
     secure_event_ = kSecureEventMax;
   }
 
@@ -3177,6 +3195,7 @@ DisplayError HWCDisplay::PostHandleSecureEvent(SecureEvent secure_event) {
   DisplayError err = display_intf_->PostHandleSecureEvent(secure_event);
   if (err == kErrorNone) {
     if (secure_event == kTUITransitionEnd || secure_event == kTUITransitionUnPrepare) {
+      secure_event_ = kSecureEventMax;
       return kErrorNone;
     }
     DLOGV("Set secure_event to %d", secure_event);

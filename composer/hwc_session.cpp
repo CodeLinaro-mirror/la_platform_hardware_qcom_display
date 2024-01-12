@@ -1300,6 +1300,23 @@ void HWCSession::GetVirtualDisplayList() {
 
     virtual_display_list_.push_back(info);
   }
+
+  if (virtual_display_list_.empty() && virtual_display_factory_.IsGPUColorConvertSupported()) {
+    AddGpuBasedVirtualDisplay(&hw_displays_info);
+  }
+}
+
+void HWCSession::AddGpuBasedVirtualDisplay(const HWDisplaysInfo *const hw_displays_info) {
+  HWDisplayInfo hw_info = {};
+  hw_info.display_type = kVirtual;
+  hw_info.is_connected = true;
+  hw_info.is_primary = false;
+  hw_info.is_wb_ubwc_supported = true;
+  hw_info.display_id = 0;
+  while (hw_displays_info->find(hw_info.display_id) != hw_displays_info->end()) {
+    hw_info.display_id++;
+  }
+  virtual_display_list_.push_back(hw_info);
 }
 
 HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height, int32_t *format,
@@ -3646,6 +3663,7 @@ void HWCSession::HandlePendingHotplug(Display disp_id, const shared_ptr<Fence> &
       int32_t err = pluggable_handler_lock_.TryLock();
       if (!err) {
         // Do hotplug handling in a different thread to avoid blocking PresentDisplay.
+        pending_hotplug_event_ = kHotPlugProcessing;
         std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
         pluggable_handler_lock_.Unlock();
       } else {
@@ -4099,10 +4117,10 @@ int HWCSession::WaitForCommitDone(Display display, int client_id) {
     clients_waiting_for_commit_[display].set(client_id);
     if (hwc_display_[display]) {
       uint32_t config = 0;
-      hwc_display_[display]->GetActiveDisplayConfig(&config);
-      DisplayConfigVariableInfo display_attributes = {};
-      hwc_display_[display]->GetDisplayAttributesForConfig(config, &display_attributes);
-      timeout_ms = kNumDrawCycles * (display_attributes.vsync_period_ns / kDenomNstoMs);
+      int32_t vsync_period = 0;
+      hwc_display_[display]->GetCachedActiveConfig(&config);
+      hwc_display_[display]->GetDisplayAttribute(config, HwcAttribute::VSYNC_PERIOD, &vsync_period);
+      timeout_ms = (kNumDrawCycles * (vsync_period / kDenomNstoMs)) + 100;
       DLOGI("timeout in ms %d", timeout_ms);
     }
     int result = locker_[display].WaitFinite(timeout_ms);
@@ -4234,10 +4252,6 @@ android::status_t HWCSession::TUITransitionPrepare(int disp_id) {
     return -ENOTSUP;
   }
 
-  if (TeardownPluggableDisplays()) {
-    pending_hotplug_event_ = kHotPlugEvent;
-  }
-
   std::vector<DisplayMapInfo> map_info = {map_info_primary_};
   std::copy(map_info_builtin_.begin(), map_info_builtin_.end(), std::back_inserter(map_info));
   std::copy(map_info_virtual_.begin(), map_info_virtual_.end(), std::back_inserter(map_info));
@@ -4251,6 +4265,10 @@ android::status_t HWCSession::TUITransitionPrepare(int disp_id) {
         return -EINVAL;
       }
     }
+  }
+
+  if (TeardownPluggableDisplays()) {
+    pending_hotplug_event_ = kHotPlugEvent;
   }
 
   return 0;
@@ -4377,7 +4395,7 @@ android::status_t HWCSession::TUITransitionEndLocked(int disp_id) {
   //Add check for internal state for bailing out (needs_refresh to false)
   if (needs_refresh) {
     DLOGI("Waiting for device unassign");
-    int ret = WaitForCommitDoneAsync(target_display, kClientTrustedUI);
+    int ret = WaitForCommitDone(target_display, kClientTrustedUI);
     if (ret != 0) {
       if (ret != -ETIMEDOUT) {
         DLOGE("Device unassign failed with error %d", ret);
@@ -4432,14 +4450,16 @@ android::status_t HWCSession::TUITransitionUnPrepare(int disp_id) {
       trigger_refresh |= needs_refresh;
     }
   }
+
+  if (pending_hotplug_event_ == kHotPlugEvent) {
+    // Do hotplug handling in a different thread to avoid blocking TUI thread.
+    pending_hotplug_event_ = kHotPlugProcessing;
+    std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
+  }
   if (trigger_refresh) {
     callbacks_.Refresh(target_display);
   }
 
-  if (pending_hotplug_event_ == kHotPlugEvent) {
-    // Do hotplug handling in a different thread to avoid blocking TUI thread.
-    std::thread(&HWCSession::HandlePluggableDisplays, this, true).detach();
-  }
   // Reset tui session state variable.
   DLOGI("End of TUI session on display %d", disp_id);
   return 0;

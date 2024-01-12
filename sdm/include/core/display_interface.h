@@ -41,6 +41,8 @@
 #define __DISPLAY_INTERFACE_H__
 
 #include <private/snapdragon_color_intf.h>
+#include <private/cb_intf.h>
+#include <private/display_event_proxy_intf.h>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -1356,6 +1358,17 @@ class DisplayInterface {
    @return \link DisplayError \endlink
   */
   virtual DisplayError SetDemuraConfig(int demura_idx) = 0;
+
+  /*! @brief Method to enable/disable panel OPR info.
+
+   @param[in] client_name : client name
+   @param[in] enable: enable or disable
+   @param[in] cb_intf: callback interface
+
+   @return \link DisplayError \endlink
+  */
+  virtual DisplayError PanelOprInfo(const std::string &client_name, bool enable,
+                                    SdmDisplayCbInterface<PanelOprPayload> *cb_intf) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

@@ -377,6 +377,10 @@ struct CwbConfig {
   bool avoid_refresh = false;                        //!< Whether to avoid additional refresh for
                                                      //!< CWB Request, by default refresh occurs
                                                      //!< for each CWB request to process it.
+  uint32_t downscale_x = 1;                          //!< downscale factor for buffer width,
+                                                     //!< supported for demuratn client only.
+  uint32_t downscale_y = 1;                          //!< downscale factor for buffer height,
+                                                     //!< supported for demuratn client only.
 };
 
 class LayerBufferObject {

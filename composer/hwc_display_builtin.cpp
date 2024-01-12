@@ -50,6 +50,7 @@
 #include "hwc_color_mode_stc.h"
 #include "hwc_debugger.h"
 #include "hwc_session.h"
+#include "perf_hint_parser.h"
 
 #define __CLASS__ "HWCDisplayBuiltIn"
 
@@ -693,7 +694,7 @@ int HWCDisplayBuiltIn::GetActiveSecureSession(std::bitset<kSecureMax> *secure_se
       secure_sessions->set(kSecureDisplay);
     }
   }
-  if (secure_event_ == kTUITransitionStart || secure_event_ == kTUITransitionPrepare) {
+  if (secure_event_ != kSecureEventMax) {
     secure_sessions->set(kSecureTUI);
   }
   return 0;
@@ -1320,7 +1321,10 @@ void HWCDisplayBuiltIn::AppendStitchLayer() {
 }
 
 DisplayError HWCDisplayBuiltIn::HistogramEvent(int fd, uint32_t blob_id) {
-  histogram.notify_histogram_event(fd, blob_id);
+  uint32_t panel_width = 0;
+  uint32_t panel_height = 0;
+  GetPanelResolution(&panel_width, &panel_height);
+  histogram.notify_histogram_event(fd, blob_id, panel_width, panel_height);
   return kErrorNone;
 }
 
@@ -1488,6 +1492,11 @@ void HWCDisplayBuiltIn::LoadMixedModePerfHintThreshold() {
   // For mixed mode composition, if perf hint for large composition cycles is enabled and if the
   // use case meets the threshold, SF and HWC will be running on the gold CPU cores.
 
+  PerfHintParser perf_hint_parser;
+  if (perf_hint_parser.Init() == HWC3::Error::None) {
+    perf_hint_parser.GetPerfHintThresholds(&mixed_mode_threshold_);
+    return;
+  }
   // For 120 fps, 8 layers should fall back to GPU
   mixed_mode_threshold_.insert(std::make_pair<int32_t, int32_t>(120, 8));
 
@@ -1609,7 +1618,7 @@ void HWCDisplayBuiltIn::HandleLargeCompositionHint(bool release) {
   if (release) {
     if (hwc_tid_ != tid) {
       DLOGV_IF(kTagResources, "HWC's tid:%d is updated to :%d", hwc_tid_, tid);
-      int ret = cpu_hint_->ReqHint(kHWC, tid);
+      int ret = cpu_hint_->ReqTidChangeOffload(kHWC, tid);
       if (!ret) {
         hwc_tid_ = tid;
       }

@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <fcntl.h>
 #include <log/log.h>
 #include <pthread.h>
@@ -163,7 +170,8 @@ void histogram::HistogramCollector::stop() {
     monitoring_thread.join();
 }
 
-void histogram::HistogramCollector::notify_histogram_event(int blob_source_fd, BlobId id) {
+void histogram::HistogramCollector::notify_histogram_event(int blob_source_fd, BlobId id,
+                                                           uint32_t width, uint32_t height) {
   std::unique_lock<decltype(mutex)> lk(mutex);
   if (!started) {
     ALOGW("Discarding event blob-id: %X", id);
@@ -172,6 +180,9 @@ void histogram::HistogramCollector::notify_histogram_event(int blob_source_fd, B
   if (work_available) {
     ALOGI("notified of histogram event before consuming last one. prior event discarded");
   }
+
+  panel_width_ = width;
+  panel_height_ = height;
 
   work_available = true;
   blobwork = HistogramCollector::BlobWork{blob_source_fd, id};
@@ -198,9 +209,43 @@ void histogram::HistogramCollector::blob_processing_thread() {
       lk.lock();
       continue;
     }
-    histogram->insert(*static_cast<struct drm_msm_hist *>(blob->data));
+
+    bool pass = hist_data_validate(*static_cast<struct drm_msm_hist *>(blob->data));
+    if (pass) {
+      histogram->insert(*static_cast<struct drm_msm_hist *>(blob->data));
+    }
     drmModeFreePropertyBlob(blob);
 
     lk.lock();
   }
+}
+
+bool histogram::HistogramCollector::hist_data_validate(struct drm_msm_hist const &hist) {
+  uint32_t hist_checksum = 0;
+  uint32_t pixels_sum = panel_width_ * panel_height_;
+
+  if (pixels_sum == 0) {
+    ALOGI("Invalid panel_width %u, height  %u", panel_width_, panel_height_);
+    return false;
+  }
+
+  for (int i = 0; i < HIST_V_SIZE; i++) {
+    // To handle the sum of abnormal histogram exceeding the maximum value of uint32_t
+    if (std::numeric_limits<uint32_t>::max() - hist.data[i] < hist_checksum) {
+      ALOGI("Overflow issue, hist.data[i] %u, current hist_checksum %u", i, hist.data[i],
+            hist_checksum);
+      return false;
+    }
+    // Accumulate hist bin data
+    hist_checksum += hist.data[i];
+  }
+
+  // Hist data is valid when the sum of all hist data equals the total number of pixels
+  if (pixels_sum != hist_checksum) {
+    ALOGI("Invalid hsit data, panel_width %u, height %u, hist_checksum %u", panel_width_,
+          panel_height_, hist_checksum);
+    return false;
+  }
+
+  return true;
 }

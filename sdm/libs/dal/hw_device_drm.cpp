@@ -600,6 +600,16 @@ DisplayError HWDeviceDRM::Init() {
     DLOGI("force_tonemapping_ %d", force_tonemapping_);
   }
 
+  value = 0;
+  if (Debug::GetProperty(ASPECT_RATIO_THRESHOLD, &value) == kErrorNone) {
+    aspect_ratio_threshold_ = 1 + (FLOAT(value) / 100);
+    DLOGI("aspect_ratio_threshold_: %f", aspect_ratio_threshold_);
+  }
+
+  value = 0;
+  Debug::GetProperty(ENABLE_BRIGHTNESS_DRM_PROP, &value);
+  enable_brightness_drm_prop_ = (value == 1);
+
   return kErrorNone;
 }
 
@@ -1461,6 +1471,13 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     drm_atomic_intf_->Perform(sde_drm::DRMOps::PLANES_RESET_LUT, token_.crtc_id);
   }
 
+  if (enable_brightness_drm_prop_ && cached_brightness_level_ != -1) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_BRIGHTNESS, token_.conn_id,
+                              cached_brightness_level_);
+    current_brightness_ = cached_brightness_level_;
+    cached_brightness_level_ = -1;
+  }
+
   for (uint32_t i = 0; i < hw_layer_count; i++) {
     Layer &layer = hw_layers_info->hw_layers.at(i);
     LayerBuffer *input_buffer = &layer.input_buffer;
@@ -1652,6 +1669,14 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
           }
 
           SetSsppTonemapFeatures(pipe_info);
+          if (hw_scale_) {
+            SDEScaler scaler_output = {};
+            hw_scale_->SetScaler(pipe_info->scale_data, &scaler_output);
+            if (hw_resource_.has_qseed3) {
+              drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
+                                        reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
+            }
+          }
         }
 
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_ID, pipe_id, fb_id);
@@ -2143,13 +2168,20 @@ void HWDeviceDRM::SelectCscType(const LayerBuffer &input_buffer, DRMCscType *typ
   }
 
   // Override YUV to RGB CSC in DV P5 cases. If extended content metadata is used
-  // for other metadata types we will run into issues.
+  // and is DV's sync word, it should be DV. Then using full range to judge it's P5.
   bool extended_md_present = input_buffer.extended_content_metadata != nullptr &&
                               input_buffer.extended_content_metadata->size;
-  if (extended_md_present && (input_buffer.color_metadata.transfer == Transfer_SMPTE_170M
-                          || input_buffer.color_metadata.transfer == Transfer_sRGB)) {
-      *type = DRMCscType::kCscYuv2RgbDolbyVisionP5;
-      return;
+  if (extended_md_present) {
+    uint8_t *md = input_buffer.extended_content_metadata->metadataPayload;
+    if (md[0] == 0x0 && md[1] == 0x0 && md[2] == 0x0 && md[3] == 0x1 && md[4] == 0x7c &&
+        md[5] == 0x1) {
+      if ((input_buffer.color_metadata.range == Range_Full) ||
+          (input_buffer.color_metadata.transfer == Transfer_SMPTE_170M) ||
+          (input_buffer.color_metadata.transfer == Transfer_sRGB)) {
+        *type = DRMCscType::kCscYuv2RgbDolbyVisionP5;
+        return;
+      }
+    }
   }
 
   switch (input_buffer.color_metadata.colorPrimaries) {
@@ -2501,7 +2533,9 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
   float display_aspect_ratio =
       FLOAT(display_attributes_[index].x_pixels) / FLOAT(display_attributes_[index].y_pixels);
 
-  if (display_aspect_ratio != mixer_aspect_ratio) {
+  float display_to_mixer_aspect_ratio = std::max(display_aspect_ratio, mixer_aspect_ratio) /
+                                        std::min(display_aspect_ratio, mixer_aspect_ratio);
+  if (display_to_mixer_aspect_ratio > aspect_ratio_threshold_) {
     DLOGW("Aspect ratio mismatch! input: res %dx%d display: res %dx%d", mixer_attributes.width,
           mixer_attributes.height, display_attributes_[index].x_pixels,
           display_attributes_[index].y_pixels);
@@ -2739,12 +2773,10 @@ void HWDeviceDRM::SetUcscTonemapFeatures(HWPipeInfo *pipe_info) {
   for (auto &it : pipe_info->ucsc_write_op) {
     switch (it.first) {
       case kUcscUnmult:
-        if (it.second != kNoOp) {
-          DLOGV_IF(kTagDriverConfig, "Call Perform UCSC UNMULT Op = %s, display: %d-%d",
-                   (it.second == kSet) ? "Set" : "Reset", display_id_, disp_type_);
-          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_UCSC_UNMULT_CONFIG, pipe_info->pipe_id,
-                                    pipe_info->ucsc_config.unmult_en);
-        }
+        DLOGV_IF(kTagDriverConfig, "Call Perform UCSC UNMULT enable = %d, display: %d-%d",
+                 pipe_info->ucsc_config.unmult_en, display_id_, disp_type_);
+        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_UCSC_UNMULT_CONFIG, pipe_info->pipe_id,
+                                  pipe_info->ucsc_config.unmult_en);
         break;
       case kUcscIgc:
         if (it.second != kNoOp) {
@@ -3352,22 +3384,49 @@ void HWDeviceDRM::ConfigureConcurrentWriteback(const HWLayersInfo &hw_layer_info
       cwb_dst.right = UINT32(cwb_roi.right);
       cwb_dst.top = UINT32(cwb_roi.top);
       cwb_dst.bottom = UINT32(cwb_roi.bottom);
+      if (cwb_config->downscale_x > 1) {
+        cwb_dst.right = ((cwb_dst.right - cwb_dst.left) / cwb_config->downscale_x) + cwb_dst.left;
+      }
+      if (cwb_config->downscale_y > 1) {
+        cwb_dst.bottom = ((cwb_dst.bottom - cwb_dst.top) / cwb_config->downscale_y) + cwb_dst.top;
+      }
     }
   }
 
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_OUTPUT_RECT, vitual_conn_id, cwb_dst);
   ConfigureCWBDither(cwb_config->dither_info, vitual_conn_id, capture_mode);
 
+  // Configure Demura DNSC only if either of downscale factors is greater than 1
+  // above case is valid only for Demura CWB Client
+  if (cwb_config->downscale_x > 1 || cwb_config->downscale_y > 1) {
+    ConfigureDemuraDNSC(hw_layer_info);
+    DLOGV_IF(kTagDriverConfig, "Configure Demura DNSC: downscale x = %d, downscale y = %d",
+             cwb_config->downscale_x, cwb_config->downscale_y);
+  }
+
   DLOGV_IF(kTagDriverConfig, "CWB Mode:%d roi.left:%u roi.top:%u roi.right:%u roi.bottom:%u",
            capture_mode, cwb_dst.left, cwb_dst.top, cwb_dst.right, cwb_dst.bottom);
 }
 
 DisplayError HWDeviceDRM::TeardownConcurrentWriteback(void) {
-  if (cwb_config_.enabled) {
-    drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
-    cwb_config_.enabled = false;
-    registry_.Clear();
+  if (!cwb_config_.enabled) {
+    return kErrorNone;
   }
+
+  if (cwb_config_.dnsc_config) {
+    uint32_t conn_id = cwb_config_.token.conn_id;
+
+    dnsc_cfg_ = {};
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_DNSC_BLR, conn_id, &dnsc_cfg_);
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_WB_USAGE_TYPE, conn_id, 0);
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL, conn_id, 0);
+    cwb_config_.dnsc_config = false;
+    DLOGV_IF(kTagDriverConfig, "Teardown Demura DNSC");
+  }
+
+  drm_mgr_intf_->UnregisterDisplay(&(cwb_config_.token));
+  cwb_config_.enabled = false;
+  registry_.Clear();
 
   return kErrorNone;
 }
@@ -3503,6 +3562,56 @@ void HWDeviceDRM::HandleCwbTeardown(bool sync_teardown) {
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
     TeardownConcurrentWriteback();
   }
+}
+
+void HWDeviceDRM::ConfigureDemuraDNSC(const HWLayersInfo &hw_layers_info) {
+#ifdef FEATURE_DNSC_BLUR
+  const HWDNSCInfo &dnsc = hw_layers_info.demura_dnsc_cfg;
+  if (!dnsc.enabled) {
+    return;
+  }
+
+  dnsc_cfg_ = {};
+  dnsc_cfg_.flags = dnsc.flags;
+  dnsc_cfg_.num_blocks = dnsc.num_blocks;
+
+  dnsc_cfg_.src_width = dnsc.src_width;
+  dnsc_cfg_.src_height = dnsc.src_height;
+  dnsc_cfg_.dst_width = dnsc.dst_width;
+  dnsc_cfg_.dst_height = dnsc.dst_height;
+
+  dnsc_cfg_.flags_h = dnsc.flags_h;
+  dnsc_cfg_.flags_v = dnsc.flags_v;
+
+  dnsc_cfg_.phase_init_h = dnsc.pcmn_data.phase_init_h;
+  dnsc_cfg_.phase_step_h = dnsc.pcmn_data.phase_step_h;
+  dnsc_cfg_.phase_init_v = dnsc.pcmn_data.phase_init_v;
+  dnsc_cfg_.phase_step_v = dnsc.pcmn_data.phase_step_v;
+
+  dnsc_cfg_.norm_h = dnsc.gaussian_data.norm_h;
+  dnsc_cfg_.ratio_h = dnsc.gaussian_data.ratio_h;
+  dnsc_cfg_.norm_v = dnsc.gaussian_data.norm_v;
+  dnsc_cfg_.ratio_v = dnsc.gaussian_data.ratio_v;
+
+  for (int i = 0; i < DNSC_BLUR_COEF_NUM && i < dnsc.gaussian_data.coef_hori.size(); i++) {
+    dnsc_cfg_.coef_hori[i] = dnsc.gaussian_data.coef_hori[i];
+  }
+
+  for (int i = 0; i < DNSC_BLUR_COEF_NUM && i < dnsc.gaussian_data.coef_vert.size(); i++) {
+    dnsc_cfg_.coef_vert[i] = dnsc.gaussian_data.coef_vert[i];
+  }
+
+  uint32_t conn_id = cwb_config_.token.conn_id;
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_DNSC_BLR, conn_id, &dnsc_cfg_);
+  sde_drm::DRMWBUsageType usage_mode = sde_drm::DRMWBUsageType::WB_USAGE_CWB;
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_WB_USAGE_TYPE, conn_id, usage_mode);
+  uint32_t topology_control = UINT32(sde_drm::DRMTopologyControl::DNSC_BLUR);
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL, conn_id, topology_control);
+  cwb_config_.dnsc_config = true;
+
+  DLOGV_IF(kTagDriverConfig, "src_width = %d, src_height = %d, dst_width = %d, dst_height = %d",
+           dnsc_cfg_.src_width, dnsc_cfg_.src_height, dnsc_cfg_.dst_width, dnsc_cfg_.dst_height);
+#endif
 }
 
 }  // namespace sdm

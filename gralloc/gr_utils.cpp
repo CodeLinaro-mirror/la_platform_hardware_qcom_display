@@ -795,6 +795,19 @@ int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]) 
 
   memset(ycbcr->reserved, 0, sizeof(ycbcr->reserved));
 
+  // Check metadata if the geometry has been updated.
+  CropRectangle_t buffer_dim;
+  if (GetMetaDataValue(const_cast<private_handle_t *>(hnd), (int64_t)StandardMetadataType::CROP,
+                       &buffer_dim) == Error::NONE) {
+    int32_t sliceWidth = buffer_dim.right - buffer_dim.left;
+    int32_t sliceHeight = buffer_dim.bottom - buffer_dim.top;
+    BufferInfo info(sliceWidth, sliceHeight, format, usage);
+    err = GetAlignedWidthAndHeight(info, &width, &height);
+    if (err) {
+      return err;
+    }
+  }
+
   // Check metadata for interlaced content.
   int interlace_flag = 0;
   if (GetMetaDataValue(const_cast<private_handle_t *>(hnd), QTI_PP_PARAM_INTERLACED,
@@ -1527,6 +1540,9 @@ int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
   }
 
   AdrenoMemInfo *adreno_mem_info = AdrenoMemInfo::GetInstance();
+  if (!adreno_mem_info) {
+    return -ENOTSUP;
+  }
   graphics_metadata->size = adreno_mem_info->AdrenoGetMetadataBlobSize();
   uint64_t adreno_usage = info.usage;
   // If gralloc disables UBWC based on any of the checks,
@@ -2452,7 +2468,6 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
       return metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(
           ::android::gralloc4::MetadataType_BlendMode.value)];
     case QTI_VT_TIMESTAMP:
-    case QTI_COLOR_METADATA:
     case QTI_PP_PARAM_INTERLACED:
     case QTI_VIDEO_PERF_MODE:
     case QTI_GRAPHICS_METADATA:
@@ -2470,6 +2485,16 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
     case QTI_S3D_FORMAT:
     case QTI_BUFFER_PERMISSION:
       return metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(paramType)];
+    case QTI_COLOR_METADATA:
+      return metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_COLOR_METADATA)] ||
+             metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(
+                 (int64_t)StandardMetadataType::DATASPACE)] ||
+             metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(
+                 (int64_t)StandardMetadataType::SMPTE2086)] ||
+             metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(
+                 (int64_t)StandardMetadataType::CTA861_3)] ||
+             metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(
+                 (int64_t)StandardMetadataType::SMPTE2094_40)];
     case QTI_COLORSPACE:
       // QTI_COLORSPACE is derived from QTI_COLOR_METADATA
       return metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_COLOR_METADATA)];
@@ -2576,6 +2601,9 @@ Error ColorMetadataToDataspace(ColorMetaData color_metadata, Dataspace *dataspac
     case Transfer_HLG:
       transfer = Dataspace::TRANSFER_HLG;
       break;
+    case Transfer_SMPTE_ST2084:
+      transfer = Dataspace::TRANSFER_ST2084;
+      break;
     default:
       return Error::UNSUPPORTED;
       /*
@@ -2587,7 +2615,6 @@ Error ColorMetadataToDataspace(ColorMetaData color_metadata, Dataspace *dataspac
       Transfer_sYCC
       Transfer_BT2020_2_1
       Transfer_BT2020_2_2
-      Transfer_SMPTE_ST2084
       Transfer_ST_428
       */
   }

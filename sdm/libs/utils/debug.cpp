@@ -262,6 +262,17 @@ int Debug::GetSecondaryMaxFetchLayers() {
 
 bool Debug::IsIWEEnabled() {
   int value = 0;
+
+  // DNSC block will be prioritized to DemuraTn over IWE
+  DebugHandler::Get()->GetProperty(ANTI_AGING_CWB_DOWNSACLE_X, &value);
+  if (value > 1) {
+    return false;
+  }
+  DebugHandler::Get()->GetProperty(ANTI_AGING_CWB_DOWNSACLE_Y, &value);
+  if (value > 1) {
+    return false;
+  }
+
   DebugHandler::Get()->GetProperty(ENABLE_INLINE_WRITEBACK, &value);
 
   return (value == 1);

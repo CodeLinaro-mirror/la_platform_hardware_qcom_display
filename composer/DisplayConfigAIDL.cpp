@@ -909,6 +909,43 @@ ScopedAStatus DisplayConfigAIDL::getDisplayPortId(int32_t disp_id, int32_t *port
   return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
+ScopedAStatus DisplayConfigAIDL::isCacV2Supported(int dispId, bool *supported) {
+  return ScopedAStatus::ok();
+}
+ScopedAStatus DisplayConfigAIDL::configureCacV2(int32_t dispId, const CacV2Config &config,
+                                                bool enable) {
+  return ScopedAStatus::ok();
+}
+ScopedAStatus DisplayConfigAIDL::configureCacV2PerEye(int32_t dispId, const CacV2Config &leftConfig,
+                                                      const CacV2Config &rightConfig, bool enable) {
+  return ScopedAStatus::ok();
+}
+ScopedAStatus DisplayConfigAIDL::configureCacV2ExtPerEye(int32_t dispId,
+                                                         const CacV2ConfigExt &leftConfig,
+                                                         const CacV2ConfigExt &rightConfig,
+                                                         bool enable) {
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::allowIdleFallback() {
+  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[HWC_DISPLAY_PRIMARY]);
+  uint32_t active_ms = 0;
+  uint32_t inactive_ms = 0;
+  sdm::Debug::GetIdleTimeoutMs(&active_ms, &inactive_ms);
+  if (hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]) {
+    ALOGI("enable idle time active_ms:%d inactive_ms:%d", active_ms, inactive_ms);
+    hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(active_ms, inactive_ms);
+    hwc_session_->is_client_up_ = true;
+    hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY]->MarkClientActive(true);
+    hwc_session_->idle_time_inactive_ms_ = inactive_ms;
+    hwc_session_->idle_time_active_ms_ = active_ms;
+    return ScopedAStatus::ok();
+  }
+
+  ALOGW("Display = %d is not connected.", HWC_DISPLAY_PRIMARY);
+  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_STATE));
+}
+
 }  // namespace config
 }  // namespace display
 }  // namespace hardware

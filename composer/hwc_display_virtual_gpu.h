@@ -79,6 +79,9 @@ class HWCDisplayVirtualGPU : public HWCDisplayVirtual,
                                       uint32_t *out_num_types, uint32_t *out_num_requests,
                                       bool *needs_commit);
   virtual bool FreezeScreen();
+  virtual HWC3::Error SetColorTransform(const float *matrix, android_color_transform_t hint) {
+    return HWC3::Error::None;
+  }
 
  private:
   // SyncTask methods.

@@ -751,8 +751,6 @@ void CompManager::HandleSecureEvent(Handle display_ctx, SecureEvent secure_event
     resource_intf_->HandleTUITransition(display_comp_ctx->display_resource_ctx, true);
   }
   if (secure_event == kTUITransitionEnd) {
-    resource_intf_->Perform(ResourceInterface::kCmdResetLUT,
-                            display_comp_ctx->display_resource_ctx);
     resource_intf_->HandleTUITransition(display_comp_ctx->display_resource_ctx, false);
     safe_mode_ = false;
   }
@@ -993,7 +991,9 @@ DisplayError CompManager::CaptureCwb(Handle display_ctx, const LayerBuffer &outp
 }
 
 void CompManager::NotifyCwbDone(int32_t display_id, int32_t status, const LayerBuffer &buffer) {
-  callback_map_[display_id]->NotifyCwbDone(status, buffer);
+  if (callback_map_[display_id]) {
+    callback_map_[display_id]->NotifyCwbDone(status, buffer);
+  }
 }
 
 void CompManager::TriggerRefresh(int32_t display_id) {

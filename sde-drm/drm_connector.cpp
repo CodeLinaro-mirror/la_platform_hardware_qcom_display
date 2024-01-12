@@ -1185,6 +1185,12 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       SetROI(req, obj_id, num_roi, conn_rois);
     } break;
 
+    case DRMOps::CONNECTOR_SET_BRIGHTNESS: {
+      uint32_t brightness_level = va_arg(args, uint32_t);
+      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::BRIGHTNESS),
+                               brightness_level);
+    } break;
+
     case DRMOps::CONNECTOR_SET_AUTOREFRESH: {
       uint32_t enable = va_arg(args, uint32_t);
       drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::AUTOREFRESH),

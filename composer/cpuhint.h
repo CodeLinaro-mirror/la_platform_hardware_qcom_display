@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -70,19 +70,19 @@ class CPUHint {
   DisplayError Init(HWCDebugHandler *debug_handler);
   int ReqHintsOffload(int hint, int tid);
   int ReqHintRelease();
-  int ReqHint(PerfHintThreadType type, int tid);
+  int ReqTidChangeOffload(PerfHintThreadType type, int tid);
   void ReqEvent(int event);
 
  private:
   const int kLargeComposition = 0x00001097;
   const int kHintPassPid = 0x0000109C;  // Inform mpctl about the TID
-  const int kPassPidSuccess = -2;       // Check if mpctl received the TID
 
   bool enabled_ = false;
   DynLib vendor_ext_lib_;
   int (*fn_perf_hint_acq_rel_offload_)(int handle, int hint, const char *pkg, int duration,
                                        int type, int num_args, int list[]) = NULL;
-  int (*fn_perf_hint_)(int hint, const char *pkg, int duration, int type) = NULL;
+  int (*fn_perf_hint_offload_)(int hint, const char *pkg, int duration, int type, int listlen,
+                               int list[]) = NULL;
   int (*fn_perf_lock_rel_offload_)(int handle) = NULL;
   void (*fn_perf_event_)(int event_id, const char *pkg, int num_args, int list[]) = NULL;
   std::mutex tid_lock_;

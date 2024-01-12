@@ -44,6 +44,7 @@
 #include <private/panel_feature_property_intf.h>
 #include <private/panel_feature_factory_intf.h>
 #include <private/hw_events_interface.h>
+#include <private/display_event_proxy_intf.h>
 #include <string>
 #include <vector>
 
@@ -108,6 +109,18 @@ class DppsInfo {
   DppsInterface *(*GetDppsInterface)() = NULL;
 
   void Deinit_nolock();
+};
+
+class EventProxyInfo {
+ public:
+  DisplayError Init(const std::string &panel_name, DisplayInterface *intf, DynLib &extension_lib);
+  DisplayError Deinit();
+  DisplayError PanelOprInfo(const std::string &client_name, bool enable,
+                            SdmDisplayCbInterface<PanelOprPayload> *cb_intf);
+
+ private:
+  std::mutex lock_;
+  std::shared_ptr<DisplayEventProxyIntf> event_proxy_intf_ = nullptr;
 };
 
 class DisplayIPCVmCallbackImpl : public IPCVmCallbackIntf {
@@ -200,6 +213,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError RetrieveDemuraTnFiles() override;
   DisplayError SetDemuraState(int state) override;
   DisplayError SetDemuraConfig(int demura_idx) override;
+  DisplayError PanelOprInfo(const std::string &client_name, bool enable,
+                            SdmDisplayCbInterface<PanelOprPayload> *cb_intf) override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;
@@ -321,6 +336,8 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   bool lower_fps_ = false;
   bool cwb_buffer_initialized_ = false;
   BufferInfo output_buffer_info_ = {};
+  EventProxyInfo event_proxy_info_ = {};
+  bool enable_brightness_drm_prop_ = false;
 };
 
 }  // namespace sdm

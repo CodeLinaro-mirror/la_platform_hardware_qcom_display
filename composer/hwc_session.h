@@ -129,6 +129,7 @@ class HWCSession : public HWCUEvent,
   enum HotPlugEvent {
     kHotPlugNone,
     kHotPlugEvent,
+    kHotPlugProcessing,
   };
 
   enum ClientCommitDone {
@@ -537,6 +538,7 @@ class HWCSession : public HWCUEvent,
   bool TeardownPluggableDisplays();
   int DisconnectPluggableDisplays(DisplayMapInfo &map_info);
   void RemoveDisconnectedPluggableDisplays();
+  void AddGpuBasedVirtualDisplay(const HWDisplaysInfo *const hw_displays_info);
 
   CoreInterface *core_intf_ = nullptr;
   HWCDisplay *hwc_display_[HWCCallbacks::kNumDisplays] = {nullptr};

@@ -62,7 +62,8 @@ static bool ValidNoisePluginDebugOverride(uint32_t override_param) {
           (override_param < kNoisePlugInDebugPropertyEnd));
 }
 
-static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
+static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut,
+                                                     bool allow_tonemap_native) {
   if (gamut.find(kDisplayP3) != std::string::npos || gamut.find(kDcip3) != std::string::npos) {
     return ColorPrimaries_DCIP3;
   } else if (gamut.find(kHdr) != std::string::npos || gamut.find("bt2020") != std::string::npos ||
@@ -74,7 +75,7 @@ static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
   } else if (gamut.find(kNative) != std::string::npos) {
     DLOGW("Native Gamut found");
     // Native gamut will have unknown primary, setting ColorPrimaries_Max
-    return ColorPrimaries_Max;
+    return (allow_tonemap_native ? ColorPrimaries_BT709_5 : ColorPrimaries_Max);
   }
 
   return ColorPrimaries_BT709_5;
@@ -220,6 +221,13 @@ DisplayError DisplayBase::Init() {
     max_mixer_stages = std::min(UINT32(property_value), hw_resource_info_.num_blending_stages);
   }
   DisplayBase::SetMaxMixerStages(max_mixer_stages);
+
+  // Open extension lib
+  if (!extension_lib_) {
+    if (!extension_lib_.Open(EXTENSION_LIBRARY_NAME)) {
+      DLOGW("Unable to open lib %s, error = %s", EXTENSION_LIBRARY_NAME, extension_lib_.Error());
+    }
+  }
 
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
@@ -421,18 +429,12 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
     return kErrorNone;
   }
 
-  DynLib feature_impl_lib;
   GetPanelFeatureFactory get_factory_f_ptr = nullptr;
-  if (feature_impl_lib.Open(EXTENSION_LIBRARY_NAME)) {
-    if (!feature_impl_lib.Sym(GET_PANEL_FEATURE_FACTORY,
-                              reinterpret_cast<void **>(&get_factory_f_ptr))) {
-      DLOGE("Unable to load symbols, error = %s", feature_impl_lib.Error());
-      return kErrorUndefined;
-    }
-  } else {
-    DLOGW("Unable to load = %s, error = %s", EXTENSION_LIBRARY_NAME, feature_impl_lib.Error());
-    DLOGW("SDM Extension is not supported");
-    return kErrorNone;
+  if (!extension_lib_.Sym(GET_PANEL_FEATURE_FACTORY,
+                          reinterpret_cast<void **>(&get_factory_f_ptr))) {
+    DLOGE("Unable to load symbols %s, error = %s", GET_PANEL_FEATURE_FACTORY,
+          extension_lib_.Error());
+    return kErrorUndefined;
   }
 
   pf_factory_ = get_factory_f_ptr();
@@ -452,9 +454,9 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
   GetDemuraTnFactory get_demuratn_factory_ptr = nullptr;
   Debug::Get()->GetProperty(ENABLE_ANTI_AGING, &demuratn_enable);
   if (demuratn_enable) {
-    if (!feature_impl_lib.Sym(GET_DEMURATN_FACTORY,
-                              reinterpret_cast<void **>(&get_demuratn_factory_ptr))) {
-      DLOGW("Unable to load symbols, error = %s", feature_impl_lib.Error());
+    if (!extension_lib_.Sym(GET_DEMURATN_FACTORY,
+                            reinterpret_cast<void **>(&get_demuratn_factory_ptr))) {
+      DLOGW("Unable to load symbols %s, error = %s", GET_DEMURATN_FACTORY, extension_lib_.Error());
       return kErrorUndefined;
     }
 
@@ -467,9 +469,10 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
 
 #ifndef TRUSTED_VM
   GetFeatureLicenseFactory get_feature_license_factory_ptr = nullptr;
-  if (!feature_impl_lib.Sym(GET_FEATURE_LICENSE_FACTORY,
-                            reinterpret_cast<void **>(&get_feature_license_factory_ptr))) {
-    DLOGW("Unable to load symbols, error = %s", feature_impl_lib.Error());
+  if (!extension_lib_.Sym(GET_FEATURE_LICENSE_FACTORY,
+                          reinterpret_cast<void **>(&get_feature_license_factory_ptr))) {
+    DLOGW("Unable to load symbols %s, error = %s", GET_FEATURE_LICENSE_FACTORY,
+          extension_lib_.Error());
     return kErrorUndefined;
   }
 
@@ -837,6 +840,7 @@ DisplayError DisplayBase::ForceToneMapUpdate(LayerStack *layer_stack) {
     cached_layer.input_buffer.extended_content_metadata =
         stack_layer->input_buffer.extended_content_metadata;
     cached_layer.input_buffer.timestamp_data = stack_layer->input_buffer.timestamp_data;
+    cached_layer.geometry_changes = stack_layer->geometry_changes;
 
     hw_config.left_pipe.lut_info.clear();
     hw_config.right_pipe.lut_info.clear();
@@ -2979,20 +2983,22 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   bool valid_lm_tappoint = layer_stack->cwb_config
                                ? layer_stack->cwb_config->tap_point == CwbTapPoint::kLmTapPoint
                                : false;
-  // Resize mixer attributes to fb config when client requests CWB at LM tap-point
-  // TODO(user): remove below check when clients request buffer with mixer resolution
-  if (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer &&
-      valid_lm_tappoint) {
-    DLOGV_IF(kTagDisplay, "Found concurrent writeback, configure LM width:%d height:%d", fb_width,
-             fb_height);
-    *new_mixer_width = fb_width;
-    *new_mixer_height = fb_height;
-    return ((*new_mixer_width != mixer_width) || (*new_mixer_height != mixer_height));
-  }
 
   if (secure_event_ == kSecureDisplayStart || secure_event_ == kTUITransitionStart) {
     *new_mixer_width = display_width;
     *new_mixer_height = display_height;
+    return ((*new_mixer_width != mixer_width) || (*new_mixer_height != mixer_height));
+  }
+
+  // Resize mixer attributes to fb config when client requests CWB at LM tap-point
+  // TODO(user): remove below check when clients request buffer with mixer resolution
+  if (force_lm_to_fb_config_ || (hw_resource_info_.has_concurrent_writeback &&
+                                 layer_stack->output_buffer && valid_lm_tappoint)) {
+    DLOGV_IF(kTagDisplay, "CWB:%d, force_lm_to_fb_config_:%d, configure LM width:%d height:%d",
+             (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer),
+             force_lm_to_fb_config_, fb_width, fb_height);
+    *new_mixer_width = fb_width;
+    *new_mixer_height = fb_height;
     return ((*new_mixer_width != mixer_width) || (*new_mixer_height != mixer_height));
   }
 
@@ -3517,7 +3523,7 @@ void DisplayBase::GetColorPrimaryTransferFromAttributes(
         (it.first.find(kDynamicRangeAttribute) != std::string::npos)) {
       attribute_field = it.second;
       PrimariesTransfer pt = {};
-      pt.primaries = GetColorPrimariesFromAttribute(attribute_field);
+      pt.primaries = GetColorPrimariesFromAttribute(attribute_field, allow_tonemap_native_);
       if (pt.primaries == ColorPrimaries_BT709_5) {
         pt.transfer = Transfer_sRGB;
         supported_pt->push_back(pt);
@@ -3666,18 +3672,18 @@ PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
   // TODO(user): Check is if someone calls with hal_display_p3
   if (hw_resource_info_.src_tone_map.none() &&
       (pic_quality == kStandard && color_gamut == kBt2020)) {
-    pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
+    pt.primaries = GetColorPrimariesFromAttribute(color_gamut, allow_tonemap_native_);
     if (transfer == kHlg) {
       pt.transfer = Transfer_HLG;
     } else {
       pt.transfer = Transfer_SMPTE_ST2084;
     }
   } else if (color_gamut == kDcip3) {
-    pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
+    pt.primaries = GetColorPrimariesFromAttribute(color_gamut, allow_tonemap_native_);
     pt.transfer = Transfer_sRGB;
   } else if (color_gamut == kNative && !allow_tonemap_native_) {
     // if allow_tonemap_native_ is set, blend space is defaulted to BT709 + sRGB
-    pt.primaries = GetColorPrimariesFromAttribute(color_gamut);
+    pt.primaries = GetColorPrimariesFromAttribute(color_gamut, allow_tonemap_native_);
     pt.transfer = Transfer_Max;
   }
 
@@ -4199,16 +4205,18 @@ DisplayError DisplayBase::GetPanelBlMaxLvl(uint32_t *max_level) {
 }
 
 DisplayError DisplayBase::SetPPConfig(void *payload, size_t size) {
-  ClientLock lock(disp_mutex_);
-
-  DisplayError err = hw_intf_->SetPPConfig(payload, size);
-  if (err) {
-    DLOGE("Failed to set PP Event %d", err);
-  } else {
-    DLOGI_IF(kTagDisplay, "PP Event is set successfully");
-    event_handler_->Refresh();
+  {
+    ClientLock lock(disp_mutex_);
+    DisplayError err = hw_intf_->SetPPConfig(payload, size);
+    if (err) {
+      DLOGE("Failed to set PP Event %d", err);
+      return err;
+    }
   }
-  return err;
+
+  DLOGI_IF(kTagDisplay, "PP Event is set successfully");
+  event_handler_->Refresh();
+  return kErrorNone;
 }
 
 DisplayError DisplayBase::SetDimmingEnable(int int_enabled) {
