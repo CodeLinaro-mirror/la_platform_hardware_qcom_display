@@ -204,6 +204,13 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
 
   auto mapper_err = STABLEMAPPER(mapper_).importBuffer(raw_handle, &buf);
 
+  if (raw_handle) {
+    // Locally created raw handle use is over here, so need to deallocate corresponding memory
+    // to avoid memory leak.
+    native_handle_delete(raw_handle);
+    raw_handle = nullptr;
+  }
+
   if (mapper_err != AIMAPPER_ERROR_NONE) {
     DLOGE("Failed to import buffer into HWC");
     return kErrorMemory;
