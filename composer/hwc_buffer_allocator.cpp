@@ -1009,4 +1009,35 @@ int HWCBufferAllocator::GetMetadataValue(void *buf, SnapMetadataType type, void 
   return err;
 }
 
+int HWCBufferAllocator::ImportBufferHandle(native_handle_t **handle, bool is_aidl_duped) {
+  if (!handle || !(*handle)) {
+    return -EINVAL;
+  }
+
+  buffer_handle_t buf = nullptr;
+  auto mapper_err = STABLEMAPPER(mapper_).importBuffer(*handle, &buf);
+
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    DLOGE("Failed to import buffer into HWC");
+    return kErrorMemory;
+  }
+
+  if (is_aidl_duped) {
+    native_handle_close(*handle);
+  }
+
+  native_handle_delete(*handle);
+  *handle = const_cast<native_handle *>(buf);
+
+  return 0;
+}
+
+void HWCBufferAllocator::ReleaseBufferHandle(const native_handle_t *handle) {
+  if (!handle) {
+    return;
+  }
+
+  STABLEMAPPER(mapper_).freeBuffer(const_cast<native_handle_t *>(handle));
+}
+
 }  // namespace sdm

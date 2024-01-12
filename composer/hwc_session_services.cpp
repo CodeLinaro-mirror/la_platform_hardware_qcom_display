@@ -567,16 +567,22 @@ int32_t HWCSession::CWB::PostBuffer(std::shared_ptr<IDisplayConfigCallback> call
   auto &session_map = display_cwb_session_map_[dpy_index];
   std::shared_ptr<QueueNode> node = nullptr;
   uint64_t node_handle_id = 0;
-  void *hdl = const_cast<native_handle_t *>(buffer);
-  auto err = hwc_session_->buffer_allocator_.GetMetadataValue(
-      hdl, SnapMetadataType::BUFFER_ID, &node_handle_id, sizeof(node_handle_id));
+  native_handle_t *handle = const_cast<native_handle_t *>(buffer);
+  auto err = hwc_session_->buffer_allocator_.ImportBufferHandle(&handle, true);
+  if (!err) {
+    auto err = hwc_session_->buffer_allocator_.GetMetadataValue(handle,
+                                                                SnapMetadataType::BUFFER_ID,
+                                                                &node_handle_id,
+                                                                sizeof(node_handle_id));
+  }
+
   if (err || node_handle_id == 0) {
     error = HWC3::Error::BadLayer;
     DLOGE("Buffer handle id retrieval failed!");
   }
 
   if (error == HWC3::Error::None) {
-    node = std::make_shared<QueueNode>(callback, cwb_config, buffer, display_type, node_handle_id);
+    node = std::make_shared<QueueNode>(callback, cwb_config, handle, display_type, node_handle_id);
     if (node) {
       // Keep CWB request handling related resources in a requested display context.
       std::unique_lock<std::mutex> lock(session_map.lock);
@@ -613,7 +619,7 @@ int32_t HWCSession::CWB::PostBuffer(std::shared_ptr<IDisplayConfigCallback> call
       error = HWC3::Error::BadDisplay;
     } else {
       // Send CWB request to CWB Manager
-      error = hwc_display->SetReadbackBuffer(buffer, nullptr, cwb_config, kCWBClientExternal);
+      error = hwc_display->SetReadbackBuffer(handle, nullptr, cwb_config, kCWBClientExternal);
     }
   }
 
@@ -622,8 +628,7 @@ int32_t HWCSession::CWB::PostBuffer(std::shared_ptr<IDisplayConfigCallback> call
   } else {
     // Need to close and delete the cloned native handle on CWB request rejection/failure and
     // if node is created and pushed, then need to remove from queue.
-    native_handle_close(buffer);
-    native_handle_delete(const_cast<native_handle_t *>(buffer));
+    hwc_session_->buffer_allocator_.ReleaseBufferHandle(handle);
     std::unique_lock<std::mutex> lock(session_map.lock);
     // If current node is pushed in the queue, then need to remove it again on error.
     if (node && node == session_map.queue.back()) {
@@ -731,8 +736,7 @@ void HWCSession::CWB::NotifyCWBStatus(int status, std::shared_ptr<QueueNode> cwb
     callback->notifyCWBBufferDone(status, ::android::dupToAidl(cwb_node->buffer));
   }
 
-  native_handle_close(cwb_node->buffer);
-  native_handle_delete(const_cast<native_handle_t *>(cwb_node->buffer));
+  hwc_session_->buffer_allocator_.ReleaseBufferHandle(cwb_node->buffer);
 }
 
 int HWCSession::NotifyCwbDone(int dpy_index, int32_t status, uint64_t handle_id) {
