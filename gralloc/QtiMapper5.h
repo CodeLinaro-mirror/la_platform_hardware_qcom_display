@@ -111,6 +111,12 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
                               void *_Nonnull outData, size_t outDataSize) override;
   Error setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_MetadataType metadataType,
                     const void *_Nonnull metadata, size_t metadataSize) override;
+  /**
+  *  Sets global values for given standard metadata types
+  *
+  *  For std::optional metadata types, nullopt can be provided as a valid metadata buffer to
+  *  explicitly invalidate the existing metadata value
+  */
   Error setStandardMetadata(buffer_handle_t _Nonnull buffer, int64_t standardMetadataType,
                             const void *_Nonnull metadata, size_t metadataSize) override;
   Error listSupportedMetadataTypes(
