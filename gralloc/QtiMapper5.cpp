@@ -144,12 +144,10 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
   int ret_val = snap_helper_->Lock(const_cast<native_handle_t *>(bufferHandle), cpuUsage,
                                    gr_access_region, acquireFenceRawFd, &snap_base);
   if (ret_val != 0) {
-    ALOGW("Snap failed to lock buffer");
-    return AIMAPPER_ERROR_BAD_BUFFER;
+    ALOGE("Snap failed to lock buffer");
   } else {
     ALOGD_IF(enable_logs, "QtiMapper5::lock address %lu\n", snap_base);
     *outData = reinterpret_cast<void *>(snap_base);
-    return AIMAPPER_ERROR_NONE;
   }
   return static_cast<Error>(ret_val);
 }
@@ -215,7 +213,6 @@ int32_t QtiMapper5::GetMetadataPrivate(buffer_handle_t _Nonnull bufferHandle, in
   if (!snap_helper_ || !snap_alloc_enable_) {
     return -AIMAPPER_ERROR_NO_RESOURCES;
   }
-  // TODO: Update size_required to bytes written in gr_snap_helper
   int32_t size_required = outDataSize;
   auto snap_error =
       snap_helper_->GetMetadata(const_cast<native_handle_t *>(bufferHandle), metadataType, outData,
@@ -251,6 +248,13 @@ int32_t QtiMapper5::getStandardMetadata(buffer_handle_t _Nonnull bufferHandle, i
                                         void *_Nonnull outData, size_t outDataSize) {
   ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld ExpectedSize: %ld",
            __FUNCTION__, bufferHandle, standardType, outDataSize);
+  // For cases where client sends in nullptr intentionally to know bytestream size, set outData to
+  // a valid vector but keep outDataSize to be 0 as a hint to gr_snap_helper so we end up returning
+  // the size without copying
+  std::vector<uint8_t> bytestream(1);
+  if (outData == nullptr) {
+    outData = bytestream.data();
+  }
   return (GetMetadataPrivate(bufferHandle, standardType, outData, outDataSize, true));
 }
 
@@ -296,6 +300,7 @@ Error QtiMapper5::setStandardMetadata(buffer_handle_t _Nonnull bufferHandle,
                                       size_t metadataSize) {
   ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld MetadataSize: %ld",
            __FUNCTION__, bufferHandle, standardTypeRaw, metadataSize);
+  metadataSize = (metadataSize == 0 && metadata == nullptr) ? 1 : metadataSize;
   return (SetMetadataPrivate(bufferHandle, standardTypeRaw, metadata, metadataSize, true));
 }
 
