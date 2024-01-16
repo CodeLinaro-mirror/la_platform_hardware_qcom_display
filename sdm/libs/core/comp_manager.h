@@ -27,7 +27,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -151,6 +151,7 @@ class CompManager : public CwbCallback {
   void GetRetireFence(Handle display_ctx, shared_ptr<Fence> *retire_fence);
   void NeedsValidate(Handle display_ctx, bool *needs_validate);
   DisplayError SetBacklightLevel(Handle display_ctx, const uint32_t &backlight_level);
+  DisplayError SetCpuPerfHint(bool isReset, const uint32_t &cpu_hint_freq);
   DisplayError GetHDRCapability(bool *hdr_plus_support, bool *dolby_vision_supported);
   DisplayError ForceToneMapConfigure(Handle display_ctx, DispLayerStack *disp_layer_stack);
   DisplayError GetDefaultQosData(Handle display_ctx, HWQosData *qos_data);
