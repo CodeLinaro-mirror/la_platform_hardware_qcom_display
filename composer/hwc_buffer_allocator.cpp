@@ -210,6 +210,7 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   }
 
   uint32_t tmp_width;
+  void *buf_handle = reinterpret_cast<void *>(const_cast<native_handle *>(buf));
 
   if (!buffer_config.access_control.empty()) {
     mapper_err = STABLEMAPPER(mapper_).setMetadata(
@@ -220,41 +221,41 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
       goto cleanup;
     }
     auto error =
-        GetMetadataValue(static_cast<void *>(raw_handle), SnapMetadataType::MEM_HANDLE,
-                         &alloc_buffer_info->mem_handle, sizeof(alloc_buffer_info->mem_handle));
+        GetMetadataValue(buf_handle, SnapMetadataType::MEM_HANDLE, &alloc_buffer_info->mem_handle,
+                         sizeof(alloc_buffer_info->mem_handle));
     if (error) {
       err = -EINVAL;
       goto cleanup;
     }
   }
 
-  err = GetFd(raw_handle, alloc_buffer_info->fd);
+  err = GetFd(buf_handle, alloc_buffer_info->fd);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetWidth(raw_handle, tmp_width);
+  err = GetWidth(buf_handle, tmp_width);
   if (err != kErrorNone)
     goto cleanup;
   alloc_buffer_info->stride = tmp_width;
   alloc_buffer_info->aligned_width = tmp_width;
 
-  err = GetHeight(raw_handle, alloc_buffer_info->aligned_height);
+  err = GetHeight(buf_handle, alloc_buffer_info->aligned_height);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetAllocationSize(raw_handle, alloc_buffer_info->size);
+  err = GetAllocationSize(buf_handle, alloc_buffer_info->size);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetBufferId(raw_handle, alloc_buffer_info->id);
+  err = GetBufferId(buf_handle, alloc_buffer_info->id);
   if (err != kErrorNone)
     goto cleanup;
 
-  err = GetSDMFormat(raw_handle, alloc_buffer_info->format);
+  err = GetSDMFormat(buf_handle, alloc_buffer_info->format);
   if (err != kErrorNone)
     goto cleanup;
 
-  buffer_info->private_data = reinterpret_cast<void *>(raw_handle);
+  buffer_info->private_data = buf_handle;
   return 0;
 
 cleanup:
@@ -359,18 +360,20 @@ int HWCBufferAllocator::GetBufferId(void *buf, uint64_t &id) {
 }
 
 int HWCBufferAllocator::GetFormat(void *buf, int32_t &format) {
-  auto result = GetStandardMetadata<StandardMetadataType::PIXEL_FORMAT_REQUESTED>(
-      mapper_, static_cast<buffer_handle_t>(buf));
+  int32_t ret_format;
+  int err =
+      GetVendorMetadata(mapper_, static_cast<buffer_handle_t>(buf),
+                        SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &ret_format, sizeof(ret_format));
 
-  if (result.has_value()) {
-    format = static_cast<uint32_t>(*result);
+  if (err == AIMAPPER_ERROR_NONE) {
+    format = ret_format;
     return kErrorNone;
   }
   return kErrorParameters;
 }
 
 int HWCBufferAllocator::GetPrivateFlags(void *buf, int32_t &flags) {
-  int32_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
+  int64_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
   auto err = STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
                                                VENDOR_QTI_METADATA(SnapMetadataType::IS_UBWC),
                                                &is_ubwc, sizeof(is_ubwc));
@@ -380,10 +383,27 @@ int HWCBufferAllocator::GetPrivateFlags(void *buf, int32_t &flags) {
   err |= STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
                                            VENDOR_QTI_METADATA(SnapMetadataType::IS_CACHED),
                                            &is_cached, sizeof(is_cached));
+  uint64_t buffer_usage;
+  err |= STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
+                                           VENDOR_QTI_METADATA(SnapMetadataType::USAGE),
+                                           &buffer_usage, sizeof(buffer_usage));
   if (err >= 0) {
+    // Private flags are being set here until pending changes to use snapalloc in SDM directly
     flags = is_ubwc ? (flags | qtigralloc::PRIV_FLAGS_UBWC_ALIGNED) : flags;
     flags = is_tile_rendered ? (flags | qtigralloc::PRIV_FLAGS_TILE_RENDERED) : flags;
     flags = is_cached ? (flags | qtigralloc::PRIV_FLAGS_CACHED) : flags;
+
+    bool secure = buffer_usage & vendor_qti_hardware_display_common_BufferUsage::PROTECTED;
+    flags = (secure) ? (flags | qtigralloc::PRIV_FLAGS_SECURE_BUFFER) : flags;
+    flags =
+        (secure && (buffer_usage & vendor_qti_hardware_display_common_BufferUsage::CAMERA_OUTPUT))
+            ? (flags | qtigralloc::PRIV_FLAGS_CAMERA_WRITE)
+            : flags;
+    flags =
+        (buffer_usage & vendor_qti_hardware_display_common_BufferUsage::QTI_PRIVATE_SECURE_DISPLAY)
+            ? (flags | qtigralloc::PRIV_FLAGS_SECURE_DISPLAY)
+            : flags;
+
     return kErrorNone;
   }
   return kErrorParameters;
