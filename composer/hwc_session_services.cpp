@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -50,12 +50,7 @@
 namespace sdm {
 
 void HWCSession::StartServices() {
-  int error = DisplayConfig::DeviceInterface::RegisterDevice(this);
-  if (error) {
-    DLOGW("Could not register IDisplayConfig as service (%d).", error);
-  } else {
-    DLOGI("IDisplayConfig service registration completed.");
-  }
+  return;
 }
 
 int MapDisplayType(DispType dpy) {
