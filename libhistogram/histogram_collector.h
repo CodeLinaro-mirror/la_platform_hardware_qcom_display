@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef HISTOGRAM_HISTOGRAM_COLLECTOR_H_
 #define HISTOGRAM_HISTOGRAM_COLLECTOR_H_
 #include <android-base/thread_annotations.h>
@@ -43,7 +50,7 @@ class HistogramCollector {
   void start(uint64_t max_frames);
   void stop();
 
-  void notify_histogram_event(int blob_source_fd, BlobId id);
+  void notify_histogram_event(int blob_source_fd, BlobId id, uint32_t width, uint32_t height);
 
   std::string Dump() const;
 
@@ -57,6 +64,7 @@ class HistogramCollector {
   HistogramCollector(HistogramCollector const &) = delete;
   HistogramCollector &operator=(HistogramCollector const &) = delete;
   void blob_processing_thread();
+  bool hist_data_validate(struct drm_msm_hist const &hist);
 
   std::condition_variable cv;
   std::mutex mutable mutex;
@@ -73,6 +81,8 @@ class HistogramCollector {
   std::thread monitoring_thread;
 
   std::unique_ptr<histogram::Ringbuffer> histogram;
+  uint32_t panel_width_ = 0;
+  uint32_t panel_height_ = 0;
 };
 
 }  // namespace histogram
