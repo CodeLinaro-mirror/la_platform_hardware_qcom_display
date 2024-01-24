@@ -30,7 +30,7 @@
 
 # Changes from Qualcomm Innovation Center are provided under the following license:
 #
-# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted (subject to the limitations in the
@@ -72,8 +72,9 @@ fi
 case "$target" in
     "anorak")
     #SOC ID for Anorak is 549
+    #SOC ID for Anorak p is 649
     case "$soc_hwid" in
-        549)
+        549|649)
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 0
         setprop vendor.display.enable_allow_idle_fallback 1
