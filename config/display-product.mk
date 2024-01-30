@@ -135,7 +135,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_scaler=0 \
     vendor.display.disable_inline_rotator=1 \
     vendor.display.disable_decimation=1 \
-    vendor.display.enable_null_display=0 \
     vendor.display.disable_excl_rect=0 \
     vendor.display.comp_mask=0 \
     vendor.display.enable_default_color_mode=1 \
@@ -144,6 +143,16 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.flush_on_layer_set_empty=1 \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_color_transformation=1
+
+ifeq ($(TARGET_USES_QMAA),true)
+ifeq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.enable_null_display=0
+else
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.enable_null_display=1
+endif
+endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), msmnile gen4),$(TARGET_BOARD_PLATFORM))
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
