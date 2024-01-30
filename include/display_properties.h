@@ -29,7 +29,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -193,6 +193,7 @@
 #define TRANSIENT_FPS_CYCLE_COUNT            DISPLAY_PROP("transient_fps_cycle_count")
 #define CORE_ID_MASK                         DISPLAY_PROP("core_id_mask")
 #define XR_VARIANT                           DISPLAY_PROP("xr_variant")
+#define ENABLE_DPU_FOVEATION                 DISPLAY_PROP("enable_dpu_foveation")
 
 // Add all other.properties above
 // End of property

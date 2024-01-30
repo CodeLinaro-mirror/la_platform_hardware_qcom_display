@@ -19,7 +19,7 @@
 
 /* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -519,6 +519,9 @@ HWC2::Error HWCLayer::SetLayerDisplayFrame(hwc_rect_t frame) {
   SetRect(frame, &dst_rect);
   if (dst_rect_ != dst_rect) {
     geometry_changes_ |= kDisplayFrame;
+    if (!dst_rect_.isSameSize(dst_rect)) {
+      geometry_changes_ |= kDstSize;
+    }
     dst_rect_ = dst_rect;
   }
 
@@ -569,6 +572,9 @@ HWC2::Error HWCLayer::SetLayerSourceCrop(hwc_frect_t crop) {
   }
   if (layer_->src_rect != src_rect) {
     geometry_changes_ |= kSourceCrop;
+    if (!layer_->src_rect.isSameSize(src_rect)) {
+      geometry_changes_ |= kSrcSize;
+    }
     layer_->src_rect = src_rect;
   }
 

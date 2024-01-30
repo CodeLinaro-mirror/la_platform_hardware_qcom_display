@@ -60,7 +60,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -241,6 +241,10 @@ DisplayError DisplayBuiltIn::Init() {
   value = 0;
   DebugHandler::Get()->GetProperty(DISABLE_CWB_IDLE_FALLBACK, &value);
   disable_cwb_idle_fallback_ = (value == 1);
+
+  value = 0;
+  DebugHandler::Get()->GetProperty(ENABLE_DPU_FOVEATION, &value);
+  enable_dpu_foveation_ = (value == 1);
 
 #ifdef TRUSTED_VM
   disable_cwb_idle_fallback_ = 1;
@@ -2003,6 +2007,10 @@ DisplayError DisplayBuiltIn::BuildLayerStackStats(LayerStack *layer_stack) {
   stack_info.enable_cac = enable_cac_;
   stack_info.cac_config = cac_config_;
 
+  if (enable_dpu_foveation_) {
+      stack_info.common_info.flags.fovea_layer_present = true;
+  }
+
   int index = 0;
   for (auto &layer : layers) {
     if (layer->buffer_map == nullptr) {
@@ -2768,6 +2776,11 @@ DisplayError DisplayBuiltIn::PerformCacConfig(CacConfig config, bool enable) {
   ClientLock lock(disp_mutex_);
 
   if (!IsCacV2Supported()) {
+    return kErrorNotSupported;
+  }
+
+  if (enable_dpu_foveation_) {
+    DLOGW("DPU foveation has been enable, DPU CAC is not supported");
     return kErrorNotSupported;
   }
 

@@ -147,6 +147,8 @@ enum GeometryChanges {
   kRemoved      = 0x100,
   kBufferGeometry = 0x200,
   kColorTransform = 0x400,
+  kSrcSize      = 0x800,
+  kDstSize      = 0x1000,
   kDefault      = 0xFFFF,
 };
 
@@ -358,6 +360,11 @@ struct LayerStackFlags {
       uint32_t scaling_rgb_layer_present : 1;  //!< This flag indicates scaling rgb layer presence
 
       bool use_metadata_refresh_rate : 1;
+
+      uint32_t fovea_layer_present : 1;  //!< This flag shall be set when fovea composition enable
+
+      bool only_position_geometry_changed : 1; //!< This flag shall be set when there has no any
+                                               //!< change except position geometry change
     };
 
     uint32_t flags = 0;               //!< For initialization purpose only.
@@ -385,6 +392,15 @@ struct LayerRect {
 
   bool operator!=(const LayerRect& rect) const {
     return !operator==(rect);
+  }
+
+  bool isSameSize(const LayerRect& rect) {
+    //compare layer rect's width and height
+    if (((this->right - this->left) == (rect.right - rect.left)) &&
+        ((this->bottom - this->top) == (rect.bottom - rect.top))) {
+      return true;
+    }
+    return false;
   }
 };
 
