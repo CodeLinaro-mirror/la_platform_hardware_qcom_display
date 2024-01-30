@@ -312,7 +312,6 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format,
             dma_vm_names->push_back("qcom,cp_camera_preview");
           } else {
             dma_vm_names->push_back("qcom,cp_camera");
-            dma_vm_names->push_back("qcom,cp_camera_preview");
           }
         } else {
           dma_vm_names->push_back("qcom,cp_camera");
