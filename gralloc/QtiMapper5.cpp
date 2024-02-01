@@ -143,6 +143,11 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
       .left = region.left, .top = region.top, .right = region.right, .bottom = region.bottom};
   int ret_val = snap_helper_->Lock(const_cast<native_handle_t *>(bufferHandle), cpuUsage,
                                    gr_access_region, acquireFenceRawFd, &snap_base);
+
+  if (acquireFenceRawFd > 0) {
+    close(acquireFenceRawFd);
+  }
+
   if (ret_val != 0) {
     ALOGE("Snap failed to lock buffer");
   } else {
