@@ -194,6 +194,7 @@
 #define CORE_ID_MASK                         DISPLAY_PROP("core_id_mask")
 #define XR_VARIANT                           DISPLAY_PROP("xr_variant")
 #define ENABLE_DPU_FOVEATION                 DISPLAY_PROP("enable_dpu_foveation")
+#define DISABLE_CAC_PIPE_RESERVE             DISPLAY_PROP("disable_cac_pipe_reserve")
 
 // Add all other.properties above
 // End of property
