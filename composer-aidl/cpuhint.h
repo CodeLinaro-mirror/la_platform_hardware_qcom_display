@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2016, The Linux Foundataion. All rights reserved.
+/* Copyright (c) 2015, The Linux Foundataion. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -27,34 +27,42 @@
 *
 */
 
-#ifndef __HW_COLOR_MANAGER_H__
-#define __HW_COLOR_MANAGER_H__
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
-#include <linux/msm_mdp_ext.h>
-#include <linux/msm_mdp.h>
+#ifndef __CPUHINT_H__
+#define __CPUHINT_H__
 
-#include <private/color_params.h>
+#include <core/sdm_types.h>
+#include <utils/sys.h>
 
 namespace sdm {
 
-class HWColorManager {
+class HWCDebugHandler;
+
+class CPUHint {
  public:
-  static DisplayError SetPCC(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
-  static DisplayError SetIGC(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
-  static DisplayError SetPGC(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
-  static DisplayError SetMixerGC(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
-  static DisplayError SetPAV2(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
-  static DisplayError SetDither(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
-  static DisplayError SetGamut(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
-  static DisplayError SetPADither(const PPFeatureInfo &feature, msmfb_mdp_pp *kernel_params);
+  DisplayError Init(HWCDebugHandler *debug_handler);
+  void Set();
+  void Reset();
 
-  static DisplayError (*SetFeature[kMaxNumPPFeatures])(const PPFeatureInfo &feature,
-                                                       msmfb_mdp_pp *kernel_params);
-
- protected:
-  HWColorManager() {}
+ private:
+  enum { HINT =  0x4501 /* 45-display layer hint, 01-Enable */ };
+  bool enabled_ = false;
+  // frames to wait before setting this hint
+  int pre_enable_window_ = 0;
+  int frame_countdown_ = 0;
+  int lock_handle_ = 0;
+  bool lock_acquired_ = false;
+  DynLib vendor_ext_lib_;
+  int (*fn_lock_acquire_)(int handle, int duration, int *hints, int num_args) = NULL;
+  int (*fn_lock_release_)(int value) = NULL;
 };
 
 }  // namespace sdm
 
-#endif  // __HW_COLOR_MANAGER_H__
+#endif  // __CPUHINT_H__

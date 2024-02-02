@@ -1926,7 +1926,7 @@ void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
       *drm_format = DRM_FORMAT_BGR888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
-      *drm_format = DRM_FORMAT_BGR565;
+      *drm_format = DRM_FORMAT_RGB565;
       break;
     case HAL_PIXEL_FORMAT_BGR_565:
       *drm_format = DRM_FORMAT_BGR565;

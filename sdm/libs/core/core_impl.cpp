@@ -74,9 +74,12 @@ DisplayError CoreImpl::Init() {
     goto CleanupOnError;
   }
 
-  error = hw_info_intf_->GetHWResourceInfo(&hw_resource_);
-  if (error != kErrorNone) {
-    goto CleanupOnError;
+  for (auto hw_info : hw_info_intf_) {
+    HWResourceInfo hw_resource;
+    error = hw_info->GetHWResourceInfo(&hw_resource);
+    if (error != kErrorNone)
+      goto CleanupOnError;
+    hw_resource_.push_back(hw_resource);
   }
 
   error = comp_mgr_.Init(hw_info_intf_, extension_intf_, buffer_allocator_,
@@ -93,18 +96,35 @@ DisplayError CoreImpl::Init() {
   }
 
   // Populate hw_displays_info_ once.
-  error = hw_info_intf_->GetDisplaysStatus(&hw_displays_info_);
-  if (error != kErrorNone) {
-    DLOGW("Failed getting displays status. Error = %d", error);
+  for (auto hw_info : hw_info_intf_) {
+    HWDisplaysInfo displays_info;
+    error = hw_info->GetDisplaysStatus(&displays_info);
+    if (error) {
+      DLOGW("Failed getting displays status. Error = %d", error);
+      break;
+    }
+    hw_displays_info_.insert(displays_info.begin(), displays_info.end());
+  }
+
+  // Find primary card id, needed by GetFirstDisplayOnterfaceType
+  if (hw_info_intf_.size() > 1) {
+    for (auto &iter : hw_displays_info_) {
+      if (iter.second.is_primary) {
+        primary_card_id_ = GET_CARD_ID(iter.second.display_id);
+        break;
+      }
+    }
   }
 
   signal(SIGPIPE, SIG_IGN);
   return kErrorNone;
 
 CleanupOnError:
-  if (hw_info_intf_) {
-    HWInfoInterface::Destroy(hw_info_intf_);
+  for (auto hw_info : hw_info_intf_) {
+    HWInfoInterface::Destroy(hw_info);
   }
+  hw_info_intf_.clear();
+  hw_resource_.clear();
 
   return error;
 }
@@ -115,7 +135,11 @@ DisplayError CoreImpl::Deinit() {
   ColorManagerProxy::Deinit();
 
   comp_mgr_.Deinit();
-  HWInfoInterface::Destroy(hw_info_intf_);
+
+  for (auto hw_info : hw_info_intf_) {
+    HWInfoInterface::Destroy(hw_info);
+  }
+  hw_info_intf_.clear();
 
   return kErrorNone;
 }
@@ -128,19 +152,23 @@ DisplayError CoreImpl::CreateDisplay(DisplayType type, DisplayEventHandler *even
     return kErrorParameters;
   }
 
+  if (hw_info_intf_.empty()) {
+    return kErrorCriticalResource;
+  }
+
   DisplayBase *display_base = NULL;
 
   switch (type) {
     case kBuiltIn:
-      display_base = new DisplayBuiltIn(event_handler, hw_info_intf_, buffer_sync_handler_,
+      display_base = new DisplayBuiltIn(event_handler, hw_info_intf_[0], buffer_sync_handler_,
                                         buffer_allocator_, &comp_mgr_);
       break;
     case kPluggable:
-      display_base = new DisplayPluggable(event_handler, hw_info_intf_, buffer_sync_handler_,
+      display_base = new DisplayPluggable(event_handler, hw_info_intf_[0], buffer_sync_handler_,
                                           buffer_allocator_, &comp_mgr_);
       break;
     case kVirtual:
-      display_base = new DisplayVirtual(event_handler, hw_info_intf_, buffer_sync_handler_,
+      display_base = new DisplayVirtual(event_handler, hw_info_intf_[0], buffer_sync_handler_,
                                         buffer_allocator_, &comp_mgr_);
       break;
     default:
@@ -179,18 +207,23 @@ DisplayError CoreImpl::CreateDisplay(int32_t display_id, DisplayEventHandler *ev
 
   DisplayBase *display_base = NULL;
   DisplayType display_type = iter->second.display_type;
+  uint32_t card_id = GET_CARD_ID(iter->second.display_id);
+
+  if (card_id >= hw_info_intf_.size()) {
+    return kErrorCriticalResource;
+  }
 
   switch (display_type) {
     case kBuiltIn:
-      display_base = new DisplayBuiltIn(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayBuiltIn(display_id, event_handler, hw_info_intf_[card_id],
                                         buffer_sync_handler_, buffer_allocator_, &comp_mgr_);
       break;
     case kPluggable:
-      display_base = new DisplayPluggable(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayPluggable(display_id, event_handler, hw_info_intf_[card_id],
                                           buffer_sync_handler_, buffer_allocator_, &comp_mgr_);
       break;
     case kVirtual:
-      display_base = new DisplayVirtual(display_id, event_handler, hw_info_intf_,
+      display_base = new DisplayVirtual(display_id, event_handler, hw_info_intf_[card_id],
                                         buffer_sync_handler_, buffer_allocator_, &comp_mgr_);
       break;
     default:
@@ -235,22 +268,37 @@ DisplayError CoreImpl::SetMaxBandwidthMode(HWBwModes mode) {
 
 DisplayError CoreImpl::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
   SCOPE_LOCK(locker_);
-  return hw_info_intf_->GetFirstDisplayInterfaceType(hw_disp_info);
+  return hw_info_intf_[primary_card_id_]->GetFirstDisplayInterfaceType(hw_disp_info);
 }
 
 DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
   SCOPE_LOCK(locker_);
-  DisplayError error = hw_info_intf_->GetDisplaysStatus(hw_displays_info);
-  if (kErrorNone == error) {
-    // Needed for error-checking in CreateDisplay(int32_t display_id, ...) and getting display-type.
-    hw_displays_info_ = *hw_displays_info;
+
+  hw_displays_info->clear();
+  for (auto hw_info : hw_info_intf_) {
+    HWDisplaysInfo display_infos;
+    DisplayError error = hw_info->GetDisplaysStatus(&display_infos);
+    if (error)
+      return error;
+    hw_displays_info->insert(display_infos.begin(), display_infos.end());
   }
-  return error;
+
+  hw_displays_info_ = *hw_displays_info;
+  return kErrorNone;
 }
 
 DisplayError CoreImpl::GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) {
   SCOPE_LOCK(locker_);
-  return hw_info_intf_->GetMaxDisplaysSupported(type, max_displays);
+
+  *max_displays = 0;
+  for (auto hw_info : hw_info_intf_) {
+    int32_t tmp;
+    DisplayError error = hw_info->GetMaxDisplaysSupported(type, &tmp);
+    if (error)
+      return error;
+    *max_displays += tmp;
+  }
+  return kErrorNone;
 }
 
 DisplayError CoreImpl::GetNotifierInterface(NotifierInterface **interface) {

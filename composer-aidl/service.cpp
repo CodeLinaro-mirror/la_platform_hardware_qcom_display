@@ -32,7 +32,7 @@
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-
+#ifdef __AIDL_COMPOSER__
 #include <android-base/logging.h>
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
@@ -114,3 +114,11 @@ int main(int, char **) {
 
   return 0;
 }
+
+#else
+
+int main(int argc, char** argv) {
+  return 1;
+}
+
+#endif
