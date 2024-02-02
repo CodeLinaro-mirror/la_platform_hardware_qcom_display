@@ -8,8 +8,6 @@
 
 namespace sdm {
 
-static QServiceBackend qservice_backend;
-
 QServiceBackend::QServiceBackend() {
   const char *qservice_name = "display.qservice";
 

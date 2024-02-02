@@ -53,6 +53,7 @@
 
 #include "sdm_interface_factory.h"
 #include "sdm_compositor_cb_intf.h"
+#include "QServiceBackend.h"
 
 namespace aidl {
 namespace vendor {
@@ -134,6 +135,7 @@ using sdm::SDMDisplaySettingsIntf;
 using sdm::SDMDisplaySideBandIntf;
 using sdm::SDMInterfaceFactory;
 using sdm::SDMVsyncPeriodChangeTimeline;
+using sdm::QServiceBackend;
 
 using sdm::DisplayConfigVariableInfo;
 using sdm::SDMDisplayLayerBuilderIntf;
@@ -433,15 +435,14 @@ class AidlComposerClient : public BnComposerClient,
   SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
   SDMDisplaySideBandIntf *sideband_ = nullptr;
 
-  //std::shared_ptr<ISnapMapper> snapmapper_;
+  QServiceBackend *qservice_ = nullptr;
+
   std::shared_ptr<IComposerCallback> callback_ = nullptr;
   std::mutex m_command_mutex_;
   std::mutex m_display_data_mutex_;
   std::unique_ptr<CommandEngine> mCommandEngine;
   std::function<void()> mOnClientDestroyed;
   std::unordered_map<sdm::Display, DisplayData> mDisplayData;
-
-  qService::QService *qservice_ = nullptr;
 };
 
 }  // namespace composer3
