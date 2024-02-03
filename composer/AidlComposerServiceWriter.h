@@ -15,8 +15,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -42,6 +41,7 @@ namespace composer3 {
 
 using aidl::android::hardware::graphics::composer3::ChangedCompositionLayer;
 using aidl::android::hardware::graphics::composer3::ChangedCompositionTypes;
+using aidl::android::hardware::graphics::composer3::ClientTargetProperty;
 using aidl::android::hardware::graphics::composer3::ClientTargetPropertyWithBrightness;
 using aidl::android::hardware::graphics::composer3::CommandError;
 using aidl::android::hardware::graphics::composer3::CommandResultPayload;

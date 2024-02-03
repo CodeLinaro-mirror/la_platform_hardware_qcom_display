@@ -15,13 +15,18 @@
  */
 
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include "AidlComposer.h"
 #include "android/binder_auto_utils.h"
 #include <android/binder_ibinder_platform.h>
+
+#include "sdm_interface_factory.h"
+
+using sdm::SDMInterfaceFactory;
 
 namespace aidl {
 namespace vendor {
@@ -31,17 +36,13 @@ namespace display {
 namespace composer3 {
 
 AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
-    : extensions_(extensions), hwc_session_(HWCSession::GetInstance()) {
-  auto error = hwc_session_->Init();
-  if (error) {
-    ALOGE("Failed to get HWComposer instance");
-  } else {
-    ALOGI("Successfully initialized HWCSession, creating AidlComposer");
-  }
+    : extensions_(extensions) {
+
+  ALOGI("Created AidlComposer");
 }
 
 AidlComposer::~AidlComposer() {
-  hwc_session_->Deinit();
+  //aparmar: layers_.Destroy();
 }
 
 ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_return) {
@@ -51,8 +52,21 @@ ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_
     return TO_BINDER_STATUS(INT32(Error::NoResources));
   }
   auto composer_client = ndk::SharedRefBase::make<AidlComposerClient>();
-  if (!composer_client || !composer_client->init()) {
+
+  SDMInterfaceFactory *sdm_factory = nullptr;
+
+  sdm_factory = sdm::GetSDMInterfaceFactory();
+  caps_ = sdm_factory->CreateCapsIntf();
+  settings_ = sdm_factory->CreateSettingsIntf();
+  lifecycle_ = sdm_factory->CreateLifeCycleIntf();
+  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
+  layers_ = sdm_factory->CreateLayerBuilderIntf();
+  sideband_ = sdm_factory->CreateSideBandIntf();
+
+  if (!composer_client ||
+      !composer_client->init(caps_, settings_, lifecycle_, drawcycle_, layers_, sideband_)) {
     *aidl_return = nullptr;
+    ALOGI("%s: failed to init composer client", __FUNCTION__);
     return TO_BINDER_STATUS(INT32(Error::NoResources));
   }
 
@@ -70,13 +84,13 @@ ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_
 }
 
 binder_status_t AidlComposer::dump(int fd, const char ** /*args*/, uint32_t /*numArgs*/) {
-  uint32_t len;
-  std::string output;
+  uint32_t len = 0;
+  std::string output = "";
 
-  hwc_session_->Dump(&len, nullptr);
+  sideband_->Dump(&len, nullptr);
   output.resize(len + 1);
 
-  hwc_session_->Dump(&len, output.data());
+  sideband_->Dump(&len, output.data());;
 
   output[len] = '\0';
   write(fd, output.c_str(), output.size());
@@ -92,14 +106,14 @@ ScopedAStatus AidlComposer::getCapabilities(std::vector<Capability> *aidl_return
   uint32_t count = 0;
   // Capability::SKIP_CLIENT_COLOR_TRANSFORM is no longer supported as client queries per display
   // capabilities from AidlComposerClient::getDisplayCapabilities
-  hwc_session_->GetCapabilities(&count, nullptr);
+  caps_->GetCapabilities(&count, nullptr);
 
   if (!count) {
     return TO_BINDER_STATUS(INT32(Error::Unsupported));
   }
 
   std::vector<int32_t> composer_caps(count);
-  hwc_session_->GetCapabilities(&count, composer_caps.data());
+  caps_->GetCapabilities(&count, composer_caps.data());
   composer_caps.resize(count);
 
   std::unordered_set<Capability> capabilities;

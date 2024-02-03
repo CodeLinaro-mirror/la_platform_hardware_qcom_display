@@ -297,6 +297,11 @@ int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
 
     auto status = snapmapper_->Lock(*hnd, static_cast<SnapUsage>(usage), access_region,
                                     acquire_fence, &ret_addr);
+
+    if (acquire_fence.fence_fd > 0) {
+      close(acquire_fence.fence_fd);
+    }
+
     if (status == SnapError::NONE) {
       *base_addr = ret_addr.addressPointer;
       return SnapError::NONE;
@@ -1888,9 +1893,8 @@ SnapError GrallocSnapHelper::ColorMetadataHelper(SnapHandle *hnd, uint32_t aidl_
     }
 
     SnapColorRemappingInfo snap_color_remapping_info;
-    std::vector<uint8_t> color_remapping_info_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::COLOR_REMAPPING_INFO,
-                                      &color_remapping_info_bytestream);
+                                      &snap_color_remapping_info);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGW("Unable to get COLOR_REMAPPING_INFO from snap");
     } else {
@@ -2799,13 +2803,13 @@ int GrallocSnapHelper::GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, Snap
 
 int GrallocSnapHelper::GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                                          SnapPixelFormat *snap_format) {
-  if ((usage & SnapUsage::QTI_ALLOC_UBWC) &&
-      (snap_to_flat_ubwc_format_.find(snap_fmt_desc) != snap_to_flat_ubwc_format_.end())) {
-    *snap_format = snap_to_flat_ubwc_format_.at(snap_fmt_desc);
-  } else if (snap_to_flat_format_.find(snap_fmt_desc) != snap_to_flat_format_.end()) {
+  if (snap_to_flat_format_.find(snap_fmt_desc) != snap_to_flat_format_.end()) {
     *snap_format = snap_to_flat_format_.at(snap_fmt_desc);
+  } else if ((usage & SnapUsage::QTI_ALLOC_UBWC) &&
+             (snap_to_flat_ubwc_format_.find(snap_fmt_desc) != snap_to_flat_ubwc_format_.end())) {
+    *snap_format = snap_to_flat_ubwc_format_.at(snap_fmt_desc);
   } else {
-    ALOGE("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
+    ALOGW("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
     return SnapError::BAD_VALUE;
   }
 
@@ -5693,9 +5697,8 @@ SnapError GrallocSnapHelperLegacy::ColorMetadataHelper(SnapHandle *hnd, bool hid
     }
 
     SnapColorRemappingInfo snap_color_remapping_info;
-    std::vector<uint8_t> color_remapping_info_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::COLOR_REMAPPING_INFO,
-                                      &color_remapping_info_bytestream);
+                                      &snap_color_remapping_info);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGW("Unable to get COLOR_REMAPPING_INFO from snap");
     } else {

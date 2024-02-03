@@ -25,16 +25,11 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -56,11 +51,17 @@
 #include <android/hardware/graphics/mapper/IMapper.h>
 #include <android/hardware/graphics/mapper/utils/IMapperMetadataTypes.h>
 
+#include <ISnapMapper.h>
+#include <ISnapAlloc.h>
+
 using aidl::android::hardware::graphics::allocator::AllocationResult;
 using aidl::android::hardware::graphics::allocator::IAllocator;
 using aidl::android::hardware::graphics::common::ExtendableType;
 
 namespace sdm {
+
+using vendor::qti::hardware::display::snapalloc::ISnapAlloc;
+using vendor::qti::hardware::display::snapalloc::ISnapMapper;
 
 template <class Type>
 inline Type ALIGN(Type x, Type align) {
@@ -73,7 +74,7 @@ class HWCBufferAllocator : public BufferAllocator {
   int FreeBuffer(BufferInfo *buffer_info);
   uint32_t GetBufferSize(BufferInfo *buffer_info);
 
-  int GetCustomWidthAndHeight(const native_handle_t *handle, int *width, int *height);
+  int GetCustomWidthAndHeight(void *handle, int *width, int *height);
   int GetAlignedWidthAndHeight(int width, int height, int format, uint32_t alloc_type,
                                int *aligned_width, int *aligned_height);
   int GetAllocatedBufferInfo(const BufferConfig &buffer_config,
@@ -81,8 +82,8 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4], uint32_t offset[4],
                       uint32_t *num_planes);
   int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
-  int MapBuffer(const native_handle_t *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
-  int UnmapBuffer(const native_handle_t *handle, int *release_fence);
+  int MapBuffer(void *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
+  int UnmapBuffer(void *handle, int *release_fence);
   int GetHeight(void *buf, uint32_t &height);
   int GetWidth(void *buf, uint32_t &width);
   int GetUnalignedHeight(void *buf, uint32_t &height);
@@ -101,12 +102,23 @@ class HWCBufferAllocator : public BufferAllocator {
   int ImportBufferHandle(native_handle_t **handle, bool is_aidl_duped);
   void ReleaseBufferHandle(const native_handle_t *handle);
 
+  // callbacks from sdmclient
+  bool GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace);
+  LayerBufferFormat GetSDMFormat(const int32_t &source, const int32_t flags,
+                                         const int64_t compression_type);
+  DisplayError ColorMetadataToDataspace(Dataspace ds, uint32_t *int_dataspace);
+  int32_t TranslateFromLegacyDataspace(const int32_t &legacy_ds);
+
  private:
   int GetGrallocInstance();
+  int GetSnapInstance();
   void SetBufferAccessControlInfo(std::bitset<kBufferPermMax> perm, BufferPermission *buf_perm);
   AIMapper *mapper_;
   std::shared_ptr<IAllocator> allocator_;
   gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+
+  std::shared_ptr<ISnapMapper> snapmapper_ = nullptr;
+  std::shared_ptr<ISnapAlloc> snapallocator_ = nullptr;
 };
 
 }  // namespace sdm

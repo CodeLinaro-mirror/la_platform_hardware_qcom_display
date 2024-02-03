@@ -15,8 +15,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -41,7 +40,7 @@ namespace sdm {
 using aidl::android::hardware::graphics::common::AlphaInterpretation;
 using aidl::android::hardware::graphics::common::BlendMode;
 using aidl::android::hardware::graphics::common::ColorTransform;
-using aidl::android::hardware::graphics::common::Dataspace;
+using AIDL_Dataspace = aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::FRect;
 using aidl::android::hardware::graphics::common::Rect;
 using aidl::android::hardware::graphics::common::Transform;
