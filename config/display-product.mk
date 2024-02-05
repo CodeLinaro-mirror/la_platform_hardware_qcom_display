@@ -202,10 +202,6 @@ ifeq ($(TARGET_USES_QMAA),true)
     endif
 endif
 
-ifneq ($(TARGET_USES_DRM_PP),true)
-    SOONG_CONFIG_qtidisplay_drmpp := false
-endif
-
 ifeq ($(TARGET_USES_5.4_KERNEL),true)
     SOONG_CONFIG_qtidisplay_kernel_5_4 := true
 endif
