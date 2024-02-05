@@ -284,6 +284,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO},
           {{.format = SnapPixelFormat::YCrCb_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_ENCODEABLE},
            HAL_PIXEL_FORMAT_NV21_ENCODEABLE},
+          // Linear format enum doesn't exist for TP10 in gralloc
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_YCbCr_420_P010},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
