@@ -760,22 +760,19 @@ SnapError GrallocSnapHelper::PixelFormatRequestedHelper(SnapHandle *hnd, uint32_
   SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
   SnapUsage snap_usage = static_cast<SnapUsage>(0);
   uint64_t modifier = 0;
-  // Gralloc4 expects PIXEL_FORMAT_ALLOCATED vs Gralloc5 expecting PIXEL_FORMAT_REQUESTED
-  SnapMetadataType metadata_type = SnapMetadataType::PIXEL_FORMAT_ALLOCATED;
-  if (aidl_size) {
-    metadata_type = SnapMetadataType::PIXEL_FORMAT_REQUESTED;
-  }
 
   if (gralloc_in_set != nullptr) {
     return SnapError::BAD_VALUE;
   }
   if (buf_des != nullptr) {
-    error = snapmapper_->GetFromBufferDescriptor(*buf_des, metadata_type, &snap_pixel_format);
+    error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PIXEL_FORMAT_REQUESTED,
+                                                 &snap_pixel_format);
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::USAGE, &snap_usage);
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::FORMAT_MODIFIER,
                                                  &modifier);
   } else if (gralloc_out_get != nullptr) {
-    error = snapmapper_->GetMetadata(*hnd, metadata_type, &snap_pixel_format);
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PIXEL_FORMAT_REQUESTED,
+                                     &snap_pixel_format);
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::USAGE, &snap_usage);
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::FORMAT_MODIFIER, &modifier);
   }
@@ -2832,6 +2829,10 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
 SnapError GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
                                            SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
+    ALOGW(
+        "%s: Explicit UBWC formats such as %d are no longer supported, please switch to using base "
+        "/ linear formats + UBWC usage bits",
+        __FUNCTION__, static_cast<int>(hal_format));
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);
@@ -2854,6 +2855,10 @@ SnapUsage GrallocSnapHelper::GetSnapUsage(uint64_t usage, int hal_format) {
 
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
     snap_usage |= SnapUsage::QTI_ALLOC_UBWC;
+    ALOGW(
+        "%s: UBWC explicit formats have been deprecated, please use the base format + UBWC usage "
+        "flag! %d",
+        __FUNCTION__, hal_format);
     // If explicit UBWC format, do not set CPU flags
     // TODO: revisit this once explicit UBWC formats deprecated
   } else {
@@ -2951,10 +2956,7 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
 
 int GrallocSnapHelper::GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                                         int *gr_format) {
-  if ((usage & SnapUsage::QTI_ALLOC_UBWC) &&
-      (snap_to_gralloc_ubwc_format_.find(snap_fmt_desc) != snap_to_gralloc_ubwc_format_.end())) {
-    *gr_format = snap_to_gralloc_ubwc_format_.at(snap_fmt_desc);
-  } else if (snap_to_gralloc_format_.find(snap_fmt_desc) != snap_to_gralloc_format_.end()) {
+  if (snap_to_gralloc_format_.find(snap_fmt_desc) != snap_to_gralloc_format_.end()) {
     *gr_format = snap_to_gralloc_format_.at(snap_fmt_desc);
   } else {
     ALOGE("%s: No map for format: 0x%x, modifier %d", __FUNCTION__, snap_fmt_desc.format,
