@@ -30,7 +30,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -1892,12 +1892,19 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
 
   bool sync_commit = synchronous_commit_ || first_cycle_;
 
-  if (hw_layers_info->elapse_timestamp > 0) {
+  if (hw_layers_info->elapse_timestamp > 0 || hw_layers_info->expected_present_time > 0) {
+    uint64_t vsync_period = display_attributes_[current_mode_index_].vsync_period_ns;
+    uint64_t expected_present_time = hw_layers_info->expected_present_time > 0 ?
+                                     hw_layers_info->expected_present_time - vsync_period : 0;
+    uint64_t future_timestamp = std::max(hw_layers_info->elapse_timestamp, expected_present_time);
     struct timespec t = {0, 0};
     clock_gettime(CLOCK_MONOTONIC, &t);
     uint64_t current_time = (UINT64(t.tv_sec) * 1000000000LL + t.tv_nsec);
-    if (current_time < hw_layers_info->elapse_timestamp) {
-      usleep(UINT32((hw_layers_info->elapse_timestamp - current_time) / 1000));
+    if (current_time < future_timestamp) {
+      uint64_t sleep_period = future_timestamp - current_time;
+      DLOGI_IF(kTagDriverConfig, "current_time: %llu, future_timestamp: %llu, sleep_period: %llu,"
+              "vsync_period: %llu", current_time, future_timestamp, sleep_period, vsync_period);
+      usleep(UINT32(sleep_period / 1000));
     }
   }
 

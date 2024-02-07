@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -568,14 +568,12 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   if (Debug::Get()->GetProperty(DISABLE_SKIP_VALIDATE_PROP, &value) == kErrorNone) {
     disable_skip_validate = (value == 1);
   }
-  uint32_t count = disable_skip_validate ? 1 : 2;
+  uint32_t count = disable_skip_validate ? 0 : 1;
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
-    int index = count - 1;
     if (!disable_skip_validate) {
-      outCapabilities[index--] = INT32(Capability::SKIP_VALIDATE);
+      outCapabilities[0] = INT32(Capability::SKIP_VALIDATE);
     }
-    outCapabilities[index--] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
   }
   *outCount = count;
 }
