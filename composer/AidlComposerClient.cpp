@@ -53,7 +53,6 @@ SnapHandle *ConvertToSnapHandle(const NativeHandle &handle) {
 using sdm::HWCParcel;
 
 ComposerHandleImporter mHandleImporter;
-//std::shared_ptr<ISnapMapper> snapmapper_ = nullptr;
 
 BufferCacheEntry::BufferCacheEntry() : mHandle(nullptr) {}
 
@@ -98,6 +97,8 @@ bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
 
   lifecycle_->Init(this, &buffer_allocator_);
 
+  qservice_ = new QServiceBackend();
+
   mCommandEngine = std::make_unique<CommandEngine>(*this);
   if (mCommandEngine == nullptr) {
     return false;
@@ -130,6 +131,7 @@ AidlComposerClient::~AidlComposerClient() {
   ALOGW("%s: Destroying composer client", __FUNCTION__);
 
   lifecycle_->EnableCallback(false);
+  delete qservice_;
 
   // no need to grab the mutex as any in-flight hwbinder call would have
   // kept the client alive
