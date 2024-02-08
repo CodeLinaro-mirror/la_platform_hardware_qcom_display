@@ -95,7 +95,7 @@ bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
   layer_builder_ = layers;
   sideband_ = sideband;
 
-  lifecycle_->Init(this, &buffer_allocator_);
+  lifecycle_->Init(this, &buffer_allocator_, &socket_handler_);
 
   qservice_ = new QServiceBackend();
 
