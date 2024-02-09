@@ -2381,7 +2381,8 @@ int GrallocSnapHelper::ConvertSnapPlaneLayoutComponentToGralloc(SnapPlaneLayout 
   return gralloc_component;
 }
 
-int GrallocSnapHelper::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size) {
+int GrallocSnapHelper::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size,
+                                       int interlaced) {
   if (!IsSnapAllocEnabled()) {
     ALOGW("SnapAlloc is disabled");
     return SnapError::UNSUPPORTED;
@@ -2391,6 +2392,10 @@ int GrallocSnapHelper::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, u
   SnapBufferLayout snap_plane_layouts;
   auto status = snapmapper_->GetFromBufferDescriptor(snap_desc, SnapMetadataType::PLANE_LAYOUTS,
                                                      &snap_plane_layouts);
+  if (interlaced) {
+    static SnapKeyValuePair modifier = {.key = "interlaced", .value = static_cast<uint64_t>(1)};
+    snap_desc.additionalOptions.emplace_back(modifier);
+  }
 
   if (status == SnapError::NONE) {
     unsigned int alloc_size;
@@ -6293,14 +6298,18 @@ int GrallocSnapHelperLegacy::ConvertSnapPlaneLayoutComponentToGralloc(SnapPlaneL
   return gralloc_component;
 }
 
-int GrallocSnapHelperLegacy::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out,
-                                             uint32_t *size) {
+int GrallocSnapHelperLegacy::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size,
+                                             int interlaced) {
   if (!IsSnapAllocEnabled()) {
     ALOGW("SnapAlloc is disabled");
     return SnapError::UNSUPPORTED;
   }
 
   auto snap_desc = GetSnapDescriptor(gr_desc);
+  if (interlaced) {
+    static SnapKeyValuePair modifier = {.key = "interlaced", .value = static_cast<uint64_t>(1)};
+    snap_desc.additionalOptions.emplace_back(modifier);
+  }
   SnapBufferLayout snap_plane_layouts;
   auto status = snapmapper_->GetFromBufferDescriptor(snap_desc, SnapMetadataType::PLANE_LAYOUTS,
                                                      &snap_plane_layouts);
