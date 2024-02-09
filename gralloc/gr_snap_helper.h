@@ -216,7 +216,8 @@ class GrallocSnapHelperIntf {
 
   virtual bool IsBufferImported(native_handle_t *gr_hnd);
   virtual int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  virtual int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  virtual int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size,
+                              int interlaced);
   virtual int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                                 uint64_t *reserved_region_size);
 };
@@ -254,7 +255,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
 
   bool IsBufferImported(native_handle_t *gr_hnd);
   int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
 
@@ -1111,7 +1112,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
 
   bool IsBufferImported(native_handle_t *gr_hnd);
   int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
 
