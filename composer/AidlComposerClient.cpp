@@ -244,9 +244,9 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
                                                   std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
-  // TODO(aparmar): std::lock_guard<std::mutex> hwc_lock(conn_mgr_->command_seq_mutex_);
-
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
   Error error = mCommandEngine->execute(in_commands, aidl_return);
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
 }
@@ -256,9 +256,9 @@ ScopedAStatus AidlComposerClient::executeQtiCommands(
     std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
-  // TODO(aparmar) std::lock_guard<std::mutex> hwc_lock(conn_mgr_->command_seq_mutex_);
-
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
   Error error = mCommandEngine->qtiExecute(in_commands, aidl_return);
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
 }
