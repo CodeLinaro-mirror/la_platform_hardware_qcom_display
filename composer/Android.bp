@@ -60,6 +60,7 @@ cc_binary {
         "vendor.qti.hardware.display.config-V8-ndk",
         "vendor.qti.hardware.display.composer3-V1-ndk",
         "vendor.qti.hardware.display.demura-V1-ndk",
+        "vendor.qti.hardware.display.aiqe-V1-ndk",
         "libgrallocutils",
         "libtinyxml2",
         "libmapperutils",
