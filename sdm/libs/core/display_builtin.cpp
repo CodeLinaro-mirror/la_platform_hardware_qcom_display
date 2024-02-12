@@ -1410,9 +1410,6 @@ DisplayError DisplayBuiltIn::VSync(int64_t timestamp) {
 void DisplayBuiltIn::SetVsyncStatus(bool enable) {
   string trace_name = enable ? "enable" : "disable";
   DTRACE_BEGIN(trace_name.c_str());
-  if (hw_events_intf_ == nullptr) {
-    return;
-  }
   if (enable) {
     // Enable if vsync is still enabled.
     hw_events_intf_->SetEventState(HWEvent::VSYNC, vsync_enable_);
