@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -4506,6 +4506,14 @@ DisplayError DisplayBase::DisableDestinationScalar() {
   hw_intf_->SetDestScalarData(dest_scale_info_map);
 
   return kErrorNone;
+}
+
+DisplayError DisplayBase::SetClientTargetCapability(
+                                  const std::bitset<kClientCapabilityMax> &client_capabilities) {
+  ClientLock lock(disp_mutex_);
+
+  return comp_manager_->SetClientTargetCapability(display_comp_ctx_, client_capabilities);
+
 }
 
 }  // namespace sdm

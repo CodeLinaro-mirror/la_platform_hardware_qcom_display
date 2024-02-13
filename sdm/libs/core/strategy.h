@@ -22,7 +22,7 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -66,6 +66,8 @@ class Strategy {
   void GenerateROI(DispLayerStack *disp_layer_stack, const PUConstraints &pu_constraints);
   void SetDisplayLayerStack(DispLayerStack *disp_layer_stack);
   DisplayError SetSprIntf(std::shared_ptr<SPRIntf> intf);
+  DisplayError SetClientTargetCapability(
+                            const std::bitset<kClientCapabilityMax> &client_capabilities);
 
  private:
   void GenerateROI();

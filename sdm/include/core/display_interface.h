@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -379,6 +379,12 @@ struct PanelFeatureInfo {
   uint32_t display_height = 0;
   std::string panel_name;
   uint32_t fps = 0;
+};
+
+enum ClientCapability {
+  kPunchholeSupported,
+  kHDRSupported,
+  kClientCapabilityMax,
 };
 
 /*! @brief Display device event handler implemented by the client.
@@ -1368,6 +1374,15 @@ class DisplayInterface {
    @return \link DisplayError \endlink
   */
   virtual DisplayError SetDemuraConfig(int demura_idx) = 0;
+
+  /*! @brief Method to disable features based on client capability.
+
+    @param[in] client_capabilities
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetClientTargetCapability(
+                            const std::bitset<kClientCapabilityMax> &client_capabilities) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

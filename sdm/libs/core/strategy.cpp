@@ -22,7 +22,7 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -322,6 +322,15 @@ DisplayError Strategy::SetSprIntf(std::shared_ptr<SPRIntf> intf) {
     return ret;
   }
   return kErrorNotSupported;
+}
+
+DisplayError Strategy::SetClientTargetCapability(
+                           const std::bitset<kClientCapabilityMax> &client_capabilities) {
+  if (strategy_intf_) {
+    return strategy_intf_->SetClientTargetCapability(client_capabilities);
+  }
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

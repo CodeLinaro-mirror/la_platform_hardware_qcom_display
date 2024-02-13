@@ -27,7 +27,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -263,6 +263,8 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   virtual DisplayError SetDemuraState(int state) { return kErrorNotSupported; }
   virtual DisplayError SetDemuraConfig(int demura_idx) { return kErrorNotSupported; }
   virtual void ResetDispLayerStack();
+  virtual DisplayError SetClientTargetCapability(
+                                  const std::bitset<kClientCapabilityMax> &client_capabilities);
 
  protected:
   struct DisplayMutex {

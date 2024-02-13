@@ -24,7 +24,7 @@
 
 /* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -143,6 +143,8 @@ class CompManager : public CwbCallback {
   void GetDSConfig(Handle display_ctx, DestScaleInfoMap *dest_scale_info_map);
   bool IsDisplayHWAvailable();
   DisplayError SetSprIntf(Handle display_ctx, std::shared_ptr<SPRIntf> intf);
+  DisplayError SetClientTargetCapability(Handle display_ctx,
+                                  const std::bitset<kClientCapabilityMax> &client_capabilities);
 
  private:
   static const int kMaxThermalLevel = 3;

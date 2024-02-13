@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -1060,6 +1060,17 @@ DisplayError CompManager::SetSprIntf(Handle display_ctx, std::shared_ptr<SPRIntf
   DisplayCompositionContext *disp_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
   return disp_comp_ctx->strategy->SetSprIntf(intf);
+}
+
+DisplayError CompManager::SetClientTargetCapability(Handle display_ctx,
+                              const std::bitset<kClientCapabilityMax> &client_capabilities) {
+  std::lock_guard<std::recursive_mutex> obj(comp_mgr_mutex_);
+
+  DisplayCompositionContext *display_comp_ctx =
+                             reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+
+  return display_comp_ctx->strategy->SetClientTargetCapability(client_capabilities);
+
 }
 
 }  // namespace sdm
