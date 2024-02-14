@@ -43,6 +43,7 @@
 #include "AidlComposerServiceWriter.h"
 #include "hwc_common.h"
 #include "hwc_buffer_allocator.h"
+#include "hwc_socket_handler.h"
 
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
@@ -126,6 +127,7 @@ using sdm::HWC3::Error;
 using std::shared_ptr;
 
 using sdm::HWCBufferAllocator;
+using sdm::HWCSocketHandler;
 
 using sdm::SDMCompositorCbIntf;
 using sdm::SDMDisplayCapsIntf;
@@ -434,6 +436,7 @@ class AidlComposerClient : public BnComposerClient,
   SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
   SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
   SDMDisplaySideBandIntf *sideband_ = nullptr;
+  HWCSocketHandler socket_handler_;
 
   QServiceBackend *qservice_ = nullptr;
 

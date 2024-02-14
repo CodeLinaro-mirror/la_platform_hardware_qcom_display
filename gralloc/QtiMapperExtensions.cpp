@@ -574,7 +574,7 @@ Return<void> QtiMapperExtensions::getFormatLayout(int32_t format, uint64_t usage
     // TODO: reduce code duplication here
     std::vector<gralloc::PlaneLayoutInfo> plane_layout_info;
 
-    if (!snap_helper_->GetFormatLayout(info, &plane_layout_info, &size)) {
+    if (!snap_helper_->GetFormatLayout(info, &plane_layout_info, &size, flags)) {
       plane_info.resize(plane_layout_info.size());
 
       ALOGD_IF(enable_logs_, "%s: Number of plane - %d gralloc format %d", __FUNCTION__,
