@@ -606,12 +606,12 @@ static int cec_init_context(cec_context_t *ctx, int hardware_intf)
         return err;
     }
 
-    ctx->cec_monitor = std::thread(event_monitor, ctx);
-
     // TODO: check for failed to open error
     if (cec_init_device(ctx, hardware_intf) != 0) {
         ALOGE("Failed to open cec device, will wait for hpd.");
     }
+
+    ctx->cec_monitor = std::thread(event_monitor, ctx);
 
     //Initialize ports - We support only one output port
     ctx->port_info = new hdmi_port_info[NUM_HDMI_PORTS];

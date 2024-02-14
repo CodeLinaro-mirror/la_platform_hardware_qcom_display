@@ -76,6 +76,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_layer_stitch=0
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),qcs605)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_cont_splash_handoff=1
+endif
+
 ifeq ($(TARGET_BOARD_PLATFORM),kona)
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.enable_gl_backpressure=1 \
