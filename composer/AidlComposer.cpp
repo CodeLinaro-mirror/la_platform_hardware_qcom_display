@@ -52,7 +52,13 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
 }
 
 AidlComposer::~AidlComposer() {
-  //aparmar: layers_.Destroy();
+  auto sdm_factory = sdm::GetSDMInterfaceFactory();
+  sdm_factory->DestroyCapsIntf();
+  sdm_factory->DestroySettingsIntf();
+  sdm_factory->DestroyLifeCycleIntf();
+  sdm_factory->DestroyDrawCycleIntf();
+  sdm_factory->DestroySideBandIntf();
+  sdm_factory->DestroyLayerBuilderIntf();
 }
 
 ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_return) {

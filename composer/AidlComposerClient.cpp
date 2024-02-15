@@ -101,7 +101,7 @@ bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
 ::android::status_t AidlComposerClient::notifyCallback(uint32_t command,
                                                        const ::android::Parcel *input_parcel,
                                                        ::android::Parcel *output_parcel) {
-  // TODO (aparmar) should be part of debug
+  // TODO (user) should be part of debug
   HWCParcel in(input_parcel);
   HWCParcel out(output_parcel);
 

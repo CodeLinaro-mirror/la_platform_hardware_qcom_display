@@ -73,6 +73,11 @@
 #include "sdm_display_intf_drawcycle.h"
 #include "sdm_display_intf_sideband.h"
 #include "sdm_display_intf_layer_builder.h"
+#include "QServiceBackend.h"
+
+#include "histogram_collector.h"
+#include "gl_color_convert.h"
+#include "gl_layer_stitch.h"
 
 namespace aidl::vendor::qti::hardware::display::config {
 class DisplayConfigAIDL;
@@ -111,6 +116,10 @@ using ::aidl::vendor::qti::hardware::display::config::TUIEventType;
 using ::android::binder::Status;
 using ndk::ScopedAStatus;
 using sdm::Display;
+using sdm::GenericPayload;
+using sdm::GLColorConvert;
+using sdm::GLLayerStitch;
+using sdm::GLRect;
 using sdm::SDMDisplayCapsIntf;
 using sdm::SDMDisplayDrawCycleIntf;
 using sdm::SDMDisplayLayerBuilderIntf;
@@ -222,7 +231,35 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   void NotifyIdleStatus(bool status) override;
   void NotifyCWBStatus(int32_t status, void *buffer) override;
   void NotifyContentFps(const std::string &name, int32_t fps) override;
+
+  // gl color convert callbacks
+  void InitColorConvert(uint64_t display, bool secure);
+  void ColorConvertBlit(uint64_t display, sdm::ColorConvertBlitContext *ctx);
+  void ResetColorConvert(uint64_t display);
+  void DestroyColorConvert(uint64_t display);
+
+  // histogram callbacks
+  void StartHistogram(uint64_t display, int max_frames);
+  void StopHistogram(uint64_t display, bool teardown);
+  void NotifyHistogram(uint64_t display, int fd, uint64_t blob_id, uint32_t panel_width,
+                       uint32_t panel_height);
+  std::string DumpHistogram(uint64_t display);
+  void CollectHistogram(uint64_t display, uint64_t max_frames, uint64_t timestamp,
+                        int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
+                        uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS], uint64_t *numFrames);
+  sdm::DisplayError GetHistogramAttributes(uint64_t display, int32_t *format, int32_t *dataspace,
+                                           uint8_t *supported_components);
+
+  // other sdmclient callbacks
+  void OnCECMessageReceived(char *message, int len);
   void OnHdmiHotplug(bool connected) override;
+  int GetDemuraFilePaths(const GenericPayload &in, GenericPayload *out) override;
+
+  void StitchLayers(uint64_t display, sdm::LayerStitchContext *ctx);
+  void InitLayerStitch(uint64_t display);
+  void DestroyLayerStitch(uint64_t display);
+
+  sdm::nsecs_t SystemTime(int clock);
 
  private:
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
@@ -241,7 +278,15 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
   sdm::Locker *locker_ = nullptr;
   ComposerHandleImporter handle_importer_;
+
+  sdm::QServiceBackend *qservice_ = nullptr;
+
   std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
+
+  // sdmclient callbacks
+  std::unordered_map<uint64_t, GLColorConvert *> color_convert_map_;
+  std::unordered_map<uint64_t, histogram::HistogramCollector *> histogram_map_;
+  std::unordered_map<uint64_t, GLLayerStitch *> layer_stitch_map_;
 };
 
 }  // namespace config

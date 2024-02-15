@@ -61,4 +61,20 @@ android::status_t QServiceBackend::notifyCallback(uint32_t command, const androi
   return 0;
 }
 
+void QServiceBackend::OnCECMessageReceived(char *message, int len) {
+  if (qservice_) {
+    qservice_->onCECMessageReceived(message, len);
+  } else {
+    DLOGW("Qservice instance not available.");
+  }
+}
+
+void QServiceBackend::OnHdmiHotplug(bool connected) {
+  if (qservice_) {
+    qservice_->onHdmiHotplug(connected);
+  } else {
+    DLOGW("QService instance not available");
+  }
+}
+
 } // namespace sdm

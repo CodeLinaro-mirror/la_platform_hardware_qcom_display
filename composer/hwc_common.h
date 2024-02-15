@@ -149,6 +149,8 @@ std::string to_string(Composition composition);
 
 SnapHandle *ConvertToSnapHandle(const NativeHandle &handle);
 NativeHandle AIDLNativeHandleFromSnapHandle(SnapHandle *snap_buffer_handle, bool pass_fd_ownership);
+// used for gl_color_convert and gl_layer_stitch impls
+native_handle_t *SnapHandleToLegacyHandle(const SnapHandle *snap_handle);
 
 }  // namespace sdm
 
