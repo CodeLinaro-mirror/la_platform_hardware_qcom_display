@@ -71,8 +71,12 @@ int HWCDisplayPluggable::Create(CoreInterface *core_intf, HWCBufferAllocator *bu
   if (primary_width && primary_height) {
     // use_primary_res means HWCDisplayPluggable should directly set framebuffer resolution to the
     // provided primary_width and primary_height
-    if (use_primary_res && (pluggable_width > max_fbt_width_)) {
-      is_tunnelling_feasible_ = false;
+    int drs_enabled = 0;
+    HWCDebugHandler::Get()->GetProperty(ENABLE_DRS, &drs_enabled);
+    bool test_fbt_limit = drs_enabled ? pluggable_width > max_fbt_width_ : 1;
+    if (use_primary_res && test_fbt_limit) {
+      is_tunnelling_feasible_ = pluggable_width == primary_width &&
+                                pluggable_height == primary_height;
       pluggable_width = primary_width;
       pluggable_height = primary_height;
     } else {
