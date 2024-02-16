@@ -18,8 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -34,12 +33,20 @@
 #include <unistd.h>
 #include <map>
 
+#include <SnapHandle.h>
+#include <Error.h>
+#include <ISnapMapper.h>
+
 namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
 namespace composer3 {
+
+using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
+using ::vendor::qti::hardware::display::snapalloc::ISnapMapper;
+using SnapError = ::vendor::qti::hardware::display::snapalloc::Error;
 
 #define MAX_INO_VALS 100
 
@@ -52,8 +59,8 @@ class ComposerHandleImporter {
   // In IComposer, any buffer_handle_t is owned by the caller and we need to
   // make a clone for hwcomposer2.  We also need to translate empty handle
   // to nullptr.  This function does that, in-place.
-  bool importBuffer(buffer_handle_t &handle);
-  void freeBuffer(buffer_handle_t handle);
+  bool importBuffer(const SnapHandle *handle);
+  void freeBuffer(const SnapHandle *handle);
   void initialize();
   void cleanup();
   void InoFdMapInsert(int fd);
@@ -64,7 +71,7 @@ class ComposerHandleImporter {
   bool mInitialized = false;
   bool enable_memory_mapping_ = false;
   std::map<uint64_t, std::vector<uint32_t>> ino_fds_map_;
-  AIMapper *mMapper;
+  std::shared_ptr<ISnapMapper> snapmapper_;
 };
 
 }  // namespace composer3

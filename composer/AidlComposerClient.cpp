@@ -15,19 +15,42 @@
  */
 
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include "AidlComposerClient.h"
 #include "android/binder_auto_utils.h"
 #include <android/binder_ibinder_platform.h>
+
+#include <sync/sync.h>
+
+#include "hwc_parcel.h"
+#include <SnapHandle.h>
+#include <fcntl.h>
+
 namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
 namespace composer3 {
+
+using MetadataType = vendor_qti_hardware_display_common_MetadataType;
+
+SnapHandle *ConvertToSnapHandle(const NativeHandle &handle) {
+  SnapHandle *snap_handle = snap_handle_create(handle.fds.size(), handle.ints.size());
+  for (size_t i = 0; i < handle.fds.size(); ++i) {
+    snap_handle->buffer_data[i] = fcntl(handle.fds[i].get(), F_DUPFD_CLOEXEC, 0);
+  }
+  for (size_t i = 0; i < handle.ints.size(); ++i) {
+    snap_handle->buffer_data[i + handle.fds.size()] = handle.ints[i];
+  }
+  return snap_handle;
+}
+
+using sdm::HWCParcel;
 
 ComposerHandleImporter mHandleImporter;
 
@@ -38,7 +61,7 @@ BufferCacheEntry::BufferCacheEntry(BufferCacheEntry &&other) {
   other.mHandle = nullptr;
 }
 
-BufferCacheEntry &BufferCacheEntry::operator=(buffer_handle_t handle) {
+BufferCacheEntry &BufferCacheEntry::operator=(SnapHandle *handle) {
   clear();
   mHandle = handle;
   return *this;
@@ -54,8 +77,27 @@ void BufferCacheEntry::clear() {
   }
 }
 
-bool AidlComposerClient::init() {
-  hwc_session_ = HWCSession::GetInstance();
+bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
+                              SDMDisplaySettingsIntf *settings,
+                              SDMDisplayLifeCycleIntf *lifecycle,
+                              SDMDisplayDrawCycleIntf *drawcycle,
+                              SDMDisplayLayerBuilderIntf *layers,
+                              SDMDisplaySideBandIntf *sideband) {
+  if (!caps || !settings || !lifecycle || !drawcycle || !layers) {
+    ALOGE("AidlComposerClient::%s: interfaces not ready", __FUNCTION__);
+    return false;
+  }
+
+  caps_ = caps;
+  settings_ = settings;
+  lifecycle_ = lifecycle;
+  drawcycle_ = drawcycle;
+  layer_builder_ = layers;
+  sideband_ = sideband;
+
+  lifecycle_->Init(this, &buffer_allocator_);
+
+  qservice_ = new QServiceBackend();
 
   mCommandEngine = std::make_unique<CommandEngine>(*this);
   if (mCommandEngine == nullptr) {
@@ -70,10 +112,26 @@ bool AidlComposerClient::init() {
   return true;
 }
 
+::android::status_t AidlComposerClient::notifyCallback(uint32_t command,
+                                                       const ::android::Parcel *input_parcel,
+                                                       ::android::Parcel *output_parcel) {
+  // TODO (aparmar) should be part of debug
+  HWCParcel in(input_parcel);
+  HWCParcel out(output_parcel);
+
+  auto ret = sideband_->NotifyCallback(command, &in, &out);
+  if (ret != sdm::kErrorNone) {
+    return ::android::FAILED_TRANSACTION;
+  }
+
+  return ::android::NO_ERROR;
+}
+
 AidlComposerClient::~AidlComposerClient() {
   ALOGW("%s: Destroying composer client", __FUNCTION__);
 
-  EnableCallback(false);
+  lifecycle_->EnableCallback(false);
+  delete qservice_;
 
   // no need to grab the mutex as any in-flight hwbinder call would have
   // kept the client alive
@@ -81,7 +139,7 @@ AidlComposerClient::~AidlComposerClient() {
     ALOGW("%s: Destroying client resources for display %" PRIu64, __FUNCTION__, dpy.first);
 
     for (const auto &ly : dpy.second.Layers) {
-      hwc_session_->DestroyLayer(dpy.first, ly.first);
+      layer_builder_->DestroyLayer(dpy.first, ly.first);
     }
 
     if (dpy.second.IsVirtual) {
@@ -91,7 +149,7 @@ AidlComposerClient::~AidlComposerClient() {
 
       mCommandEngine->validateDisplay(dpy.first);
 
-      hwc_session_->AcceptDisplayChanges(dpy.first);
+      drawcycle_->AcceptDisplayChanges(dpy.first);
 
       shared_ptr<Fence> presentFence = nullptr;
       mCommandEngine->presentDisplay(dpy.first, &presentFence);
@@ -109,41 +167,14 @@ AidlComposerClient::~AidlComposerClient() {
   ALOGW("%s: Removed composer client", __FUNCTION__);
 }
 
-void AidlComposerClient::EnableCallback(bool enable) {
-  if (enable) {
-    hotplug_callback_ = &OnHotplug;
-    refresh_callback_ = &OnRefresh;
-    vsync_callback_ = &OnVsync;
-    vsync_changed_callback_ = &OnVsyncPeriodTimingChanged;
-    seamless_possible_callback_ = &OnSeamlessPossible;
-    vsync_idle_callback_ = &OnVsyncIdle;
-    hwc_session_->RegisterCallback(sdm::CALLBACK_HOTPLUG, this,
-                                   reinterpret_cast<void *>(&hotplug_callback_));
-    hwc_session_->RegisterCallback(sdm::CALLBACK_REFRESH, this,
-                                   reinterpret_cast<void *>(&refresh_callback_));
-    hwc_session_->RegisterCallback(sdm::CALLBACK_VSYNC, this,
-                                   reinterpret_cast<void *>(&vsync_callback_));
-    hwc_session_->RegisterCallback(sdm::CALLBACK_VSYNC_PERIOD_TIMING_CHANGED, this,
-                                   reinterpret_cast<void *>(&vsync_changed_callback_));
-    hwc_session_->RegisterCallback(sdm::CALLBACK_SEAMLESS_POSSIBLE, this,
-                                   reinterpret_cast<void *>(&seamless_possible_callback_));
-    hwc_session_->RegisterCallback(sdm::CALLBACK_VSYNC_IDLE, this,
-                                   reinterpret_cast<void *>(&vsync_idle_callback_));
-  } else {
-    hwc_session_->RegisterCallback(sdm::CALLBACK_HOTPLUG, this, nullptr);
-    hwc_session_->RegisterCallback(sdm::CALLBACK_REFRESH, this, nullptr);
-    hwc_session_->RegisterCallback(sdm::CALLBACK_VSYNC, this, nullptr);
-    hwc_session_->RegisterCallback(sdm::CALLBACK_VSYNC_PERIOD_TIMING_CHANGED, this, nullptr);
-    hwc_session_->RegisterCallback(sdm::CALLBACK_SEAMLESS_POSSIBLE, this, nullptr);
-    hwc_session_->RegisterCallback(sdm::CALLBACK_VSYNC_IDLE, this, nullptr);
-  }
-}
-
 ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buffer_slot_count,
                                               int64_t *aidl_return) {
   sdm::LayerId layer = 0;
-  auto error = hwc_session_->CreateLayer(in_display, &layer);
-  if (error == Error::None) {
+  auto error = layer_builder_->CreateLayer(in_display, &layer);
+  drawcycle_->LayerStackUpdated(in_display);
+  auto ret = Error::None;
+
+  if (error == sdm::kErrorNone) {
     *aidl_return = static_cast<int64_t>(layer);
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
     auto dpy = mDisplayData.find(in_display);
@@ -152,13 +183,15 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
       auto ly = dpy->second.Layers.emplace(layer, LayerBuffers()).first;
       ly->second.Buffers.resize(in_buffer_slot_count);
     } else {
-      error = Error::BadDisplay;
+      ret = Error::BadDisplay;
       // Note: We do not destroy the layer on this error as the hotplug
       // disconnect invalidates the display id. The implementation should
       // ensure all layers for the display are destroyed.
     }
+  } else {
+    ret = Error::BadLayer;
   }
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(ret));
 }
 
 ScopedAStatus AidlComposerClient::createVirtualDisplay(int32_t in_width, int32_t in_height,
@@ -167,9 +200,10 @@ ScopedAStatus AidlComposerClient::createVirtualDisplay(int32_t in_width, int32_t
                                                        VirtualDisplay *aidl_return) {
   int32_t format = static_cast<int32_t>(in_format_hint);
   uint64_t display;
-  auto error = hwc_session_->CreateVirtualDisplay(in_width, in_height, &format, &display);
+  auto error = lifecycle_->CreateDisplay(sdm::kVirtual, in_width, in_height, &format, &display);
+  auto ret = Error::None;
 
-  if (error == Error::None) {
+  if (error == sdm::kErrorNone) {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
 
     auto dpy = mDisplayData.emplace(static_cast<sdm::Display>(display), DisplayData(true)).first;
@@ -177,13 +211,21 @@ ScopedAStatus AidlComposerClient::createVirtualDisplay(int32_t in_width, int32_t
 
     aidl_return->display = display;
     aidl_return->format = in_format_hint;
+  } else {
+    ret = Error::BadDisplay;
   }
-  return TO_BINDER_STATUS(INT32(error));
+
+  return TO_BINDER_STATUS(INT32(ret));
 }
 
 ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_layer) {
-  auto error = hwc_session_->DestroyLayer(in_display, in_layer);
-  if (error == Error::None) {
+  drawcycle_->WaitForDrawCycleToComplete(in_display);
+  auto error = layer_builder_->DestroyLayer(in_display, in_layer);
+  drawcycle_->LayerStackUpdated(in_display);
+
+  auto ret = Error::None;
+
+  if (error == sdm::kErrorNone) {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
 
     auto dpy = mDisplayData.find(in_display);
@@ -191,30 +233,37 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
     if (dpy != mDisplayData.end()) {
       dpy->second.Layers.erase(in_layer);
     }
+  } else {
+    ret = Error::BadLayer;
   }
-  return TO_BINDER_STATUS(INT32(error));
+
+  return TO_BINDER_STATUS(INT32(ret));
 }
 
 ScopedAStatus AidlComposerClient::destroyVirtualDisplay(int64_t in_display) {
-  auto error = hwc_session_->DestroyVirtualDisplay(in_display);
-  if (error == Error::None) {
+  auto error = lifecycle_->DestroyDisplay(in_display);
+  auto ret = Error::None;
+
+  if (error == sdm::kErrorNone) {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
 
     mDisplayData.erase(in_display);
+  } else {
+    ret = Error::BadDisplay;
   }
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(ret));
 }
 
 ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayCommand> &in_commands,
                                                   std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
-  std::lock_guard<std::mutex> hwc_lock(hwc_session_->command_seq_mutex_);
+  // TODO(aparmar): std::lock_guard<std::mutex> hwc_lock(conn_mgr_->command_seq_mutex_);
 
   Error error = mCommandEngine->execute(in_commands, aidl_return);
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::executeQtiCommands(
@@ -222,35 +271,40 @@ ScopedAStatus AidlComposerClient::executeQtiCommands(
     std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
-  std::lock_guard<std::mutex> hwc_lock(hwc_session_->command_seq_mutex_);
+  // TODO(aparmar) std::lock_guard<std::mutex> hwc_lock(conn_mgr_->command_seq_mutex_);
 
   Error error = mCommandEngine->qtiExecute(in_commands, aidl_return);
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getActiveConfig(int64_t in_display, int32_t *aidl_return) {
-  uint32_t config = 0;
-  auto error = hwc_session_->GetActiveConfig(in_display, &config);
+  auto error = settings_->GetActiveConfig(in_display, (sdm::Config *)aidl_return);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
 
-  *aidl_return = config;
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getColorModes(int64_t in_display,
                                                 std::vector<ColorMode> *aidl_return) {
   uint32_t count = 0;
 
-  auto error = hwc_session_->GetColorModes(in_display, &count, nullptr);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  auto error = settings_->GetColorModes(in_display, &count, nullptr);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
   aidl_return->resize(count);
-  error = hwc_session_->GetColorModes(
+  error = settings_->GetColorModes(
       in_display, &count,
       reinterpret_cast<std::underlying_type<ColorMode>::type *>(aidl_return->data()));
-  return TO_BINDER_STATUS(INT32(error));
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getDataspaceSaturationMatrix(Dataspace in_dataspace,
@@ -260,30 +314,88 @@ ScopedAStatus AidlComposerClient::getDataspaceSaturationMatrix(Dataspace in_data
   }
 
   aidl_return->resize(sdm::kDataspaceSaturationMatrixCount);
-  Error error = Error::Unsupported;
-  error = hwc_session_->GetDataspaceSaturationMatrix(static_cast<int32_t>(in_dataspace),
-                                                     aidl_return->data());
-  if (error != Error::None) {
+  auto error = settings_->GetDataspaceSaturationMatrix(static_cast<int32_t>(in_dataspace),
+                                                       aidl_return->data());
+  if (error != sdm::kErrorNone) {
     *aidl_return = {
         1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
     };
+
+    return TO_BINDER_STATUS(INT32(Error::Unsupported));
   }
-  return TO_BINDER_STATUS(INT32(error));
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_t in_config,
                                                       DisplayAttribute in_attribute,
                                                       int32_t *aidl_return) {
-  auto error = hwc_session_->GetDisplayAttribute(in_display, in_config, in_attribute, aidl_return);
-  return TO_BINDER_STATUS(INT32(error));
+  DisplayConfigVariableInfo attributes{};
+  uint32_t group_id = -1;
+  auto error = settings_->GetDisplayAttributes(in_display, in_config, &attributes, &group_id);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  }
+
+  switch (in_attribute) {
+    case DisplayAttribute::VSYNC_PERIOD:
+      *aidl_return = INT32(attributes.vsync_period_ns);
+      break;
+    case DisplayAttribute::WIDTH:
+      *aidl_return = INT32(attributes.x_pixels);
+      break;
+    case DisplayAttribute::HEIGHT:
+      *aidl_return = INT32(attributes.y_pixels);
+      break;
+    case DisplayAttribute::DPI_X:
+      *aidl_return = INT32(attributes.x_dpi * 1000.0f);
+      break;
+    case DisplayAttribute::DPI_Y:
+      *aidl_return = INT32(attributes.y_dpi * 1000.0f);
+      break;
+    case DisplayAttribute::CONFIG_GROUP:
+      *aidl_return = settings_->GetDisplayConfigGroup(in_display, attributes);
+      break;
+    default:
+      ALOGW("Spurious attribute type");
+      *aidl_return = -1;
+      return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs,
     std::vector<DisplayConfiguration> *out_configs) {
-  auto error = hwc_session_->GetDisplayConfigurations(in_display, out_configs);
-  return TO_BINDER_STATUS(INT32(error));
+  std::map<uint32_t, sdm::DisplayConfigVariableInfo> info;
+  auto error = settings_->GetAllDisplayAttributes(in_display, &info);
+
+  out_configs->clear();
+  out_configs->reserve(info.size());
+
+  for (const auto &[config_id, variable_config] : info) {
+    DisplayConfiguration display_configuration;
+    display_configuration.configId = config_id;
+    display_configuration.width = variable_config.x_pixels;
+    display_configuration.height = variable_config.y_pixels;
+    display_configuration.dpi = {static_cast<float>(variable_config.x_dpi),
+                                 static_cast<float>(variable_config.y_dpi)};
+    display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
+    display_configuration.configGroup = variable_config.group_id;
+    display_configuration.vrrConfig = {
+        static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
+    ALOGI(
+        "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, minFrameInterval= "
+        "%d",
+        config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
+        display_configuration.vrrConfig->minFrameIntervalNs);
+
+    out_configs->emplace_back(display_configuration);
+  }
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::notifyExpectedPresent(
@@ -303,10 +415,15 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
   }
 
   HwcDisplayConnectionType display_conn_type = HwcDisplayConnectionType::INTERNAL;
-  auto ret = hwc_session_->GetDisplayConnectionType(in_display, &display_conn_type);
+  sdm::DisplayClass display_class;
+  auto ret = caps_->GetDisplayConnectionType(in_display, &display_class);
+  if (sdm::kErrorNone != ret) {
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  }
 
-  if (Error::None != ret) {
-    return TO_BINDER_STATUS(INT32(ret));
+  display_conn_type = HwcDisplayConnectionType::EXTERNAL;
+  if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+    display_conn_type = HwcDisplayConnectionType::INTERNAL;
   }
 
   if (HwcDisplayConnectionType::INTERNAL == display_conn_type) {
@@ -317,7 +434,7 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     // DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM here to maintain support.
     aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
     int32_t has_doze_support = 0;
-    hwc_session_->GetDozeSupport(in_display, &has_doze_support);
+    caps_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
       aidl_return->push_back(DisplayCapability::DOZE);
       aidl_return->push_back(DisplayCapability::SUSPEND);
@@ -332,66 +449,77 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
 
 ScopedAStatus AidlComposerClient::getDisplayConfigs(int64_t in_display,
                                                     std::vector<int32_t> *aidl_return) {
-  uint32_t count = 0;
-
-  auto error = hwc_session_->GetDisplayConfigs(in_display, &count, nullptr);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  auto error = caps_->GetDisplayConfigs(in_display, aidl_return);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
-  aidl_return->resize(count);
-  error = hwc_session_->GetDisplayConfigs(in_display, &count,
-                                          reinterpret_cast<uint32_t *>(aidl_return->data()));
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getDisplayConnectionType(int64_t in_display,
                                                            DisplayConnectionType *aidl_return) {
-  auto error = hwc_session_->GetDisplayConnectionType(in_display, aidl_return);
-  return TO_BINDER_STATUS(INT32(error));
+  sdm::DisplayClass display_class;
+  auto ret = caps_->GetDisplayConnectionType(in_display, &display_class);
+  if (sdm::kErrorNone != ret) {
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  }
+
+  *aidl_return = HwcDisplayConnectionType::EXTERNAL;
+  if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+    *aidl_return = HwcDisplayConnectionType::INTERNAL;
+  }
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 ScopedAStatus AidlComposerClient::getDisplayIdentificationData(int64_t in_display,
                                                                DisplayIdentification *aidl_return) {
   uint8_t port = 0;
   uint32_t size = 0;
 
-  auto error = hwc_session_->GetDisplayIdentificationData(in_display, &port, &size, nullptr);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  auto error = caps_->GetDisplayIdentificationData(in_display, &port, &size, nullptr);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
   aidl_return->data.resize(size);
-  error = hwc_session_->GetDisplayIdentificationData(in_display, &port, &size,
-                                                     aidl_return->data.data());
+  error = caps_->GetDisplayIdentificationData(in_display, &port, &size, aidl_return->data.data());
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
   aidl_return->port = port;
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getDisplayName(int64_t in_display, std::string *aidl_return) {
   uint32_t count = 0;
   // std::vector<char> name;
 
-  auto error = hwc_session_->GetDisplayName(in_display, &count, nullptr);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  auto error = settings_->GetDisplayName(in_display, &count, nullptr);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
   aidl_return->resize(count + 1);
-  error = hwc_session_->GetDisplayName(in_display, &count, aidl_return->data());
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  error = settings_->GetDisplayName(in_display, &count, aidl_return->data());
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
   aidl_return->at(count) = '\0';
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getDisplayVsyncPeriod(int64_t in_display, int32_t *aidl_return) {
-  VsyncPeriodNanos vsync_period;
-  auto error = hwc_session_->GetDisplayVsyncPeriod(in_display, &vsync_period);
+  sdm::VsyncPeriodNanos vsync_period;
+  auto error = settings_->GetDisplayVsyncPeriod(in_display, &vsync_period);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
   *aidl_return = INT32(vsync_period);
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getDisplayedContentSample(int64_t in_display,
@@ -425,30 +553,60 @@ ScopedAStatus AidlComposerClient::getHdrCapabilities(int64_t in_display,
                                                      HdrCapabilities *aidl_return) {
   uint32_t count = 0;
 
-  auto error = hwc_session_->GetHdrCapabilities(
-      in_display, &count, nullptr, &aidl_return->maxLuminance, &aidl_return->maxAverageLuminance,
-      &aidl_return->minLuminance);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  auto error =
+      caps_->GetHdrCapabilities(in_display, &count, nullptr, &aidl_return->maxLuminance,
+                                &aidl_return->maxAverageLuminance, &aidl_return->minLuminance);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
   aidl_return->types.resize(count);
-  error = hwc_session_->GetHdrCapabilities(
+  error = caps_->GetHdrCapabilities(
       in_display, &count,
       reinterpret_cast<std::underlying_type<Hdr>::type *>(aidl_return->types.data()),
       &aidl_return->maxLuminance, &aidl_return->maxAverageLuminance, &aidl_return->minLuminance);
-  return TO_BINDER_STATUS(INT32(error));
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return) {
-  *aidl_return = hwc_session_->GetMaxVirtualDisplayCount();
+  *aidl_return = caps_->GetMaxVirtualDisplayCount();
 
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
-  auto error = hwc_session_->GetOverlaySupport(aidl_return);
-  return TO_BINDER_STATUS(INT32(error));
+  // All individually supported properties by hardware
+  static std::vector<PixelFormat> pixel_formats{
+      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,    PixelFormat::RGB_888,
+      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,    PixelFormat::YV12,
+      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102, PixelFormat::RGBA_FP16};
+  static std::vector<Dataspace> dataspace_standards{
+      Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
+      Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
+  static std::vector<Dataspace> dataspace_transfers{
+      Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2, Dataspace::TRANSFER_SMPTE_170M,
+      Dataspace::TRANSFER_LINEAR};
+  static std::vector<Dataspace> dataspace_ranges{Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
+                                                 Dataspace::RANGE_EXTENDED};
+  static bool mixed_colorspaces_support = true;
+
+  OverlayProperties::SupportedBufferCombinations supported_combination;
+
+  // Combination 1 - All support pixel formats work for all supported colorspaces
+  // Since all pixel formats work for all colorspaces only 1 entry is required
+  supported_combination.pixelFormats = std::move(pixel_formats);
+  supported_combination.standards = std::move(dataspace_standards);
+  supported_combination.transfers = std::move(dataspace_transfers);
+  supported_combination.ranges = std::move(dataspace_ranges);
+
+  aidl_return->combinations.emplace_back(supported_combination);
+  aidl_return->supportMixedColorSpaces = mixed_colorspaces_support;
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getHdrConversionCapabilities(
@@ -470,17 +628,26 @@ ScopedAStatus AidlComposerClient::getPerFrameMetadataKeys(
     int64_t in_display, std::vector<PerFrameMetadataKey> *aidl_return) {
   uint32_t count = 0;
 
-  auto error = hwc_session_->GetPerFrameMetadataKeys(in_display, &count, nullptr);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  sdm::DisplayConfigFixedInfo fixed_info{};
+  auto error = caps_->GetFixedConfig(in_display, &fixed_info);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
-  aidl_return->resize(count);
-  error = hwc_session_->GetPerFrameMetadataKeys(
-      in_display, &count,
-      reinterpret_cast<std::underlying_type<PerFrameMetadataKey>::type *>(aidl_return->data()));
+  uint32_t num_keys = 0;
+  if (fixed_info.hdr_plus_supported) {
+    num_keys = UINT32(PerFrameMetadataKey::HDR10_PLUS_SEI) + 1;
+  } else {
+    num_keys = UINT32(PerFrameMetadataKey::MAX_FRAME_AVERAGE_LIGHT_LEVEL) + 1;
+  }
 
-  return TO_BINDER_STATUS(INT32(error));
+  aidl_return->resize(num_keys);
+
+  for (int32_t i = 0; i < num_keys; i++) {
+    (*aidl_return)[i] = static_cast<PerFrameMetadataKey>(i);
+  }
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getReadbackBufferAttributes(
@@ -488,9 +655,8 @@ ScopedAStatus AidlComposerClient::getReadbackBufferAttributes(
   int32_t format = -1;
   int32_t dataspace = -1;
 
-  auto error = hwc_session_->GetReadbackBufferAttributes(in_display, &format, &dataspace);
-
-  if (error != Error::None) {
+  auto error = settings_->GetReadbackBufferAttributes(in_display, &format, &dataspace);
+  if (error != sdm::kErrorNone) {
     format = -1;
     dataspace = -1;
   }
@@ -498,29 +664,29 @@ ScopedAStatus AidlComposerClient::getReadbackBufferAttributes(
   aidl_return->format = static_cast<PixelFormat>(format);
   aidl_return->dataspace = static_cast<Dataspace>(dataspace);
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getReadbackBufferFence(int64_t in_display,
                                                          ::ndk::ScopedFileDescriptor *aidl_return) {
   shared_ptr<Fence> fence = nullptr;
-  auto error = hwc_session_->GetReadbackBufferFence(in_display, &fence);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  auto error = settings_->GetReadbackBufferFence(in_display, &fence);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
   *aidl_return = ::ndk::ScopedFileDescriptor(Fence::Dup(fence));
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getRenderIntents(int64_t in_display, ColorMode in_mode,
                                                    std::vector<RenderIntent> *aidl_return) {
   uint32_t count = 0;
 
-  auto error = hwc_session_->GetRenderIntents(in_display, int32_t(in_mode), &count, nullptr);
-  if (error != Error::None) {
-    return TO_BINDER_STATUS(INT32(error));
+  auto error = settings_->GetRenderIntents(in_display, int32_t(in_mode), &count, nullptr);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
   }
 
   std::lock_guard<std::mutex> lock(m_display_data_mutex_);
@@ -529,11 +695,14 @@ ScopedAStatus AidlComposerClient::getRenderIntents(int64_t in_display, ColorMode
   }
 
   aidl_return->resize(count);
-  error = hwc_session_->GetRenderIntents(
+  error = settings_->GetRenderIntents(
       in_display, int32_t(in_mode), &count,
       reinterpret_cast<std::underlying_type<RenderIntent>::type *>(aidl_return->data()));
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getSupportedContentTypes(int64_t in_display,
@@ -547,43 +716,56 @@ ScopedAStatus AidlComposerClient::getSupportedContentTypes(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::getDisplayDecorationSupport(
     int64_t in_display, std::optional<DisplayDecorationSupport> *aidl_return) {
-  APixelFormat format;
+  PixelFormat format;
   AlphaInterpretation alpha;
-  auto error = hwc_session_->getDisplayDecorationSupport(in_display, &format, &alpha);
-  if (error == Error::None) {
-    aidl_return->emplace();
-    aidl_return->value().alphaInterpretation = alpha;
-    aidl_return->value().format = format;
-  }
 
-  return TO_BINDER_STATUS(INT32(error));
+  format = PixelFormat::R_8;
+  alpha = AlphaInterpretation::COVERAGE;
+
+  aidl_return->emplace();
+  aidl_return->value().alphaInterpretation = alpha;
+  aidl_return->value().format = format;
+
+  return ScopedAStatus::ok();
 }
 
 ScopedAStatus AidlComposerClient::registerCallback(
     const std::shared_ptr<IComposerCallback> &in_callback) {
   callback_ = in_callback;
-  EnableCallback(in_callback != nullptr);
+  lifecycle_->EnableCallback(in_callback != nullptr);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus AidlComposerClient::setActiveConfig(int64_t in_display, int32_t in_config) {
-  auto error = hwc_session_->SetActiveConfig(in_display, in_config);
+  auto error = settings_->SetActiveConfig(in_display, in_config);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::setActiveConfigWithConstraints(
     int64_t in_display, int32_t in_config,
     const VsyncPeriodChangeConstraints &in_vsync_period_change_constraints,
     VsyncPeriodChangeTimeline *aidl_return) {
-  VsyncPeriodChangeTimeline timeline;
-  timeline.newVsyncAppliedTimeNanos = systemTime();
-  timeline.refreshRequired = false;
-  timeline.refreshTimeNanos = 0;
+  sdm::SDMVsyncPeriodChangeTimeline timeline{};
+  sdm::SDMVsyncPeriodChangeConstraints constraints{};
 
-  auto error = hwc_session_->SetActiveConfigWithConstraints(
-      in_display, in_config, &in_vsync_period_change_constraints, aidl_return);
-  return TO_BINDER_STATUS(INT32(error));
+  constraints.desiredTimeNanos = in_vsync_period_change_constraints.desiredTimeNanos;
+  constraints.seamlessRequired = in_vsync_period_change_constraints.seamlessRequired;
+
+  auto error =
+      settings_->SetActiveConfigWithConstraints(in_display, in_config, &constraints, &timeline);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
+  aidl_return->newVsyncAppliedTimeNanos = timeline.newVsyncAppliedTimeNanos;
+  aidl_return->refreshRequired = timeline.refreshRequired;
+  aidl_return->refreshTimeNanos = timeline.refreshTimeNanos;
+
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::setBootDisplayConfig(int64_t in_display, int32_t in_config) {
@@ -624,10 +806,13 @@ ScopedAStatus AidlComposerClient::setClientTargetSlotCount(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::setColorMode(int64_t in_display, ColorMode in_mode,
                                                RenderIntent in_intent) {
-  auto error = hwc_session_->SetColorModeWithRenderIntent(in_display, static_cast<int32_t>(in_mode),
-                                                          static_cast<int32_t>(in_intent));
+  auto error = settings_->SetColorModeWithRenderIntent(in_display, static_cast<int32_t>(in_mode),
+                                                       static_cast<int32_t>(in_intent));
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::setContentType(int64_t in_display, ContentType in_type) {
@@ -649,16 +834,19 @@ ScopedAStatus AidlComposerClient::setDisplayedContentSamplingEnabled(
 }
 
 ScopedAStatus AidlComposerClient::setPowerMode(int64_t in_display, PowerMode in_mode) {
-  auto error = hwc_session_->SetPowerMode(in_display, static_cast<int32_t>(in_mode));
+  auto error = lifecycle_->SetPowerMode(in_display, static_cast<int32_t>(in_mode));
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::setReadbackBuffer(
     int64_t in_display, const NativeHandle &in_buffer,
     const ::ndk::ScopedFileDescriptor &in_release_fence) {
   shared_ptr<Fence> fence = nullptr;
-  buffer_handle_t buffer = ::android::makeFromAidl(in_buffer);
+  const SnapHandle *buffer = ConvertToSnapHandle(in_buffer);
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(in_release_fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
@@ -672,108 +860,116 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
     }
   }
 
-  const native_handle_t *readback_buffer = nullptr;
-  auto error = getDisplayReadbackBuffer(in_display, buffer, &readback_buffer);
+  auto error = getDisplayReadbackBuffer(in_display, buffer);
   if (error != Error::None) {
     return TO_BINDER_STATUS(INT32(error));
   }
 
-  // Cleanup orginally cloned handle from in_buffer
-  native_handle_delete(const_cast<native_handle_t *>(buffer));
+  auto err = settings_->SetReadbackBuffer(in_display, (void *)buffer, fence);
+  if (err != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
 
-  error = hwc_session_->SetReadbackBuffer(in_display, readback_buffer, fence);
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::setVsyncEnabled(int64_t in_display, bool in_enabled) {
-  auto error = hwc_session_->SetVsyncEnabled(in_display, static_cast<int32_t>(in_enabled));
+  auto error = drawcycle_->SetVsyncEnabled(in_display, static_cast<int32_t>(in_enabled));
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
 
-  return TO_BINDER_STATUS(INT32(error));
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 ScopedAStatus AidlComposerClient::setIdleTimerEnabled(int64_t in_display, int32_t in_timeoutMs) {
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
 }
 
-void AidlComposerClient::OnHotplug(void *callbackData, int64_t in_display, bool in_connected) {
-  auto client = reinterpret_cast<AidlComposerClient *>(callbackData);
-  if (!client->callback_) {
+void AidlComposerClient::OnHotplug(uint64_t in_display, bool in_connected) {
+  if (!callback_) {
     ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
     return;
   }
   if (in_connected) {
-    std::lock_guard<std::mutex> lock_d(client->m_display_data_mutex_);
-    client->mDisplayData.emplace(in_display, DisplayData(false));
+    std::lock_guard<std::mutex> lock_d(m_display_data_mutex_);
+    mDisplayData.emplace(in_display, DisplayData(false));
   }
 
-  client->callback_->onHotplug(in_display, in_connected);
+  callback_->onHotplug(in_display, in_connected);
 
   if (!in_connected) {
     // Trigger refresh to make sure disconnect event received/updated properly by SurfaceFlinger.
-    client->hwc_session_->Refresh(HWC_DISPLAY_PRIMARY);
+    drawcycle_->Refresh(sdm::HWC_DISPLAY_PRIMARY);
     // Wait for sufficient time to ensure sufficient resources are available to process connection.
     uint32_t vsync_period = 0;
-    client->hwc_session_->GetVsyncPeriod(HWC_DISPLAY_PRIMARY, &vsync_period);
+    drawcycle_->GetVsyncPeriod(sdm::HWC_DISPLAY_PRIMARY, &vsync_period);
     usleep(vsync_period * 2 / 1000);
 
     // Wait for the input command message queue to process before destroying the local display data.
-    std::lock_guard<std::mutex> lock(client->m_command_mutex_);
-    std::lock_guard<std::mutex> lock_d(client->m_display_data_mutex_);
-    client->mDisplayData.erase(in_display);
+    std::lock_guard<std::mutex> lock(m_command_mutex_);
+    std::lock_guard<std::mutex> lock_d(m_display_data_mutex_);
+    mDisplayData.erase(in_display);
   }
 }
-void AidlComposerClient::OnRefresh(void *callback_data, int64_t in_display) {
-  auto client = reinterpret_cast<AidlComposerClient *>(callback_data);
-  if (!client->callback_) {
+
+void AidlComposerClient::OnRefresh(uint64_t in_display) {
+  if (!callback_) {
     ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
     return;
   }
-  client->callback_->onRefresh(in_display);
+  callback_->onRefresh(in_display);
   // hwc2_callback_data_t used here originally with a callback ret status log
 }
-void AidlComposerClient::OnSeamlessPossible(void *callback_data, int64_t in_display) {
-  auto client = reinterpret_cast<AidlComposerClient *>(callback_data);
-  if (!client->callback_) {
+
+void AidlComposerClient::OnSeamlessPossible(uint64_t in_display) {
+  if (!callback_) {
     ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
     return;
   }
 
-  client->callback_->onSeamlessPossible(in_display);
+  callback_->onSeamlessPossible(in_display);
 }
-void AidlComposerClient::OnVsync(void *callback_data, int64_t in_display, int64_t in_timestamp,
+
+void AidlComposerClient::OnVsync(uint64_t in_display, int64_t in_timestamp,
                                  int32_t in_vsync_period_nanos) {
-  auto client = reinterpret_cast<AidlComposerClient *>(callback_data);
-  if (!client->callback_) {
+  if (!callback_) {
     ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
     return;
   }
-  client->callback_->onVsync(in_display, in_timestamp, in_vsync_period_nanos);
+  callback_->onVsync(in_display, in_timestamp, in_vsync_period_nanos);
   // hwc2_callback_data_t used here originally with a callback ret status log
 }
+
 void AidlComposerClient::OnVsyncPeriodTimingChanged(
-    void *callback_data, int64_t in_display, const VsyncPeriodChangeTimeline &in_updated_timeline) {
-  auto client = reinterpret_cast<AidlComposerClient *>(callback_data);
-  if (!client->callback_) {
+    uint64_t in_display, const SDMVsyncPeriodChangeTimeline &in_updated_timeline) {
+  if (!callback_) {
     ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
+
     return;
   }
-  client->callback_->onVsyncPeriodTimingChanged(in_display, in_updated_timeline);
+
+  VsyncPeriodChangeTimeline timeline{};
+  timeline.newVsyncAppliedTimeNanos = in_updated_timeline.newVsyncAppliedTimeNanos;
+  timeline.refreshRequired = in_updated_timeline.refreshRequired;
+  timeline.refreshTimeNanos = in_updated_timeline.refreshTimeNanos;
+
+  callback_->onVsyncPeriodTimingChanged(in_display, timeline);
   // hwc2_callback_data_t used here originally with a callback ret status log
 }
-void AidlComposerClient::OnVsyncIdle(void *callback_data, int64_t in_display) {
-  auto client = reinterpret_cast<AidlComposerClient *>(callback_data);
-  if (!client->callback_) {
+
+void AidlComposerClient::OnVsyncIdle(uint64_t in_display) {
+  if (!callback_) {
     ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
     return;
   }
-  client->callback_->onVsyncIdle(in_display);
+  callback_->onVsyncIdle(in_display);
 }
 
 Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display,
-                                                   const native_handle_t *rawHandle,
-                                                   const native_handle_t **outHandle) {
+                                                   const SnapHandle *rawHandle) {
   // TODO(user): revisit for caching and freeBuffer in success case.
   if (!mHandleImporter.importBuffer(rawHandle)) {
-    ALOGE("%s: ImportBuffer failed.", __FUNCTION__);
+    ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
     return Error::NoResources;
   }
 
@@ -784,7 +980,6 @@ Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display,
     return Error::BadDisplay;
   }
 
-  *outHandle = rawHandle;
   return Error::None;
 }
 
@@ -911,18 +1106,17 @@ Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplay
 
 void AidlComposerClient::CommandEngine::executeSetColorTransform(int64_t display,
                                                                  const std::vector<float> &matrix) {
-  auto err = mClient.hwc_session_->SetColorTransform(display, matrix);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.settings_->SetColorTransform(display, matrix);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
                                                                const ClientTarget &command) {
   bool useCache = !command.buffer.handle;
-  buffer_handle_t clientTarget =
-      useCache ? nullptr : ::android::makeFromAidl(*command.buffer.handle);
-  native_handle_t *clientTargetClone = const_cast<native_handle_t *>(clientTarget);
+  SnapHandle *clientTarget =
+      useCache ? nullptr : ConvertToSnapHandle(*command.buffer.handle);
   shared_ptr<Fence> fence = nullptr;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(command.buffer.fence);
   auto fd = sfd.get();
@@ -934,22 +1128,23 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
     sync_wait(fd, -1);
   }
 
-  sdm::Region region = {command.damage.size(),
-                        reinterpret_cast<Rect const *>(command.damage.data())};
+  uint32_t size = command.damage.size();
+  const Rect *rect = reinterpret_cast<const Rect *>(command.damage.data());
+
+  sdm::SDMRegion region = {size};
+  GetSDMRectFromRect(rect, &region);
+
   auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
-                          clientTarget, &clientTarget);
+                          &clientTarget);
   if (err == Error::None) {
-    err = mClient.hwc_session_->SetClientTarget(display, clientTarget, fence,
-                                                INT32(command.dataspace), region);
+    auto error = mClient.drawcycle_->SetClientTarget(display, clientTarget, fence,
+                                                     INT32(command.dataspace), region, 0);
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
-    if (err == Error::None) {
+    if (error == sdm::kErrorNone) {
       err = updateBufErr;
     }
   }
-
-  // Cleanup orginally cloned handle from the input
-  native_handle_delete(clientTargetClone);
 
   if (err != Error::None) {
     writeError(__FUNCTION__, err);
@@ -964,16 +1159,15 @@ void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
     return;
   }
 
-  auto err = mClient.hwc_session_->SetDisplayBrightness(display, command.brightness);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.settings_->SetDisplayBrightness(display, command.brightness);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 void AidlComposerClient::CommandEngine::executeSetOutputBuffer(uint64_t display,
                                                                const Buffer &buffer) {
   bool useCache = !buffer.handle;
-  buffer_handle_t outputBuffer = useCache ? nullptr : ::android::makeFromAidl(*buffer.handle);
-  native_handle_t *outputBufferClone = const_cast<native_handle_t *>(outputBuffer);
+  SnapHandle *outputBuffer = useCache ? nullptr : ConvertToSnapHandle(*buffer.handle);
   shared_ptr<Fence> fence = nullptr;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(buffer.fence);
   auto fd = sfd.get();
@@ -986,18 +1180,15 @@ void AidlComposerClient::CommandEngine::executeSetOutputBuffer(uint64_t display,
   }
 
   auto err = lookupBuffer(display, -1, BufferCache::OUTPUT_BUFFERS, buffer.slot, useCache,
-                          outputBuffer, &outputBuffer);
+                          &outputBuffer);
   if (err == Error::None) {
-    err = mClient.hwc_session_->SetOutputBuffer(display, outputBuffer, fence);
+    mClient.drawcycle_->SetOutputBuffer(display, outputBuffer, fence);
     auto updateBufErr =
         updateBuffer(display, -1, BufferCache::OUTPUT_BUFFERS, buffer.slot, useCache, outputBuffer);
     if (err == Error::None) {
       err = updateBufErr;
     }
   }
-
-  // Cleanup orginally cloned handle from the input
-  native_handle_delete(outputBufferClone);
 
   if (err != Error::None) {
     writeError(__FUNCTION__, err);
@@ -1025,21 +1216,21 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
   uint32_t typesCount = 0;
   uint32_t reqsCount = 0;
   bool validate_only = false;
-  auto status = mClient.hwc_session_->CommitOrPrepare(display, validate_only, &presentFence,
-                                                      &typesCount, &reqsCount, &needsCommit);
+  auto status = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
+                                                    &typesCount, &reqsCount, &needsCommit);
   if (needsCommit) {
-    if (status != Error::None && status != Error::HasChanges) {
+    if (status != sdm::kErrorNone && status != sdm::kErrorNeedsCommit) {
       ALOGE("%s: CommitOrPrepare failed %d", __FUNCTION__, status);
     }
     // Implement post validation. Getcomptypes etc;
     postValidateDisplay(display, typesCount, reqsCount);
     mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
   } else {
-    if (status == Error::HasChanges) {
+    if (status == sdm::kErrorNeedsCommit) {
       // Perform post validate.
       auto error = postValidateDisplay(display, typesCount, reqsCount);
       if (error == Error::None) {
-        mClient.hwc_session_->AcceptDisplayChanges(display);
+        mClient.drawcycle_->AcceptDisplayChanges(display);
       }
       // Set result to validated, has comp changes
       mWriter->setPresentOrValidateResult(display, static_cast<PresentOrValidate::Result>(2));
@@ -1053,17 +1244,17 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
 }
 
 void AidlComposerClient::CommandEngine::executeAcceptDisplayChanges(int64_t display) {
-  auto err = mClient.hwc_session_->AcceptDisplayChanges(display);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.drawcycle_->AcceptDisplayChanges(display);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 Error AidlComposerClient::CommandEngine::presentDisplay(int64_t display,
                                                         shared_ptr<Fence> *presentFence) {
-  auto err = mClient.hwc_session_->PresentDisplay(display, presentFence);
-  if (err != Error::None) {
-    return err;
+  auto err = mClient.drawcycle_->PresentDisplay(display, presentFence);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
   }
 
   return postPresentDisplay(display, presentFence);
@@ -1081,18 +1272,26 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
 void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t display,
                                                                       int64_t layer,
                                                                       const Point &cursorPosition) {
-  auto err =
-      mClient.hwc_session_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  if (mClient.layer_builder_->GetDeviceSelectedCompositionType(display, layer) !=
+      sdm::SDMCompositionType::COMP_CURSOR) {
+    writeError(__FUNCTION__, Error::BadConfig);
+    return;
   }
+
+  auto err =
+      mClient.settings_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+    return;
+  }
+
+  mClient.layer_builder_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, int64_t layer,
                                                               const Buffer &buffer) {
   bool useCache = !buffer.handle;
-  buffer_handle_t layerBuffer = useCache ? nullptr : ::android::makeFromAidl(*buffer.handle);
-  native_handle_t *layerBufferClone = const_cast<native_handle_t *>(layerBuffer);
+  SnapHandle *layerBuffer = useCache ? nullptr : ConvertToSnapHandle(*buffer.handle);
   shared_ptr<Fence> fence = nullptr;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(buffer.fence);
   auto fd = sfd.get();
@@ -1105,18 +1304,16 @@ void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, i
   }
 
   auto error = lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, buffer.slot, useCache,
-                            layerBuffer, &layerBuffer);
+                            &layerBuffer);
+
   if (error == Error::None) {
-    error = mClient.hwc_session_->SetLayerBuffer(display, layer, layerBuffer, fence);
+    auto err = mClient.layer_builder_->SetLayerBuffer(display, layer, layerBuffer, fence);
     auto updateBufErr = updateBuffer(display, layer, BufferCache::LAYER_BUFFERS, buffer.slot,
                                      useCache, layerBuffer);
     if (static_cast<Error>(error) == Error::None) {
       error = updateBufErr;
     }
   }
-
-  // Cleanup orginally cloned handle from the input
-  native_handle_delete(layerBufferClone);
 
   if (error != Error::None) {
     writeError(__FUNCTION__, error);
@@ -1126,18 +1323,22 @@ void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, i
 void AidlComposerClient::CommandEngine::executeSetLayerSurfaceDamage(
     int64_t display, int64_t layer, const std::vector<std::optional<Rect>> &damage) {
   // N rectangles
-  sdm::Region region = {damage.size(), reinterpret_cast<Rect const *>(damage.data())};
-  auto err = mClient.hwc_session_->SetLayerSurfaceDamage(display, layer, region);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  const Rect *rect = reinterpret_cast<const Rect *>(damage.data());
+  ;
+  sdm::SDMRegion region = {damage.size()};
+  GetSDMRectFromRect(rect, &region);
+
+  auto err = mClient.layer_builder_->SetLayerSurfaceDamage(display, layer, region);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBlendMode(
     int64_t display, int64_t layer, const ParcelableBlendMode &blendMode) {
-  auto err = mClient.hwc_session_->SetLayerBlendMode(display, layer, INT32(blendMode.blendMode));
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerBlendMode(display, layer, INT32(blendMode.blendMode));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
@@ -1150,44 +1351,48 @@ void AidlComposerClient::CommandEngine::executeSetLayerColor(int64_t display, in
     return std::clamp(intVal, minVal, maxVal);
   };
 
-  sdm::Color int_color{floatColorToUint8Clamped(color.r), floatColorToUint8Clamped(color.g),
-                       floatColorToUint8Clamped(color.b), floatColorToUint8Clamped(color.a)};
-  auto err = mClient.hwc_session_->SetLayerColor(display, layer, int_color);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  sdm::SDMColor int_color{floatColorToUint8Clamped(color.r), floatColorToUint8Clamped(color.g),
+                          floatColorToUint8Clamped(color.b), floatColorToUint8Clamped(color.a)};
+  auto err = mClient.layer_builder_->SetLayerColor(display, layer, int_color);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerComposition(
     int64_t display, int64_t layer, const ParcelableComposition &composition) {
-  auto err =
-      mClient.hwc_session_->SetLayerCompositionType(display, layer, INT32(composition.composition));
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerCompositionType(display, layer,
+                                                             INT32(composition.composition));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerDataspace(
     int64_t display, int64_t layer, const ParcelableDataspace &dataspace) {
-  auto err = mClient.hwc_session_->SetLayerDataspace(display, layer, INT32(dataspace.dataspace));
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerDataspace(display, layer, INT32(dataspace.dataspace));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerDisplayFrame(int64_t display, int64_t layer,
                                                                     const Rect &rect) {
-  auto err = mClient.hwc_session_->SetLayerDisplayFrame(display, layer, rect);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  uint32_t size = 1;
+
+  sdm::SDMRegion region = {size};
+  GetSDMRectFromRect(&rect, &region);
+  auto err = mClient.layer_builder_->SetLayerDisplayFrame(display, layer, region.rects[0]);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t display, int64_t layer,
                                                                   const PlaneAlpha &planeAlpha) {
-  auto err = mClient.hwc_session_->SetLayerPlaneAlpha(display, layer, planeAlpha.alpha);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerPlaneAlpha(display, layer, planeAlpha.alpha);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
@@ -1198,9 +1403,15 @@ void AidlComposerClient::CommandEngine::executeSetLayerSidebandStream(
 
 void AidlComposerClient::CommandEngine::executeSetLayerSourceCrop(int64_t display, int64_t layer,
                                                                   const FRect &sourceCrop) {
-  auto err = mClient.hwc_session_->SetLayerSourceCrop(display, layer, sourceCrop);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  sdm::SDMRect rect{};
+  rect.left = sourceCrop.left;
+  rect.right = sourceCrop.right;
+  rect.top = sourceCrop.top;
+  rect.bottom = sourceCrop.bottom;
+
+  auto err = mClient.layer_builder_->SetLayerSourceCrop(display, layer, rect);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
@@ -1211,26 +1422,32 @@ void AidlComposerClient::CommandEngine::executeSetLayerTransform(
   if (INT32(layer_transform) == 128)
     layer_transform = Transform::NONE;
 
-  auto err = mClient.hwc_session_->SetLayerTransform(display, layer, layer_transform);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerTransform(
+      display, layer, static_cast<sdm::SDMTransform>(layer_transform));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerVisibleRegion(
     int64_t display, int64_t layer, const std::vector<std::optional<Rect>> &visibleRegion) {
-  sdm::Region region = {visibleRegion.size(), reinterpret_cast<Rect const *>(visibleRegion.data())};
-  auto err = mClient.hwc_session_->SetLayerVisibleRegion(display, layer, region);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  uint32_t size = visibleRegion.size();
+  const Rect *rect = reinterpret_cast<const Rect *>(visibleRegion.data());
+
+  sdm::SDMRegion region = {size};
+  GetSDMRectFromRect(rect, &region);
+
+  auto err = mClient.layer_builder_->SetLayerVisibleRegion(display, layer, region);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerZOrder(int64_t display, int64_t layer,
                                                               const ZOrder &zOrder) {
-  auto err = mClient.hwc_session_->SetLayerZOrder(display, layer, zOrder.z);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerZOrder(display, layer, zOrder.z);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
@@ -1245,18 +1462,18 @@ void AidlComposerClient::CommandEngine::executeSetLayerPerFrameMetadata(
     values.push_back(static_cast<float>(m->value));
   }
 
-  auto err = mClient.hwc_session_->SetLayerPerFrameMetadata(display, layer, perFrameMetadata.size(),
-                                                            keys.data(), values.data());
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerPerFrameMetadata(
+      display, layer, perFrameMetadata.size(), keys.data(), values.data());
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerColorTransform(
     int64_t display, int64_t layer, const std::vector<float> &colorTransform) {
-  auto err = mClient.hwc_session_->SetLayerColorTransform(display, layer, colorTransform.data());
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerColorTransform(display, layer, colorTransform.data());
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
@@ -1273,19 +1490,19 @@ void AidlComposerClient::CommandEngine::executeSetLayerPerFrameMetadataBlobs(
     blob_of_data_.insert(blob_of_data_.end(), m->blob.begin(), m->blob.end());
   }
 
-  auto err = mClient.hwc_session_->SetLayerPerFrameMetadataBlobs(
+  auto err = mClient.layer_builder_->SetLayerPerFrameMetadataBlobs(
       display, layer, perFrameMetadataBlob.size(), keys.data(), sizes_of_metablob_.data(),
       blob_of_data_.data());
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
     int64_t display, int64_t layer, const LayerBrightness &brightness) {
-  auto err = mClient.hwc_session_->SetLayerBrightness(display, layer, brightness.brightness);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.layer_builder_->SetLayerBrightness(display, layer, brightness.brightness);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
@@ -1300,18 +1517,18 @@ void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(
     expectedPresentTimestamp = static_cast<uint64_t>(expectedPresentTime->timestampNanos);
   }
 
-  auto err = mClient.hwc_session_->SetExpectedPresentTime(display, expectedPresentTimestamp);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.drawcycle_->SetExpectedPresentTime(display, expectedPresentTimestamp);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
     int64_t display, int64_t layer, const std::vector<std::optional<Rect>> &blockingRegion) {
   // TODO: Add impl here and in hwc_session / hwc_display
-  //   auto err = mClient.hwc_session_->SetLayerBlockingRegion(display, blockingRegion);
+  //   auto err = mClient.layer_builder_->SetLayerBlockingRegion(display, blockingRegion);
   //   if (err != Error::None) {
-  //     writeError(__FUNCTION__, err);
+  //     writeError(__FUNCTION__, Error::BadConfig);
   //   }
   // writeError(__FUNCTION__, Error::Unsupported);
 }
@@ -1323,10 +1540,10 @@ Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
   uint32_t reqs_count = 0;
   shared_ptr<Fence> presentFence = nullptr;
 
-  auto err = mClient.hwc_session_->CommitOrPrepare(display, validate_only, &presentFence,
-                                                   &types_count, &reqs_count, &needsCommit);
-  if (err != Error::None && err != Error::HasChanges) {
-    return err;
+  auto err = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
+                                                 &types_count, &reqs_count, &needsCommit);
+  if (err != sdm::kErrorNone && err != sdm::kErrorNeedsCommit) {
+    return Error::BadConfig;
   }
 
   return postValidateDisplay(display, types_count, reqs_count);
@@ -1335,8 +1552,8 @@ Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
 Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
                                                             shared_ptr<Fence> *presentFence) {
   uint32_t count = 0;
-  auto err = mClient.hwc_session_->GetReleaseFences(display, &count, nullptr, nullptr);
-  if (err != Error::None) {
+  auto err = mClient.drawcycle_->GetReleaseFences(display, &count, nullptr, nullptr);
+  if (err != sdm::kErrorNone) {
     ALOGW("%s: Failed to get release fences", __FUNCTION__);
     return Error::None;
   }
@@ -1346,8 +1563,8 @@ Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
   std::vector<::ndk::ScopedFileDescriptor> aidlReleaseFences;
   layers.resize(count);
   releaseFences.resize(count);
-  err = mClient.hwc_session_->GetReleaseFences(display, &count, layers.data(), &releaseFences);
-  if (err != Error::None) {
+  err = mClient.drawcycle_->GetReleaseFences(display, &count, layers.data(), &releaseFences);
+  if (err != sdm::kErrorNone) {
     ALOGW("%s: Failed to get release fences", __FUNCTION__);
     layers.clear();
     releaseFences.clear();
@@ -1376,35 +1593,35 @@ Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, ui
   changedLayers.resize(types_count);
   compositionTypes.resize(types_count);
   auto err =
-      mClient.hwc_session_->GetChangedCompositionTypes(display, &types_count, nullptr, nullptr);
-  if (err != Error::None) {
-    return err;
+      mClient.drawcycle_->GetChangedCompositionTypes(display, &types_count, nullptr, nullptr);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
   }
 
-  err = mClient.hwc_session_->GetChangedCompositionTypes(
+  err = mClient.drawcycle_->GetChangedCompositionTypes(
       display, &types_count, changedLayers.data(),
       reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
 
-  if (err != Error::None) {
+  if (err != sdm::kErrorNone) {
     changedLayers.clear();
     compositionTypes.clear();
     return static_cast<Error>(err);
   }
 
   int32_t display_reqs = 0;
-  err = mClient.hwc_session_->GetDisplayRequests(display, &display_reqs, &reqs_count, nullptr,
-                                                 nullptr);
-  if (err != Error::None) {
+  err =
+      mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count, nullptr, nullptr);
+  if (err != sdm::kErrorNone) {
     changedLayers.clear();
     compositionTypes.clear();
-    return err;
+    return Error::BadConfig;
   }
 
   requestedLayers.resize(reqs_count);
   requestMasks.resize(reqs_count);
-  err = mClient.hwc_session_->GetDisplayRequests(display, &display_reqs, &reqs_count,
-                                                 requestedLayers.data(), requestMasks.data());
-  if (err != Error::None) {
+  err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count,
+                                               requestedLayers.data(), requestMasks.data());
+  if (err != sdm::kErrorNone) {
     changedLayers.clear();
     compositionTypes.clear();
 
@@ -1412,11 +1629,15 @@ Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, ui
     requestMasks.clear();
   }
 
-  err = mClient.hwc_session_->GetClientTargetProperty(display, &clientTargetProperty);
-  if (err != Error::None) {
+  sdm::SDMClientTargetProperty client_property{};
+  err = mClient.settings_->GetClientTargetProperty(display, &client_property);
+  if (err != sdm::kErrorNone) {
     // todo: reset to default values
-    return err;
+    return Error::BadConfig;
   }
+
+  clientTargetProperty.dataspace = static_cast<Dataspace>(client_property.dataspace);
+  clientTargetProperty.pixelFormat = static_cast<PixelFormat>(client_property.pixel_format);
 
   mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(changedLayers),
                                       compositionTypes);
@@ -1426,14 +1647,14 @@ Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, ui
   DimmingStage dimmingStage = DimmingStage::NONE;
   mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
 
-  return err;
+  return Error::None;
 }
 
 // TODO: Re-add extensions API
 void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t display,
                                                                    const ClientTarget &command) {
   bool useCache = true;
-  buffer_handle_t clientTarget = nullptr;
+  SnapHandle *clientTarget = nullptr;
   shared_ptr<Fence> fence = nullptr;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(command.buffer.fence);
   auto fd = sfd.get();
@@ -1445,15 +1666,15 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t displ
     sync_wait(fd, -1);
   }
 
-  sdm::Region region = {};
+  sdm::SDMRegion region = {};
   auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
-                          clientTarget, &clientTarget);
+                          &clientTarget);
   if (err == Error::None) {
-    err = mClient.hwc_session_->SetClientTarget_3_1(display, clientTarget, fence,
-                                                    INT32(command.dataspace), region);
+    auto error = mClient.drawcycle_->SetClientTarget(
+        display, clientTarget, fence, INT32(command.dataspace), region, 3 /* version*/);
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
-    if (err == Error::None) {
+    if (error == sdm::kErrorNone) {
       err = updateBufErr;
     }
   }
@@ -1464,25 +1685,27 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t displ
 
 void AidlComposerClient::CommandEngine::executeSetDisplayElapseTime(int64_t display,
                                                                     uint64_t time) {
-  auto err = mClient.hwc_session_->SetDisplayElapseTime(display, time);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err = mClient.drawcycle_->SetDisplayElapseTime(display, time);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerType(int64_t display, int64_t layer,
                                                             sdm::LayerType type) {
-  auto err = mClient.hwc_session_->SetLayerType(display, layer, type);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err =
+      mClient.layer_builder_->SetLayerType(display, layer, static_cast<sdm::SDMLayerTypes>(type));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerFlag(int64_t display, int64_t layer,
                                                             sdm::LayerFlag flag) {
-  auto err = mClient.hwc_session_->SetLayerFlag(display, layer, flag);
-  if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+  auto err =
+      mClient.layer_builder_->SetLayerFlag(display, layer, static_cast<sdm::SDMLayerFlag>(flag));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 
@@ -1539,8 +1762,7 @@ Error AidlComposerClient::CommandEngine::lookupBufferCacheEntryLocked(
 
 Error AidlComposerClient::CommandEngine::lookupBuffer(int64_t display, int64_t layer,
                                                       BufferCache cache, uint32_t slot,
-                                                      bool useCache, buffer_handle_t handle,
-                                                      buffer_handle_t *outHandle) {
+                                                      bool useCache, SnapHandle **handle) {
   if (useCache) {
     std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
 
@@ -1550,21 +1772,12 @@ Error AidlComposerClient::CommandEngine::lookupBuffer(int64_t display, int64_t l
       return error;
     }
 
-    // input handle is ignored
-    *outHandle = entry->getHandle();
-  } else if (cache == BufferCache::LAYER_SIDEBAND_STREAMS) {
-    if (handle) {
-      *outHandle = native_handle_clone(handle);
-      if (*outHandle == nullptr) {
-        return Error::NoResources;
-      }
-    }
+    // assign cached handle to given SnapHandle *
+    *handle = entry->getHandle();
   } else {
-    if (!mHandleImporter.importBuffer(handle)) {
+    if (!mHandleImporter.importBuffer(*handle)) {
       return Error::NoResources;
     }
-
-    *outHandle = handle;
   }
 
   return Error::None;
@@ -1572,7 +1785,7 @@ Error AidlComposerClient::CommandEngine::lookupBuffer(int64_t display, int64_t l
 
 Error AidlComposerClient::CommandEngine::updateBuffer(int64_t display, int64_t layer,
                                                       BufferCache cache, uint32_t slot,
-                                                      bool useCache, buffer_handle_t handle) {
+                                                      bool useCache, SnapHandle *handle) {
   // handle was looked up from cache
   if (useCache) {
     return Error::None;

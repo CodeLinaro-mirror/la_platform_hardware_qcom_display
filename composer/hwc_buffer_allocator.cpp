@@ -1,43 +1,26 @@
 /*
- * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *  * Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *  * Redistributions in binary form must reproduce the above
- *    copyright notice, this list of conditions and the following
- *    disclaimer in the documentation and/or other materials provided
- *    with the distribution.
- *  * Neither the name of The Linux Foundation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
+ * Copyright 2015 The Android Open Source Project
  *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-
 #include <QtiGralloc.h>
 
 #include <gralloctypes/Gralloc4.h>
@@ -48,13 +31,19 @@
 #include <BufferUsage.h>
 
 #include "hwc_buffer_allocator.h"
-#include "hwc_debugger.h"
-#include "hwc_layers.h"
 #include "gr_snap_helper.h"
 #include "mapper_utils.h"
 
 #include <aidl/android/hardware/graphics/allocator/BufferDescriptorInfo.h>
 #include <android/rect.h>
+#include "sdm_interface_factory.h"
+#include "sdm_display_intf_layer_builder.h"
+#include "hwc_common.h"
+
+#include <SnapHandle.h>
+#include <BufferUsage.h>
+#include <PixelFormat.h>
+#include <AllocationResult.h>
 
 #define __CLASS__ "HWCBufferAllocator"
 
@@ -71,6 +60,15 @@ using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 using aidl::android::hardware::graphics::common::Rect;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using ABufferUsage = aidl::android::hardware::graphics::common::BufferUsage;
+
+using SnapAllocationResult = vendor::qti::hardware::display::snapalloc::AllocationResult;
+using SnapBufferDescriptor = vendor::qti::hardware::display::snapalloc::BufferDescriptor;
+using SnapError = vendor::qti::hardware::display::snapalloc::Error;
+using SnapHandle = vendor::qti::hardware::display::snapalloc::SnapHandle;
+
+using SnapBufferUsage = vendor_qti_hardware_display_common_BufferUsage;
+using SnapMetadataType = vendor_qti_hardware_display_common_MetadataType;
+using SnapPixelFormat = vendor_qti_hardware_display_common_PixelFormat;
 
 namespace sdm {
 
@@ -107,22 +105,60 @@ int HWCBufferAllocator::GetGrallocInstance() {
   return 0;
 }
 
-static BufferDescriptorInfo CreateDescriptor(std::string name, uint32_t width, uint32_t height,
+int HWCBufferAllocator::GetSnapInstance() {
+  if (snapmapper_ != nullptr && snapallocator_ != nullptr) {
+    return 0;
+  }
+
+  const std::string snapalloc_lib_name = "vendor.qti.hardware.display.snapalloc-impl.so";
+  void *snap_impl_lib_ = ::dlopen(snapalloc_lib_name.c_str(), RTLD_NOW);
+  if (!snap_impl_lib_) {
+    ALOGE("Dlopen error for snapalloc impl: %s", dlerror());
+    return kErrorCriticalResource;
+  }
+
+  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)() = nullptr;
+  *reinterpret_cast<void **>(&LINK_FETCH_ISnapAlloc) = ::dlsym(snap_impl_lib_, "FETCH_ISnapAlloc");
+  if (LINK_FETCH_ISnapAlloc) {
+    snapallocator_ = LINK_FETCH_ISnapAlloc();
+  }
+
+  if (snapallocator_ == nullptr) {
+    ALOGE("%s: Failed to link FETCH_ISnapAlloc - %s", __FUNCTION__, strerror(errno));
+    return kErrorCriticalResource;
+  }
+
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
+  *reinterpret_cast<void **>(&LINK_FETCH_ISnapMapper) =
+      ::dlsym(snap_impl_lib_, "FETCH_ISnapMapper");
+  if (LINK_FETCH_ISnapMapper) {
+    snapmapper_ = LINK_FETCH_ISnapMapper();
+  }
+
+  if (snapmapper_ == nullptr) {
+    ALOGE("%s: Failed to link FETCH_ISnapMapper - %s", __FUNCTION__, strerror(errno));
+    return kErrorCriticalResource;
+  }
+
+  return 0;
+}
+
+static SnapBufferDescriptor CreateDescriptor(std::string name, uint32_t width, uint32_t height,
                                              int format, uint32_t layer_count, uint64_t usage) {
-  BufferDescriptorInfo descriptorInfo{
+  SnapBufferDescriptor descriptorInfo{
       .width = static_cast<int32_t>(width),
       .height = static_cast<int32_t>(height),
       .layerCount = static_cast<int32_t>(layer_count),
-      .format = static_cast<APixelFormat>(format),
-      .usage = static_cast<ABufferUsage>(usage),
+      .format = static_cast<SnapPixelFormat>(format),
+      .usage = static_cast<SnapBufferUsage>(usage),
   };
-  auto nameLength = std::min(name.length(), descriptorInfo.name.size() - 1);
-  memcpy(descriptorInfo.name.data(), name.data(), nameLength);
+  auto nameLength = std::min(name.length(), static_cast<size_t>(MAX_NAME_LEN - 1));
+  memcpy(descriptorInfo.name, name.data(), nameLength);
   return descriptorInfo;
 }
 
 int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
-  auto err = GetGrallocInstance();
+  auto err = GetSnapInstance();
   if (err != 0) {
     return err;
   }
@@ -138,11 +174,11 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
 
   if (buffer_config.access_control.empty()) {
     if (buffer_config.secure) {
-      alloc_flags |= static_cast<uint64_t>(ABufferUsage::PROTECTED);
+      alloc_flags |= static_cast<uint64_t>(SnapBufferUsage::PROTECTED);
     }
 
     if (buffer_config.secure_camera) {
-      alloc_flags |= static_cast<uint64_t>(ABufferUsage::CAMERA_OUTPUT);
+      alloc_flags |= static_cast<uint64_t>(SnapBufferUsage::CAMERA_OUTPUT);
     }
 
     if (!buffer_config.cache) {
@@ -157,10 +193,10 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
     }
 
     if (buffer_config.gfx_client) {
-      alloc_flags |= static_cast<uint64_t>(ABufferUsage::GPU_TEXTURE);
+      alloc_flags |= static_cast<uint64_t>(SnapBufferUsage::GPU_TEXTURE);
     }
 
-    alloc_flags |= static_cast<uint64_t>(ABufferUsage::COMPOSER_OVERLAY);
+    alloc_flags |= static_cast<uint64_t>(SnapBufferUsage::COMPOSER_OVERLAY);
   } else {
     for (uint32_t i = 0; i < BUFFER_CLIENT_MAX; i++) {
       buf_perm[i].permission = 0;
@@ -173,7 +209,7 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
       }
       SetBufferAccessControlInfo(it->second, &buf_perm[kBufferClientUnTrustedVM]);
     } else {
-      alloc_flags |= static_cast<uint64_t>(ABufferUsage::PROTECTED);
+      alloc_flags |= static_cast<uint64_t>(SnapBufferUsage::PROTECTED);
     }
 
     it = buffer_config.access_control.find(kBufferClientTrustedVM);
@@ -184,91 +220,87 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
 
     it = buffer_config.access_control.find(kBufferClientDPU);
     if (it != buffer_config.access_control.end()) {
-      alloc_flags |= static_cast<uint64_t>(ABufferUsage::COMPOSER_OVERLAY);
+      alloc_flags |= static_cast<uint64_t>(SnapBufferUsage::COMPOSER_OVERLAY);
       SetBufferAccessControlInfo(it->second, &buf_perm[kBufferClientDPU]);
     }
   }
 
-  buffer_handle_t buf = nullptr;
-
-  BufferDescriptorInfo descriptor_info = CreateDescriptor(
+  SnapBufferDescriptor descriptor_info = CreateDescriptor(
       std::string("HWC_Buffer"), buffer_config.width, buffer_config.height, format, 1, alloc_flags);
 
-  AllocationResult result;
-  auto status = allocator_->allocate2(descriptor_info, 1, &result);
-  if (!status.isOk()) {
-    DLOGE("Failed to allocate buffer");
+  SnapAllocationResult result;
+  auto status = snapallocator_->Allocate(descriptor_info, 1, &result);
+  if (status != SnapError::NONE) {
+    DLOGE("Failed to allocate buffer: %d", status);
     return kErrorMemory;
   }
-  native_handle *raw_handle = android::makeFromAidl(result.buffers[0]);
+  SnapHandle *handle = result.handles[0];
 
-  auto mapper_err = STABLEMAPPER(mapper_).importBuffer(raw_handle, &buf);
+  auto mapper_err = snapmapper_->Retain(*handle);
 
-  if (mapper_err != AIMAPPER_ERROR_NONE) {
-    DLOGE("Failed to import buffer into HWC");
+  if (mapper_err != SnapError::NONE) {
+    DLOGE("Failed to import buffer into HWC: %d", mapper_err);
     return kErrorMemory;
   }
 
   uint32_t tmp_width;
-  void *buf_handle = reinterpret_cast<void *>(const_cast<native_handle *>(buf));
 
   if (!buffer_config.access_control.empty()) {
-    mapper_err = STABLEMAPPER(mapper_).setMetadata(
-        buf, VENDOR_QTI_METADATA(SnapMetadataType::BUFFER_PERMISSION), buf_perm, sizeof(buf_perm));
-    if (mapper_err != AIMAPPER_ERROR_NONE) {
+    mapper_err = snapmapper_->SetMetadata(*handle, SnapMetadataType::BUFFER_PERMISSION, buf_perm);
+    if (mapper_err != SnapError::NONE) {
       DLOGE("setMetadata failed for SnapMetadataType::BUFFER_PERMISSION %d", mapper_err);
       err = -EINVAL;
       goto cleanup;
     }
-    auto error =
-        GetMetadataValue(buf_handle, SnapMetadataType::MEM_HANDLE, &alloc_buffer_info->mem_handle,
-                         sizeof(alloc_buffer_info->mem_handle));
-    if (error) {
+    mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::MEM_HANDLE, &alloc_buffer_info->mem_handle);
+    if (error != SnapError::NONE) {
       err = -EINVAL;
       goto cleanup;
     }
   }
 
-  err = GetFd(buf_handle, alloc_buffer_info->fd);
-  if (err != kErrorNone)
+  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::FD, &alloc_buffer_info->fd);
+  if (mapper_err != SnapError::NONE)
     goto cleanup;
 
-  err = GetWidth(buf_handle, tmp_width);
-  if (err != kErrorNone)
+  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::STRIDE, &tmp_width);
+  if (mapper_err != SnapError::NONE)
     goto cleanup;
   alloc_buffer_info->stride = tmp_width;
   alloc_buffer_info->aligned_width = tmp_width;
 
-  err = GetHeight(buf_handle, alloc_buffer_info->aligned_height);
-  if (err != kErrorNone)
+  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::HEIGHT, &alloc_buffer_info->aligned_height);
+  if (mapper_err != SnapError::NONE)
     goto cleanup;
 
-  err = GetAllocationSize(buf_handle, alloc_buffer_info->size);
-  if (err != kErrorNone)
+  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::ALLOCATION_SIZE, &alloc_buffer_info->size);
+  if (mapper_err != SnapError::NONE)
     goto cleanup;
 
-  err = GetBufferId(buf_handle, alloc_buffer_info->id);
-  if (err != kErrorNone)
+  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::BUFFER_ID, &alloc_buffer_info->id);
+  if (mapper_err != SnapError::NONE)
     goto cleanup;
 
-  err = GetSDMFormat(buf_handle, alloc_buffer_info->format);
-  if (err != kErrorNone)
-    goto cleanup;
+  int64_t tmp_format, is_ubwc, compression_type;
+  snapmapper_->GetMetadata(*handle, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &tmp_format);
+  snapmapper_->GetMetadata(*handle, SnapMetadataType::IS_UBWC, &is_ubwc);
+  snapmapper_->GetMetadata(*handle, SnapMetadataType::COMPRESSION, &compression_type);
+  alloc_buffer_info->format = GetSDMFormat(tmp_format, is_ubwc, compression_type);
 
-  buffer_info->private_data = buf_handle;
+  buffer_info->private_data = (void *)handle;
   return 0;
 
 cleanup:
-  if (buf) {
-    STABLEMAPPER(mapper_).freeBuffer(buf);
+  if (handle) {
+    snapmapper_->Release(*handle);
   }
   return err;
 }
 
 int HWCBufferAllocator::FreeBuffer(BufferInfo *buffer_info) {
   int err = 0;
-  auto hnd = reinterpret_cast<buffer_handle_t>(buffer_info->private_data);
-  STABLEMAPPER(mapper_).freeBuffer(hnd);
+  auto hnd = reinterpret_cast<SnapHandle *>(buffer_info->private_data);
+  snapmapper_->Release(*hnd);
 
   AllocatedBufferInfo &alloc_buffer_info = buffer_info->alloc_buffer_info;
 
@@ -436,7 +468,8 @@ int HWCBufferAllocator::GetSDMFormat(void *buf, LayerBufferFormat &sdm_format) {
   if (err != kErrorNone)
     return kErrorUndefined;
 
-  sdm_format = HWCLayer::GetSDMFormat(tmp_format, tmp_flags, tmp_compression_type);
+  GetSDMFormat(tmp_format, tmp_flags, tmp_compression_type);
+
   return kErrorNone;
 }
 
@@ -464,9 +497,8 @@ int HWCBufferAllocator::GetBufferGeometry(void *buf, int32_t &slice_width, int32
   return kErrorParameters;
 }
 
-int HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, int *width,
-                                                int *height) {
-  void *hnd = const_cast<native_handle_t *>(handle);
+int HWCBufferAllocator::GetCustomWidthAndHeight(void *handle, int *width, int *height) {
+  void *hnd = handle;
 
   GetMetadataValue(hnd, SnapMetadataType::STRIDE, width, sizeof(*width));
   GetMetadataValue(hnd, SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS, height, sizeof(*height));
@@ -479,11 +511,11 @@ int HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, i
   int ret;
   if (handle != nullptr) {
     if (snap_helper_->IsSnapAllocEnabled()) {
-      ret = GetMetadataValue(const_cast<native_handle_t *>(handle),
+      ret = GetMetadataValue(static_cast<native_handle_t *>(handle),
                              SnapMetadataType::CUSTOM_DIMENSIONS_STRIDE, width, sizeof(*width));
 
       if (ret == 0) {
-        ret = GetMetadataValue(const_cast<native_handle_t *>(handle),
+        ret = GetMetadataValue(static_cast<native_handle_t *>(handle),
                                SnapMetadataType::CUSTOM_DIMENSIONS_HEIGHT, height, sizeof(*height));
       }
     } else {
@@ -899,8 +931,7 @@ int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info, uin
   return kErrorNone;
 }
 
-int HWCBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<Fence> acquire_fence,
-                                  void **base_ptr) {
+int HWCBufferAllocator::MapBuffer(void *handle, shared_ptr<Fence> acquire_fence, void **base_ptr) {
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGW("Could not get gralloc instance");
@@ -914,7 +945,7 @@ int HWCBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<Fenc
     acquire_fence_fd = scoped_ref.Get(acquire_fence);
   }
 
-  auto hnd = static_cast<buffer_handle_t>(const_cast<native_handle_t *>(handle));
+  auto hnd = static_cast<buffer_handle_t>(handle);
   *base_ptr = NULL;
   ARect access_region = {.left = 0, .top = 0, .right = 0, .bottom = 0};
   auto error = STABLEMAPPER(mapper_).lock(hnd, (uint64_t)ABufferUsage::CPU_READ_OFTEN,
@@ -928,10 +959,10 @@ int HWCBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<Fenc
   return kErrorNone;
 }
 
-int HWCBufferAllocator::UnmapBuffer(const native_handle_t *handle, int *release_fence) {
+int HWCBufferAllocator::UnmapBuffer(void *handle, int *release_fence) {
   int err = kErrorNone;
   *release_fence = -1;
-  auto hnd = static_cast<buffer_handle_t>(const_cast<native_handle_t *>(handle));
+  auto hnd = static_cast<buffer_handle_t>(handle);
   auto error = STABLEMAPPER(mapper_).unlock(hnd, release_fence);
 
   if (error != AIMAPPER_ERROR_NONE) {
@@ -1000,6 +1031,384 @@ int HWCBufferAllocator::GetMetadataValue(void *buf, SnapMetadataType type, void 
   }
 
   return err;
+}
+
+// Returns true when color primary is supported
+bool GetColorPrimary(const int32_t &dataspace, QtiColorPrimaries *color_primary) {
+  auto standard = dataspace & HAL_DATASPACE_STANDARD_MASK;
+  bool supported_csc = true;
+  switch (standard) {
+    case HAL_DATASPACE_STANDARD_BT709:
+      *color_primary = QtiColorPrimaries::QtiColorPrimaries_BT709_5;
+      break;
+    case HAL_DATASPACE_STANDARD_BT601_525:
+    case HAL_DATASPACE_STANDARD_BT601_525_UNADJUSTED:
+      *color_primary = QtiColorPrimaries::QtiColorPrimaries_BT601_6_525;
+      break;
+    case HAL_DATASPACE_STANDARD_BT601_625:
+    case HAL_DATASPACE_STANDARD_BT601_625_UNADJUSTED:
+      *color_primary = QtiColorPrimaries::QtiColorPrimaries_BT601_6_625;
+      break;
+    case HAL_DATASPACE_STANDARD_DCI_P3:
+      *color_primary = QtiColorPrimaries::QtiColorPrimaries_DCIP3;
+      break;
+    case HAL_DATASPACE_STANDARD_BT2020:
+      *color_primary = QtiColorPrimaries::QtiColorPrimaries_BT2020;
+      break;
+    default:
+      DLOGW_IF(kTagClient, "Unsupported Standard Request = %d", standard);
+      supported_csc = false;
+  }
+  return supported_csc;
+}
+
+bool GetTransfer(const int32_t &dataspace, QtiGammaTransfer *gamma_transfer) {
+  auto transfer = dataspace & HAL_DATASPACE_TRANSFER_MASK;
+  bool supported_transfer = true;
+  switch (transfer) {
+    case HAL_DATASPACE_TRANSFER_SRGB:
+      *gamma_transfer = QtiGammaTransfer::QtiTransfer_sRGB;
+      break;
+    case HAL_DATASPACE_TRANSFER_SMPTE_170M:
+      *gamma_transfer = QtiGammaTransfer::QtiTransfer_SMPTE_170M;
+      break;
+    case HAL_DATASPACE_TRANSFER_ST2084:
+      *gamma_transfer = QtiGammaTransfer::QtiTransfer_SMPTE_ST2084;
+      break;
+    case HAL_DATASPACE_TRANSFER_HLG:
+      *gamma_transfer = QtiGammaTransfer::QtiTransfer_HLG;
+      break;
+    case HAL_DATASPACE_TRANSFER_LINEAR:
+      *gamma_transfer = QtiGammaTransfer::QtiTransfer_Linear;
+      break;
+    case HAL_DATASPACE_TRANSFER_GAMMA2_2:
+      *gamma_transfer = QtiGammaTransfer::QtiTransfer_Gamma2_2;
+      break;
+    case HAL_DATASPACE_TRANSFER_GAMMA2_8:
+      *gamma_transfer = QtiGammaTransfer::QtiTransfer_Gamma2_8;
+      break;
+    default:
+      DLOGW_IF(kTagClient, "Unsupported Transfer Request = %d", transfer);
+      supported_transfer = false;
+  }
+  return supported_transfer;
+} 
+
+bool GetRange(const int32_t &dataspace, QtiColorRange *color_range) {
+  auto range = dataspace & HAL_DATASPACE_RANGE_MASK;
+  switch (range) {
+    case HAL_DATASPACE_RANGE_FULL:
+      *color_range = QtiColorRange::QtiRange_Full;
+      break;
+    case HAL_DATASPACE_RANGE_LIMITED:
+      *color_range = QtiColorRange::QtiRange_Limited;
+      break;
+    case HAL_DATASPACE_RANGE_EXTENDED:
+      *color_range = QtiColorRange::QtiRange_Extended;
+      break;
+    default:
+      DLOGW_IF(kTagClient, "Unsupported Range Request = %d", range);
+      return false;
+  }
+  return true;
+}
+
+// Retrieve ColorMetaData from android_data_space_t (STANDARD|TRANSFER|RANGE)
+bool HWCBufferAllocator::GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace) {
+  bool valid = false;
+  valid = GetColorPrimary(int_dataspace, &(dataspace->colorPrimaries));
+  if (valid) {
+    valid = GetTransfer(int_dataspace, &(dataspace->transfer));
+  }
+  if (valid) {
+    valid = GetRange(int_dataspace, &(dataspace->range));
+  }
+
+  return valid;
+}
+
+LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const int32_t flags,
+                                         const int64_t compression_type) {
+  LayerBufferFormat format = kFormatInvalid;
+  if (flags & SnapMetadataType::IS_UBWC) {
+    switch (source) {
+      case static_cast<int>(PixelFormat::RGBA_8888):
+        if (compression_type == QTI_COMPRESSION_UBWC_LOSSY_2_TO_1) {
+          format = kFormatRGBA8888UbwcLossy2To1;
+        } else if (compression_type == QTI_COMPRESSION_UBWC_LOSSY_8_TO_5) {
+          format = kFormatRGBA8888UbwcLossy8To5;
+        } else {
+          format = kFormatRGBA8888Ubwc;
+        }
+        break;
+      case static_cast<int>(PixelFormat::RGBX_8888):
+        format = kFormatRGBX8888Ubwc;
+        break;
+      case HAL_PIXEL_FORMAT_BGR_565:
+        format = kFormatBGR565Ubwc;
+        break;
+      case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
+      case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+      case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
+        format = kFormatYCbCr420SPVenusUbwc;
+        break;
+      case static_cast<int>(PixelFormat::RGBA_1010102):
+        format = kFormatRGBA1010102Ubwc;
+        break;
+      case HAL_PIXEL_FORMAT_RGBX_1010102:
+        format = kFormatRGBX1010102Ubwc;
+        break;
+      case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
+        format = kFormatYCbCr420TP10Ubwc;
+        break;
+      case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
+        format = kFormatYCbCr420P010Ubwc;
+        break;
+      case HAL_PIXEL_FORMAT_RGBA_FP16:
+        format = kFormatRGBA16161616FUbwc;
+        break;
+      default:
+        DLOGW("Unsupported format type for UBWC: %d", source);
+        return kFormatInvalid;
+    }
+    return format;
+  }
+
+  switch (source) {
+    case static_cast<int>(PixelFormat::RGBA_8888):
+      format = kFormatRGBA8888;
+      break;
+    case HAL_PIXEL_FORMAT_RGBA_5551:
+      format = kFormatRGBA5551;
+      break;
+    case HAL_PIXEL_FORMAT_RGBA_4444:
+      format = kFormatRGBA4444;
+      break;
+    case static_cast<int>(PixelFormat::BGRA_8888):
+      format = kFormatBGRA8888;
+      break;
+    case static_cast<int>(PixelFormat::RGBX_8888):
+      format = kFormatRGBX8888;
+      break;
+    case HAL_PIXEL_FORMAT_BGRX_8888:
+      format = kFormatBGRX8888;
+      break;
+    case static_cast<int>(PixelFormat::RGB_888):
+      format = kFormatRGB888;
+      break;
+    case HAL_PIXEL_FORMAT_BGR_888:
+      format = kFormatBGR888;
+      break;
+    case static_cast<int>(PixelFormat::RGB_565):
+      format = kFormatRGB565;
+      break;
+    case HAL_PIXEL_FORMAT_BGR_565:
+      format = kFormatBGR565;
+      break;
+    case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
+      format = kFormatYCbCr420SemiPlanarVenus;
+      break;
+    case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
+      format = kFormatYCrCb420SemiPlanarVenus;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+      format = kFormatYCbCr420SPVenusUbwc;
+      break;
+    case static_cast<int>(PixelFormat::YV12):
+      format = kFormatYCrCb420PlanarStride16;
+      break;
+    case static_cast<int>(PixelFormat::YCRCB_420_SP):
+      format = kFormatYCrCb420SemiPlanar;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP:
+      format = kFormatYCbCr420SemiPlanar;
+      break;
+    case static_cast<int>(PixelFormat::YCBCR_422_SP):
+      format = kFormatYCbCr422H2V1SemiPlanar;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_422_I:
+      format = kFormatYCbCr422H2V1Packed;
+      break;
+    case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+      format = kFormatCbYCrY422H2V1Packed;
+      break;
+    case static_cast<int>(PixelFormat::RGBA_1010102):
+      format = kFormatRGBA1010102;
+      break;
+    case HAL_PIXEL_FORMAT_ARGB_2101010:
+      format = kFormatARGB2101010;
+      break;
+    case HAL_PIXEL_FORMAT_RGBX_1010102:
+      format = kFormatRGBX1010102;
+      break;
+    case HAL_PIXEL_FORMAT_XRGB_2101010:
+      format = kFormatXRGB2101010;
+      break;
+    case HAL_PIXEL_FORMAT_BGRA_1010102:
+      format = kFormatBGRA1010102;
+      break;
+    case HAL_PIXEL_FORMAT_ABGR_2101010:
+      format = kFormatABGR2101010;
+      break;
+    case HAL_PIXEL_FORMAT_BGRX_1010102:
+      format = kFormatBGRX1010102;
+      break;
+    case HAL_PIXEL_FORMAT_XBGR_2101010:
+      format = kFormatXBGR2101010;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
+      format = kFormatYCbCr420P010;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
+      format = kFormatYCbCr420TP10Ubwc;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
+      format = kFormatYCbCr420P010Ubwc;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
+      format = kFormatYCbCr420P010Venus;
+      break;
+    case static_cast<int>(PixelFormat::RGBA_FP16):
+      format = kFormatRGBA16161616F;
+      break;
+    case static_cast<int>(APixelFormat::R_8):
+      format = kFormatA8;
+      break;
+    default:
+      DLOGW("Unsupported format type = %d", source);
+      return kFormatInvalid;
+  }
+  return format;
+}
+
+DisplayError HWCBufferAllocator::ColorMetadataToDataspace(Dataspace ds, uint32_t *int_dataspace) {
+  AIDL_Dataspace primaries, transfer, range = AIDL_Dataspace::UNKNOWN;
+
+  switch (ds.colorPrimaries) {
+    case QtiColorPrimaries::QtiColorPrimaries_BT709_5:
+      primaries = AIDL_Dataspace::STANDARD_BT709;
+      break;
+    // TODO(user): verify this is equivalent
+    case QtiColorPrimaries::QtiColorPrimaries_BT470_6M:
+      primaries = AIDL_Dataspace::STANDARD_BT470M;
+      break;
+    case QtiColorPrimaries::QtiColorPrimaries_BT601_6_625:
+      primaries = AIDL_Dataspace::STANDARD_BT601_625;
+      break;
+    case QtiColorPrimaries::QtiColorPrimaries_BT601_6_525:
+      primaries = AIDL_Dataspace::STANDARD_BT601_525;
+      break;
+    case QtiColorPrimaries::QtiColorPrimaries_GenericFilm:
+      primaries = AIDL_Dataspace::STANDARD_FILM;
+      break;
+    case QtiColorPrimaries::QtiColorPrimaries_BT2020:
+      primaries = AIDL_Dataspace::STANDARD_BT2020;
+      break;
+    case QtiColorPrimaries::QtiColorPrimaries_AdobeRGB:
+      primaries = AIDL_Dataspace::STANDARD_ADOBE_RGB;
+      break;
+    case QtiColorPrimaries::QtiColorPrimaries_DCIP3:
+      primaries = AIDL_Dataspace::STANDARD_DCI_P3;
+      break;
+    default:
+      return kErrorNotSupported;
+
+       /*QtiColorPrimaries::QtiColorPrimaries_SMPTE_240M;
+       QtiColorPrimaries::QtiColorPrimaries_SMPTE_ST428;
+       QtiColorPrimaries::QtiColorPrimaries_EBU3213;*/
+
+  }
+
+  switch (ds.transfer) {
+    case QtiGammaTransfer::QtiTransfer_sRGB:
+      transfer = AIDL_Dataspace::TRANSFER_SRGB;
+      break;
+    case QtiGammaTransfer::QtiTransfer_Gamma2_2:
+      transfer = AIDL_Dataspace::TRANSFER_GAMMA2_2;
+      break;
+    case QtiGammaTransfer::QtiTransfer_Gamma2_8:
+      transfer = AIDL_Dataspace::TRANSFER_GAMMA2_8;
+      break;
+    case QtiGammaTransfer::QtiTransfer_SMPTE_170M:
+      transfer = AIDL_Dataspace::TRANSFER_SMPTE_170M;
+      break;
+    case QtiGammaTransfer::QtiTransfer_Linear:
+      transfer = AIDL_Dataspace::TRANSFER_LINEAR;
+      break;
+    case QtiGammaTransfer::QtiTransfer_SMPTE_ST2084:
+      transfer = AIDL_Dataspace::TRANSFER_ST2084;
+      break;
+    case QtiGammaTransfer::QtiTransfer_HLG:
+      transfer = AIDL_Dataspace::TRANSFER_HLG;
+      break;
+    default:
+      return kErrorNotSupported;
+
+      /*QtiGammaTransfer::QtiTransfer_SMPTE_240M
+      QtiGammaTransfer::QtiTransfer_Log
+      QtiGammaTransfer::QtiTransfer_Log_Sqrt
+      QtiGammaTransfer::QtiTransfer_XvYCC
+      QtiGammaTransfer::QtiTransfer_BT1361
+      QtiGammaTransfer::QtiTransfer_sYCC
+      QtiGammaTransfer::QtiTransfer_BT2020_2_1
+      QtiGammaTransfer::QtiTransfer_BT2020_2_2
+      QtiGammaTransfer::QtiTransfer_ST_428*/
+
+  }
+
+  switch (ds.range) {
+    case QtiColorRange::QtiRange_Full:
+      range = AIDL_Dataspace::RANGE_FULL;
+      break;
+    case QtiColorRange::QtiRange_Limited:
+      range = AIDL_Dataspace::RANGE_LIMITED;
+      break;
+    case QtiColorRange::QtiRange_Extended:
+      range = AIDL_Dataspace::RANGE_EXTENDED;
+      break;
+    default:
+      return kErrorNotSupported;
+  }
+
+  *int_dataspace = ((uint32_t)primaries | (uint32_t)transfer | (uint32_t)range);
+  return kErrorNone;
+}
+
+int32_t HWCBufferAllocator::TranslateFromLegacyDataspace(const int32_t &legacy_ds) {
+  int32_t dataspace = legacy_ds;
+
+  if (dataspace & 0xffff) {
+    switch (dataspace & 0xffff) {
+      case HAL_DATASPACE_SRGB:
+        dataspace = HAL_DATASPACE_V0_SRGB;
+        break;
+      case HAL_DATASPACE_JFIF:
+        dataspace = HAL_DATASPACE_V0_JFIF;
+        break;
+      case HAL_DATASPACE_SRGB_LINEAR:
+        dataspace = HAL_DATASPACE_V0_SRGB_LINEAR;
+        break;
+      case HAL_DATASPACE_BT601_625:
+        dataspace = HAL_DATASPACE_V0_BT601_625;
+        break;
+      case HAL_DATASPACE_BT601_525:
+        dataspace = HAL_DATASPACE_V0_BT601_525;
+        break;
+      case HAL_DATASPACE_BT709:
+        dataspace = HAL_DATASPACE_V0_BT709;
+        break;
+      default:
+        // unknown legacy dataspace
+        DLOGW_IF(kTagClient, "Unsupported dataspace type %d", dataspace);
+    }
+  }
+
+  if (dataspace == 0) {
+    dataspace = HAL_DATASPACE_V0_SRGB;
+  }
+
+  return dataspace;
 }
 
 }  // namespace sdm

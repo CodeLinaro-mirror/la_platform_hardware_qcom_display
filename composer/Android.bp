@@ -18,6 +18,7 @@ cc_binary {
         "libimapper_providerutils",
         "snapalloc_interface_headers",
         "common_interface_headers",
+        "sdmclient_interface_headers",
     ],
 
     cflags: [
@@ -63,6 +64,7 @@ cc_binary {
         "libtinyxml2",
         "libmapperutils",
         "libvndksupport",
+        "libsdmclient",
     ],
 
     static_libs: [

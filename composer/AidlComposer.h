@@ -15,7 +15,8 @@
  */
 
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -36,8 +37,8 @@ namespace display {
 namespace composer3 {
 using aidl::android::hardware::graphics::composer3::BnComposer;
 using aidl::android::hardware::graphics::composer3::Capability;
-using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
 using aidl::android::hardware::graphics::composer3::IComposerClient;
+using ::android::hardware::hidl_vec;
 
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 
@@ -60,10 +61,16 @@ class AidlComposer : public BnComposer {
   void onClientDestroyed();
 
   shared_ptr<QtiComposer3Client> extensions_ = nullptr;
-  HWCSession *hwc_session_ = nullptr;
   std::mutex mClientMutex;
   bool mClientAlive GUARDED_BY(mClientMutex) = false;
   std::condition_variable mClientDestroyedCondition;
+
+  SDMDisplayCapsIntf *caps_ = nullptr;
+  SDMDisplaySettingsIntf *settings_ = nullptr;
+  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
+  SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
+  SDMDisplayLayerBuilderIntf *layers_ = nullptr;
+  SDMDisplaySideBandIntf *sideband_ = nullptr;
 };
 
 }  // namespace composer3

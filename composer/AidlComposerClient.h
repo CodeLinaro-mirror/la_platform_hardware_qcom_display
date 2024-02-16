@@ -15,7 +15,8 @@
  */
 
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -27,10 +28,32 @@
 #include <string>
 #include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
+#include <aidl/vendor/qti/hardware/display/config/BnDisplayConfig.h>
+#include <aidl/vendor/qti/hardware/display/config/BnDisplayConfigCallback.h>
 #include <aidlcommonsupport/NativeHandle.h>
-#include "hwc_session.h"
+#include <hidl/HidlSupport.h>
+#include <IQClient.h>
+#include <QService.h>
+#include <SnapHandle.h>
+#include <Error.h>
+
+#include <core/buffer_allocator.h>
+
 #include "AidlComposerHandleImporter.h"
 #include "AidlComposerServiceWriter.h"
+#include "hwc_common.h"
+#include "hwc_buffer_allocator.h"
+
+#include "sdm_display_intf_caps.h"
+#include "sdm_display_intf_settings.h"
+#include "sdm_display_intf_lifecycle.h"
+#include "sdm_display_intf_drawcycle.h"
+#include "sdm_display_intf_layer_builder.h"
+#include "sdm_display_intf_sideband.h"
+
+#include "sdm_interface_factory.h"
+#include "sdm_compositor_cb_intf.h"
+#include "QServiceBackend.h"
 
 namespace aidl {
 namespace vendor {
@@ -92,14 +115,35 @@ using aidl::android::hardware::graphics::composer3::VirtualDisplay;
 using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeConstraints;
 using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeTimeline;
 using aidl::android::hardware::graphics::composer3::ZOrder;
+using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
+using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using ::android::hardware::hidl_handle;
 using ndk::ScopedAStatus;
 using ndk::SpAIBinder;
 
 using sdm::Fence;
-using sdm::HWCSession;
 using sdm::HWC3::Error;
 using std::shared_ptr;
+
+using sdm::HWCBufferAllocator;
+
+using sdm::SDMCompositorCbIntf;
+using sdm::SDMDisplayCapsIntf;
+using sdm::SDMDisplayDrawCycleIntf;
+using sdm::SDMDisplayLifeCycleIntf;
+using sdm::SDMDisplaySettingsIntf;
+using sdm::SDMDisplaySideBandIntf;
+using sdm::SDMInterfaceFactory;
+using sdm::SDMVsyncPeriodChangeTimeline;
+using sdm::QServiceBackend;
+
+using sdm::DisplayConfigVariableInfo;
+using sdm::SDMDisplayLayerBuilderIntf;
+
+using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
+using SnapError = ::vendor::qti::hardware::display::snapalloc::Error;
+using ::vendor::qti::hardware::display::snapalloc::snap_handle_create;
+using ::vendor::qti::hardware::display::snapalloc::snap_handle_delete;
 
 class BufferCacheEntry {
  public:
@@ -109,26 +153,45 @@ class BufferCacheEntry {
   BufferCacheEntry(const BufferCacheEntry &other) = delete;
   BufferCacheEntry &operator=(const BufferCacheEntry &other) = delete;
 
-  BufferCacheEntry &operator=(buffer_handle_t handle);
+  BufferCacheEntry &operator=(SnapHandle *handle);
   ~BufferCacheEntry();
 
-  buffer_handle_t getHandle() const { return mHandle; }
+  SnapHandle *getHandle() const { return mHandle; }
 
  private:
   void clear();
 
-  buffer_handle_t mHandle;
+  SnapHandle *mHandle = nullptr;
 };
 
-class AidlComposerClient : public BnComposerClient {
+class AidlComposerClient : public BnComposerClient,
+                           public qClient::BnQClient,
+                           public SDMCompositorCbIntf {
  public:
   AidlComposerClient(){};
   virtual ~AidlComposerClient();
-  bool init();
+  bool init(SDMDisplayCapsIntf *caps,
+            SDMDisplaySettingsIntf *settings,
+            SDMDisplayLifeCycleIntf *lifecycle,
+            SDMDisplayDrawCycleIntf *drawcycle,
+            SDMDisplayLayerBuilderIntf *layers,
+            SDMDisplaySideBandIntf *sideband);
+
+  // SDM compositor callback overrides
+  void OnHotplug(uint64_t in_display, bool in_connected) override;
+  void OnRefresh(uint64_t in_display) override;
+  void OnVsync(uint64_t in_display, int64_t in_timestamp, int32_t in_vsync_period_nanos) override;
+  void OnSeamlessPossible(uint64_t in_display) override;
+  void OnVsyncIdle(uint64_t in_display) override;
+  void OnVsyncPeriodTimingChanged(uint64_t in_display,
+                                  const SDMVsyncPeriodChangeTimeline &in_updated_timeline);
 
   void setOnClientDestroyed(std::function<void()> onClientDestroyed) {
     mOnClientDestroyed = onClientDestroyed;
   }
+
+  ::android::status_t notifyCallback(uint32_t command, const ::android::Parcel *input_parcel,
+                                     ::android::Parcel *output_parcel);
 
   // Methods from aidl::android::hardware::graphics::composer3::IComposerClient
   ScopedAStatus createLayer(int64_t in_display, int32_t in_buffer_slot_count,
@@ -147,11 +210,13 @@ class AidlComposerClient : public BnComposerClient {
                                              std::vector<float> *aidl_return) override;
   ScopedAStatus getDisplayAttribute(int64_t in_display, int32_t in_config,
                                     DisplayAttribute in_attribute, int32_t *aidl_return) override;
+
   ScopedAStatus getDisplayConfigurations(int64_t in_display, int32_t maxFrameIntervalNs,
                                          std::vector<DisplayConfiguration> *outConfigs) override;
   ScopedAStatus notifyExpectedPresent(int64_t displayId,
                                       const ClockMonotonicTimestamp &expectedPresentTime,
                                       int32_t frameIntervalNs) override;
+
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
                                        std::vector<DisplayCapability> *aidl_return) override;
   ScopedAStatus getDisplayConfigs(int64_t in_display, std::vector<int32_t> *aidl_return) override;
@@ -212,20 +277,8 @@ class AidlComposerClient : public BnComposerClient {
   ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t in_display,
                                                           bool in_enabled) override;
 
-  // Methods for RegisterCallback
-  void EnableCallback(bool enable);
-  static void OnHotplug(void *callback_data, int64_t in_display, bool in_connected);
-  static void OnRefresh(void *callback_data, int64_t in_display);
-  static void OnSeamlessPossible(void *callback_data, int64_t in_display);
-  static void OnVsync(void *callback_data, int64_t in_display, int64_t in_timestamp,
-                      int32_t in_vsync_period_nanos);
-  static void OnVsyncPeriodTimingChanged(void *callback_data, int64_t in_display,
-                                         const VsyncPeriodChangeTimeline &in_updated_timeline);
-  static void OnVsyncIdle(void *callback_data, int64_t in_display);
-
   // Methods for ConcurrentWriteBack
-  Error getDisplayReadbackBuffer(int64_t display, const native_handle_t *rawHandle,
-                                 const native_handle_t **outHandle);
+  Error getDisplayReadbackBuffer(int64_t display, const SnapHandle *rawHandle);
 
   // Methods for extensions (QtiComposer3Client)
   ScopedAStatus executeQtiCommands(const std::vector<QtiDisplayCommand> &in_commands,
@@ -235,6 +288,9 @@ class AidlComposerClient : public BnComposerClient {
   SpAIBinder createBinder() override;
 
  private:
+  std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
+  HWCBufferAllocator buffer_allocator_{};
+
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;
     // the handle is a sideband stream handle, not a buffer handle
@@ -351,36 +407,42 @@ class AidlComposerClient : public BnComposerClient {
     Error lookupBufferCacheEntryLocked(int64_t display, int64_t layer, BufferCache cache,
                                        uint32_t slot, BufferCacheEntry **outEntry);
     Error lookupBuffer(int64_t display, int64_t layer, BufferCache cache, uint32_t slot,
-                       bool useCache, buffer_handle_t handle, buffer_handle_t *outHandle);
+                       bool useCache, SnapHandle **handle);
     Error updateBuffer(int64_t display, int64_t layer, BufferCache cache, uint32_t slot,
-                       bool useCache, buffer_handle_t handle);
+                       bool useCache, SnapHandle *handle);
 
-    Error lookupLayerSidebandStream(int64_t display, int64_t layer, buffer_handle_t handle,
-                                    buffer_handle_t *outHandle) {
-      return lookupBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle,
-                          outHandle);
+    Error lookupLayerSidebandStream(int64_t display, int64_t layer, SnapHandle *handle) {
+      return lookupBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, &handle);
     }
-    Error updateLayerSidebandStream(int64_t display, int64_t layer, buffer_handle_t handle) {
+    Error updateLayerSidebandStream(int64_t display, int64_t layer, SnapHandle *handle) {
       return updateBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle);
     }
     Error postPresentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
     Error postValidateDisplay(int64_t display, uint32_t &types_count, uint32_t &reqs_count);
+
+    void GetSDMRectFromRect(const Rect *rect, sdm::SDMRegion *region) {
+      for (int i = 0; i < region->num_rects; i++) {
+        sdm::SDMRect new_rec = {rect[i].left, rect[i].top, rect[i].right, rect[i].bottom};
+        region->rects.push_back(new_rec);
+      }
+    }
   };
 
-  HWCSession *hwc_session_ = nullptr;
+  SDMDisplayCapsIntf *caps_ = nullptr;
+  SDMDisplaySettingsIntf *settings_ = nullptr;
+  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
+  SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
+  SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
+  SDMDisplaySideBandIntf *sideband_ = nullptr;
+
+  QServiceBackend *qservice_ = nullptr;
+
   std::shared_ptr<IComposerCallback> callback_ = nullptr;
   std::mutex m_command_mutex_;
   std::mutex m_display_data_mutex_;
   std::unique_ptr<CommandEngine> mCommandEngine;
   std::function<void()> mOnClientDestroyed;
   std::unordered_map<sdm::Display, DisplayData> mDisplayData;
-
-  sdm::onHotplug_func_t hotplug_callback_ = nullptr;
-  sdm::onRefresh_func_t refresh_callback_ = nullptr;
-  sdm::onVsync_func_t vsync_callback_ = nullptr;
-  sdm::onSeamlessPossible_func_t seamless_possible_callback_ = nullptr;
-  sdm::onVsyncPeriodTimingChanged_func_t vsync_changed_callback_ = nullptr;
-  sdm::onVsyncIdle_func_t vsync_idle_callback_ = nullptr;
 };
 
 }  // namespace composer3

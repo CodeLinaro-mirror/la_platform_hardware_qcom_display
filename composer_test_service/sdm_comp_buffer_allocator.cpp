@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -249,6 +249,10 @@ cleanup:
     mapper_->freeBuffer(hnd);
   }
   return err;
+}
+
+int SDMCompBufferAllocator::GetCompressionType(void *buf, int64_t &compression_type) {
+  return kErrorNone;
 }
 
 int SDMCompBufferAllocator::FreeBuffer(BufferInfo *buffer_info) {
@@ -566,9 +570,8 @@ int SDMCompBufferAllocator::GetBufferGeometry(void *buf, int32_t &slice_width, i
   return kErrorParameters;
 }
 
-int SDMCompBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, int *width,
-                                                int *height) {
-  void *hnd = const_cast<native_handle_t *>(handle);
+int SDMCompBufferAllocator::GetCustomWidthAndHeight(void *handle, int *width, int *height) {
+  void *hnd = handle;
 
   gralloc::GetMetaDataValue(hnd, QTI_ALIGNED_WIDTH_IN_PIXELS, width);
   gralloc::GetMetaDataValue(hnd, QTI_ALIGNED_HEIGHT_IN_PIXELS, height);
@@ -890,8 +893,8 @@ int SDMCompBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
   return kErrorNone;
 }
 
-int SDMCompBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<Fence> acquire_fence,
-                                  void **base_ptr) {
+int SDMCompBufferAllocator::MapBuffer(void *handle, shared_ptr<Fence> acquire_fence,
+                                      void **base_ptr) {
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGW("Could not get gralloc instance");
@@ -907,7 +910,7 @@ int SDMCompBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<
     acquire_fence_handle = h;
   }
 
-  auto hnd = const_cast<native_handle_t *>(handle);
+  auto hnd = handle;
   *base_ptr = NULL;
   const IMapper::Rect access_region = {.left = 0, .top = 0, .width = 0, .height = 0};
   mapper_->lock(reinterpret_cast<void *>(hnd), (uint64_t)BufferUsage::CPU_READ_OFTEN, access_region,
@@ -925,10 +928,10 @@ int SDMCompBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<
   return kErrorNone;
 }
 
-int SDMCompBufferAllocator::UnmapBuffer(const native_handle_t *handle, int *release_fence) {
+int SDMCompBufferAllocator::UnmapBuffer(void *handle, int *release_fence) {
   int err = kErrorNone;
   *release_fence = -1;
-  auto hnd = const_cast<native_handle_t *>(handle);
+  auto hnd = handle;
   mapper_->unlock(reinterpret_cast<void *>(hnd),
                   [&](const auto &_error, const auto &_release_fence) {
                     if (_error != Error::NONE) {

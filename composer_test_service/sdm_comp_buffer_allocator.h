@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -70,7 +70,7 @@ class SDMCompBufferAllocator : public BufferAllocator {
   int FreeBuffer(BufferInfo *buffer_info);
   uint32_t GetBufferSize(BufferInfo *buffer_info);
 
-  int GetCustomWidthAndHeight(const native_handle_t *handle, int *width, int *height);
+  int GetCustomWidthAndHeight(void *handle, int *width, int *height);
   int GetAlignedWidthAndHeight(int width, int height, int format, uint32_t alloc_type,
                                int *aligned_width, int *aligned_height);
   int GetAllocatedBufferInfo(const BufferConfig &buffer_config,
@@ -78,8 +78,8 @@ class SDMCompBufferAllocator : public BufferAllocator {
   int GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4],
                                uint32_t offset[4], uint32_t *num_planes);
   int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
-  int MapBuffer(const native_handle_t *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
-  int UnmapBuffer(const native_handle_t *handle, int *release_fence);
+  int MapBuffer(void *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
+  int UnmapBuffer(void *handle, int *release_fence);
   int GetHeight(void *buf, uint32_t &height);
   int GetWidth(void *buf, uint32_t &width);
   int GetUnalignedHeight(void *buf, uint32_t &height);
@@ -93,6 +93,16 @@ class SDMCompBufferAllocator : public BufferAllocator {
   int GetBufferType(void *buf, uint32_t &buffer_type);
   int GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height);
   int GetCustomContentMetadata(void *buf, CustomContentMetadata *dest);
+  int GetCompressionType(void *buf, int64_t &compression_type);
+
+  // callbacks from sdmclient
+  bool GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace){return 0;}
+  LayerBufferFormat GetSDMFormat(const int32_t &source, const int32_t flags,
+                                         const int64_t compression_type) { return kFormatInvalid;}
+  DisplayError ColorMetadataToDataspace(Dataspace ds, uint32_t *int_dataspace) {return kErrorNone;}
+  int32_t TranslateFromLegacyDataspace(const int32_t &legacy_ds) {return 0;}
+  int GetMetadataValue(void *buf, vendor_qti_hardware_display_common_MetadataType type, void *dest, size_t dest_size) {return 0;}
+
 
  private:
   int GetGrallocInstance();

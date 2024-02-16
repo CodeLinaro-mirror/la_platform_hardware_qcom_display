@@ -28,13 +28,19 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+#include <QtiGralloc.h>
+
 #include "DisplayConfigAIDL.h"
+
+#include "sdm_interface_factory.h"
+#include "display_properties.h"
+
+using sdm::SDMInterfaceFactory;
 
 using ::aidl::android::hardware::common::NativeHandle;
 using sdm::Locker;
@@ -46,14 +52,17 @@ namespace hardware {
 namespace display {
 namespace config {
 
-DisplayConfigAIDL::DisplayConfigAIDL() : hwc_session_(HWCSession::GetInstance()) {}
+DisplayConfigAIDL::DisplayConfigAIDL() {
+  SDMInterfaceFactory *sdm_factory = nullptr;
+  sdm_factory = sdm::GetSDMInterfaceFactory();
 
-DisplayConfigAIDL::DisplayConfigAIDL(HWCSession *hwc_session) {
-  if (!hwc_session) {
-    ALOGE("%s: hwc_session:%p is invalid", __FUNCTION__, hwc_session);
-  } else {
-    hwc_session_ = hwc_session;
-  }
+  caps_ = sdm_factory->CreateCapsIntf();
+  settings_ = sdm_factory->CreateSettingsIntf();
+  lifecycle_ = sdm_factory->CreateLifeCycleIntf();
+  lifecycle_->RegisterSideBandCallback(this);
+  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
+  sideband_ = sdm_factory->CreateSideBandIntf();
+  layer_builder_ = sdm_factory->CreateLayerBuilderIntf();
 }
 
 int MapDisplayType(DisplayType dpy) {
@@ -77,52 +86,46 @@ int MapDisplayType(DisplayType dpy) {
   return -EINVAL;
 }
 
-sdm::HWCDisplay::DisplayStatus MapExternalStatus(ExternalStatus status) {
+sdm::SDMDisplayStatus MapExternalStatus(ExternalStatus status) {
   switch (status) {
     case ExternalStatus::OFFLINE:
-      return sdm::HWCDisplay::kDisplayStatusOffline;
+      return sdm::SDMDisplayStatus::kDisplayStatusOffline;
 
     case ExternalStatus::ONLINE:
-      return sdm::HWCDisplay::kDisplayStatusOnline;
+      return sdm::SDMDisplayStatus::kDisplayStatusOnline;
 
     case ExternalStatus::PAUSE:
-      return sdm::HWCDisplay::kDisplayStatusPause;
+      return sdm::SDMDisplayStatus::kDisplayStatusPause;
 
     case ExternalStatus::RESUME:
-      return sdm::HWCDisplay::kDisplayStatusResume;
+      return sdm::SDMDisplayStatus::kDisplayStatusResume;
 
     default:
       break;
   }
 
-  return sdm::HWCDisplay::kDisplayStatusInvalid;
+  return sdm::SDMDisplayStatus::kDisplayStatusInvalid;
 }
 
-bool WaitForResourceNeeded(sdm::PowerMode prev_mode, sdm::PowerMode new_mode) {
-  return ((prev_mode == sdm::PowerMode::OFF) &&
-          (new_mode == sdm::PowerMode::ON || new_mode == sdm::PowerMode::DOZE));
+bool WaitForResourceNeeded(sdm::SDMPowerMode prev_mode, sdm::SDMPowerMode new_mode) {
+  return ((prev_mode == sdm::SDMPowerMode::POWER_MODE_OFF) &&
+          (new_mode == sdm::SDMPowerMode::POWER_MODE_ON ||
+           new_mode == sdm::SDMPowerMode::POWER_MODE_DOZE));
 }
 
 ScopedAStatus DisplayConfigAIDL::isDisplayConnected(DisplayType dpy, bool *connected) {
   int disp_id = MapDisplayType(dpy);
-  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
 
-  if (disp_idx == -1) {
-    ALOGE("%s: Invalid display = %d", __FUNCTION__, disp_id);
-    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-  } else {
-    SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[disp_idx]);
-    *connected = hwc_session_->hwc_display_[disp_idx];
-  }
+  *connected = lifecycle_->IsDisplayConnected(disp_id);
 
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::setDisplayStatus(DisplayType dpy, ExternalStatus status) {
   int disp_id = MapDisplayType(dpy);
-  sdm::HWCDisplay::DisplayStatus external_status = MapExternalStatus(status);
+  sdm::SDMDisplayStatus external_status = MapExternalStatus(status);
 
-  if (hwc_session_->SetDisplayStatus(disp_id, external_status) != 0) {
+  if (lifecycle_->SetDisplayStatus(disp_id, external_status) != 0) {
     ALOGW("%s: Setting status:%d to display:%d failed", __FUNCTION__, status, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -131,25 +134,23 @@ ScopedAStatus DisplayConfigAIDL::setDisplayStatus(DisplayType dpy, ExternalStatu
 }
 
 ScopedAStatus DisplayConfigAIDL::configureDynRefreshRate(DynRefreshRateOp op, int refresh_rate) {
-  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[HWC_DISPLAY_PRIMARY]);
-  sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY];
-
-  if (!hwc_display) {
-    ALOGW("%s: Display = %d is not connected.", __FUNCTION__, HWC_DISPLAY_PRIMARY);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
+  sdm::SDMBuiltInDisplayOps ops;
+  int val = 0;
 
   switch (op) {
     case DynRefreshRateOp::DISABLE_METADATA:
-      hwc_display->Perform(sdm::HWCDisplayBuiltIn::SET_METADATA_DYN_REFRESH_RATE, false);
+      ops = sdm::SDMBuiltInDisplayOps::SET_METADATA_DYN_REFRESH_RATE;
+      val = false;
       break;
 
     case DynRefreshRateOp::ENABLE_METADATA:
-      hwc_display->Perform(sdm::HWCDisplayBuiltIn::SET_METADATA_DYN_REFRESH_RATE, true);
+      ops = sdm::SDMBuiltInDisplayOps::SET_METADATA_DYN_REFRESH_RATE;
+      val = true;
       break;
 
     case DynRefreshRateOp::SET_BINDER:
-      hwc_display->Perform(sdm::HWCDisplayBuiltIn::SET_BINDER_DYN_REFRESH_RATE, refresh_rate);
+      ops = sdm::SDMBuiltInDisplayOps::SET_BINDER_DYN_REFRESH_RATE;
+      val = refresh_rate;
       break;
 
     default:
@@ -157,12 +158,18 @@ ScopedAStatus DisplayConfigAIDL::configureDynRefreshRate(DynRefreshRateOp op, in
       return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
+  auto ret = settings_->ConfigureDynRefreshRate(ops, val);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Display = %d is not connected.", __FUNCTION__, sdm::HWC_DISPLAY_PRIMARY);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::getConfigCount(DisplayType dpy, int *count) {
-  int error = hwc_session_->GetConfigCount(MapDisplayType(dpy), (uint32_t *)count);
-  if (error == -EINVAL) {
+  auto error = lifecycle_->GetConfigCount(MapDisplayType(dpy), (uint32_t *)count);
+  if (error != sdm::kErrorNone) {
     ALOGW("%s: Failed to retrieve config count for display:%d", __FUNCTION__, dpy);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -173,8 +180,8 @@ ScopedAStatus DisplayConfigAIDL::getConfigCount(DisplayType dpy, int *count) {
 ScopedAStatus DisplayConfigAIDL::getActiveConfig(DisplayType dpy, int *config) {
   int disp_id = MapDisplayType(dpy);
 
-  int error = hwc_session_->GetActiveConfigIndex(disp_id, (uint32_t *)config);
-  if (error == -EINVAL) {
+  int error = drawcycle_->GetActiveConfigIndex(disp_id, (uint32_t *)config);
+  if (error != sdm::kErrorNone) {
     ALOGW("%s: Failed to retrieve the active config index for display:%d", __FUNCTION__, dpy);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -185,7 +192,7 @@ ScopedAStatus DisplayConfigAIDL::getActiveConfig(DisplayType dpy, int *config) {
 ScopedAStatus DisplayConfigAIDL::setActiveConfig(DisplayType dpy, int config) {
   int disp_id = MapDisplayType(dpy);
 
-  if (hwc_session_->SetActiveConfigIndex(disp_id, (uint32_t)config) == -EINVAL) {
+  if (drawcycle_->SetActiveConfigIndex(disp_id, (uint32_t)config) != sdm::kErrorNone) {
     ALOGW("%s: Failed to set active config index to display:%d", __FUNCTION__, dpy);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -195,30 +202,26 @@ ScopedAStatus DisplayConfigAIDL::setActiveConfig(DisplayType dpy, int config) {
 
 ScopedAStatus DisplayConfigAIDL::getDisplayAttributes(int config_index, DisplayType dpy,
                                                       Attributes *attributes) {
-  int error = -EINVAL;
+  auto error = sdm::kErrorNone;
   int disp_id = MapDisplayType(dpy);
-  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
 
-  if (disp_idx == -1) {
+  // TODO (aparmar): seq lk
+  sdm::DisplayConfigVariableInfo var_info{};
+  uint32_t group_id = -1;
+  error = settings_->GetDisplayAttributes(disp_id, config_index, &var_info, &group_id);
+
+  if (error != sdm::kErrorNone) {
     ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  } else {
-    SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[disp_idx]);
-    if (hwc_session_->hwc_display_[disp_idx]) {
-      sdm::DisplayConfigVariableInfo var_info;
-      error = hwc_session_->hwc_display_[disp_idx]->GetDisplayAttributesForConfig(INT(config_index),
-                                                                                  &var_info);
-      if (!error) {
-        attributes->vsyncPeriod = var_info.vsync_period_ns;
-        attributes->xRes = var_info.x_pixels;
-        attributes->yRes = var_info.y_pixels;
-        attributes->xDpi = var_info.x_dpi;
-        attributes->yDpi = var_info.y_dpi;
-        attributes->panelType = DisplayPortType::DEFAULT;
-        attributes->isYuv = var_info.is_yuv;
-      }
-    }
   }
+
+  attributes->vsyncPeriod = var_info.vsync_period_ns;
+  attributes->xRes = var_info.x_pixels;
+  attributes->yRes = var_info.y_pixels;
+  attributes->xDpi = var_info.x_dpi;
+  attributes->yDpi = var_info.y_dpi;
+  attributes->panelType = DisplayPortType::DEFAULT;
+  attributes->isYuv = var_info.is_yuv;
 
   return ScopedAStatus::ok();
 }
@@ -230,9 +233,9 @@ ScopedAStatus DisplayConfigAIDL::setPanelBrightness(int level) {
   }
 
   if (level == 0) {
-    hwc_session_->SetDisplayBrightness(HWC_DISPLAY_PRIMARY, -1.0f);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, -1.0f);
   } else {
-    hwc_session_->SetDisplayBrightness(HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f);
   }
   return ScopedAStatus::ok();
 }
@@ -240,7 +243,7 @@ ScopedAStatus DisplayConfigAIDL::setPanelBrightness(int level) {
 ScopedAStatus DisplayConfigAIDL::getPanelBrightness(int *level) {
   float brightness = -1.0f;
 
-  hwc_session_->getDisplayBrightness(HWC_DISPLAY_PRIMARY, &brightness);
+  settings_->GetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, &brightness);
   if (brightness == -1.0f) {
     *level = 0;
   } else {
@@ -251,28 +254,28 @@ ScopedAStatus DisplayConfigAIDL::getPanelBrightness(int *level) {
 }
 
 ScopedAStatus DisplayConfigAIDL::minHdcpEncryptionLevelChanged(DisplayType dpy, int min_enc_level) {
-  hwc_session_->MinHdcpEncryptionLevelChanged(MapDisplayType(dpy), min_enc_level);
+  drawcycle_->MinHdcpEncryptionLevelChanged(MapDisplayType(dpy), min_enc_level);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::refreshScreen() {
-  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[HWC_DISPLAY_PRIMARY]);
-  hwc_session_->callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
+  // TODO(aparmar): seq lk
+  drawcycle_->Refresh(sdm::HWC_DISPLAY_PRIMARY);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::controlPartialUpdate(DisplayType dpy, bool enable) {
-  hwc_session_->ControlPartialUpdate(MapDisplayType(dpy), enable);
+  settings_->ControlPartialUpdate(MapDisplayType(dpy), enable);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::toggleScreenUpdate(bool on) {
-  hwc_session_->ToggleScreenUpdate(on);
+  settings_->ToggleScreenUpdate(on);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::setIdleTimeout(int value) {
-  hwc_session_->SetIdleTimeout(value);
+  settings_->SetIdleTimeout(value);
   return ScopedAStatus::ok();
 }
 
@@ -281,28 +284,15 @@ ScopedAStatus DisplayConfigAIDL::getHDRCapabilities(DisplayType dpy, HDRCapsPara
 
   do {
     int disp_id = MapDisplayType(dpy);
-    int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
-    if (disp_idx == -1) {
-      ALOGE("Invalid display = %d", disp_id);
-      break;
-    }
-
-    SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-    sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[disp_idx];
-    if (!hwc_display) {
-      ALOGW("Display = %d is not connected.", disp_idx);
-      error = -ENODEV;
-      break;
-    }
 
     // query number of hdr types
     uint32_t out_num_types = 0;
     float out_max_luminance = 0.0f;
     float out_max_average_luminance = 0.0f;
     float out_min_luminance = 0.0f;
-    if (hwc_display->GetHdrCapabilities(&out_num_types, nullptr, &out_max_luminance,
-                                        &out_max_average_luminance,
-                                        &out_min_luminance) != Error::None) {
+    if (caps_->GetHdrCapabilities(disp_id, &out_num_types, nullptr, &out_max_luminance,
+                                  &out_max_average_luminance,
+                                  &out_min_luminance) != sdm::kErrorNone) {
       break;
     }
     if (!out_num_types) {
@@ -313,9 +303,9 @@ ScopedAStatus DisplayConfigAIDL::getHDRCapabilities(DisplayType dpy, HDRCapsPara
     // query hdr caps
     caps->supportedHdrTypes.resize(out_num_types);
 
-    if (hwc_display->GetHdrCapabilities(&out_num_types, caps->supportedHdrTypes.data(),
-                                        &out_max_luminance, &out_max_average_luminance,
-                                        &out_min_luminance) == Error::None) {
+    if (caps_->GetHdrCapabilities(disp_id, &out_num_types, caps->supportedHdrTypes.data(),
+                                  &out_max_luminance, &out_max_average_luminance,
+                                  &out_min_luminance) == sdm::kErrorNone) {
       error = 0;
     }
   } while (false);
@@ -324,45 +314,44 @@ ScopedAStatus DisplayConfigAIDL::getHDRCapabilities(DisplayType dpy, HDRCapsPara
 }
 
 ScopedAStatus DisplayConfigAIDL::setCameraLaunchStatus(int on) {
-  hwc_session_->SetCameraLaunchStatus(on);
+  sideband_->SetCameraLaunchStatus(on);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::displayBWTransactionPending(bool *status) {
-  hwc_session_->DisplayBWTransactionPending(status);
+  sideband_->DisplayBWTransactionPending(status);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::setDisplayAnimating(long display_id, bool animating) {
-  hwc_session_->CallDisplayFunction(display_id, &sdm::HWCDisplay::SetDisplayAnimating, animating);
+  sideband_->SetDisplayAnimating(display_id, animating);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::controlIdlePowerCollapse(bool enable, bool synchronous) {
-  hwc_session_->ControlIdlePowerCollapse(enable, synchronous);
+  sideband_->ControlIdlePowerCollapse(enable, synchronous);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::getWriteBackCapabilities(bool *is_wb_ubwc_supported) {
-  hwc_session_->IsWbUbwcSupported(is_wb_ubwc_supported);
+  caps_->IsWbUbwcSupported(is_wb_ubwc_supported);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::setDisplayDppsAdROI(int display_id, int h_start, int h_end,
                                                      int v_start, int v_end, int factor_in,
                                                      int factor_out) {
-  hwc_session_->SetDisplayDppsAdROI(display_id, h_start, h_end, v_start, v_end, factor_in,
-                                    factor_out);
+  settings_->SetDisplayDppsAdROI(display_id, h_start, h_end, v_start, v_end, factor_in, factor_out);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::updateVSyncSourceOnPowerModeOff() {
-  hwc_session_->update_vsync_on_power_off_ = true;
+  settings_->UpdateVSyncSourceOnPowerModeOff();
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::updateVSyncSourceOnPowerModeDoze() {
-  hwc_session_->update_vsync_on_doze_ = true;
+  settings_->UpdateVSyncSourceOnPowerModeDoze();
   return ScopedAStatus::ok();
 }
 
@@ -377,23 +366,13 @@ ScopedAStatus DisplayConfigAIDL::isPowerModeOverrideSupported(int disp_id, bool 
 }
 
 ScopedAStatus DisplayConfigAIDL::isHDRSupported(int disp_id, bool *supported) {
-  if (disp_id < 0 || disp_id >= sdm::HWCCallbacks::kNumDisplays) {
+  if (disp_id < 0 || disp_id >= sdm::kNumDisplays) {
     ALOGW("%s: Not valid display", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
-  SCOPE_LOCK(hwc_session_->hdr_locker_[disp_id]);
 
-  if (hwc_session_->is_hdr_display_.size() <= disp_id) {
-    ALOGW(
-        "%s: is_hdr_display_ is not initialized for display %d!! Reporting it as HDR not "
-        "supported",
-        __FUNCTION__, disp_id);
+  *supported = settings_->IsHDRDisplay(disp_id);
 
-    *supported = false;
-    return ScopedAStatus::ok();
-  }
-
-  *supported = static_cast<bool>(hwc_session_->is_hdr_display_[disp_id]);
   return ScopedAStatus::ok();
 }
 
@@ -403,25 +382,11 @@ ScopedAStatus DisplayConfigAIDL::isWCGSupported(int disp_id, bool *supported) {
 }
 
 ScopedAStatus DisplayConfigAIDL::setLayerAsMask(int disp_id, long layer_id) {
-  SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-  sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[disp_id];
-  if (!hwc_display) {
-    ALOGW("%s: Display = %d is not connected.", __FUNCTION__, disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  if (hwc_session_->disable_mask_layer_hint_) {
-    ALOGW("%s: Mask layer hint is disabled!", __FUNCTION__);
+  auto err = layer_builder_->SetLayerAsMask(disp_id, layer_id);
+  if (err != sdm::kErrorNone) {
     return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
   }
 
-  auto hwc_layer = hwc_display->GetHWCLayer(layer_id);
-  if (hwc_layer == nullptr) {
-    ALOGW("%s: Failed to retrieve the hwc layer fpr display:%d", __FUNCTION__, disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  hwc_layer->SetLayerAsMask();
   return ScopedAStatus::ok();
 }
 
@@ -432,7 +397,7 @@ ScopedAStatus DisplayConfigAIDL::getDebugProperty(const std::string &prop_name,
   char val[64] = {};
 
   vendor_prop_name += prop_name.c_str();
-  if (sdm::HWCDebugHandler::Get()->GetProperty(vendor_prop_name.c_str(), val) == sdm::kErrorNone) {
+  if (!sideband_->GetProperty(vendor_prop_name.c_str(), val)) {
     *value = val;
     error = 0;
   }
@@ -441,39 +406,40 @@ ScopedAStatus DisplayConfigAIDL::getDebugProperty(const std::string &prop_name,
 }
 
 ScopedAStatus DisplayConfigAIDL::setClientUp() {
-  hwc_session_->is_client_up_ = true;
-  sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[HWC_DISPLAY_PRIMARY];
-  hwc_display->MarkClientActive(true);
+  sideband_->SetClientUp();
+
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::getActiveBuiltinDisplayAttributes(Attributes *attr) {
-  int error = -EINVAL;
-  Display disp_id = hwc_session_->GetActiveBuiltinDisplay();
-
-  if (disp_id >= sdm::HWCCallbacks::kNumDisplays) {
-    ALOGE("%s: Invalid display = %lu", __FUNCTION__, disp_id);
-  } else {
-    if (hwc_session_->hwc_display_[disp_id]) {
-      uint32_t config_index = 0;
-      Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(false, &config_index);
-      if (ret != Error::None) {
-        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-      }
-      sdm::DisplayConfigVariableInfo var_info;
-      error = hwc_session_->hwc_display_[disp_id]->GetDisplayAttributesForConfig(INT(config_index),
-                                                                                 &var_info);
-      if (!error) {
-        attr->vsyncPeriod = var_info.vsync_period_ns;
-        attr->xRes = var_info.x_pixels;
-        attr->yRes = var_info.y_pixels;
-        attr->xDpi = var_info.x_dpi;
-        attr->yDpi = var_info.y_dpi;
-        attr->panelType = DisplayPortType::DEFAULT;
-        attr->isYuv = var_info.is_yuv;
-      }
-    }
+  uint64_t disp_id = sdm::kNumDisplays;
+  auto error = settings_->GetActiveBuiltinDisplay(&disp_id);
+  if (error != sdm::kErrorNone) {
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
+
+  sdm::Config config = -1;
+  error = settings_->GetActiveConfig(disp_id, &config);
+  if (error != sdm::kErrorNone) {
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  sdm::DisplayConfigVariableInfo var_info{};
+  uint32_t group_id = -1;
+  error = settings_->GetDisplayAttributes(disp_id, config, &var_info, &group_id);
+
+  if (error != sdm::kErrorNone) {
+    ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  attr->vsyncPeriod = var_info.vsync_period_ns;
+  attr->xRes = var_info.x_pixels;
+  attr->yRes = var_info.y_pixels;
+  attr->xDpi = var_info.x_dpi;
+  attr->yDpi = var_info.y_dpi;
+  attr->panelType = DisplayPortType::DEFAULT;
+  attr->isYuv = var_info.is_yuv;
 
   return ScopedAStatus::ok();
 }
@@ -493,110 +459,63 @@ ScopedAStatus DisplayConfigAIDL::setPanelLuminanceAttributes(int disp_id, float 
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  std::lock_guard<std::mutex> obj(hwc_session_->mutex_lum_);
-  hwc_session_->set_min_lum_ = min_lum;
-  hwc_session_->set_max_lum_ = max_lum;
-  ALOGI("%s: set max_lum %f, min_lum %f", __FUNCTION__, max_lum, min_lum);
+  settings_->SetPanelLuminanceAttributes(disp_id, min_lum, max_lum);
 
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::isBuiltInDisplay(int disp_id, bool *is_built_in) {
-  if ((hwc_session_->map_info_primary_.client_id == disp_id) &&
-      (hwc_session_->map_info_primary_.disp_type == sdm::kBuiltIn)) {
-    *is_built_in = true;
-    return ScopedAStatus::ok();
-  }
+  *is_built_in = sideband_->IsBuiltInDisplay(disp_id);
 
-  for (auto &info : hwc_session_->map_info_builtin_) {
-    if (disp_id == info.client_id) {
-      *is_built_in = true;
-      return ScopedAStatus::ok();
-    }
-  }
-
-  *is_built_in = false;
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::isAsyncVDSCreationSupported(bool *supported) {
-  if (!hwc_session_->async_vds_creation_) {
-    *supported = false;
-    return ScopedAStatus::ok();
-  }
+  *supported = sideband_->IsAsyncVDSCreationSupported();
 
-  *supported = true;
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int format) {
-  if (!hwc_session_->async_vds_creation_) {
-    ALOGW("%s: Asynchronous virtual display creation is not supported.", __FUNCTION__);
+  auto ret = sideband_->CreateVirtualDisplay(width, height, format);
+  if (ret != sdm::kErrorNone) {
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  if (!width || !height) {
-    ALOGW("%s: Width and height provided are invalid.", __FUNCTION__);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  Display virtual_id = 0;
-  Display active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
-  auto status = hwc_session_->CreateVirtualDisplayObj(width, height, &format, &virtual_id);
-  if (status == Error::None) {
-    ALOGI("%s, Created virtual display id:%" PRIu64 ", res: %dx%d", __FUNCTION__, virtual_id, width,
-          height);
-
-    if (active_builtin_disp_id < sdm::HWCCallbacks::kNumRealDisplays) {
-      hwc_session_->WaitForResources(true, active_builtin_disp_id, virtual_id);
-    }
-  } else {
-    ALOGE("%s: Failed to create virtual display: %s", __FUNCTION__, sdm::to_string(status).c_str());
   }
 
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) {
-  SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-  if (!hwc_session_->hwc_display_[disp_id]) {
-    ALOGW("%s: Display:%d is not connected", __FUNCTION__, disp_id);
+  auto ret = caps_->GetSupportedDSIClock(disp_id, bit_clks);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Display: %d is not connected", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  hwc_session_->hwc_display_[disp_id]->GetSupportedDSIClock((std::vector<uint64_t> *)bit_clks);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
-  SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-  if (!hwc_session_->hwc_display_[disp_id]) {
-    ALOGW("%s: Invalid display:%d", __FUNCTION__, disp_id);
+  auto ret = settings_->GetDSIClk(disp_id, (uint64_t *)bit_clk);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  hwc_session_->hwc_display_[disp_id]->GetDynamicDSIClock((uint64_t *)bit_clk);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::setDSIClk(int disp_id, long bit_clk) {
-  SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-  if (!hwc_session_->hwc_display_[disp_id]) {
-    ALOGW("%s: Invalid display:%d", __FUNCTION__, disp_id);
+  auto ret = settings_->SetDSIClk(disp_id, (uint64_t)bit_clk);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  hwc_session_->hwc_display_[disp_id]->SetDynamicDSIClock(bit_clk);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::setQsyncMode(int disp_id, QsyncMode mode) {
-  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-  if (!hwc_session_->hwc_display_[disp_id]) {
-    ALOGW("%s: Invalid display:%d", __FUNCTION__, disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
   sdm::QSyncMode qsync_mode = sdm::kQSyncModeNone;
   switch (mode) {
     case QsyncMode::NONE:
@@ -616,49 +535,39 @@ ScopedAStatus DisplayConfigAIDL::setQsyncMode(int disp_id, QsyncMode mode) {
       break;
   }
 
-  hwc_session_->hwc_display_[disp_id]->SetQSyncMode(qsync_mode);
+  auto ret = settings_->SetQsyncMode(disp_id, qsync_mode);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: failed: %d", __FUNCTION__, ret);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::isSmartPanelConfig(int disp_id, int config_id, bool *is_smart) {
-  SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-  if (!hwc_session_->hwc_display_[disp_id]) {
-    ALOGE("%s: Display %d is not created yet.", __FUNCTION__, disp_id);
-    *is_smart = false;
+  auto ret = caps_->IsSmartPanelConfig(disp_id, config_id, is_smart);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: failed: %d", __FUNCTION__, ret);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  if (hwc_session_->hwc_display_[disp_id]->GetDisplayClass() != sdm::DISPLAY_CLASS_BUILTIN) {
-    ALOGW("%s: Smart panel config is only supported on built in displays.", __FUNCTION__);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  *is_smart = hwc_session_->hwc_display_[disp_id]->IsSmartPanelConfig(config_id);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::isRotatorSupportedFormat(int hal_format, bool ubwc,
                                                           bool *supported) {
-  if (!hwc_session_->core_intf_) {
-    ALOGW("%s: core_intf_ not initialized.", __FUNCTION__);
-    *supported = false;
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
   int flag = ubwc ? qtigralloc::PRIV_FLAGS_UBWC_ALIGNED : 0;
+  sdm::LayerBufferFormat sdm_format = layer_builder_->GetSDMFormat(hal_format, flag, 0);
 
-  sdm::LayerBufferFormat sdm_format = sdm::HWCLayer::GetSDMFormat(
-      hal_format, flag, vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE);
-
-  *supported = hwc_session_->core_intf_->IsRotatorSupportedFormat(sdm_format);
+  *supported = caps_->IsRotatorSupportedFormat(sdm_format);
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::controlQsyncCallback(bool enable) {
   if (enable) {
-    hwc_session_->qsync_callback_ = callback_;
+    qsync_callback_ = callback_;
   } else {
-    hwc_session_->qsync_callback_.reset();
+    qsync_callback_.reset();
   }
 
   return ScopedAStatus::ok();
@@ -666,43 +575,19 @@ ScopedAStatus DisplayConfigAIDL::controlQsyncCallback(bool enable) {
 
 ScopedAStatus DisplayConfigAIDL::sendTUIEvent(DisplayType dpy, TUIEventType event_type) {
   int disp_id = MapDisplayType(dpy);
-  int ret = hwc_session_->TUIEventHandler(disp_id, event_type);
-  if (ret != 0) {
+  auto ret = sideband_->TUIEventHandler(disp_id, static_cast<sdm::SDMTUIEventType>(event_type));
+  if (ret != sdm::kErrorNone) {
     ALOGW("TUIEventHandler failed with %d", ret);
-    return ScopedAStatus(AStatus_fromServiceSpecificError(ret));
+    return ScopedAStatus(AStatus_fromServiceSpecificError(EX_ILLEGAL_ARGUMENT));
   }
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::getDisplayHwId(int disp_id, int *display_hw_id) {
-  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
-  if (disp_idx == -1) {
-    ALOGE("%s: Invalid display = %d", __FUNCTION__, disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  SCOPE_LOCK(hwc_session_->locker_[disp_id]);
-  if (!hwc_session_->hwc_display_[disp_idx]) {
-    ALOGW("%s: Display %d is not connected.", __FUNCTION__, disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  // Supported for Built-In displays only.
-  if ((hwc_session_->map_info_primary_.client_id == disp_id) &&
-      (hwc_session_->map_info_primary_.disp_type == sdm::kBuiltIn)) {
-    if (hwc_session_->map_info_primary_.sdm_id >= 0) {
-      *display_hw_id = static_cast<uint32_t>(hwc_session_->map_info_primary_.sdm_id);
-      return ScopedAStatus::ok();
-    }
-  }
-
-  for (auto &info : hwc_session_->map_info_builtin_) {
-    if (disp_id == info.client_id) {
-      if (info.sdm_id >= 0) {
-        *display_hw_id = static_cast<uint32_t>(info.sdm_id);
-        return ScopedAStatus::ok();
-      }
-    }
+  auto ret = caps_->GetDisplayHwId(disp_id, display_hw_id);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("getDisplayHwId failed with %d", ret);
+    return ScopedAStatus(AStatus_fromServiceSpecificError(EX_ILLEGAL_ARGUMENT));
   }
 
   return ScopedAStatus::ok();
@@ -710,8 +595,8 @@ ScopedAStatus DisplayConfigAIDL::getDisplayHwId(int disp_id, int *display_hw_id)
 
 ScopedAStatus DisplayConfigAIDL::getSupportedDisplayRefreshRates(
     DisplayType dpy, std::vector<int> *supported_refresh_rates) {
-  hwc_session_->GetSupportedDisplayRefreshRates(MapDisplayType(dpy),
-                                                (std::vector<uint32_t> *)supported_refresh_rates);
+  caps_->GetSupportedDisplayRefreshRates(MapDisplayType(dpy),
+                                         (std::vector<uint32_t> *)supported_refresh_rates);
   return ScopedAStatus::ok();
 }
 
@@ -719,7 +604,7 @@ ScopedAStatus DisplayConfigAIDL::isRCSupported(int disp_id, bool *supported) {
   // Mask layers can potentially be shown on any display so report RC supported on all displays if
   // the property enables the feature for use.
   int val = false;  // Default value.
-  sdm::Debug::GetProperty(ENABLE_ROUNDED_CORNER, &val);
+  sideband_->GetProperty(ENABLE_ROUNDED_CORNER, &val);
   *supported = val ? true : false;
 
   return ScopedAStatus::ok();
@@ -727,33 +612,16 @@ ScopedAStatus DisplayConfigAIDL::isRCSupported(int disp_id, bool *supported) {
 
 ScopedAStatus DisplayConfigAIDL::controlIdleStatusCallback(bool enable) {
   if (enable) {
-    hwc_session_->enable_aidl_idle_notification_ = true;
+    idle_callback_ = callback_;
   } else {
-    hwc_session_->enable_aidl_idle_notification_ = false;
+    idle_callback_.reset();
   }
 
   return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::isSupportedConfigSwitch(int disp_id, int config, bool *supported) {
-  if (!hwc_session_) {
-    ALOGW("%s: Invalid hwc session:%p found.", __FUNCTION__, hwc_session_);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  int disp_idx = hwc_session_->GetDisplayIndex(disp_id);
-  if (disp_idx == -1) {
-    ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  SCOPE_LOCK(hwc_session_->locker_[disp_idx]);
-  if (!hwc_session_->hwc_display_[disp_idx]) {
-    ALOGW("%s: Display %d is not connected.", __FUNCTION__, disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  *supported = hwc_session_->hwc_display_[disp_idx]->IsModeSwitchAllowed(config);
+  *supported = caps_->IsModeSwitchAllowed(disp_id, config);
   return ScopedAStatus::ok();
 }
 
@@ -783,8 +651,8 @@ int DisplayConfigAIDL::GetDispTypeFromPhysicalId(uint64_t physical_disp_id,
   int port_id = (physical_disp_id & 0xFF);
   int out_port = 0;
   for (int dpy = qdutils::DISPLAY_PRIMARY; dpy <= qdutils::DISPLAY_EXTERNAL_2; dpy++) {
-    int ret = hwc_session_->GetDisplayPortId(dpy, &out_port);
-    if (ret != 0) {
+    auto ret = caps_->GetDisplayPortId(dpy, &out_port);
+    if (ret != sdm::kErrorNone) {
       return ret;
     }
     if (port_id == out_port) {
@@ -814,34 +682,21 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  int dpy_index = -1;
-  Display disp_type = HWC_DISPLAY_PRIMARY;
-  if (disp_id == UINT32(DisplayType::PRIMARY)) {
-    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_PRIMARY);
-  } else if (disp_id == UINT32(DisplayType::EXTERNAL)) {
-    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
-    disp_type = HWC_DISPLAY_EXTERNAL;
-  } else if (disp_id == UINT32(DisplayType::BUILTIN2)) {
-    dpy_index = hwc_session_->GetDisplayIndex(qdutils::DISPLAY_BUILTIN_2);
-    disp_type = HWC_DISPLAY_BUILTIN_2;
-  } else {
+  std::unordered_map<int32_t, int32_t> disp_type_map = {
+      {static_cast<int32_t>(DisplayType::PRIMARY), static_cast<int32_t>(qdutils::DISPLAY_PRIMARY)},
+      {static_cast<int32_t>(DisplayType::EXTERNAL),
+       static_cast<int32_t>(qdutils::DISPLAY_EXTERNAL)},
+      {static_cast<int32_t>(DisplayType::BUILTIN2),
+       static_cast<int32_t>(qdutils::DISPLAY_BUILTIN_2)},
+  };
+
+  if (disp_id <= static_cast<int32_t>(DisplayType::INVALID) ||
+      disp_id > static_cast<int32_t>(DisplayType::BUILTIN2)) {
     ALOGE("%s: CWB is supported on primary or external display only at present.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
-  if (dpy_index == -1) {
-    ALOGW("Unable to retrieve display index for display:%d", disp_id);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-  }
-
-  // Mutex scope
-  {
-    SCOPE_LOCK(hwc_session_->locker_[dpy_index]);
-    if (!hwc_session_->hwc_display_[dpy_index]) {
-      ALOGE("%s: Display is not created yet.", __FUNCTION__);
-      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
-    }
-  }
+  int32_t display_type = disp_type_map[disp_id];
 
   sdm::CwbConfig cwb_config = {};
   cwb_config.tap_point = static_cast<sdm::CwbTapPoint>(post_processed);
@@ -854,11 +709,46 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   ALOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f)",
         cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom);
 
-  // TODO(user): Convert NativeHandle to native_handle_t, call PostBuffer
+  void *hdl = const_cast<native_handle_t *>(::android::dupFromAidl(buffer));
 
-  int ret = hwc_session_->cwb_.PostBuffer(callback, cwb_config, ::android::dupFromAidl(buffer),
-                                          disp_type, dpy_index);
-  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+  if (cwb_callbacks_.find(hdl) != cwb_callbacks_.end()) {
+    ALOGE("%s: buffer already being handled", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  cwb_callbacks_.insert({hdl, callback});
+
+  sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
+  if (ret != sdm::kErrorNone) {
+    // Need to close and delete the cloned native handle on CWB request rejection/failure
+    native_handle_close(static_cast<native_handle_t *>(hdl));
+    native_handle_delete(static_cast<native_handle_t *>(hdl));
+
+    return ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+  }
+
+  return ScopedAStatus::ok();
+}
+
+void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
+  if (cwb_callbacks_.find(hdl) == cwb_callbacks_.end()) {
+    ALOGE("%s: buffer not found", __FUNCTION__);
+    return;
+  }
+
+  std::shared_ptr<IDisplayConfigCallback> callback = cwb_callbacks_[hdl];
+
+  native_handle_t *buffer = reinterpret_cast<native_handle_t *>(hdl);
+  if (callback) {
+    ALOGI("Notify the client about buffer status %d.", status);
+
+    callback->notifyCWBBufferDone(status, ::android::dupToAidl(buffer));
+  }
+
+  native_handle_close(buffer);
+  native_handle_delete(buffer);
+
+  cwb_callbacks_.erase(hdl);
 }
 
 ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t fps) {
@@ -868,9 +758,10 @@ ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t 
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
 
-  ret = hwc_session_->SetCameraSmoothInfo(op, fps);
+  ret = sideband_->SetCameraSmoothInfo(static_cast<sdm::SDMCameraSmoothOp>(op), fps);
 
-  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+  return ret == sdm::kErrorNone ? ScopedAStatus::ok()
+                                : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
 ScopedAStatus DisplayConfigAIDL::registerCallback(
@@ -881,21 +772,33 @@ ScopedAStatus DisplayConfigAIDL::registerCallback(
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
 
-  ret = hwc_session_->RegisterCallbackClient(callback, client_handle);
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  callback_clients_.emplace(callback_client_id_, callback);
+  *client_handle = callback_client_id_;
+  callback_client_id_++;
 
-  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+  return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayConfigAIDL::unRegisterCallback(int64_t client_handle) {
   int ret = -1;
+  bool removed = false;
 
   if (client_handle < 0) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
 
-  ret = hwc_session_->UnregisterCallbackClient(client_handle);
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto it = callback_clients_.begin(); it != callback_clients_.end();) {
+    if (it->first == client_handle) {
+      it = callback_clients_.erase(it);
+      removed = true;
+    } else {
+      it++;
+    }
+  }
 
-  return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+  return removed ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
 ScopedAStatus DisplayConfigAIDL::getDisplayPortId(int32_t disp_id, int32_t *port_id) {
@@ -905,9 +808,106 @@ ScopedAStatus DisplayConfigAIDL::getDisplayPortId(int32_t disp_id, int32_t *port
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
 
-  ret = hwc_session_->GetDisplayPortId(disp_id, port_id);
+  ret = caps_->GetDisplayPortId(disp_id, port_id);
 
   return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+}
+
+void DisplayConfigAIDL::NotifyQsyncChange(uint64_t display_id, bool qsync_enabled,
+                                          uint32_t refresh_rate, uint32_t qsync_refresh_rate) {
+  // AIDL callback
+  if (!callback_clients_.empty()) {
+    std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+    for (auto const &[id, callback] : callback_clients_) {
+      if (callback) {
+        callback->notifyQsyncChange(qsync_enabled, refresh_rate, qsync_refresh_rate);
+      }
+    }
+  }
+
+  // HIDL callback
+  std::shared_ptr<DisplayConfig::ConfigCallback> callback = qsync_callback_.lock();
+  if (!callback) {
+    return;
+  }
+
+  callback->NotifyQsyncChange(qsync_enabled, refresh_rate, qsync_refresh_rate);
+}
+
+void DisplayConfigAIDL::NotifyCameraSmoothInfo(sdm::SDMCameraSmoothOp op, int32_t fps) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyCameraSmoothInfo(static_cast<CameraSmoothOp>(op), fps);
+    }
+  }
+}
+
+void DisplayConfigAIDL::NotifyResolutionChange(uint64_t display_id,
+                                               sdm::SDMConfigAttributes &attr) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+
+  Attributes attributes{};
+  attributes.vsyncPeriod = attr.vsyncPeriod;
+  attributes.xRes = attr.xRes;
+  attributes.yRes = attr.yRes;
+  attributes.xDpi = attr.xDpi;
+  attributes.yDpi = attr.yDpi;
+  attributes.panelType = static_cast<DisplayPortType>(attr.panelType);
+
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyResolutionChange(display_id, attributes);
+    }
+  }
+}
+
+typedef ::aidl::vendor::qti::hardware::display::config::DisplayType AIDLDisplayType;
+AIDLDisplayType MapDisplayId(int disp_id) {
+  switch (disp_id) {
+    case qdutils::DISPLAY_PRIMARY:
+      return AIDLDisplayType::PRIMARY;
+
+    case qdutils::DISPLAY_EXTERNAL:
+      return AIDLDisplayType::EXTERNAL;
+
+    case qdutils::DISPLAY_VIRTUAL:
+      return AIDLDisplayType::VIRTUAL;
+
+    case qdutils::DISPLAY_BUILTIN_2:
+      return AIDLDisplayType::BUILTIN2;
+
+    default:
+      break;
+  }
+
+  return AIDLDisplayType::INVALID;
+}
+
+void DisplayConfigAIDL::NotifyTUIEventDone(uint32_t ret, uint32_t disp_id,
+                                           sdm::SDMTUIEventType event_type) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+
+  AIDLDisplayType disp_type = MapDisplayId(disp_id);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyTUIEventDone(ret, disp_type, static_cast<TUIEventType>(event_type));
+    }
+  }
+}
+
+void DisplayConfigAIDL::NotifyIdleStatus(bool status) {
+  std::shared_ptr<DisplayConfig::ConfigCallback> callback = idle_callback_.lock();
+  if (!callback) {
+    return;
+  }
+
+  callback->NotifyIdleStatus(true);
+}
+
+void DisplayConfigAIDL::OnHdmiHotplug(bool connected) {
+  // TODO(aparmar)
 }
 
 }  // namespace config
