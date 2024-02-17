@@ -19,7 +19,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -483,6 +483,9 @@ class HWCDisplay : public DisplayEventHandler {
                              int *active_config_index, uint32_t *num_configs);
   virtual void SetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo>& variable_config_map,
                              int active_config_index, uint32_t num_configs) {};
+  virtual HWC2::Error SetDPUFoveation(int32_t int_enabled) {
+    return HWC2::Error::Unsupported;
+  }
 
  protected:
   static uint32_t throttling_refresh_rate_;

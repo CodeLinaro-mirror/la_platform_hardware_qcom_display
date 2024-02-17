@@ -24,7 +24,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -188,6 +188,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
                                uint32_t min_refresh_rate);
   DisplayError PerformCacConfig(CacConfig config, bool enable) override;
   bool IsCacV2Supported() override;
+  DisplayError SetDPUFoveation(int int_enabled) override;
 
   // Implement the HWEventHandlers
   DisplayError VSync(int64_t timestamp) override;
@@ -297,6 +298,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayIPCVmCallbackImpl *vm_cb_intf_ = nullptr;
   Layer cwb_layer_ = {};
   bool lower_fps_ = false;
+  bool enable_dpu_foveation_ = false;
   bool enable_cac_ = false;
   CacConfig cac_config_ = {};
 };

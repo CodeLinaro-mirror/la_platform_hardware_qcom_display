@@ -61,7 +61,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -1546,6 +1546,12 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       continue;
     }
 
+    /* when it's fovea use case and layer has no geometry, can skip some properties
+     * after first drawcycle setup.
+     */
+    bool can_skip_periphery = (hw_layers_info->common_info->flags.fovea_layer_present
+                              && !layer.geometry_changes && periphery_layer_setup_done_);
+
     for (uint32_t count = 0; count < pipe_info_vec.size(); count++) {
       HWPipeInfo *pipe_info = pipe_info_vec[count];
       HWRotateInfo *hw_rotate_info = (count <= 1) ?
@@ -1560,7 +1566,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       if (pipe_info->valid && fb_id[pipe_info->cac_color]) {
         uint32_t pipe_id = pipe_info->pipe_id;
 
-        if (update_config) {
+        if (update_config && !can_skip_periphery) {
           uint32_t fg_alpha = layer.plane_alpha;
           uint32_t bg_alpha = 0xff - layer.plane_alpha;
 
@@ -1761,6 +1767,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       }
     }
   }
+
 
   if (bit_clk_rate_) {
     // Set the new bit clk rate
@@ -2009,6 +2016,12 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   }
 
   hw_layers_info->sync_handle = release_fence;
+
+  if (hw_layers_info->common_info->flags.fovea_layer_present) {
+    periphery_layer_setup_done_ = true;
+  } else {
+    periphery_layer_setup_done_ = false;
+  }
 
   if (vrefresh_) {
     // Update current mode index if refresh rate is changed

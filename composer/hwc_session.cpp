@@ -19,7 +19,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -1369,6 +1369,10 @@ int32_t HWCSession::SetDimmingMinBl(hwc2_display_t display, int32_t min_bl) {
   return CallDisplayFunction(display, &HWCDisplay::SetDimmingMinBl, min_bl);
 }
 
+int32_t HWCSession::SetDPUFoveation(hwc2_display_t display, int32_t int_enabled) {
+  return CallDisplayFunction(display, &HWCDisplay::SetDPUFoveation, int_enabled);
+}
+
 int32_t HWCSession::GetDozeSupport(hwc2_display_t display, int32_t *out_support) {
   if (!out_support) {
     return HWC2_ERROR_BAD_PARAMETER;
@@ -1948,6 +1952,18 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
         break;
       }
       status = PerformCacConfig(input_parcel);
+      output_parcel->writeInt32(status);
+    }
+    break;
+
+    case qService::IQService::ENABLE_DPU_FOVEATION_DYNAMIC: {
+      if (!input_parcel || !output_parcel) {
+        DLOGE("QService command = %d: input_parcel and output_parcel needed.", command);
+        break;
+      }
+      int disp_id = input_parcel->readInt32();
+      int enable = input_parcel->readInt32();
+      status = SetDPUFoveation(disp_id, enable);
       output_parcel->writeInt32(status);
     }
     break;
