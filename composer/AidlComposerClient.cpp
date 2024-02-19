@@ -27,7 +27,6 @@
 #include <sync/sync.h>
 
 #include "hwc_parcel.h"
-#include <SnapHandle.h>
 #include <fcntl.h>
 
 namespace aidl {
@@ -38,18 +37,6 @@ namespace display {
 namespace composer3 {
 
 using MetadataType = vendor_qti_hardware_display_common_MetadataType;
-
-SnapHandle *ConvertToSnapHandle(const NativeHandle &handle) {
-  SnapHandle *snap_handle = snap_handle_create(handle.fds.size(), handle.ints.size());
-  for (size_t i = 0; i < handle.fds.size(); ++i) {
-    snap_handle->buffer_data[i] = fcntl(handle.fds[i].get(), F_DUPFD_CLOEXEC, 0);
-  }
-  for (size_t i = 0; i < handle.ints.size(); ++i) {
-    snap_handle->buffer_data[i + handle.fds.size()] = handle.ints[i];
-  }
-  return snap_handle;
-}
-
 using sdm::HWCParcel;
 
 ComposerHandleImporter mHandleImporter;
@@ -846,7 +833,7 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
     int64_t in_display, const NativeHandle &in_buffer,
     const ::ndk::ScopedFileDescriptor &in_release_fence) {
   shared_ptr<Fence> fence = nullptr;
-  const SnapHandle *buffer = ConvertToSnapHandle(in_buffer);
+  const SnapHandle *buffer = sdm::ConvertToSnapHandle(in_buffer);
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(in_release_fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
@@ -1115,8 +1102,7 @@ void AidlComposerClient::CommandEngine::executeSetColorTransform(int64_t display
 void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
                                                                const ClientTarget &command) {
   bool useCache = !command.buffer.handle;
-  SnapHandle *clientTarget =
-      useCache ? nullptr : ConvertToSnapHandle(*command.buffer.handle);
+  SnapHandle *clientTarget = useCache ? nullptr : sdm::ConvertToSnapHandle(*command.buffer.handle);
   shared_ptr<Fence> fence = nullptr;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(command.buffer.fence);
   auto fd = sfd.get();
@@ -1167,7 +1153,7 @@ void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
 void AidlComposerClient::CommandEngine::executeSetOutputBuffer(uint64_t display,
                                                                const Buffer &buffer) {
   bool useCache = !buffer.handle;
-  SnapHandle *outputBuffer = useCache ? nullptr : ConvertToSnapHandle(*buffer.handle);
+  SnapHandle *outputBuffer = useCache ? nullptr : sdm::ConvertToSnapHandle(*buffer.handle);
   shared_ptr<Fence> fence = nullptr;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(buffer.fence);
   auto fd = sfd.get();
@@ -1291,7 +1277,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t di
 void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, int64_t layer,
                                                               const Buffer &buffer) {
   bool useCache = !buffer.handle;
-  SnapHandle *layerBuffer = useCache ? nullptr : ConvertToSnapHandle(*buffer.handle);
+  SnapHandle *layerBuffer = useCache ? nullptr : sdm::ConvertToSnapHandle(*buffer.handle);
   shared_ptr<Fence> fence = nullptr;
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(buffer.fence);
   auto fd = sfd.get();

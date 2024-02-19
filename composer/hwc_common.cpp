@@ -92,4 +92,32 @@ std::string to_string(Composition composition) {
   }
 }
 
+SnapHandle *ConvertToSnapHandle(const NativeHandle &handle) {
+  SnapHandle *snap_handle = snap_handle_create(handle.fds.size(), handle.ints.size());
+  for (size_t i = 0; i < handle.fds.size(); ++i) {
+    snap_handle->buffer_data[i] = fcntl(handle.fds[i].get(), F_DUPFD_CLOEXEC, 0);
+  }
+  for (size_t i = 0; i < handle.ints.size(); ++i) {
+    snap_handle->buffer_data[i + handle.fds.size()] = handle.ints[i];
+  }
+  return snap_handle;
+}
+
+NativeHandle AIDLNativeHandleFromSnapHandle(SnapHandle *snap_buffer_handle,
+                                            bool pass_fd_ownership) {
+  NativeHandle aidl_native_handle;
+
+  aidl_native_handle.fds = std::vector<ndk::ScopedFileDescriptor>(snap_buffer_handle->num_fds);
+  for (size_t i = 0; i < snap_buffer_handle->num_fds; i++) {
+    int fd = snap_buffer_handle->buffer_data[i];
+    aidl_native_handle.fds.at(i).set(pass_fd_ownership ? fd : fcntl(fd, F_DUPFD_CLOEXEC, 0));
+  }
+
+  aidl_native_handle.ints = std::vector<int32_t>(
+      snap_buffer_handle->buffer_data + snap_buffer_handle->num_fds,
+      snap_buffer_handle->buffer_data + snap_buffer_handle->num_fds + snap_buffer_handle->num_ints);
+
+  return aidl_native_handle;
+}
+
 }  // namespace sdm

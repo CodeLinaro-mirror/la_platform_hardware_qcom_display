@@ -99,8 +99,6 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetCustomContentMetadata(void *buf, CustomContentMetadata *dest);
   int GetMetadataValue(void *buf, SnapMetadataType type, void *dest, size_t dest_size);
   int GetCompressionType(void *buf, int64_t &compression_type);
-  int ImportBufferHandle(native_handle_t **handle, bool is_aidl_duped);
-  void ReleaseBufferHandle(const native_handle_t *handle);
 
   // callbacks from sdmclient
   bool GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace);
