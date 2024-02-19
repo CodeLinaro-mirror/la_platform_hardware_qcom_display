@@ -1150,6 +1150,7 @@ LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const 
       case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
       case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
       case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
+      case HAL_PIXEL_FORMAT_YCbCr_420_SP:
         format = kFormatYCbCr420SPVenusUbwc;
         break;
       case static_cast<int>(PixelFormat::RGBA_1010102):
@@ -1162,6 +1163,8 @@ LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const 
         format = kFormatYCbCr420TP10Ubwc;
         break;
       case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
+      case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
+      case HAL_PIXEL_FORMAT_YCbCr_420_P010:
         format = kFormatYCbCr420P010Ubwc;
         break;
       case HAL_PIXEL_FORMAT_RGBA_FP16:
