@@ -97,7 +97,8 @@ bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
 
   lifecycle_->Init(this, &buffer_allocator_, &socket_handler_);
 
-  qservice_ = new QServiceBackend();
+  qservice_ = QServiceBackend::GetInstance();
+  qservice_->Init();
 
   mCommandEngine = std::make_unique<CommandEngine>(*this);
   if (mCommandEngine == nullptr) {
@@ -131,7 +132,6 @@ AidlComposerClient::~AidlComposerClient() {
   ALOGW("%s: Destroying composer client", __FUNCTION__);
 
   lifecycle_->EnableCallback(false);
-  delete qservice_;
 
   // no need to grab the mutex as any in-flight hwbinder call would have
   // kept the client alive
