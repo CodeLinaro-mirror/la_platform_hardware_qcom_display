@@ -384,13 +384,8 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup = variable_config.group_id;
-    display_configuration.vrrConfig = {
-        static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
-    ALOGI(
-        "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, minFrameInterval= "
-        "%d",
-        config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
-        display_configuration.vrrConfig->minFrameIntervalNs);
+    ALOGI("GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d", config_id,
+          variable_config.vsync_period_ns, display_configuration.configGroup);
 
     out_configs->emplace_back(display_configuration);
   }
