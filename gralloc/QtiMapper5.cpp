@@ -326,7 +326,7 @@ constexpr AIMapper_MetadataTypeDescription describeQTI(int64_t type, const char 
 Error QtiMapper5::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 61> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 62> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -401,7 +401,10 @@ Error QtiMapper5::listSupportedMetadataTypes(
                   "Early notify line count - used by video", true, true),
       describeQTI(SnapMetadataType::HEAP_NAME, "Heap name", true, false),
       describeQTI(SnapMetadataType::BASE_ADDRESS, "Buffer data base address", true, false),
-      describeQTI(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, "Pixel format post allocation", true, false),
+      describeQTI(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, "Pixel format post allocation", true,
+                  false),
+      describeQTI(SnapMetadataType::BUFFER_DEQUEUE_DURATION, "Last buffer dequeue duration", true,
+                  true),
   };
   *outDescriptionList = sSupportedMetadaTypes.data();
   *outNumberOfDescriptions = sSupportedMetadaTypes.size();
@@ -759,7 +762,7 @@ Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandl
 Error QtiMapper5Legacy::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 61> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 62> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -835,6 +838,8 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
       describeQTI(SnapMetadataType::HEAP_NAME, "Heap name", true, false),
       describeQTI(SnapMetadataType::BASE_ADDRESS, "Buffer data base address", true, false),
       describeQTI(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, "Format Post allocation", true, false),
+      describeQTI(SnapMetadataType::BUFFER_DEQUEUE_DURATION, "Last buffer dequeue duration", true,
+                  true),
   };
   *outDescriptionList = sSupportedMetadaTypes.data();
   *outNumberOfDescriptions = sSupportedMetadaTypes.size();

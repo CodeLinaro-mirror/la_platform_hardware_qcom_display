@@ -1078,6 +1078,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                        SnapDescriptor *buf_des = nullptr,
                                        bool check_metadata_set = true,
                                        int32_t *mapper_return = nullptr);
+  SnapError BufferDequeueDurationHelper(SnapHandle *, uint32_t aidl_size,
+                                        void *gralloc_in_set = nullptr,
+                                        void *gralloc_out_get = nullptr,
+                                        SnapDescriptor *buf_des = nullptr,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1147,6 +1153,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {BASE_ADDRESS, &GrallocSnapHelper::BaseAddressHelper},
           {MATRIX_COEFFICIENTS, &GrallocSnapHelper::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelper::EarlyNotifyLineCountHelper},
+          {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelper::BufferDequeueDurationHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -1557,6 +1564,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {QTI_CUSTOM_CONTENT_METADATA, SnapMetadataType::CUSTOM_CONTENT_METADATA},
       {QTI_HEAP_NAME, SnapMetadataType::HEAP_NAME},
       {QTI_EARLYNOTIFY_LINECOUNT, SnapMetadataType::EARLYNOTIFY_LINECOUNT},
+      {QTI_BUFFER_DEQUEUE_DURATION, SnapMetadataType::BUFFER_DEQUEUE_DURATION},
       // New enum entries
       {SnapMetadataType::HEAP_NAME, SnapMetadataType::HEAP_NAME},
       {SnapMetadataType::IS_UBWC, SnapMetadataType::IS_UBWC},
@@ -1844,6 +1852,12 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
                                        SnapDescriptor *buf_des = nullptr,
                                        bool check_metadata_set = true,
                                        int32_t *mapper_return = nullptr);
+  SnapError BufferDequeueDurationHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                        void *gralloc_in_set = nullptr,
+                                        void *gralloc_out_get = nullptr,
+                                        SnapDescriptor *buf_des = nullptr,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1913,6 +1927,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {BASE_ADDRESS, &GrallocSnapHelperLegacy::BaseAddressHelper},
           {MATRIX_COEFFICIENTS, &GrallocSnapHelperLegacy::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelperLegacy::EarlyNotifyLineCountHelper},
+          {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelperLegacy::BufferDequeueDurationHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>

@@ -1168,6 +1168,20 @@ SnapError GrallocSnapHelper::VTTimestampHelper(SnapHandle *hnd, uint32_t aidl_si
   return error;
 }
 
+SnapError GrallocSnapHelper::BufferDequeueDurationHelper(
+    SnapHandle *hnd, uint32_t aidl_size, void *gralloc_in_set, void *gralloc_out_get,
+    SnapDescriptor *buf_des, bool check_metadata_set, int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    error =
+        snapmapper_->GetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION, gralloc_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error =
+        snapmapper_->SetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION, gralloc_in_set);
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::PPParamInterlacedHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                      void *gralloc_in_set, void *gralloc_out_get,
                                                      SnapDescriptor *buf_des,
@@ -4395,6 +4409,42 @@ SnapError GrallocSnapHelperLegacy::VTTimestampHelper(SnapHandle *hnd, bool hidl_
       vt_timestamp = *static_cast<uint64_t *>(gralloc_in_set);
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::VT_TIMESTAMP, &vt_timestamp);
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelperLegacy::BufferDequeueDurationHelper(
+    SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size, void *gralloc_in_set,
+    void *gralloc_out_get, SnapDescriptor *buf_des, bool check_metadata_set,
+    int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    int64_t dequeue_duration = 0;
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION,
+                                     &dequeue_duration);
+    error = CheckMetadataSet(SnapMetadataType::BUFFER_DEQUEUE_DURATION, error, check_metadata_set);
+    if (hidl_bytestream) {
+      if (android::gralloc4::encodeInt64(qtigralloc::MetadataType_BufferDequeueDuration,
+                                         dequeue_duration,
+                                         static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+        return SnapError::BAD_VALUE;
+      }
+    } else {
+      *static_cast<int64_t *>(gralloc_out_get) = static_cast<int64_t>(dequeue_duration);
+    }
+  } else if (gralloc_in_set != nullptr) {
+    int64_t dequeue_duration = 0;
+    if (hidl_bytestream) {
+      if (android::gralloc4::decodeInt64(qtigralloc::MetadataType_BufferDequeueDuration,
+                                         *static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
+                                         &dequeue_duration)) {
+        return SnapError::UNSUPPORTED;
+      }
+    } else {
+      dequeue_duration = *static_cast<int64_t *>(gralloc_in_set);
+    }
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION,
+                                     &dequeue_duration);
   }
   return error;
 }
