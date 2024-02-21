@@ -217,6 +217,7 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_ALLOCATED), sizeof(SnapPixelFormat)},
       {static_cast<uint64_t>(SnapMetadataType::EARLYNOTIFY_LINECOUNT), sizeof(int32_t)},
       {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_DEQUEUE_DURATION), sizeof(int64_t)},
       // TODO: Remove the legacy type below once HWC has moved to Snap defs
       {static_cast<uint64_t>(QTI_COLOR_METADATA), sizeof(ColorMetaData)},
   };
@@ -346,6 +347,7 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
       {static_cast<uint64_t>(SnapMetadataType::EARLYNOTIFY_LINECOUNT), sizeof(int32_t)},
       {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_DEQUEUE_DURATION), sizeof(int64_t)},
   };
 };
 
