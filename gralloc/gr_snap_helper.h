@@ -7,6 +7,7 @@
 #define __GR_SNAP_HELPER_H__
 
 #include <functional>
+#include <list>
 
 #include <Address.h>
 #include <BlendMode.h>
@@ -262,15 +263,15 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
  private:
   GrallocSnapHelper();
   ~GrallocSnapHelper();
-  int GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
+  SnapError GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
   SnapUsage GetSnapUsage(uint64_t usage, int hal_format);
   int GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage, int *gr_format);
   int GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                         SnapPixelFormat *snap_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
 
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferDescriptor gr_desc);
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferInfo gr_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
 
   int ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &snap_dataspace,
                                              GrallocDataspace *gr_dataspace);
@@ -746,6 +747,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
   };
 
+  std::list<int> unsupported_formats = {
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
+  };
+
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(
       SnapHandle *, uint32_t aidl_size, void *gralloc_in_set, void *gralloc_out_get,
       SnapDescriptor *buf_des, bool check_metadata_set, int32_t *mapper_return);
@@ -1121,15 +1128,15 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
  private:
   GrallocSnapHelperLegacy();
   ~GrallocSnapHelperLegacy();
-  int GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
+  SnapError GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
   SnapUsage GetSnapUsage(uint64_t usage, int hal_format);
   int GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage, int *gr_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
   int GetGrallocPrivateFlags(SnapUsage snap_usage, int64_t is_ubwc, int64_t is_tile_rendered,
                              int64_t is_cached);
 
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferDescriptor gr_desc);
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferInfo gr_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
   SnapMetadataType GetSnapMetadataType(uint64_t gr_metadata_type);
 
   int ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &snap_dataspace,
@@ -1584,6 +1591,12 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::COLOR_REMAPPING_INFO},
       {SnapMetadataType::BASE_ADDRESS, SnapMetadataType::BASE_ADDRESS},
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
+  };
+
+  std::list<int> unsupported_formats = {
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
   };
 
   typedef SnapError (GrallocSnapHelperLegacy::*MetadataHelper)(
