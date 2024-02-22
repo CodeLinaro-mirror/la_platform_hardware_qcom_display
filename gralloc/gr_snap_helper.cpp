@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <QtiGralloc.h>
@@ -175,7 +175,11 @@ int GrallocSnapHelper::Allocate(
     return SnapError::BAD_VALUE;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   SnapAllocationResult snap_result;
 
   auto status = snapallocator_->Allocate(snap_desc, buffer_count, &snap_result);
@@ -367,7 +371,11 @@ int GrallocSnapHelper::ValidateBufferSize(native_handle_t *gr_hnd, gralloc::Buff
   }
 
   if (hnd != nullptr) {
-    SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+    SnapDescriptor snap_desc = {};
+    auto err = GetSnapDescriptor(gr_desc, snap_desc);
+    if (err) {
+      return err;
+    }
     auto status = snapmapper_->ValidateBufferSize(*hnd, snap_desc);
     if (status != SnapError::NONE) {
       ALOGE("%s: Failed to validate buffer size via SnapAlloc. Error code: %d", __FUNCTION__,
@@ -486,7 +494,11 @@ int GrallocSnapHelper::IsSupported(gralloc::BufferDescriptor gr_desc, bool *is_s
     return SnapError::UNSUPPORTED;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto status = snapallocator_->IsSupported(snap_desc, is_supported);
   if (status != SnapError::NONE) {
     ALOGE("%s: Failed to check if descriptor is supported via SnapAlloc. Error code: %d",
@@ -2184,7 +2196,11 @@ int GrallocSnapHelper::GetFromBufferDescriptor(gralloc::BufferDescriptor gr_desc
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto snap_metadata_type = static_cast<SnapMetadataType>(gr_metadata_type);
   if (bufferdescription_conversion_helper_function_map.find(snap_metadata_type) !=
       bufferdescription_conversion_helper_function_map.end()) {
@@ -2387,7 +2403,11 @@ int GrallocSnapHelper::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, u
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   SnapBufferLayout snap_plane_layouts;
   auto status = snapmapper_->GetFromBufferDescriptor(snap_desc, SnapMetadataType::PLANE_LAYOUTS,
                                                      &snap_plane_layouts);
@@ -2679,12 +2699,16 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
 }
 
 // Gralloc <-> Snapalloc conversion helper functions
-int GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
-                                     SnapFormatDescriptor *snap_fmt_desc) {
+SnapError GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
+                                           SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);
+  } else if (std::find(unsupported_formats.begin(), unsupported_formats.end(), hal_format) !=
+             unsupported_formats.end()) {
+    ALOGW("%s:: Unsupported format - %d", __FUNCTION__, hal_format);
+    return SnapError::UNSUPPORTED;
   } else {
     ALOGE("No map for gralloc format to snap format");
     return SnapError::BAD_VALUE;
@@ -2739,13 +2763,16 @@ UBWC_Version GrallocSnapHelper::GetGrallocUBWCVersion(SnapUBWCVersion version) {
   return UBWC_MAX_VERSION;
 }
 
-SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc,
+                                               SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.GetFormat(), gr_desc.GetUsage(), &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.GetFormat());
+    return err;
+  } else {
     auto name_length = std::min(gr_desc.GetName().size(), static_cast<size_t>(MAX_NAME_LEN - 1));
-    memcpy(&snap_desc.name, gr_desc.GetName().data(), name_length);
+    memcpy(snap_desc.name, gr_desc.GetName().data(), name_length);
     snap_desc.format = snap_fmt_desc.format;
     snap_desc.usage = GetSnapUsage(gr_desc.GetUsage(), gr_desc.GetFormat());
     snap_desc.width = gr_desc.GetWidth();
@@ -2763,14 +2790,17 @@ SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr
     ALOGD_IF(DEBUG, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
              gr_desc.GetName().c_str(), snap_desc.name);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
-SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
+                                               SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.format, gr_desc.usage, &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting SnapDescriptor - gr_format %d", gr_desc.format);
+    return err;
+  } else {
     snap_desc.format = snap_fmt_desc.format;
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
     snap_desc.width = gr_desc.width;
@@ -2786,7 +2816,7 @@ SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc)
              gr_desc.format, gr_desc.usage, snap_fmt_desc.format, snap_fmt_desc.modifier,
              snap_desc.usage);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
 int GrallocSnapHelper::GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
@@ -2972,7 +3002,11 @@ int GrallocSnapHelperLegacy::Allocate(
     return SnapError::BAD_VALUE;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   SnapAllocationResult snap_result;
 
   auto status = snapallocator_->Allocate(snap_desc, buffer_count, &snap_result);
@@ -3161,7 +3195,11 @@ int GrallocSnapHelperLegacy::ValidateBufferSize(native_handle_t *gr_hnd,
   }
 
   if (hnd != nullptr) {
-    SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+    SnapDescriptor snap_desc = {};
+    auto err = GetSnapDescriptor(gr_desc, snap_desc);
+    if (err) {
+      return err;
+    }
     auto status = snapmapper_->ValidateBufferSize(*hnd, snap_desc);
     if (status != SnapError::NONE) {
       ALOGE("%s: Failed to validate buffer size via SnapAlloc. Error code: %d", __FUNCTION__,
@@ -3280,7 +3318,11 @@ int GrallocSnapHelperLegacy::IsSupported(gralloc::BufferDescriptor gr_desc, bool
     return SnapError::UNSUPPORTED;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto status = snapallocator_->IsSupported(snap_desc, is_supported);
   if (status != SnapError::NONE) {
     ALOGE("%s: Failed to check if descriptor is supported via SnapAlloc. Error code: %d",
@@ -6067,7 +6109,11 @@ int GrallocSnapHelperLegacy::GetFromBufferDescriptor(gralloc::BufferDescriptor g
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto snap_metadata_type = GetSnapMetadataType(gr_metadata_type);
   if (bufferdescription_conversion_helper_function_map.find(snap_metadata_type) !=
       bufferdescription_conversion_helper_function_map.end()) {
@@ -6272,7 +6318,11 @@ int GrallocSnapHelperLegacy::GetFormatLayout(gralloc::BufferInfo gr_desc, void *
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   if (interlaced) {
     static SnapKeyValuePair modifier = {.key = "interlaced", .value = static_cast<uint64_t>(1)};
     snap_desc.additionalOptions.emplace_back(modifier);
@@ -6564,14 +6614,18 @@ int GrallocSnapHelperLegacy::ConvertGrallocDataspaceToSnapDataspace(GrallocDatas
 }
 
 // Gralloc <-> Snapalloc conversion helper functions
-int GrallocSnapHelperLegacy::GetSnapFormat(int hal_format, uint64_t usage,
-                                           SnapFormatDescriptor *snap_fmt_desc) {
+SnapError GrallocSnapHelperLegacy::GetSnapFormat(int hal_format, uint64_t usage,
+                                                 SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);
+  } else if (std::find(unsupported_formats.begin(), unsupported_formats.end(), hal_format) !=
+             unsupported_formats.end()) {
+    ALOGW("%s:: Unsupported format - %d", __FUNCTION__, hal_format);
+    return SnapError::UNSUPPORTED;
   } else {
-    ALOGE("No map for gralloc format to snap format");
+    ALOGE("%s:: No map for gralloc format %d to snap format", __FUNCTION__, hal_format);
     return SnapError::BAD_VALUE;
   }
 
@@ -6624,13 +6678,16 @@ UBWC_Version GrallocSnapHelperLegacy::GetGrallocUBWCVersion(SnapUBWCVersion vers
   return UBWC_MAX_VERSION;
 }
 
-SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc,
+                                                     SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.GetFormat(), gr_desc.GetUsage(), &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.GetFormat());
+    return err;
+  } else {
     auto name_length = std::min(gr_desc.GetName().size(), static_cast<size_t>(MAX_NAME_LEN - 1));
-    memcpy(&snap_desc.name, gr_desc.GetName().data(), name_length);
+    memcpy(snap_desc.name, gr_desc.GetName().data(), name_length);
     snap_desc.format = snap_fmt_desc.format;
     snap_desc.usage = GetSnapUsage(gr_desc.GetUsage(), gr_desc.GetFormat());
     snap_desc.width = gr_desc.GetWidth();
@@ -6648,14 +6705,17 @@ SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescrip
     ALOGD_IF(DEBUG, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
              gr_desc.GetName().c_str(), snap_desc.name);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
-SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
+                                                     SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.format, gr_desc.usage, &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.format);
+    return err;
+  } else {
     snap_desc.format = snap_fmt_desc.format;
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
     snap_desc.width = gr_desc.width;
@@ -6671,7 +6731,7 @@ SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr
              gr_desc.format, gr_desc.usage, snap_fmt_desc.format, snap_fmt_desc.modifier,
              snap_desc.usage);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
 SnapMetadataType GrallocSnapHelperLegacy::GetSnapMetadataType(uint64_t gr_metadata_type) {
