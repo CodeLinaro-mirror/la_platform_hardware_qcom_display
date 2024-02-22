@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -207,8 +207,7 @@ ScopedAStatus DisplayConfigAIDL::getDisplayAttributes(int config_index, DisplayT
 
   // TODO (aparmar): seq lk
   sdm::DisplayConfigVariableInfo var_info{};
-  uint32_t group_id = -1;
-  error = settings_->GetDisplayAttributes(disp_id, config_index, &var_info, &group_id);
+  error = settings_->GetDisplayAttributes(disp_id, config_index, &var_info);
 
   if (error != sdm::kErrorNone) {
     ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
@@ -425,8 +424,7 @@ ScopedAStatus DisplayConfigAIDL::getActiveBuiltinDisplayAttributes(Attributes *a
   }
 
   sdm::DisplayConfigVariableInfo var_info{};
-  uint32_t group_id = -1;
-  error = settings_->GetDisplayAttributes(disp_id, config, &var_info, &group_id);
+  error = settings_->GetDisplayAttributes(disp_id, config, &var_info);
 
   if (error != sdm::kErrorNone) {
     ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
