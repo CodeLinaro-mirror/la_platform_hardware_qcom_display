@@ -65,6 +65,7 @@
 #include <atomic>
 #include <core/display_interface.h>
 #include "hwc_common.h"
+#include "AidlComposerHandleImporter.h"
 
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
@@ -97,6 +98,7 @@ using DisplayConfiguration = composer3::DisplayConfiguration;
 using HwcDisplayCapability = composer3::DisplayCapability;
 using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
+using ::aidl::vendor::qti::hardware::display::composer3::ComposerHandleImporter;
 using ::aidl::vendor::qti::hardware::display::config::Attributes;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
@@ -219,7 +221,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   SDMDisplaySideBandIntf *sideband_ = nullptr;
   SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
   sdm::Locker *locker_ = nullptr;
-
+  ComposerHandleImporter handle_importer_;
   std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
 };
 

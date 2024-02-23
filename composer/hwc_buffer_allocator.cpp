@@ -40,7 +40,6 @@
 #include "sdm_display_intf_layer_builder.h"
 #include "hwc_common.h"
 
-#include <SnapHandle.h>
 #include <BufferUsage.h>
 #include <PixelFormat.h>
 #include <AllocationResult.h>
@@ -71,7 +70,6 @@ using SnapMetadataType = vendor_qti_hardware_display_common_MetadataType;
 using SnapPixelFormat = vendor_qti_hardware_display_common_PixelFormat;
 
 namespace sdm {
-
 int HWCBufferAllocator::GetGrallocInstance() {
   // Lazy initialization of gralloc HALs
   if (mapper_ != nullptr && allocator_ != nullptr && snap_helper_ != nullptr) {

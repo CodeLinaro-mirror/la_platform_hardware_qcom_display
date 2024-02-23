@@ -33,6 +33,14 @@
 #include <aidl/android/hardware/graphics/common/ColorTransform.h>
 #include <functional>
 #include <string>
+#include <fcntl.h>
+#include <SnapHandle.h>
+#include <aidlcommonsupport/NativeHandle.h>
+
+using aidl::android::hardware::common::NativeHandle;
+using ::vendor::qti::hardware::display::snapalloc::snap_handle_create;
+using ::vendor::qti::hardware::display::snapalloc::snap_handle_delete;
+using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
 
 // TODO: Change to HWC3 namespace
 namespace sdm {
@@ -138,6 +146,9 @@ enum {
 std::string to_string(HWC3::Error error);
 std::string to_string(PowerMode mode);
 std::string to_string(Composition composition);
+
+SnapHandle *ConvertToSnapHandle(const NativeHandle &handle);
+NativeHandle AIDLNativeHandleFromSnapHandle(SnapHandle *snap_buffer_handle, bool pass_fd_ownership);
 
 }  // namespace sdm
 

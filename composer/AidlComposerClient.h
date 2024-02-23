@@ -144,8 +144,6 @@ using sdm::SDMDisplayLayerBuilderIntf;
 
 using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
 using SnapError = ::vendor::qti::hardware::display::snapalloc::Error;
-using ::vendor::qti::hardware::display::snapalloc::snap_handle_create;
-using ::vendor::qti::hardware::display::snapalloc::snap_handle_delete;
 
 class BufferCacheEntry {
  public:
