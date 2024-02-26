@@ -22,6 +22,7 @@ qtidisplay_cc_defaults {
         "-Wno-missing-field-initializers",
         "-Wall",
         "-Werror",
+        "-Wno-reorder-ctor",
     ],
     shared_libs: [
         "liblog",
@@ -29,7 +30,6 @@ qtidisplay_cc_defaults {
         "libutils",
     ],
     header_libs: ["display_headers"],
-    clang: true,
     soong_config_variables: {
         drmpp: {
             cflags: ["-DPP_DRM_ENABLE"],

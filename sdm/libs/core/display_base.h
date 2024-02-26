@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -94,8 +94,9 @@ class DisplayBase : public DisplayInterface {
   virtual ~DisplayBase() { }
   virtual DisplayError Init();
   virtual DisplayError Deinit();
-  DisplayError Prepare(LayerStack *layer_stack);
-  DisplayError Commit(LayerStack *layer_stack);
+  virtual DisplayError Prepare(LayerStack *layer_stack);
+  virtual DisplayError CommitOrPrepare(LayerStack *layer_stack);
+  virtual DisplayError Commit(LayerStack *layer_stack);
   virtual DisplayError Flush(LayerStack *layer_stack);
   virtual DisplayError GetDisplayState(DisplayState *state);
   virtual DisplayError GetNumVariableInfoConfigs(uint32_t *count);
@@ -308,9 +309,11 @@ class DisplayBase : public DisplayInterface {
   bool StartDisplayPowerReset();
   void EndDisplayPowerReset();
   void SetRCData(LayerStack *layer_stack);
+  void CacheDisplayComposition();
   unsigned int rc_cached_res_width_ = 0;
   unsigned int rc_cached_res_height_ = 0;
   std::unique_ptr<RCIntf> rc_core_ = nullptr;
+  bool gpu_comp_frame_ = false;
 };
 
 }  // namespace sdm

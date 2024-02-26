@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -356,6 +356,17 @@ DisplayError DisplayBase::ValidateGPUTargetParams() {
   return kErrorNone;
 }
 
+void DisplayBase::CacheDisplayComposition() {
+  // Bail out if GPU composed layers aren't present.
+  gpu_comp_frame_ = false;
+  for (auto &layer : hw_layers_.info.stack->layers) {
+    if (layer->composition == kCompositionGPU) {
+      gpu_comp_frame_ = true;
+      break;
+    }
+  }
+}
+
 DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
@@ -436,6 +447,8 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   comp_manager_->PostPrepare(display_comp_ctx_, &hw_layers_);
 
+  CacheDisplayComposition();
+
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
   return error;
 }
@@ -506,6 +519,27 @@ void DisplayBase::SetRCData(LayerStack *layer_stack) {
     hw_layers_info.rc_layers_info.bottom_width = rc_out_config->bottom_width;
     hw_layers_info.rc_layers_info.bottom_height = rc_out_config->bottom_height;
   }
+}
+
+DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
+  DTRACE_SCOPED();
+  DisplayError error = kErrorNone;
+  // Perform prepare
+  error = Prepare(layer_stack);
+  if (error != kErrorNone) {
+    if (error == kErrorPermission) {
+      DLOGW("Prepare failed: %d", error);
+    } else {
+      DLOGE("Prepare failed: %d", error);
+    }
+    return error;
+  }
+
+  if (!gpu_comp_frame_) {
+    return Commit(layer_stack);
+  }
+
+  return kErrorNeedsCommit;
 }
 
 DisplayError DisplayBase::Commit(LayerStack *layer_stack) {

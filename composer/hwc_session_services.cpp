@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <core/buffer_allocator.h>
 #include <utils/debug.h>
 #include <utils/constants.h>
@@ -43,12 +50,7 @@
 namespace sdm {
 
 void HWCSession::StartServices() {
-  int error = DisplayConfig::DeviceInterface::RegisterDevice(this);
-  if (error) {
-    DLOGW("Could not register IDisplayConfig as service (%d).", error);
-  } else {
-    DLOGI("IDisplayConfig service registration completed.");
-  }
+  return;
 }
 
 int MapDisplayType(DispType dpy) {
@@ -69,9 +71,9 @@ int MapDisplayType(DispType dpy) {
   return -EINVAL;
 }
 
-bool WaitForResourceNeeded(HWC2::PowerMode prev_mode, HWC2::PowerMode new_mode) {
-  return ((prev_mode == HWC2::PowerMode::Off) &&
-          (new_mode == HWC2::PowerMode::On || new_mode == HWC2::PowerMode::Doze));
+bool WaitForResourceNeeded(PowerMode prev_mode, PowerMode new_mode) {
+  return ((prev_mode == PowerMode::OFF) &&
+          (new_mode == PowerMode::ON || new_mode == PowerMode::DOZE));
 }
 
 HWCDisplay::DisplayStatus MapExternalStatus(DisplayConfig::ExternalStatus status) {
@@ -162,7 +164,7 @@ int HWCSession::SetDisplayStatus(int disp_id, HWCDisplay::DisplayStatus status) 
   }
 
   if (status == HWCDisplay::kDisplayStatusResume || status == HWCDisplay::kDisplayStatusPause) {
-    hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+    Display active_builtin_disp_id = GetActiveBuiltinDisplay();
     if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays) {
       {
         SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
@@ -468,7 +470,7 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
     float out_min_luminance = 0.0f;
     if (hwc_display->GetHdrCapabilities(&out_num_types, nullptr, &out_max_luminance,
                                         &out_max_average_luminance, &out_min_luminance)
-                                        != HWC2::Error::None) {
+                                        != HWC3::Error::None) {
       break;
     }
     if (!out_num_types) {
@@ -481,7 +483,7 @@ int HWCSession::DisplayConfigImpl::GetHDRCapabilities(DispType dpy,
 
     if (hwc_display->GetHdrCapabilities(&out_num_types, caps->supported_hdr_types.data(),
                                         &out_max_luminance, &out_max_average_luminance,
-                                        &out_min_luminance) == HWC2::Error::None) {
+                                        &out_min_luminance) == HWC3::Error::None) {
       error = 0;
     }
   } while (false);
@@ -559,7 +561,7 @@ int HWCSession::DisplayConfigImpl::DisplayBWTransactionPending(bool *status) {
 }
 
 int HWCSession::ControlIdlePowerCollapse(bool enable, bool synchronous) {
-  hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
+  Display active_builtin_disp_id = GetActiveBuiltinDisplay();
   if (active_builtin_disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("No active displays");
     return -EINVAL;
@@ -624,11 +626,11 @@ int HWCSession::IsWbUbwcSupported(bool *value) {
 
 int32_t HWCSession::getDisplayBrightness(uint32_t display, float *brightness) {
   if (!brightness) {
-    return HWC2_ERROR_BAD_PARAMETER;
+    return INT32(HWC3::Error::BadParameter);
   }
 
   if (display >= HWCCallbacks::kNumDisplays) {
-    return HWC2_ERROR_BAD_DISPLAY;
+    return INT32(HWC3::Error::BadDisplay);
   }
 
   SEQUENCE_WAIT_SCOPE_LOCK(locker_[display]);
@@ -648,11 +650,11 @@ int32_t HWCSession::getDisplayBrightness(uint32_t display, float *brightness) {
 
 int32_t HWCSession::getDisplayMaxBrightness(uint32_t display, uint32_t *max_brightness_level) {
   if (!max_brightness_level) {
-    return HWC2_ERROR_BAD_PARAMETER;
+    return INT32(HWC3::Error::BadParameter);
   }
 
   if (display >= HWCCallbacks::kNumDisplays) {
-    return HWC2_ERROR_BAD_DISPLAY;
+    return INT32(HWC3::Error::BadDisplay);
   }
 
   int32_t error = -EINVAL;
@@ -668,7 +670,8 @@ int32_t HWCSession::getDisplayMaxBrightness(uint32_t display, uint32_t *max_brig
 }
 
 int HWCSession::DisplayConfigImpl::SetDisplayAnimating(uint64_t display_id, bool animating) {
-  return hwc_session_->CallDisplayFunction(display_id, &HWCDisplay::SetDisplayAnimating, animating);
+  return INT(
+      hwc_session_->CallDisplayFunction(display_id, &HWCDisplay::SetDisplayAnimating, animating));
 }
 
 int HWCSession::DisplayConfigImpl::GetWriteBackCapabilities(bool *isWbUbwcSupported) {
@@ -678,9 +681,8 @@ int HWCSession::DisplayConfigImpl::GetWriteBackCapabilities(bool *isWbUbwcSuppor
 int HWCSession::SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start,
                                     uint32_t h_end, uint32_t v_start, uint32_t v_end,
                                     uint32_t factor_in, uint32_t factor_out) {
-  return CallDisplayFunction(display_id,
-                             &HWCDisplay::SetDisplayDppsAdROI, h_start, h_end, v_start, v_end,
-                             factor_in, factor_out);
+  return INT(CallDisplayFunction(display_id, &HWCDisplay::SetDisplayDppsAdROI, h_start, h_end,
+                                 v_start, v_end, factor_in, factor_out));
 }
 
 int HWCSession::DisplayConfigImpl::SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start,
@@ -724,14 +726,14 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   // Added this flag for pixel
   hwc_session_->async_power_mode_triggered_  = true;
   // Active builtin display needs revalidation
-  hwc2_display_t active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
-  HWC2::PowerMode previous_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
+  Display active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
+  PowerMode previous_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
 
   DLOGI("disp_id: %d power_mode: %d", disp_id, power_mode);
-  auto mode = static_cast<HWC2::PowerMode>(power_mode);
+  auto mode = static_cast<PowerMode>(power_mode);
 
   HWCDisplay::HWCLayerStack stack = {};
-  hwc2_display_t dummy_disp_id = hwc_session_->map_hwc_display_.at(disp_id);
+  Display dummy_disp_id = hwc_session_->map_hwc_display_.at(disp_id);
 
   // Power state transition start.
   // Acquire the display's power-state transition var read lock.
@@ -749,7 +751,7 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   buffer_handle_t target = 0;
   shared_ptr<Fence> acquire_fence = nullptr;
   int32_t dataspace = 0;
-  hwc_region_t damage = {};
+  Region damage = {};
   VsyncPeriodNanos vsync_period = 16600000;
   hwc_session_->hwc_display_[disp_id]->GetClientTarget(
                                  target, acquire_fence, dataspace, damage);
@@ -782,7 +784,7 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   hwc_session_->hwc_display_[disp_id]->SetLayerStack(&stack);
   bool vsync_pending = hwc_session_->hwc_display_[dummy_disp_id]->VsyncEnablePending();
   if (vsync_pending) {
-    hwc_session_->hwc_display_[disp_id]->SetVsyncEnabled(HWC2::Vsync::Enable);
+    hwc_session_->hwc_display_[disp_id]->SetVsyncEnabled(true);
   }
   hwc_session_->hwc_display_[dummy_disp_id]->GetClientTarget(
                                        target, acquire_fence, dataspace, damage);
@@ -797,7 +799,7 @@ int HWCSession::DisplayConfigImpl::SetPowerMode(uint32_t disp_id,
   // Release the display's power-state transition var read lock.
   hwc_session_->power_state_[disp_id].Unlock();
 
-  HWC2::PowerMode new_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
+  PowerMode new_mode = hwc_session_->hwc_display_[disp_id]->GetCurrentPowerMode();
   if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays &&
       hwc_session_->hwc_display_[disp_id]->IsFirstCommitDone() &&
       WaitForResourceNeeded(previous_mode, new_mode)) {
@@ -875,15 +877,15 @@ int HWCSession::DisplayConfigImpl::GetDebugProperty(const std::string prop_name,
 int HWCSession::DisplayConfigImpl::GetActiveBuiltinDisplayAttributes(
                                                     DisplayConfig::Attributes *attr) {
   int error = -EINVAL;
-  hwc2_display_t disp_id = hwc_session_->GetActiveBuiltinDisplay();
+  Display disp_id = hwc_session_->GetActiveBuiltinDisplay();
 
   if (disp_id >= HWCCallbacks::kNumDisplays) {
     DLOGE("Invalid display = %d", UINT32(disp_id));
   } else {
     if (hwc_session_->hwc_display_[disp_id]) {
       uint32_t config_index = 0;
-      HWC2::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
-      if (ret != HWC2::Error::None) {
+      HWC3::Error ret = hwc_session_->hwc_display_[disp_id]->GetActiveConfig(&config_index);
+      if (ret != HWC3::Error::None) {
         goto err;
       }
       DisplayConfigVariableInfo var_info;
@@ -1083,7 +1085,7 @@ void HWCSession::CWB::ProcessRequests() {
     {
       SEQUENCE_WAIT_SCOPE_LOCK(locker);
       if (hwc_display->SetReadbackBuffer(node->buffer, nullptr, node->post_processed,
-                                         kCWBClientExternal) != HWC2::Error::None) {
+                                         kCWBClientExternal) != HWC3::Error::None) {
         DLOGE("CWB buffer could not be set.");
         status = -1;
       }
@@ -1138,7 +1140,7 @@ void HWCSession::CWB::AsyncTask(CWB *cwb) {
   cwb->ProcessRequests();
 }
 
-void HWCSession::CWB::PresentDisplayDone(hwc2_display_t disp_id) {
+void HWCSession::CWB::PresentDisplayDone(Display disp_id) {
   if (disp_id != HWC_DISPLAY_PRIMARY) {
     return;
   }
@@ -1211,17 +1213,18 @@ int HWCSession::DisplayConfigImpl::IsAsyncVDSCreationSupported(bool *supported) 
 int HWCSession::DisplayConfigImpl::CreateVirtualDisplay(uint32_t width, uint32_t height,
                                                         int32_t format) {
   if (!hwc_session_->async_vds_creation_) {
-    return HWC2_ERROR_UNSUPPORTED;
+    return INT(HWC3::Error::Unsupported);
   }
 
   if (!width || !height) {
-    return HWC2_ERROR_BAD_PARAMETER;
+    return INT(HWC3::Error::BadParameter);
   }
 
-  hwc2_display_t active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
+
+  Display active_builtin_disp_id = hwc_session_->GetActiveBuiltinDisplay();
   auto status = hwc_session_->CreateVirtualDisplayObj(width, height, &format,
                                                       &hwc_session_->virtual_id_);
-  if (status == HWC2::Error::None) {
+  if (status == HWC3::Error::None) {
     DLOGI("Created virtual display id:%" PRIu64 ", res: %dx%d",
           hwc_session_->virtual_id_, width, height);
     if (active_builtin_disp_id < HWCCallbacks::kNumRealDisplays) {
@@ -1241,7 +1244,7 @@ int HWCSession::DisplayConfigImpl::IsRotatorSupportedFormat(int hal_format, bool
     *supported = false;
     return -EINVAL;
   }
-  int flag = ubwc ? private_handle_t::PRIV_FLAGS_UBWC_ALIGNED : 0;
+  int flag = ubwc ? qtigralloc::PRIV_FLAGS_UBWC_ALIGNED : 0;
 
   LayerBufferFormat sdm_format = HWCLayer::GetSDMFormat(hal_format, flag);
 

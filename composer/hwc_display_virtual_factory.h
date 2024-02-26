@@ -26,6 +26,14 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_VIRTUAL_FACTORY_H__
 #define __HWC_DISPLAY_VIRTUAL_FACTORY_H__
 
@@ -41,7 +49,7 @@ namespace sdm {
 class HWCVirtualDisplayFactory {
  public:
   int Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-             HWCCallbacks *callbacks, hwc2_display_t id, int32_t sdm_id, uint32_t width,
+             HWCCallbacks *callbacks, Display id, int32_t sdm_id, uint32_t width,
              uint32_t height, int32_t *format, float min_lum, float max_lum,
              HWCDisplay **hwc_display);
   void Destroy(HWCDisplay *hwc_display);

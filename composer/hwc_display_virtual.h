@@ -27,11 +27,16 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_VIRTUAL_H__
 #define __HWC_DISPLAY_VIRTUAL_H__
 
-#include <qdMetaData.h>
-#include <gralloc_priv.h>
 #include "hwc_display.h"
 #include "hwc_display_event_handler.h"
 
@@ -42,23 +47,23 @@ class HWCDisplayVirtual : public HWCDisplay {
   static void Destroy(HWCDisplay *hwc_display);
   virtual int Init();
   virtual int Deinit();
-  virtual HWC2::Error Present(shared_ptr<Fence> *out_retire_fence);
-  virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
+  virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                          int32_t format, bool post_processed);
-  virtual HWC2::Error GetDisplayType(int32_t *out_type);
-  virtual HWC2::Error SetColorMode(ColorMode mode);
-  virtual HWC2::Error SetOutputBuffer(buffer_handle_t buf, shared_ptr<Fence> release_fence);
-  virtual HWC2::Error DumpVDSBuffer();
+  virtual HWC3::Error GetDisplayType(int32_t *out_type);
+  virtual HWC3::Error SetColorMode(ColorMode mode);
+  virtual HWC3::Error SetOutputBuffer(buffer_handle_t buf, shared_ptr<Fence> release_fence);
+  virtual HWC3::Error DumpVDSBuffer();
   bool NeedsGPUBypass();
   HWCDisplayVirtual(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                    HWCCallbacks *callbacks, hwc2_display_t id, int32_t sdm_id,
+                    HWCCallbacks *callbacks, Display id, int32_t sdm_id,
                     uint32_t width, uint32_t height);
 
  protected:
   uint32_t width_ = 0;
   uint32_t height_ = 0;
   LayerBuffer output_buffer_ = {};
-  const private_handle_t *output_handle_ = nullptr;
+  const qtigralloc::private_handle_t *output_handle_ = nullptr;
 
  private:
   bool dump_output_layer_ = false;

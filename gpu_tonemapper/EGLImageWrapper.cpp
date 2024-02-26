@@ -19,10 +19,46 @@
  * limitations under the License.
  */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include "EGLImageWrapper.h"
 #include <cutils/native_handle.h>
-#include <gralloc_priv.h>
-#include <qdMetaData.h>
+#include <QtiGralloc.h>
+#include <QtiGrallocPriv.h>
 #include <ui/GraphicBuffer.h>
 #include <fcntl.h>
 #include <string>
@@ -32,6 +68,7 @@
 using std::string;
 using std::map;
 using std::pair;
+using aidl::android::hardware::graphics::common::StandardMetadataType;
 
 static string pidString = std::to_string(getpid());
 
@@ -127,10 +164,12 @@ static EGLImageBuffer* L_wrap(const private_handle_t *src)
   uint32_t stride = src->width;
   native_handle_t *native_handle = const_cast<private_handle_t *>(src);
 
-  BufferDim_t custom_dim;
-  if(!getMetaData(const_cast<private_handle_t *>(src), GET_BUFFER_GEOMETRY, &custom_dim)) {
-    unaligned_width = custom_dim.sliceWidth;
-    unaligned_height = custom_dim.sliceHeight;
+  CropRectangle_t crop;
+  if (gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
+                               (int64_t)StandardMetadataType::CROP,
+                                &crop) == gralloc::Error::NONE) {
+    unaligned_width = crop.right;
+    unaligned_height = crop.bottom;
     uint32_t aligned_height = 0;
     gralloc::BufferInfo info(unaligned_width, unaligned_height, src->format, src->usage);
     gralloc::GetAlignedWidthAndHeight(info, &stride, &aligned_height);
@@ -140,7 +179,7 @@ static EGLImageBuffer* L_wrap(const private_handle_t *src)
               android::GraphicBuffer::USAGE_SW_READ_NEVER |
               android::GraphicBuffer::USAGE_SW_WRITE_NEVER;
 
-  if (src->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
+  if (src->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
     flags |= android::GraphicBuffer::USAGE_PROTECTED;
   }
 

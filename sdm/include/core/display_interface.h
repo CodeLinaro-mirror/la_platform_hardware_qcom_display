@@ -34,7 +34,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -400,6 +400,37 @@ class DisplayInterface {
     @sa Commit
   */
   virtual DisplayError Prepare(LayerStack *layer_stack) = 0;
+
+  /*! @brief Method to try to perform prepare and commit in one go.
+
+    @details Client shall send all layers associated with a frame targeted for current display
+    using this method and check the layers which can be handled completely in display manager.
+
+    Client shall mark composition type for one of the layer as kCompositionGPUTarget; the GPU
+    composed output would be rendered at the specified layer if some of the layers are not handled
+    by SDM.
+
+    Display manager will set each layer as kCompositionGPU or kCompositionSDE upon return. Client
+    shall render all the layers marked as kCompositionGPU using GPU.
+
+    This method must be followed by Commit() if the unified draw cycle could not be performed.
+
+    This method shall be called only once for each frame.
+
+    In the event of an error as well, this call will cause any fences returned in the previous call
+    to Commit() to eventually become signaled, so the client's wait on fences can be released to
+    prevent deadlocks.
+
+    In case of a virtual display, an explict call is needed to retrieve buffer output fences. Fences
+    will be set to -1 in the layer stack when this call is returned.
+
+    @param[in] layer_stack \link LayerStack \endlink
+
+    @return \link DisplayError \endlink
+
+    @sa Commit
+  */
+  virtual DisplayError CommitOrPrepare(LayerStack *layer_stack) = 0;
 
   /*! @brief Method to commit layers of a frame submitted in a former call to Prepare().
 
