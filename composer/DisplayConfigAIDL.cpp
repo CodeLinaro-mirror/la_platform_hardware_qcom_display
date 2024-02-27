@@ -610,9 +610,9 @@ ScopedAStatus DisplayConfigAIDL::isRCSupported(int disp_id, bool *supported) {
 
 ScopedAStatus DisplayConfigAIDL::controlIdleStatusCallback(bool enable) {
   if (enable) {
-    idle_callback_ = callback_;
+    enable_aidl_idle_notification_ = true;
   } else {
-    idle_callback_.reset();
+    enable_aidl_idle_notification_ = false;
   }
 
   return ScopedAStatus::ok();
@@ -906,12 +906,16 @@ void DisplayConfigAIDL::NotifyTUIEventDone(uint32_t ret, uint32_t disp_id,
 }
 
 void DisplayConfigAIDL::NotifyIdleStatus(bool status) {
-  std::shared_ptr<DisplayConfig::ConfigCallback> callback = idle_callback_.lock();
-  if (!callback) {
+  if (!enable_aidl_idle_notification_) {
     return;
   }
 
-  callback->NotifyIdleStatus(true);
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyIdleStatus(status);
+    }
+  }
 }
 
 void DisplayConfigAIDL::OnHdmiHotplug(bool connected) {
