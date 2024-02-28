@@ -3019,7 +3019,6 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
   usleep(UINT32(GetVsyncPeriod(HWC_DISPLAY_PRIMARY)) * 2 / 1000);
 
   {
-    SCOPE_LOCK(locker_[client_id]);
     auto &hwc_display = hwc_display_[client_id];
     if (!hwc_display) {
       return;
