@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -150,6 +150,8 @@
 #define ENABLE_SPR                           DISPLAY_PROP("enable_spr")
 #define ENABLE_SPR_BYPASS                    DISPLAY_PROP("enable_spr_bypass")
 #define ENABLE_MEMORY_MAPPING                DISPLAY_PROP("enable_memory_mapping")
+#define DISABLE_SPR_PRIMARY                  DISPLAY_PROP("disable_spr_primary")
+#define DISABLE_SPR_SECONDARY                DISPLAY_PROP("disable_spr_secondary")
 
 // Panel Feature Demura Properties
 #define ENABLE_DEMURA                        DISPLAY_PROP("enable_demura")

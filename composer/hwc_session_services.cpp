@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -488,6 +488,21 @@ int HWCSession::NotifyResolutionChange(int32_t disp_id, Attributes &attr) {
   for (auto const &[id, callback] : callback_clients_) {
     if (callback) {
       callback->notifyResolutionChange(disp_id, attr);
+    }
+  }
+
+  return 0;
+}
+
+int HWCSession::NotifyIdleStatus(bool idle_status) {
+  if (!enable_aidl_idle_notification_) {
+    return 0;
+  }
+
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyIdleStatus(idle_status);
     }
   }
 

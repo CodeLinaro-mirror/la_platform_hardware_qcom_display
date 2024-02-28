@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -796,14 +796,9 @@ void HWCSession::PerformQsyncCallback(Display display, bool qsync_enabled, uint3
 }
 
 void HWCSession::PerformIdleStatusCallback(Display display) {
-  std::shared_ptr<DisplayConfig::ConfigCallback> callback = idle_callback_.lock();
-  if (!callback) {
-    return;
-  }
-
   if (hwc_display_[display]->IsDisplayIdle()) {
     DTRACE_SCOPED();
-    callback->NotifyIdleStatus(true);
+    NotifyIdleStatus(true);
   }
 }
 

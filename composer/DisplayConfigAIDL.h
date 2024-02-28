@@ -90,7 +90,7 @@ class DisplayConfigAIDL : public BnDisplayConfig {
   ScopedAStatus getHDRCapabilities(DisplayType dpy, HDRCapsParams *aidl_return) override;
   ScopedAStatus setCameraLaunchStatus(int on) override;
   ScopedAStatus displayBWTransactionPending(bool *status) override;
-  ScopedAStatus setDisplayAnimating(long display_id, bool animating) override;
+  ScopedAStatus setDisplayAnimating(int64_t display_id, bool animating) override;
   ScopedAStatus controlIdlePowerCollapse(bool enable, bool synchronous) override;
   ScopedAStatus getWriteBackCapabilities(bool *is_wb_ubwc_supported);
   ScopedAStatus setDisplayDppsAdROI(int display_id, int h_start, int h_end, int v_start, int v_end,
@@ -101,16 +101,16 @@ class DisplayConfigAIDL : public BnDisplayConfig {
   ScopedAStatus isPowerModeOverrideSupported(int disp_id, bool *supported) override;
   ScopedAStatus isHDRSupported(int disp_id, bool *supported) override;
   ScopedAStatus isWCGSupported(int disp_id, bool *supported) override;
-  ScopedAStatus setLayerAsMask(int disp_id, long layer_id) override;
+  ScopedAStatus setLayerAsMask(int32_t disp_id, int64_t layer_id) override;
   ScopedAStatus getDebugProperty(const std::string &prop_name, std::string *value) override;
   ScopedAStatus getActiveBuiltinDisplayAttributes(Attributes *attr) override;
   ScopedAStatus setPanelLuminanceAttributes(int disp_id, float min_lum, float max_lum) override;
   ScopedAStatus isBuiltInDisplay(int disp_id, bool *aidl_return) override;
   ScopedAStatus isAsyncVDSCreationSupported(bool *aidl_return) override;
   ScopedAStatus createVirtualDisplay(int width, int height, int format) override;
-  ScopedAStatus getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) override;
-  ScopedAStatus getDSIClk(int disp_id, long *bit_clk) override;
-  ScopedAStatus setDSIClk(int disp_id, long bit_clk) override;
+  ScopedAStatus getSupportedDSIBitClks(int32_t disp_id, std::vector<int64_t> *bit_clks) override;
+  ScopedAStatus getDSIClk(int32_t disp_id, int64_t *bit_clk) override;
+  ScopedAStatus setDSIClk(int32_t disp_id, int64_t bit_clk) override;
   ScopedAStatus setQsyncMode(int disp_id, QsyncMode mode) override;
   ScopedAStatus isSmartPanelConfig(int disp_id, int config_id, bool *is_smart) override;
   ScopedAStatus isRotatorSupportedFormat(int hal_format, bool ubwc, bool *supported) override;
@@ -123,7 +123,7 @@ class DisplayConfigAIDL : public BnDisplayConfig {
   ScopedAStatus isRCSupported(int disp_id, bool *supported) override;
   ScopedAStatus controlIdleStatusCallback(bool enable) override;
   ScopedAStatus isSupportedConfigSwitch(int disp_id, int config, bool *supported) override;
-  ScopedAStatus getDisplayType(long physical_disp_id, DisplayType *display_type) override;
+  ScopedAStatus getDisplayType(int64_t physical_disp_id, DisplayType *display_type) override;
   ScopedAStatus setCWBOutputBuffer(
       const std::shared_ptr<IDisplayConfigCallback> &in_callback, int32_t in_disp_id,
       const Rect &in_rect, bool in_post_processed,

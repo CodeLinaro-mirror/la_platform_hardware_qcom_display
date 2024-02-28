@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -333,7 +333,7 @@ ScopedAStatus DisplayConfigAIDL::displayBWTransactionPending(bool *status) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setDisplayAnimating(long display_id, bool animating) {
+ScopedAStatus DisplayConfigAIDL::setDisplayAnimating(int64_t display_id, bool animating) {
   hwc_session_->CallDisplayFunction(display_id, &sdm::HWCDisplay::SetDisplayAnimating, animating);
   return ScopedAStatus::ok();
 }
@@ -402,7 +402,7 @@ ScopedAStatus DisplayConfigAIDL::isWCGSupported(int disp_id, bool *supported) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setLayerAsMask(int disp_id, long layer_id) {
+ScopedAStatus DisplayConfigAIDL::setLayerAsMask(int32_t disp_id, int64_t layer_id) {
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[disp_id];
   if (!hwc_display) {
@@ -557,7 +557,8 @@ ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) {
+ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int32_t disp_id,
+                                                        std::vector<int64_t> *bit_clks) {
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     ALOGW("%s: Display:%d is not connected", __FUNCTION__, disp_id);
@@ -568,7 +569,7 @@ ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
+ScopedAStatus DisplayConfigAIDL::getDSIClk(int32_t disp_id, int64_t *bit_clk) {
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     ALOGW("%s: Invalid display:%d", __FUNCTION__, disp_id);
@@ -579,7 +580,7 @@ ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setDSIClk(int disp_id, long bit_clk) {
+ScopedAStatus DisplayConfigAIDL::setDSIClk(int32_t disp_id, int64_t bit_clk) {
   SCOPE_LOCK(hwc_session_->locker_[disp_id]);
   if (!hwc_session_->hwc_display_[disp_id]) {
     ALOGW("%s: Invalid display:%d", __FUNCTION__, disp_id);
@@ -726,9 +727,9 @@ ScopedAStatus DisplayConfigAIDL::isRCSupported(int disp_id, bool *supported) {
 
 ScopedAStatus DisplayConfigAIDL::controlIdleStatusCallback(bool enable) {
   if (enable) {
-    hwc_session_->idle_callback_ = callback_;
+    hwc_session_->enable_aidl_idle_notification_ = true;
   } else {
-    hwc_session_->idle_callback_.reset();
+    hwc_session_->enable_aidl_idle_notification_ = false;
   }
 
   return ScopedAStatus::ok();
@@ -795,7 +796,8 @@ int DisplayConfigAIDL::GetDispTypeFromPhysicalId(uint64_t physical_disp_id,
   return -ENODEV;
 }
 
-ScopedAStatus DisplayConfigAIDL::getDisplayType(long physical_disp_id, DisplayType *display_type) {
+ScopedAStatus DisplayConfigAIDL::getDisplayType(int64_t physical_disp_id,
+                                                DisplayType *display_type) {
   if (!display_type) {
     ALOGW("%s: Display type provided is invalid.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));

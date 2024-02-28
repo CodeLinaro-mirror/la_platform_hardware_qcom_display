@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -2484,6 +2484,9 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
     case QTI_VIDEO_TS_INFO:
     case QTI_S3D_FORMAT:
     case QTI_BUFFER_PERMISSION:
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
+    case QTI_BUFFER_DEQUEUE_DURATION:
+#endif
       return metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(paramType)];
     case QTI_COLOR_METADATA:
       return metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_COLOR_METADATA)] ||
@@ -3504,6 +3507,15 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
       }
       break;
     }
+#endif
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
+    case QTI_BUFFER_DEQUEUE_DURATION:
+      if (copy) {
+        *(reinterpret_cast<int64_t *>(in)) = data->bufferDequeueDuration;
+      } else {
+        *out = &data->bufferDequeueDuration;
+      }
+      break;
 #endif
     default:
       ALOGD_IF(DEBUG, "Unsupported metadata type %d", type);

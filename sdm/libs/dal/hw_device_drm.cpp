@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -3517,6 +3517,7 @@ DisplayError HWDeviceDRM::GetPanelBlMaxLvl(uint32_t *bl_max) {
 }
 
 DisplayError HWDeviceDRM::SetPPConfig(void *payload, size_t size) {
+  DTRACE_SCOPED();
   if (!payload || size != sizeof(DRMPPFeatureInfo)) {
     DLOGE("Invalid input params on display %d-%d payload %pK, size %zd expect size %zd",
           display_id_, disp_type_, payload, size, sizeof(DRMPPFeatureInfo));

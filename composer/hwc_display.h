@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -602,6 +602,7 @@ class HWCDisplay : public DisplayEventHandler {
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
   void WaitOnPreviousFence();
+  bool NotifyIdleNow();
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
@@ -616,6 +617,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool client_target_3_1_set_ = false;
   bool is_client_up_ = false;
   uint64_t expected_present_time_ = 0;  // Expected Present time for current frame
+  int idle_active_ms_ = 0;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

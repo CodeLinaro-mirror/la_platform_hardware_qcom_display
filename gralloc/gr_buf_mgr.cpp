@@ -18,7 +18,7 @@
  */
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -127,6 +127,9 @@ static Error dataspaceToColorMetadata(Dataspace dataspace, ColorMetaData *color_
     case (uint32_t)Dataspace::TRANSFER_HLG:
       out.transfer = Transfer_HLG;
       break;
+    case (uint32_t)Dataspace::TRANSFER_ST2084:
+      out.transfer = Transfer_SMPTE_ST2084;
+      break;
     default:
       return Error::UNSUPPORTED;
       /*
@@ -138,7 +141,6 @@ static Error dataspaceToColorMetadata(Dataspace dataspace, ColorMetaData *color_
       Transfer_sYCC
       Transfer_BT2020_2_1
       Transfer_BT2020_2_2
-      Transfer_SMPTE_ST2084
       Transfer_ST_428
       */
   }
@@ -1438,6 +1440,16 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       }
       break;
 #endif
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
+    case QTI_BUFFER_DEQUEUE_DURATION:
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeInt64(qtigralloc::MetadataType_BufferDequeueDuration,
+                                       *reinterpret_cast<int64_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -1728,6 +1740,14 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
             android::hardware::graphics::mapper::V4_0::Error::NONE) {
           return Error::BAD_VALUE;
         }
+      }
+      break;
+#endif
+#ifdef QTI_BUFFER_DEQUEUE_DURATION
+    case QTI_BUFFER_DEQUEUE_DURATION:
+      if (android::gralloc4::decodeInt64(qtigralloc::MetadataType_BufferDequeueDuration, in,
+                                         &metadata->bufferDequeueDuration)) {
+        return Error::UNSUPPORTED;
       }
       break;
 #endif

@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -46,6 +46,7 @@ class HWCDisplayEventHandler {
                                     uint32_t qsync_refresh_rate) = 0;
   virtual void VmReleaseDone(Display display) = 0;
   virtual int NotifyCwbDone(int dpy_index, int32_t status, uint64_t handle_id) = 0;
+  virtual int NotifyIdleStatus(bool idle_status) = 0;
 
  protected:
   virtual ~HWCDisplayEventHandler() {}

@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -517,6 +517,8 @@ int HWCDisplay::Init() {
   if (property_swap_interval == 0) {
     swap_interval_zero_ = true;
   }
+
+  idle_active_ms_ = HWCDebugHandler::GetIdleTimeoutMs();
 
   client_target_ = new HWCLayer(id_, buffer_allocator_);
 
@@ -1500,6 +1502,9 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
     } break;
     case kPostIdleTimeout:
       display_idle_ = true;
+      if (NotifyIdleNow()) {
+        event_handler_->NotifyIdleStatus(true);
+      }
       break;
     case kVmReleaseDone: {
       if (event_handler_) {
@@ -3758,4 +3763,13 @@ void HWCDisplay::Abort() {
 void HWCDisplay::MarkClientActive(bool is_client_up) {
   is_client_up_ = is_client_up;
 }
+
+bool HWCDisplay::NotifyIdleNow() {
+  if (IsDisplayIdle() && (IsDisplayCommandMode() || idle_active_ms_ <= 0)) {
+    return true;
+  }
+
+  return false;
+}
+
 }  // namespace sdm

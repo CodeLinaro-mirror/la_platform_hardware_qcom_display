@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -506,6 +506,8 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   LayerRect window_rect_ = {};
   bool enable_win_rect_mask_ = false;
   HWDisplayMode default_panel_mode_ = kModeDefault;
+  bool idle_hint_set_ = false;
+  uint32_t idle_active_ms_ = 0;
 };
 
 }  // namespace sdm
