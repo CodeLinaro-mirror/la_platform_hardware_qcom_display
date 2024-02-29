@@ -319,8 +319,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
                                                       DisplayAttribute in_attribute,
                                                       int32_t *aidl_return) {
   DisplayConfigVariableInfo attributes{};
-  uint32_t group_id = -1;
-  auto error = settings_->GetDisplayAttributes(in_display, in_config, &attributes, &group_id);
+  auto error = settings_->GetDisplayAttributes(in_display, in_config, &attributes);
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
@@ -370,7 +369,8 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     display_configuration.dpi = {static_cast<float>(variable_config.x_dpi),
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
-    display_configuration.configGroup = variable_config.group_id;
+    display_configuration.configGroup =
+        settings_->GetDisplayConfigGroup(in_display, variable_config);
     ALOGI("GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d", config_id,
           variable_config.vsync_period_ns, display_configuration.configGroup);
 
