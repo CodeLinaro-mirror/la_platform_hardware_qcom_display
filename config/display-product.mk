@@ -199,7 +199,7 @@ ifeq ($(call is-vendor-board-platform,QCOM),true)
 endif
 
 
-ifeq ($(TARGET_BOARD_PLATFORM), kalama)
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), kalama niobe), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_ubwcp_headers := false
 endif
 

@@ -77,8 +77,12 @@ case "$target" in
         setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.display.enable_qsync_idle 1
         ;;
+    esac
+    ;;
+    "pitti")
+    # SOC ID for Pitti is 623
+    case "$soc_hwid" in
       623)
-        # SOC ID for Pitti is 623
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 5
@@ -97,6 +101,7 @@ case "$target" in
         setprop vendor.display.disable_cwb_idle_fallback 1
         setprop vendor.display.disable_offline_rotator 0
         setprop vendor.display.enable_qsync_idle 1
+        ;;
     esac
     ;;
     "kalama")
