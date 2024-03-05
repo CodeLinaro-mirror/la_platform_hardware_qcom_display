@@ -1317,7 +1317,25 @@ void AidlComposerClient::CommandEngine::executeSetLayerSurfaceDamage(
 
 void AidlComposerClient::CommandEngine::executeSetLayerBlendMode(
     int64_t display, int64_t layer, const ParcelableBlendMode &blendMode) {
-  auto err = mClient.layer_builder_->SetLayerBlendMode(display, layer, INT32(blendMode.blendMode));
+  int32_t blending = sdm::kBlendingPremultiplied;
+  auto mode = static_cast<BlendMode>(blendMode.blendMode);
+  switch (mode) {
+    case BlendMode::NONE:
+      blending = sdm::kBlendingOpaque;
+      break;
+    case BlendMode::PREMULTIPLIED:
+      blending = sdm::kBlendingPremultiplied;
+      break;
+    case BlendMode::COVERAGE:
+      blending = sdm::kBlendingCoverage;
+      break;
+    case BlendMode::INVALID:
+    default:
+      writeError(__FUNCTION__, Error::BadConfig);
+      return;
+  }
+
+  auto err = mClient.layer_builder_->SetLayerBlendMode(display, layer, blending);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }
