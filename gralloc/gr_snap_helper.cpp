@@ -4772,17 +4772,29 @@ SnapError GrallocSnapHelperLegacy::VendorMetadataStatusHelper(
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     bool vendor_metadata_state[METADATA_SET_SIZE];
+    bool vendor_metadata_state_legacy[METADATA_SET_SIZE] = {};
+
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::VENDOR_METADATA_STATUS,
                                      &vendor_metadata_state);
     error = CheckMetadataSet(SnapMetadataType::VENDOR_METADATA_STATUS, error, check_metadata_set);
+
+    for (int type = 0; type < METADATA_SET_SIZE; type++) {
+      int legacy_type = QTI_VT_TIMESTAMP + type;
+      if (metadata_type_map.find(legacy_type) != metadata_type_map.end()) {
+        int snap_type = metadata_type_map[legacy_type];
+        vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] =
+            vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+      }
+    }
+
     if (hidl_bytestream) {
-      if (qtigralloc::encodeMetadataState(vendor_metadata_state,
+      if (qtigralloc::encodeMetadataState(vendor_metadata_state_legacy,
                                           static_cast<hidl_vec<uint8_t> *>(gralloc_out_get)) !=
           GrallocError::NONE) {
         return SnapError::BAD_VALUE;
       }
     } else {
-      std::memcpy(gralloc_out_get, vendor_metadata_state, sizeof(bool) * METADATA_SET_SIZE);
+      std::memcpy(gralloc_out_get, vendor_metadata_state_legacy, sizeof(bool) * METADATA_SET_SIZE);
     }
   } else if (gralloc_in_set != nullptr) {
     if (hidl_bytestream) {
