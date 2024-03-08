@@ -572,6 +572,16 @@ HWC3::Error HWCSession::DestroyVirtualDisplay(Display display) {
   return HWC3::Error::None;
 }
 
+int32_t HWCSession::GetVirtualDisplayId(HWDisplayInfo &info) {
+  for (auto &map_info : map_info_virtual_) {
+    if (map_info.sdm_id == info.display_id) {
+      return -1;
+    }
+  }
+
+  return info.display_id;
+}
+
 void HWCSession::Dump(uint32_t *out_size, char *out_buffer) {
   if (!out_size) {
     return;
@@ -1346,11 +1356,22 @@ HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
     }
   }
 
-  // Request to get virtual display id corresponds writeback block, which could be used for WFD.
   int32_t display_id = -1;
-  auto err = core_intf_->RequestVirtualDisplayId(&display_id);
-  if (err != kErrorNone || display_id == -1) {
-    return HWC3::Error::NoResources;
+
+  if (!virtual_display_factory_.IsGPUColorConvertSupported()) {
+    // Request to get virtual display id corresponds writeback block, which could be used for WFD.
+    auto err = core_intf_->RequestVirtualDisplayId(&display_id);
+    if (err != kErrorNone || display_id == -1) {
+      return HWC3::Error::NoResources;
+    }
+  } else {
+    for (auto &vdl : virtual_display_list_) {
+      display_id = GetVirtualDisplayId(vdl);
+      if (display_id == -1) {
+        continue;
+      }
+      break;
+    }
   }
 
   // Lock confined to this scope
