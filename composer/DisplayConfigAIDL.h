@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -207,12 +207,12 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 
  private:
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
-  std::weak_ptr<DisplayConfig::ConfigCallback> idle_callback_;
 
   std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
   std::mutex callbacks_lock_;
   uint64_t callback_client_id_ = 0;
+  bool enable_aidl_idle_notification_ = false;
 
   SDMDisplayCapsIntf *caps_ = nullptr;
   SDMDisplaySettingsIntf *settings_ = nullptr;

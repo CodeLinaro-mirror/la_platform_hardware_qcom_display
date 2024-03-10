@@ -82,8 +82,6 @@ bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
   layer_builder_ = layers;
   sideband_ = sideband;
 
-  lifecycle_->Init(this, &buffer_allocator_, &socket_handler_);
-
   qservice_ = QServiceBackend::GetInstance();
   qservice_->Init();
 
@@ -118,7 +116,7 @@ bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
 AidlComposerClient::~AidlComposerClient() {
   ALOGW("%s: Destroying composer client", __FUNCTION__);
 
-  lifecycle_->EnableCallback(false);
+  lifecycle_->RegisterCompositorCallback(nullptr, false);
 
   // no need to grab the mutex as any in-flight hwbinder call would have
   // kept the client alive
@@ -714,7 +712,7 @@ ScopedAStatus AidlComposerClient::getDisplayDecorationSupport(
 ScopedAStatus AidlComposerClient::registerCallback(
     const std::shared_ptr<IComposerCallback> &in_callback) {
   callback_ = in_callback;
-  lifecycle_->EnableCallback(in_callback != nullptr);
+  lifecycle_->RegisterCompositorCallback(this, in_callback != nullptr);
   return ScopedAStatus::ok();
 }
 
@@ -1317,7 +1315,25 @@ void AidlComposerClient::CommandEngine::executeSetLayerSurfaceDamage(
 
 void AidlComposerClient::CommandEngine::executeSetLayerBlendMode(
     int64_t display, int64_t layer, const ParcelableBlendMode &blendMode) {
-  auto err = mClient.layer_builder_->SetLayerBlendMode(display, layer, INT32(blendMode.blendMode));
+  int32_t blending = sdm::kBlendingPremultiplied;
+  auto mode = static_cast<BlendMode>(blendMode.blendMode);
+  switch (mode) {
+    case BlendMode::NONE:
+      blending = sdm::kBlendingOpaque;
+      break;
+    case BlendMode::PREMULTIPLIED:
+      blending = sdm::kBlendingPremultiplied;
+      break;
+    case BlendMode::COVERAGE:
+      blending = sdm::kBlendingCoverage;
+      break;
+    case BlendMode::INVALID:
+    default:
+      writeError(__FUNCTION__, Error::BadConfig);
+      return;
+  }
+
+  auto err = mClient.layer_builder_->SetLayerBlendMode(display, layer, blending);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }

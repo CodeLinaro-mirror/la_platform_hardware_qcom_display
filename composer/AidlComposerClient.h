@@ -126,9 +126,6 @@ using sdm::Fence;
 using sdm::HWC3::Error;
 using std::shared_ptr;
 
-using sdm::HWCBufferAllocator;
-using sdm::HWCSocketHandler;
-
 using sdm::SDMCompositorCbIntf;
 using sdm::SDMDisplayCapsIntf;
 using sdm::SDMDisplayDrawCycleIntf;
@@ -289,7 +286,6 @@ class AidlComposerClient : public BnComposerClient,
 
  private:
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
-  HWCBufferAllocator buffer_allocator_{};
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;
@@ -434,7 +430,6 @@ class AidlComposerClient : public BnComposerClient,
   SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
   SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
   SDMDisplaySideBandIntf *sideband_ = nullptr;
-  HWCSocketHandler socket_handler_;
 
   QServiceBackend *qservice_ = nullptr;
 
