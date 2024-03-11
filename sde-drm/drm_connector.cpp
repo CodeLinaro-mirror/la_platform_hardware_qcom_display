@@ -651,6 +651,10 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   }
 
   char *fmt_str = new char[blob->length + 1];
+  if (fmt_str == nullptr) {
+    return;
+  }
+
   memcpy (fmt_str, blob->data, blob->length);
   fmt_str[blob->length] = '\0';
   stringstream stream(fmt_str);

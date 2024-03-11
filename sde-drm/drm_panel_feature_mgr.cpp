@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -327,6 +327,10 @@ void DRMPanelFeatureMgr::ParseDsppCapabilities(uint32_t blob_id, std::vector<int
   }
 
   char *fmt_str = new char[blob->length + 1];
+  if (fmt_str == nullptr) {
+    return;
+  }
+
   std::memcpy(fmt_str, blob->data, blob->length);
   fmt_str[blob->length] = '\0';
   std::stringstream stream(fmt_str);
@@ -362,6 +366,10 @@ void DRMPanelFeatureMgr::ParseCapabilities(uint32_t blob_id, char* value, uint32
   }
 
   char *fmt_str = new char[blob->length + 1];
+  if (fmt_str == nullptr) {
+    return;
+  }
+
   std::memcpy(fmt_str, blob->data, blob->length);
   fmt_str[blob->length] = '\0';
   std::stringstream stream(fmt_str);
