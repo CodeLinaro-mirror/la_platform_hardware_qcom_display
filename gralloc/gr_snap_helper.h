@@ -632,6 +632,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       snap_to_gralloc_ubwc_format_ = {
           {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
            HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_4R},
+           HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -707,6 +709,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_WFD, SnapUsage::QTI_PRIVATE_WFD},
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_TRUSTED_VM, SnapUsage::QTI_PRIVATE_TRUSTED_VM},
+      {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R, SnapUsage::QTI_ALLOC_UBWC_4R},
       {SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
       {SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
   };
@@ -1380,6 +1383,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       snap_to_gralloc_ubwc_format_ = {
           {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
            HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_4R},
+           HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -1453,6 +1458,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_WFD, SnapUsage::QTI_PRIVATE_WFD},
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_TRUSTED_VM, SnapUsage::QTI_PRIVATE_TRUSTED_VM},
+      {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R, SnapUsage::QTI_ALLOC_UBWC_4R},
       {SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
       {SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
   };
