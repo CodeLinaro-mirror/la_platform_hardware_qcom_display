@@ -53,8 +53,6 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_CO
 #SDR Dimming config file for vtdr6130, display id is 4630947039571902851
 PRODUCT_COPY_FILES += hardware/qcom/display/config/display_id_sample.xml:$(TARGET_COPY_OUT_VENDOR)/etc/displayconfig/display_id_4630947039571902851.xml
 
-PRODUCT_COPY_FILES += hardware/qcom/display/config/hwc_display_resolution_extn.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display/hwc_display_resolution_extn.xml
-
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.demo.hdmirotationlock=false \
     persist.sys.sf.color_saturation=1.0 \
