@@ -1,6 +1,9 @@
 /*
 * Copyright (c) 2014 - 2016, 2018 - 2021 The Linux Foundation. All rights reserved.
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+*
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -287,6 +290,12 @@ class CoreInterface {
     @return returns true if resources are successfully reserved.
   */
   virtual DisplayError ReserveDemuraResources() = 0;
+
+  /*! @brief Method to set cpu perf hint.
+
+    @return returns true if cpu perf hint successfully set.
+  */
+  virtual DisplayError SetCpuPerfHint(bool isReset, const uint32_t &cpu_hint_freq) = 0;
 
  protected:
   virtual ~CoreInterface() { }

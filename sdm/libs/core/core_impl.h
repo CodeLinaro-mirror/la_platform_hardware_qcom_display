@@ -1,7 +1,9 @@
 /*
 * Copyright (c) 2014 - 2016, 2018, 2020-2021 The Linux Foundation. All rights reserved.
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -93,6 +95,7 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info);
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format);
+  virtual DisplayError SetCpuPerfHint(bool isReset, const uint32_t &cpu_hint_freq);
   virtual DisplayError ReserveDemuraResources();
 #ifdef PROFILE_COVERAGE_DATA
   virtual DisplayError DumpCodeCoverage();
