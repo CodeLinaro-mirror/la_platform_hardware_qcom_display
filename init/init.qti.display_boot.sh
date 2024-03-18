@@ -39,9 +39,8 @@ fi
 case "$target" in
     "sun")
     #SOC ID for Sun is 618
-    #SOC ID for Sun APQ is 639
     case "$soc_hwid" in
-      618|639)
+      618)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 4
