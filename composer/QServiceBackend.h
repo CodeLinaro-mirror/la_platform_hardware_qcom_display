@@ -11,9 +11,11 @@ namespace sdm {
 
 class QServiceBackend : public qClient::BnQClient {
 public:
-  QServiceBackend();
-  android::status_t notifyCallback(uint32_t command, const android::Parcel *input_parcel,
-                                             android::Parcel *output_parcel);
+ static QServiceBackend *GetInstance();
+ void Init();
+ android::status_t notifyCallback(uint32_t command, const android::Parcel *input_parcel,
+                                  android::Parcel *output_parcel);
+
 private:
   SDMDisplaySideBandIntf *sideband_ = nullptr;
   qService::QService *qservice_ = nullptr;

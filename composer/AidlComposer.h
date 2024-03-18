@@ -42,6 +42,9 @@ using ::android::hardware::hidl_vec;
 
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 
+using sdm::HWCBufferAllocator;
+using sdm::HWCSocketHandler;
+
 class AidlComposer : public BnComposer {
  public:
   AidlComposer(const shared_ptr<QtiComposer3Client> &extensions);
@@ -71,6 +74,8 @@ class AidlComposer : public BnComposer {
   SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
   SDMDisplayLayerBuilderIntf *layers_ = nullptr;
   SDMDisplaySideBandIntf *sideband_ = nullptr;
+  HWCSocketHandler socket_handler_;
+  HWCBufferAllocator buffer_allocator_{};
 };
 
 }  // namespace composer3

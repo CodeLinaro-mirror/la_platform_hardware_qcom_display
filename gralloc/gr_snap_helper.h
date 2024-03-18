@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -7,6 +7,7 @@
 #define __GR_SNAP_HELPER_H__
 
 #include <functional>
+#include <list>
 
 #include <Address.h>
 #include <BlendMode.h>
@@ -177,7 +178,8 @@ class GrallocSnapHelperIntf {
 
   virtual bool IsBufferImported(native_handle_t *gr_hnd);
   virtual int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  virtual int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  virtual int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size,
+                              int interlaced);
   virtual int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                                 uint64_t *reserved_region_size);
 };
@@ -218,22 +220,22 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
 
   bool IsBufferImported(native_handle_t *gr_hnd);
   int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
 
  private:
   GrallocSnapHelper();
   ~GrallocSnapHelper();
-  int GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
+  SnapError GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
   SnapUsage GetSnapUsage(uint64_t usage, int hal_format);
   int GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage, int *gr_format);
   int GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                         SnapPixelFormat *snap_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
 
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferDescriptor gr_desc);
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferInfo gr_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
 
   int ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &snap_dataspace,
                                              GrallocDataspace *gr_dataspace);
@@ -821,6 +823,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
   };
 
+  std::list<int> unsupported_formats = {
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
+  };
+
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(
       SnapHandle *, uint32_t aidl_size, void *gralloc_in_set, void *gralloc_out_get,
       SnapDescriptor *buf_des, bool check_metadata_set, int32_t *mapper_return);
@@ -1057,6 +1065,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                        SnapDescriptor *buf_des = nullptr,
                                        bool check_metadata_set = true,
                                        int32_t *mapper_return = nullptr);
+  SnapError BufferDequeueDurationHelper(SnapHandle *, uint32_t aidl_size,
+                                        void *gralloc_in_set = nullptr,
+                                        void *gralloc_out_get = nullptr,
+                                        SnapDescriptor *buf_des = nullptr,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1126,6 +1140,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {BASE_ADDRESS, &GrallocSnapHelper::BaseAddressHelper},
           {MATRIX_COEFFICIENTS, &GrallocSnapHelper::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelper::EarlyNotifyLineCountHelper},
+          {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelper::BufferDequeueDurationHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -1189,22 +1204,22 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
 
   bool IsBufferImported(native_handle_t *gr_hnd);
   int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
 
  private:
   GrallocSnapHelperLegacy();
   ~GrallocSnapHelperLegacy();
-  int GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
+  SnapError GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
   SnapUsage GetSnapUsage(uint64_t usage, int hal_format);
   int GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage, int *gr_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
   int GetGrallocPrivateFlags(SnapUsage snap_usage, int64_t is_ubwc, int64_t is_tile_rendered,
                              int64_t is_cached);
 
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferDescriptor gr_desc);
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferInfo gr_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
   SnapMetadataType GetSnapMetadataType(uint64_t gr_metadata_type);
 
   int ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &snap_dataspace,
@@ -1531,6 +1546,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {QTI_CUSTOM_CONTENT_METADATA, SnapMetadataType::CUSTOM_CONTENT_METADATA},
       {QTI_HEAP_NAME, SnapMetadataType::HEAP_NAME},
       {QTI_EARLYNOTIFY_LINECOUNT, SnapMetadataType::EARLYNOTIFY_LINECOUNT},
+      {QTI_BUFFER_DEQUEUE_DURATION, SnapMetadataType::BUFFER_DEQUEUE_DURATION},
       // New enum entries
       {SnapMetadataType::HEAP_NAME, SnapMetadataType::HEAP_NAME},
       {SnapMetadataType::IS_UBWC, SnapMetadataType::IS_UBWC},
@@ -1543,6 +1559,12 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::COLOR_REMAPPING_INFO},
       {SnapMetadataType::BASE_ADDRESS, SnapMetadataType::BASE_ADDRESS},
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
+  };
+
+  std::list<int> unsupported_formats = {
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
   };
 
   typedef SnapError (GrallocSnapHelperLegacy::*MetadataHelper)(
@@ -1812,6 +1834,12 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
                                        SnapDescriptor *buf_des = nullptr,
                                        bool check_metadata_set = true,
                                        int32_t *mapper_return = nullptr);
+  SnapError BufferDequeueDurationHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                        void *gralloc_in_set = nullptr,
+                                        void *gralloc_out_get = nullptr,
+                                        SnapDescriptor *buf_des = nullptr,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1881,6 +1909,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {BASE_ADDRESS, &GrallocSnapHelperLegacy::BaseAddressHelper},
           {MATRIX_COEFFICIENTS, &GrallocSnapHelperLegacy::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelperLegacy::EarlyNotifyLineCountHelper},
+          {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelperLegacy::BufferDequeueDurationHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>

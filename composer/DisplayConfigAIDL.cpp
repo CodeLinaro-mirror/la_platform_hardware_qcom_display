@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -207,8 +207,7 @@ ScopedAStatus DisplayConfigAIDL::getDisplayAttributes(int config_index, DisplayT
 
   // TODO (aparmar): seq lk
   sdm::DisplayConfigVariableInfo var_info{};
-  uint32_t group_id = -1;
-  error = settings_->GetDisplayAttributes(disp_id, config_index, &var_info, &group_id);
+  error = settings_->GetDisplayAttributes(disp_id, config_index, &var_info);
 
   if (error != sdm::kErrorNone) {
     ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
@@ -425,8 +424,7 @@ ScopedAStatus DisplayConfigAIDL::getActiveBuiltinDisplayAttributes(Attributes *a
   }
 
   sdm::DisplayConfigVariableInfo var_info{};
-  uint32_t group_id = -1;
-  error = settings_->GetDisplayAttributes(disp_id, config, &var_info, &group_id);
+  error = settings_->GetDisplayAttributes(disp_id, config, &var_info);
 
   if (error != sdm::kErrorNone) {
     ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
@@ -612,9 +610,9 @@ ScopedAStatus DisplayConfigAIDL::isRCSupported(int disp_id, bool *supported) {
 
 ScopedAStatus DisplayConfigAIDL::controlIdleStatusCallback(bool enable) {
   if (enable) {
-    idle_callback_ = callback_;
+    enable_aidl_idle_notification_ = true;
   } else {
-    idle_callback_.reset();
+    enable_aidl_idle_notification_ = false;
   }
 
   return ScopedAStatus::ok();
@@ -709,25 +707,36 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   ALOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f)",
         cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom);
 
-  void *hdl = const_cast<native_handle_t *>(::android::dupFromAidl(buffer));
+  auto ret_status = EX_NONE;
 
-  if (cwb_callbacks_.find(hdl) != cwb_callbacks_.end()) {
+  void *hdl = sdm::ConvertToSnapHandle(buffer);
+
+  if (!handle_importer_.importBuffer(static_cast<const SnapHandle *>(hdl))) {
+    ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
+    ret_status = EX_ILLEGAL_ARGUMENT;
+  }
+
+  if (ret_status == EX_NONE && cwb_callbacks_.find(hdl) != cwb_callbacks_.end()) {
     ALOGE("%s: buffer already being handled", __FUNCTION__);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    ret_status = EX_ILLEGAL_ARGUMENT;
   }
 
-  cwb_callbacks_.insert({hdl, callback});
-
-  sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
-  if (ret != sdm::kErrorNone) {
-    // Need to close and delete the cloned native handle on CWB request rejection/failure
-    native_handle_close(static_cast<native_handle_t *>(hdl));
-    native_handle_delete(static_cast<native_handle_t *>(hdl));
-
-    return ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+  if (ret_status == EX_NONE) {
+    sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
+    if (ret != sdm::kErrorNone) {
+      ret_status = EX_TRANSACTION_FAILED;
+    } else {
+      cwb_callbacks_.insert({hdl, callback});
+    }
   }
 
-  return ScopedAStatus::ok();
+  if (ret_status != EX_NONE) {
+    // Need to unregister and delete snap handle on CWB request rejection/failure
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(hdl));
+  }
+
+  return (ret_status == EX_NONE) ? ScopedAStatus::ok()
+                                 : ScopedAStatus(AStatus_fromExceptionCode(ret_status));
 }
 
 void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
@@ -738,17 +747,16 @@ void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
 
   std::shared_ptr<IDisplayConfigCallback> callback = cwb_callbacks_[hdl];
 
-  native_handle_t *buffer = reinterpret_cast<native_handle_t *>(hdl);
+  NativeHandle buffer =
+      sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
   if (callback) {
     ALOGI("Notify the client about buffer status %d.", status);
 
-    callback->notifyCWBBufferDone(status, ::android::dupToAidl(buffer));
+    callback->notifyCWBBufferDone(status, buffer);
   }
 
-  native_handle_close(buffer);
-  native_handle_delete(buffer);
-
   cwb_callbacks_.erase(hdl);
+  handle_importer_.freeBuffer(static_cast<const SnapHandle *>(hdl));
 }
 
 ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t fps) {
@@ -898,12 +906,16 @@ void DisplayConfigAIDL::NotifyTUIEventDone(uint32_t ret, uint32_t disp_id,
 }
 
 void DisplayConfigAIDL::NotifyIdleStatus(bool status) {
-  std::shared_ptr<DisplayConfig::ConfigCallback> callback = idle_callback_.lock();
-  if (!callback) {
+  if (!enable_aidl_idle_notification_) {
     return;
   }
 
-  callback->NotifyIdleStatus(true);
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyIdleStatus(status);
+    }
+  }
 }
 
 void DisplayConfigAIDL::OnHdmiHotplug(bool connected) {

@@ -43,6 +43,7 @@
 #include "AidlComposerServiceWriter.h"
 #include "hwc_common.h"
 #include "hwc_buffer_allocator.h"
+#include "hwc_socket_handler.h"
 
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
@@ -125,8 +126,6 @@ using sdm::Fence;
 using sdm::HWC3::Error;
 using std::shared_ptr;
 
-using sdm::HWCBufferAllocator;
-
 using sdm::SDMCompositorCbIntf;
 using sdm::SDMDisplayCapsIntf;
 using sdm::SDMDisplayDrawCycleIntf;
@@ -142,8 +141,6 @@ using sdm::SDMDisplayLayerBuilderIntf;
 
 using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
 using SnapError = ::vendor::qti::hardware::display::snapalloc::Error;
-using ::vendor::qti::hardware::display::snapalloc::snap_handle_create;
-using ::vendor::qti::hardware::display::snapalloc::snap_handle_delete;
 
 class BufferCacheEntry {
  public:
@@ -289,7 +286,6 @@ class AidlComposerClient : public BnComposerClient,
 
  private:
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
-  HWCBufferAllocator buffer_allocator_{};
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;

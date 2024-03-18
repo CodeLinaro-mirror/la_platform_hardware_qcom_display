@@ -37,6 +37,16 @@ namespace composer3 {
 
 AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
     : extensions_(extensions) {
+  SDMInterfaceFactory *sdm_factory = nullptr;
+
+  sdm_factory = sdm::GetSDMInterfaceFactory();
+  caps_ = sdm_factory->CreateCapsIntf();
+  settings_ = sdm_factory->CreateSettingsIntf();
+  lifecycle_ = sdm_factory->CreateLifeCycleIntf();
+  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
+  layers_ = sdm_factory->CreateLayerBuilderIntf();
+  sideband_ = sdm_factory->CreateSideBandIntf();
+  lifecycle_->Init(&buffer_allocator_, &socket_handler_);
 
   ALOGI("Created AidlComposer");
 }
@@ -52,16 +62,6 @@ ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_
     return TO_BINDER_STATUS(INT32(Error::NoResources));
   }
   auto composer_client = ndk::SharedRefBase::make<AidlComposerClient>();
-
-  SDMInterfaceFactory *sdm_factory = nullptr;
-
-  sdm_factory = sdm::GetSDMInterfaceFactory();
-  caps_ = sdm_factory->CreateCapsIntf();
-  settings_ = sdm_factory->CreateSettingsIntf();
-  lifecycle_ = sdm_factory->CreateLifeCycleIntf();
-  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
-  layers_ = sdm_factory->CreateLayerBuilderIntf();
-  sideband_ = sdm_factory->CreateSideBandIntf();
 
   if (!composer_client ||
       !composer_client->init(caps_, settings_, lifecycle_, drawcycle_, layers_, sideband_)) {

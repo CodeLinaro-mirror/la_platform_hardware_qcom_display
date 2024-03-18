@@ -1,5 +1,5 @@
 #!/vendor/bin/sh
-# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -39,8 +39,9 @@ fi
 case "$target" in
     "sun")
     #SOC ID for Sun is 618
+    #SOC ID for Sun APQ is 639
     case "$soc_hwid" in
-      618)
+      618|639)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 4
@@ -48,7 +49,7 @@ case "$target" in
         setprop vendor.display.enable_allow_idle_fallback 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_rotator_ui 1
-        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.thermal.version 1
         setprop vendor.display.enable_rc_support 1
         setprop vendor.display.enable_latch_media_content 1
@@ -56,6 +57,8 @@ case "$target" in
         setprop vendor.display.timed_render_enable 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
         ;;
     esac
     ;;

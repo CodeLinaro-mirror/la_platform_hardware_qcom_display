@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -65,6 +65,7 @@
 #include <atomic>
 #include <core/display_interface.h>
 #include "hwc_common.h"
+#include "AidlComposerHandleImporter.h"
 
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
@@ -97,6 +98,7 @@ using DisplayConfiguration = composer3::DisplayConfiguration;
 using HwcDisplayCapability = composer3::DisplayCapability;
 using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
+using ::aidl::vendor::qti::hardware::display::composer3::ComposerHandleImporter;
 using ::aidl::vendor::qti::hardware::display::config::Attributes;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
@@ -205,12 +207,12 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 
  private:
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
-  std::weak_ptr<DisplayConfig::ConfigCallback> idle_callback_;
 
   std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
   std::mutex callbacks_lock_;
   uint64_t callback_client_id_ = 0;
+  bool enable_aidl_idle_notification_ = false;
 
   SDMDisplayCapsIntf *caps_ = nullptr;
   SDMDisplaySettingsIntf *settings_ = nullptr;
@@ -219,7 +221,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   SDMDisplaySideBandIntf *sideband_ = nullptr;
   SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
   sdm::Locker *locker_ = nullptr;
-
+  ComposerHandleImporter handle_importer_;
   std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
 };
 

@@ -8,7 +8,12 @@
 
 namespace sdm {
 
-QServiceBackend::QServiceBackend() {
+QServiceBackend *QServiceBackend::GetInstance() {
+  static QServiceBackend *qservice_ = ::new QServiceBackend();
+  return qservice_;
+}
+
+void QServiceBackend::Init() {
   const char *qservice_name = "display.qservice";
 
   // Start QService and connect to it.
