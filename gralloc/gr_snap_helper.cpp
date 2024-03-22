@@ -1737,7 +1737,7 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
         snap_converted_dynamic_metadata.dynamicMetaDataLen =
             static_cast<int>(dynamic_metadata_payload->size());
         memcpy(&snap_converted_dynamic_metadata.dynamicMetaDataPayload,
-               dynamic_metadata_payload->data(), sizeof(dynamic_metadata_payload));
+               dynamic_metadata_payload->data(), dynamic_metadata_payload->size());
         snap_converted_dynamic_metadata.dynamicMetaDataValid = true;
       } else {
         snap_converted_dynamic_metadata.dynamicMetaDataValid = false;
@@ -1746,6 +1746,12 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
     }
     error =
         snapmapper_->SetMetadata(*hnd, SnapMetadataType::DYNAMIC_METADATA, snap_dynamic_metadata);
+  } else if (gralloc_in_set == nullptr && aidl_size == 1) {
+    // Handling for when std::nullopt is passed in with expectation to invalidate the metadata
+    SnapDynamicMetadata snap_dynamic_metadata = {};
+    snap_dynamic_metadata.dynamicMetaDataValid = false;
+    error =
+        snapmapper_->SetMetadata(*hnd, SnapMetadataType::DYNAMIC_METADATA, &snap_dynamic_metadata);
   }
   return error;
 }
@@ -5554,7 +5560,7 @@ SnapError GrallocSnapHelperLegacy::DynamicMetadataHelper(SnapHandle *hnd, bool h
     if (dynamic_metadata_payload != std::nullopt) {
       snap_dynamic_metadata.dynamicMetaDataLen = static_cast<int>(dynamic_metadata_payload->size());
       memcpy(&snap_dynamic_metadata.dynamicMetaDataPayload, dynamic_metadata_payload->data(),
-             sizeof(dynamic_metadata_payload));
+             dynamic_metadata_payload->size());
       snap_dynamic_metadata.dynamicMetaDataValid = true;
     } else {
       snap_dynamic_metadata.dynamicMetaDataValid = false;
