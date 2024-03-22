@@ -1550,7 +1550,8 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
      * after first drawcycle setup.
      */
     bool can_skip_periphery = (hw_layers_info->common_info->flags.fovea_layer_present
-                              && !layer.geometry_changes && periphery_layer_setup_done_);
+                              && !layer.geometry_changes && periphery_layer_setup_done_
+                              && !layer.update_mask.test(kSecurity));
 
     for (uint32_t count = 0; count < pipe_info_vec.size(); count++) {
       HWPipeInfo *pipe_info = pipe_info_vec[count];
