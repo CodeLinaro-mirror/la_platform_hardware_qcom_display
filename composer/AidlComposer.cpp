@@ -46,7 +46,7 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
   drawcycle_ = sdm_factory->CreateDrawCycleIntf();
   layers_ = sdm_factory->CreateLayerBuilderIntf();
   sideband_ = sdm_factory->CreateSideBandIntf();
-  lifecycle_->Init(&buffer_allocator_, &socket_handler_);
+  lifecycle_->Init(&buffer_allocator_, &socket_handler_, &hwc_debugger_);
 
   ALOGI("Created AidlComposer");
 }

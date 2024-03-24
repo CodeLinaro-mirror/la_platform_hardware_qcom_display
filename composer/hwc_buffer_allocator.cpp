@@ -115,10 +115,10 @@ int HWCBufferAllocator::GetSnapInstance() {
     return kErrorCriticalResource;
   }
 
-  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)() = nullptr;
+  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)(DebugCallbackIntf *) = nullptr;
   *reinterpret_cast<void **>(&LINK_FETCH_ISnapAlloc) = ::dlsym(snap_impl_lib_, "FETCH_ISnapAlloc");
   if (LINK_FETCH_ISnapAlloc) {
-    snapallocator_ = LINK_FETCH_ISnapAlloc();
+    snapallocator_ = LINK_FETCH_ISnapAlloc(nullptr);
   }
 
   if (snapallocator_ == nullptr) {
@@ -126,11 +126,11 @@ int HWCBufferAllocator::GetSnapInstance() {
     return kErrorCriticalResource;
   }
 
-  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   *reinterpret_cast<void **>(&LINK_FETCH_ISnapMapper) =
       ::dlsym(snap_impl_lib_, "FETCH_ISnapMapper");
   if (LINK_FETCH_ISnapMapper) {
-    snapmapper_ = LINK_FETCH_ISnapMapper();
+    snapmapper_ = LINK_FETCH_ISnapMapper(nullptr);
   }
 
   if (snapmapper_ == nullptr) {
