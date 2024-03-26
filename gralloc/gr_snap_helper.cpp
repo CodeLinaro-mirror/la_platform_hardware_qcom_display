@@ -2524,13 +2524,13 @@ int GrallocSnapHelper::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, u
   if (err) {
     return err;
   }
-  SnapBufferLayout snap_plane_layouts;
-  auto status = snapmapper_->GetFromBufferDescriptor(snap_desc, SnapMetadataType::PLANE_LAYOUTS,
-                                                     &snap_plane_layouts);
   if (interlaced) {
     static SnapKeyValuePair modifier = {.key = "interlaced", .value = static_cast<uint64_t>(1)};
     snap_desc.additionalOptions.emplace_back(modifier);
   }
+  SnapBufferLayout snap_plane_layouts;
+  auto status = snapmapper_->GetFromBufferDescriptor(snap_desc, SnapMetadataType::PLANE_LAYOUTS,
+                                                     &snap_plane_layouts);
 
   if (status == SnapError::NONE) {
     unsigned int alloc_size;
