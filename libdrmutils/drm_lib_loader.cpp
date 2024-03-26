@@ -38,24 +38,26 @@ using std::lock_guard;
 
 namespace drm_utils {
 
-DRMLibLoader *DRMLibLoader::s_instance = nullptr;
+std::map<uint32_t, DRMLibLoader*> DRMLibLoader ::s_instance;
 mutex DRMLibLoader::s_lock;
 
-DRMLibLoader *DRMLibLoader::GetInstance() {
+DRMLibLoader *DRMLibLoader::GetInstance(uint32_t card_id) {
   lock_guard<mutex> obj(s_lock);
 
-  if (!s_instance) {
-    s_instance = new DRMLibLoader();
+  auto iter = s_instance.find(card_id);
+  if (iter == s_instance.end()) {
+    DRMLibLoader *loader = new DRMLibLoader();
+    s_instance[card_id] = loader;
   }
-
-  return s_instance;
+  return s_instance[card_id];
 }
 
-void DRMLibLoader::Destroy() {
+void DRMLibLoader::Destroy(uint32_t card_id) {
   lock_guard<mutex> obj(s_lock);
-  if (s_instance) {
-    delete s_instance;
-    s_instance = nullptr;
+  if (s_instance[card_id]) {
+    delete s_instance[card_id];
+    s_instance[card_id] = nullptr;
+    s_instance.erase(card_id);
   }
 }
 
