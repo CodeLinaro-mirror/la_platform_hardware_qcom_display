@@ -25,40 +25,6 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *    * Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *
- *    * Redistributions in binary form must reproduce the above
- *      copyright notice, this list of conditions and the following
- *      disclaimer in the documentation and/or other materials provided
- *      with the distribution.
- *
- *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 /*
@@ -101,7 +67,6 @@
 #define __GR_ALLOC_INTERFACE_H__
 
 #include <string>
-#include <vector>
 
 #include "QtiGrallocMetadata.h"
 
@@ -120,7 +85,6 @@ struct AllocData {
   bool uncached = false;
   unsigned int flags = 0x0;
   std::string heap_name = "";
-  std::vector<std::string> vm_names;
   unsigned int alloc_type = 0x0;
 };
 
@@ -192,25 +156,24 @@ class AllocInterface {
 
   /*! @brief Method to allocate secure buffer
 
-    @param[out]  data - \link AllocData \endlink
+    @param[in] fd - fd of the secure buffer
 
     @return Returns 0 on success otherwise errno
   */
-  virtual int SecureMemPerms(AllocData *data);
+  virtual int SecureMemPerms(int fd);
 
   /*! @brief Method to get heap info
 
     @param[in] usage - Buffer usage mask
-    @param[in]  sensor_flag - flag to set system heap for sensor use
-    @param[out] heap_name - Corresponding name of heap
-    @param[out] vm_names = Corresponding vector of names of vm to hyp assign in secure use case
+    @param[out] ion_heap_name - Corresponding name of ion heap
     @param[out] alloc_type
-    @param[out] flags - flags to specify desired heap allocation configuration
+    @param[out] ion_flags - Ion flags to specify desired heap allocation configuration
+    @param[out] sec_flag - flag to set whether secure allocation is needed
+    @param[in]  sensor_flag - flag to set system heap for sensor use
 
   */
-  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *heap_name,
-                           std::vector<std::string> *vm_names, unsigned int *alloc_type,
-                           unsigned int *flags);
+  virtual void GetHeapInfo(uint64_t usage, std::string *ion_heap_name, unsigned int *alloc_type,
+                           unsigned int *ion_flags, bool *sec_flag, bool *sensor_flag);
 
  protected:
   virtual ~AllocInterface() {}

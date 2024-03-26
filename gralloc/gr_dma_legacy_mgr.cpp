@@ -25,40 +25,6 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *    * Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *
- *    * Redistributions in binary form must reproduce the above
- *      copyright notice, this list of conditions and the following
- *      disclaimer in the documentation and/or other materials provided
- *      with the distribution.
- *
- *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 /*
@@ -115,7 +81,6 @@
 #include <linux/msm_ion.h>
 #endif
 #include <string>
-#include <vector>
 
 #include "gr_utils.h"
 #include "gr_dma_legacy_mgr.h"
@@ -288,15 +253,19 @@ int DmaLegacyManager::UnmapBuffer(void *base, unsigned int size, unsigned int /*
   return err;
 }
 
-int DmaLegacyManager::SecureMemPerms(__attribute__((unused)) AllocData *data) {
-  // DmaLegacyManager will use ION flags handle secure permissions
+int DmaLegacyManager::SecureMemPerms(int fd) {
   int ret = 0;
+  fd = 0;
+  /*
+  * TODO: Finish Secure Memory Implementation once libvmmem is deployed
+  ret = vmm_->modify_buffer_permissions(fd, vmm->current_vm, usecase_perms);
+  */
   return ret;
 }
 
-void DmaLegacyManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string *ion_heap_name,
-                                   __attribute__ ((unused)) std::vector<std::string> *vm_names,
-                                   unsigned int *alloc_type, unsigned int *ion_flags) {
+void DmaLegacyManager::GetHeapInfo(uint64_t usage, std::string *ion_heap_name,
+                                   unsigned int *alloc_type, unsigned int *ion_flags,
+                                   bool *sec_flag, bool *sensor_flag) {
   std::string heap_name = "qcom,system";
   unsigned int type = 0;
   uint32_t flags = 0;
@@ -311,6 +280,7 @@ void DmaLegacyManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string
       flags |= UINT(ION_SD_FLAGS);
       buffer_allocator_.MapNameToIonHeap(heap_name, "secure_display", flags,
                                          ION_HEAP(ION_SECURE_DISPLAY_HEAP_ID), flags);
+      *sec_flag = true;
     } else if (usage & BufferUsage::CAMERA_OUTPUT) {
       int secure_preview_only = 0;
       char property[PROPERTY_VALUE_MAX];
@@ -332,16 +302,19 @@ void DmaLegacyManager::GetHeapInfo(uint64_t usage, bool sensor_flag, std::string
       }
       buffer_allocator_.MapNameToIonHeap(heap_name, "secure_display", flags,
                                          ION_HEAP(ION_SECURE_DISPLAY_HEAP_ID), flags);
+      *sec_flag = true;
     } else if (usage & GRALLOC_USAGE_PRIVATE_CDSP) {
       heap_name = "qcom,secure-cdsp";
       flags |= UINT(ION_SECURE | ION_FLAG_CP_CDSP);
       buffer_allocator_.MapNameToIonHeap(heap_name, "secure_carveout", flags,
                                          ION_HEAP(ION_SECURE_CARVEOUT_HEAP_ID), flags);
+      *sec_flag = true;
     } else {
       heap_name = "qcom,secure-pixel";
       flags |= UINT(ION_CP_FLAGS);
       buffer_allocator_.MapNameToIonHeap(heap_name, "secure_heap", flags,
                                          ION_HEAP(ION_SECURE_HEAP_ID), flags);
+      *sec_flag = true;
     }
   } else if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
     // Reuse GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY with no GRALLOC_USAGE_PROTECTED flag to alocate
