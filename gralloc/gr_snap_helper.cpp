@@ -10,6 +10,7 @@
 
 #include <dlfcn.h>
 #include <log/log.h>
+#include <cstdint>
 #include <mutex>
 #include <cutils/properties.h>
 #include <utils/debug.h>
@@ -1554,14 +1555,37 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t ai
                                                     bool check_metadata_set,
                                                     int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
+  // Conversion factors for Snap <=> AIDL/AOSP conversion
+  // AIDL equivalent struct uses 1:1 units where as Snap uses 1/50k for primaries and whitepoint,
+  // and 1/10k for minDisplayLuminance
+  constexpr float snap_units[2] = {50000.0f, 10000.0f};
   if (gralloc_out_get != nullptr) {
     SnapMasteringDisplay snap_mastering_display_values = {};
     void *snap_out_get = aidl_size ? &snap_mastering_display_values : gralloc_out_get;
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY, snap_out_get);
     if (aidl_size) {
-      std::optional<GrallocSmpte2086> mastering_display_values = {};
-      memcpy(&mastering_display_values, &snap_mastering_display_values,
-             sizeof(snap_mastering_display_values));
+      std::optional<GrallocSmpte2086> mastering_display_values;
+      GrallocSmpte2086 smpte2086;
+      if (snap_mastering_display_values.colorVolumeSEIEnabled) {
+        smpte2086.primaryRed = {
+            static_cast<float>(snap_mastering_display_values.primaryRed.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.primaryRed.y) / snap_units[0]};
+        smpte2086.primaryGreen = {
+            static_cast<float>(snap_mastering_display_values.primaryGreen.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.primaryGreen.y) / snap_units[0]};
+        smpte2086.primaryBlue = {
+            static_cast<float>(snap_mastering_display_values.primaryBlue.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.primaryBlue.y) / snap_units[0]};
+        smpte2086.whitePoint = {
+            static_cast<float>(snap_mastering_display_values.whitePoint.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.whitePoint.y) / snap_units[0]};
+        smpte2086.maxLuminance =
+            static_cast<float>(snap_mastering_display_values.maxDisplayLuminance);
+        smpte2086.minLuminance =
+            static_cast<float>(snap_mastering_display_values.minDisplayLuminance) / snap_units[1];
+        mastering_display_values = std::move(smpte2086);
+      }
+
       *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2086>(
           mastering_display_values, gralloc_out_get, *mapper_return);
       if (*mapper_return < 0) {
@@ -1581,8 +1605,23 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t ai
       }
       mastering_display_values = *decoded_result;
       if (mastering_display_values != std::nullopt) {
-        memcpy(&snap_converted_mastering_display_values, &mastering_display_values,
-               sizeof(mastering_display_values));
+        snap_converted_mastering_display_values.colorVolumeSEIEnabled = true;
+        snap_converted_mastering_display_values.primaryRed = {
+            static_cast<uint32_t>(mastering_display_values->primaryRed.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->primaryRed.y * snap_units[0])};
+        snap_converted_mastering_display_values.primaryGreen = {
+            static_cast<uint32_t>(mastering_display_values->primaryGreen.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->primaryGreen.y * snap_units[0])};
+        snap_converted_mastering_display_values.primaryBlue = {
+            static_cast<uint32_t>(mastering_display_values->primaryBlue.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->primaryBlue.y * snap_units[0])};
+        snap_converted_mastering_display_values.whitePoint = {
+            static_cast<uint32_t>(mastering_display_values->whitePoint.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->whitePoint.y * snap_units[0])};
+        snap_converted_mastering_display_values.maxDisplayLuminance =
+            static_cast<uint32_t>(mastering_display_values->maxLuminance);
+        snap_converted_mastering_display_values.minDisplayLuminance =
+            static_cast<uint32_t>(mastering_display_values->minLuminance * snap_units[1]);
       } else {
         snap_converted_mastering_display_values.colorVolumeSEIEnabled = false;
       }
@@ -1590,6 +1629,13 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t ai
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY,
                                      snap_mastering_display_values);
+  }
+  // Handling for when std::nullopt is passed in with expectation to invalidate the metadata
+  else if (gralloc_in_set == nullptr && aidl_size == 1) {
+    SnapMasteringDisplay snap_mastering_display_values = {};
+    snap_mastering_display_values.colorVolumeSEIEnabled = false;
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY,
+                                     &snap_mastering_display_values);
   }
   return error;
 }
@@ -1606,7 +1652,14 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, uint32_t a
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::CONTENT_LIGHT_LEVEL, snap_out_get);
     if (aidl_size) {
       std::optional<GrallocCta861_3> content_light_level = {};
-      memcpy(&content_light_level, &snap_content_light_level, sizeof(snap_content_light_level));
+      GrallocCta861_3 cta861_3;
+      if (snap_content_light_level.lightLevelSEIEnabled) {
+        cta861_3.maxContentLightLevel =
+            static_cast<float>(snap_content_light_level.maxContentLightLevel);
+        cta861_3.maxFrameAverageLightLevel =
+            static_cast<float>(snap_content_light_level.maxFrameAverageLightLevel);
+        content_light_level = std::move(cta861_3);
+      }
       *mapper_return = Mapper5Encode<StandardMetadataType::CTA861_3>(
           content_light_level, gralloc_out_get, *mapper_return);
       if (*mapper_return < 0) {
@@ -1626,8 +1679,11 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, uint32_t a
       }
       content_light_level = *decoded_result;
       if (content_light_level != std::nullopt) {
-        memcpy(&snap_converted_content_light_level, &content_light_level,
-               sizeof(content_light_level));
+        snap_converted_content_light_level.lightLevelSEIEnabled = true;
+        snap_converted_content_light_level.maxContentLightLevel =
+            static_cast<uint32_t>(content_light_level->maxContentLightLevel);
+        snap_converted_content_light_level.maxFrameAverageLightLevel =
+            static_cast<uint32_t>(content_light_level->maxFrameAverageLightLevel);
       } else {
         snap_converted_content_light_level.lightLevelSEIEnabled = false;
       }
@@ -1635,6 +1691,11 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, uint32_t a
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::CONTENT_LIGHT_LEVEL,
                                      snap_content_light_level);
+  } else if (gralloc_in_set == nullptr && aidl_size == 1) {
+    SnapContentLightLevel snap_content_light_level = {};
+    snap_content_light_level.lightLevelSEIEnabled = false;
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::CONTENT_LIGHT_LEVEL,
+                                     &snap_content_light_level);
   }
   return error;
 }
@@ -1649,14 +1710,16 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
     void *snap_out_get = aidl_size ? &snap_dynamic_metadata : gralloc_out_get;
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::DYNAMIC_METADATA, snap_out_get);
     if (aidl_size) {
-      std::vector<uint8_t> dynamic_metadata_payload = {};
-      dynamic_metadata_payload.resize(sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
-      memcpy(dynamic_metadata_payload.data(), &snap_dynamic_metadata.dynamicMetaDataPayload,
-             sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
-      *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
-          dynamic_metadata_payload, gralloc_out_get, *mapper_return);
-      if (*mapper_return < 0) {
-        return SnapError::BAD_VALUE;
+      if (snap_dynamic_metadata.dynamicMetaDataValid) {
+        std::vector<uint8_t> dynamic_metadata_payload;
+        dynamic_metadata_payload.resize(sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
+        memcpy(dynamic_metadata_payload.data(), &snap_dynamic_metadata.dynamicMetaDataPayload,
+               sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
+        *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
+            dynamic_metadata_payload, gralloc_out_get, *mapper_return);
+        if (*mapper_return < 0) {
+          return SnapError::BAD_VALUE;
+        }
       }
     }
   } else if (gralloc_in_set != nullptr) {
@@ -2232,19 +2295,28 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
     SnapHandle *hnd, SnapDescriptor *buf_des, const SnapBufferLayout snap_buffer_layout,
     std::vector<GrallocPlaneLayout> *gr_plane_layouts) {
   uint64_t width, height;
+  SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
+  bool is_raw = false;
+  bool individually_packed = true;
+
   if (hnd != nullptr) {
     // Get unaligned width
-    std::vector<uint8_t> out_width_bytestream;
     auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::WIDTH, &width);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned width");
       return status;
     }
     //Get unaligned height
-    std::vector<uint8_t> out_height_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::HEIGHT, &height);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned height");
+      return status;
+    }
+    // Get pixel format
+    status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED,
+                                      &snap_pixel_format);
+    if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
+      ALOGE("Unable to get pixel format");
       return status;
     }
   } else if (buf_des != nullptr) {
@@ -2258,14 +2330,33 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
       ALOGE("Unable to get unaligned height");
       return error;
     }
+    snap_pixel_format = buf_des->format;
   }
   auto snap_plane_layout = snap_buffer_layout.planes;
   int plane_count = snap_buffer_layout.plane_count;
   gr_plane_layouts->resize(plane_count);
   int bpp = snap_buffer_layout.bpp;
+
+  // For RAW formats update information to meet IMapper5 VTS / Gralloc4 specs
+  // Sets sampleIncrementInBits to 0 and component sizeInBits to -1 if sampleIncrementInBits is not
+  // divisible by 8. These values aren't valid for formats such as RAW10 and RAW12 which aren't
+  // individually packed due to their size not being in multiples of 8-bits
+  switch (snap_pixel_format) {
+    case SnapPixelFormat::RAW10:
+    case SnapPixelFormat::RAW12:
+      individually_packed = false;
+    case SnapPixelFormat::RAW8:
+    case SnapPixelFormat::RAW16:
+      is_raw = true;
+      break;
+    default:
+      is_raw = false;
+  }
   for (int i = 0; i < plane_count; i++) {
     (*gr_plane_layouts)[i].sampleIncrementInBits =
-        static_cast<int64_t>(snap_plane_layout[i].sample_increment_bits);
+        is_raw && !individually_packed
+            ? 0
+            : static_cast<int64_t>(snap_plane_layout[i].sample_increment_bits);
     (*gr_plane_layouts)[i].strideInBytes =
         static_cast<int64_t>(snap_plane_layout[i].horizontal_stride_in_bytes);
     (*gr_plane_layouts)[i].totalSizeInBytes =
@@ -2300,7 +2391,8 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
       ConvertSnapToGrallocPlaneComponentType(snap_plane_layout_components[j].type,
                                              &gr_plane_layout_component.type);
       gr_plane_layout_component.offsetInBits = snap_plane_layout_components[j].offset_in_bits;
-      gr_plane_layout_component.sizeInBits = snap_plane_layout_components[j].size_in_bits;
+      gr_plane_layout_component.sizeInBits =
+          (is_raw && !individually_packed) ? -1 : snap_plane_layout_components[j].size_in_bits;
       (*gr_plane_layouts)[i].components.push_back(gr_plane_layout_component);
     }
   }
@@ -6196,14 +6288,12 @@ int GrallocSnapHelperLegacy::ConvertSnapBufferlayoutToGrallocPlaneLayout(
   uint64_t width, height;
   if (hnd != nullptr) {
     // Get unaligned width
-    std::vector<uint8_t> out_width_bytestream;
     auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::WIDTH, &width);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned width");
       return status;
     }
     //Get unaligned height
-    std::vector<uint8_t> out_height_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::HEIGHT, &height);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned height");
