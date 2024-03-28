@@ -55,6 +55,7 @@ case "$target" in
         setprop vendor.display.enable_latch_media_content 1
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.timed_render_enable 1
+        setprop vendor.display.idle_fallback_on_dspp 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_optimal_refresh_rate 1
