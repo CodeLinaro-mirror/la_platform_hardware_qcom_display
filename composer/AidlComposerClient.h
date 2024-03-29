@@ -336,9 +336,11 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetDisplayBrightness(uint64_t display, const DisplayBrightness &command);
     void executeSetOutputBuffer(uint64_t display, const Buffer &buffer);
     void executeValidateDisplay(int64_t display,
-                                const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
+                                const std::optional<ClockMonotonicTimestamp> expectedPresentTime,
+                                int32_t frameIntervalNs);
     void executePresentOrValidateDisplay(
-        int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
+        int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime,
+        int32_t frameIntervalNs);
     void executeAcceptDisplayChanges(int64_t display);
     void executePresentDisplay(int64_t display);
 
@@ -378,6 +380,7 @@ class AidlComposerClient : public BnComposerClient,
         int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
+    void executeSetFrameIntervalNsInternal(int64_t display, int32_t frameIntervalNs);
 
     // Commands from extensions (QtiComposer3Client)
     void executeSetClientTarget_3_1(int64_t display, const ClientTarget &command);
