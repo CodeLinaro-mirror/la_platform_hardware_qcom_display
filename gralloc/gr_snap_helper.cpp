@@ -2617,6 +2617,9 @@ int GrallocSnapHelper::ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &sna
     case QtiTransfer_HLG:
       transfer = GrallocDataspace::TRANSFER_HLG;
       break;
+    case QtiTransfer_SMPTE_ST2084:
+      transfer = GrallocDataspace::TRANSFER_ST2084;
+      break;
     default:
       ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
       return SnapError::BAD_VALUE;
@@ -2778,6 +2781,9 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
       break;
     case (uint32_t)GrallocDataspace::TRANSFER_HLG:
       dataspace.transfer = QtiTransfer_HLG;
+      break;
+    case (uint32_t)GrallocDataspace::TRANSFER_ST2084:
+      dataspace.transfer = QtiTransfer_SMPTE_ST2084;
       break;
     default:
       ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
@@ -6578,6 +6584,9 @@ int GrallocSnapHelperLegacy::ConvertSnapDataspaceToGrallocDataspace(
     case QtiTransfer_HLG:
       transfer = GrallocDataspace::TRANSFER_HLG;
       break;
+    case QtiTransfer_SMPTE_ST2084:
+      transfer = GrallocDataspace::TRANSFER_ST2084;
+      break;
     default:
       ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
       return SnapError::BAD_VALUE;
@@ -6739,6 +6748,9 @@ int GrallocSnapHelperLegacy::ConvertGrallocDataspaceToSnapDataspace(GrallocDatas
       break;
     case (uint32_t)GrallocDataspace::TRANSFER_HLG:
       dataspace.transfer = QtiTransfer_HLG;
+      break;
+    case (uint32_t)GrallocDataspace::TRANSFER_ST2084:
+      dataspace.transfer = QtiTransfer_SMPTE_ST2084;
       break;
     default:
       ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
