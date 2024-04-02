@@ -100,8 +100,6 @@ using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
 using ::aidl::vendor::qti::hardware::display::composer3::ComposerHandleImporter;
 using ::aidl::vendor::qti::hardware::display::config::Attributes;
-using ::aidl::vendor::qti::hardware::display::config::CacV2Config;
-using ::aidl::vendor::qti::hardware::display::config::CacV2ConfigExt;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfig;
@@ -197,22 +195,6 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
     return ScopedAStatus::ok();
   }
   ScopedAStatus getDisplayPortId(int32_t disp_id, int32_t *port_id) override;
-  ScopedAStatus isCacV2Supported(int32_t in_dispId, bool *_aidl_return) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2(int32_t in_dispId, const CacV2Config &in_config, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2PerEye(int32_t in_dispId, const CacV2Config &in_leftConfig,
-                                     const CacV2Config &in_rightConfig, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2ExtPerEye(int32_t in_dispId, const CacV2ConfigExt &in_leftConfig,
-                                        const CacV2ConfigExt &in_rightConfig, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus allowIdleFallback() { return ScopedAStatus::ok(); }
-  ScopedAStatus setContentFps(const std::string &in_name, int32_t in_fps) override;
 
   void NotifyQsyncChange(uint64_t display_id, bool qsync_enabled, uint32_t refresh_rate,
                          uint32_t qsync_refresh_rate) override;
@@ -221,7 +203,6 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   void NotifyTUIEventDone(uint32_t ret, uint32_t disp_id, sdm::SDMTUIEventType type) override;
   void NotifyIdleStatus(bool status) override;
   void NotifyCWBStatus(int32_t status, void *buffer) override;
-  void NotifyContentFps(const std::string &name, int32_t fps) override;
   void OnHdmiHotplug(bool connected) override;
 
  private:
