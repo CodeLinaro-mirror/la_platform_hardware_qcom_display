@@ -1352,8 +1352,10 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR},
           {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR,
             .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR}
-  };
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR},
+          {{.format = SnapPixelFormat::Y16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           static_cast<int>(PixelFormat::Y16)},
+      };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
 
