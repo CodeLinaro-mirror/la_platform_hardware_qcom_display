@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2024, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2017 The Android Open Source Project
@@ -17,18 +17,24 @@
  * limitations under the License.
  */
 
+/*
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <log/log.h>
 
 #include "QtiQmaaComposerHandleImporter.h"
+#include <ui/GraphicBufferMapper.h>
 
+namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer {
-namespace V3_0 {
+namespace composer3 {
 
-using MapperV4Error = android::hardware::graphics::mapper::V4_0::Error;
+using ::android::GraphicBufferMapper;
 
 ComposerHandleImporter::ComposerHandleImporter() : mInitialized(false) {}
 
@@ -38,20 +44,11 @@ void ComposerHandleImporter::initialize() {
     return;
   }
 
-  mMapper_V4 = IMapperV4::getService();
-  if (mMapper_V4 == nullptr) {
-    ALOGE("%s: cannnot acccess graphics mapper HAL!", __FUNCTION__);
-    return;
-  }
-
   mInitialized = true;
   return;
 }
 
 void ComposerHandleImporter::cleanup() {
-  if (mMapper_V4 != nullptr) {
-    mMapper_V4.clear();
-  }
   mInitialized = false;
 }
 
@@ -73,26 +70,12 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
     initialize();
   }
 
-  if (mMapper_V4 == nullptr) {
-    ALOGE("%s: mMapper is null!", __FUNCTION__);
-    return false;
-  }
+  buffer_handle_t importedHandle = nullptr;
 
-  MapperV4Error error;
-  buffer_handle_t importedHandle;
+  auto status = GraphicBufferMapper::get().importBufferNoValidate(handle, &importedHandle);
 
-  auto ret = mMapper_V4->importBuffer(
-      hidl_handle(handle), [&](const auto &tmpError, const auto &tmpBufferHandle) {
-        error = tmpError;
-        importedHandle = static_cast<buffer_handle_t>(tmpBufferHandle);
-      });
-
-  if (!ret.isOk()) {
-    ALOGE("%s: mapper importBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-    return false;
-  }
-
-  if (error != MapperV4Error::NONE) {
+  if (status != ::android::OK) {
+    ALOGE("%s: mapper importBuffer failed: %d", __FUNCTION__, status);
     return false;
   }
 
@@ -108,20 +91,15 @@ void ComposerHandleImporter::freeBuffer(buffer_handle_t handle) {
 
   Mutex::Autolock lock(mLock);
 
-  if (mMapper_V4 == nullptr) {
-    ALOGE("%s: mMapper is null!", __FUNCTION__);
-    return;
-  }
-
-  auto ret = mMapper_V4->freeBuffer(const_cast<native_handle_t *>(handle));
-  if (!ret.isOk()) {
-    ALOGE("%s: mapper freeBuffer failed: %s", __FUNCTION__, ret.description().c_str());
+  auto status = GraphicBufferMapper::get().freeBuffer(handle);
+  if (status != ::android::OK) {
+    ALOGE("%s: mapper freeBuffer failed: %d", __FUNCTION__, status);
   }
 }
 
-}  // namespace V3_0
-}  // namespace composer
+}  // namespace composer3
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
+}  // namespace aidl
