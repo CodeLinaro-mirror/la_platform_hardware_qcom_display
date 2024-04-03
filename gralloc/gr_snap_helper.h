@@ -1985,6 +1985,13 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {QTI_COLORSPACE, &GrallocSnapHelperLegacy::ColorspaceHelper},
           {QTI_YUV_PLANE_INFO, &GrallocSnapHelperLegacy::YuvPlaneInfoHelper},
       };
+  std::unordered_map<uint64_t, std::vector<SnapMetadataType>> deprecated_metadata_type_map = {
+      {QTI_COLOR_METADATA, {SnapMetadataType::MASTERING_DISPLAY,
+      SnapMetadataType::CONTENT_LIGHT_LEVEL, SnapMetadataType::DYNAMIC_METADATA,
+      SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::MATRIX_COEFFICIENTS}},
+      {QTI_PRIVATE_FLAGS, {SnapMetadataType::IS_UBWC, SnapMetadataType::IS_TILE_RENDERED,
+      SnapMetadataType::IS_CACHED}},
+  };
 };
 
 }  // namespace gralloc

@@ -4853,6 +4853,12 @@ SnapError GrallocSnapHelperLegacy::VendorMetadataStatusHelper(
         int snap_type = metadata_type_map[legacy_type];
         vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] =
             vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+      } else if (deprecated_metadata_type_map.find(legacy_type) !=
+            deprecated_metadata_type_map.end()){
+        for (auto snap_type : deprecated_metadata_type_map[legacy_type]) {
+          vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] |=
+            vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+        }
       }
     }
 
