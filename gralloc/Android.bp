@@ -198,7 +198,6 @@ cc_library_shared {
         "QtiMapper4.cpp",
         "QtiMapperExtensions.cpp",
     ],
-    vintf_fragments: ["android.hardware.graphics.mapper-impl-qti-display.xml"],
 }
 
 //mapper5
