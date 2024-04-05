@@ -7,7 +7,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
         <name>mapper</name>
         <version>5.0</version>
         <interface>
-            <instance>qtidisplay</instance>
+            <instance>qti</instance>
         </interface>
     </hal>
 </manifest>
