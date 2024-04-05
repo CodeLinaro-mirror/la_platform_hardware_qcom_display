@@ -58,6 +58,7 @@ case "$target" in
         setprop vendor.display.idle_fallback_on_dspp 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         ;;
