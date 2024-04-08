@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -158,7 +158,7 @@ static InlineRotationVersion GetInRotVersion(sde_drm::InlineRotationVersion drm_
 }
 
 DisplayError HWInfoDRM::Init() {
-  default_mode_ = (DRMLibLoader::GetInstance()->IsLoaded() == false);
+  default_mode_ = (DRMLibLoader::GetInstance(card_id_)->IsLoaded() == false);
   if (!default_mode_) {
     DRMMaster *drm_master = {};
     int dev_fd = -1;
@@ -168,13 +168,16 @@ DisplayError HWInfoDRM::Init() {
       return kErrorCriticalResource;
     }
     drm_master->GetHandle(&dev_fd);
-    DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+    DRMLibLoader::GetInstance(card_id_)->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (!drm_mgr_intf_) {
-      DRMLibLoader::Destroy();
+      DRMLibLoader::Destroy(card_id_);
       DRMMaster::DestroyInstance(card_id_);
       DLOGE("Failed to get DRMManagerInterface");
       return kErrorCriticalResource;
     }
+  } else {
+      DRMLibLoader::Destroy(card_id_);
+      return kErrorCriticalResource;
   }
 
   return kErrorNone;
@@ -190,11 +193,12 @@ void HWInfoDRM::Deinit() {
   }
 
   if (drm_mgr_intf_) {
-    DRMLibLoader::GetInstance()->FuncDestroyDRMManager()();
+    DRMLibLoader::GetInstance(card_id_)->FuncDestroyDRMManager()();
     drm_mgr_intf_ = nullptr;
   }
 
-  DRMLibLoader::Destroy();
+  DRMLibLoader::Destroy(card_id_);
+
   DRMMaster::DestroyInstance(card_id_);
 }
 

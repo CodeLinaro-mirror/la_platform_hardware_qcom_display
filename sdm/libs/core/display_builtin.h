@@ -157,7 +157,6 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   LayerRect left_frame_roi_ = {};
   LayerRect right_frame_roi_ = {};
   bool first_cycle_ = true;
-  int previous_retire_fence_ = -1;
   DeferFpsConfig deferred_config_ = {};
   float level_remainder_ = 0.0f;
   recursive_mutex brightness_lock_;
