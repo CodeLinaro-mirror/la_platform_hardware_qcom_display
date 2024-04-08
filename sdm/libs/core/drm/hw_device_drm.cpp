@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -505,7 +505,12 @@ DisplayError HWDeviceDRM::Init() {
   DRMMaster *drm_master = {};
   DRMMaster::GetInstance(&drm_master, GET_CARD_ID(display_id_));
   drm_master->GetHandle(&dev_fd_);
-  DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
+  DRMLibLoader::GetInstance(GET_CARD_ID(display_id_))->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
+
+  if(!drm_mgr_intf_) {
+      DLOGE(" GetDRMManager failed");
+      return kErrorResources;
+  }
 
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {
