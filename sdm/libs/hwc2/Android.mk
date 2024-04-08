@@ -39,6 +39,9 @@ LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware li
                                  vendor.display.config@2.0 libhidlbase libhidltransport \
                                  libdisplayconfig.qti libui libgpu_tonemapper
 
+#Add sendorservice for HY11 packing purpose
+LOCAL_SHARED_LIBRARIES        += android.frameworks.sensorservice@1.0
+
 ifneq ($(TARGET_USES_GRALLOC1), true)
     LOCAL_SHARED_LIBRARIES += libmemalloc
 endif
