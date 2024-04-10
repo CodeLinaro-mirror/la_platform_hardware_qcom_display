@@ -120,4 +120,15 @@ NativeHandle AIDLNativeHandleFromSnapHandle(SnapHandle *snap_buffer_handle,
   return aidl_native_handle;
 }
 
+native_handle_t *SnapHandleToLegacyHandle(const SnapHandle *snap_handle) {
+  native_handle_t *handle = native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
+  for (size_t i = 0; i < snap_handle->num_fds; ++i) {
+    handle->data[i] = fcntl(snap_handle->buffer_data[i], F_DUPFD_CLOEXEC, 0);
+  }
+  for (size_t i = snap_handle->num_fds; i < snap_handle->num_fds + snap_handle->num_ints; ++i) {
+    handle->data[i] = snap_handle->buffer_data[i];
+  }
+  return handle;
+}
+
 }  // namespace sdm
