@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -98,20 +98,29 @@ void DRMMaster::DestroyInstance(uint32_t card) {
   }
 }
 
+/*
+ * if DRM card leasing is enabled
+ *    card 0 will not be able to open because,all its resources are lease to other cards
+ *    We will open the instance of the card which will have the name as msm_drm
+ *
+ * if DRM card leasing feature not enabled
+ *    card0 and card1 will be opened
+ *
+ * */
+
 int DRMMaster::Init(uint32_t card) {
   if (card == 0) {
     dev_fd_ = drmOpen("msm_drm", nullptr);
   } else {
     drmVersionPtr ver;
     int fd;
-    int itr = 0;
     bool first_match = false;
+    int i;
 
-    for (int i = itr; i < 16; i++) {
+    for (i = 0; i < 16; i++) {
       snprintf(path_, sizeof(path_), "/dev/dri/card%d", i);
       fd = open(path_, O_RDWR | O_CLOEXEC, 0);
       if (fd < 0) {
-        itr++;
         continue;
       }
 
@@ -120,18 +129,19 @@ int DRMMaster::Init(uint32_t card) {
         bool match = !strcmp(ver->name, "msm_drm");
         drmFreeVersion(ver);
         if (match) {
-          if (!first_match)
+          if (!first_match) {
             first_match = true;
+            close(fd);
+          } else {
             dev_fd_ = fd;
             card_ = card;
-            itr++;
+          }
            /* Revisit the exit logic for more than 2 DPUs*/
-            if (first_match)
-              continue;
-            else
-              break;
+          if (first_match)
+            continue;
+          else
+            break;
         }
-        itr++;
       }
 
       close(fd);
