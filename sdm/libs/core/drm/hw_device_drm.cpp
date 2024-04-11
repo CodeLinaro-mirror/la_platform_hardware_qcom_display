@@ -1546,12 +1546,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       continue;
     }
 
-    /* when it's fovea use case and layer has no geometry, can skip some properties
-     * after first drawcycle setup.
+    /* When layer stack only has position change, and a layer doesn't have geometry change, we can
+     * assume it has no any change so we can skip.
      */
-    bool can_skip_periphery = (hw_layers_info->common_info->flags.fovea_layer_present
-                              && !layer.geometry_changes && periphery_layer_setup_done_
-                              && !layer.update_mask.test(kSecurity));
+    bool can_skip_nochange = (hw_layers_info->common_info->flags.only_position_geometry_changed
+                              && !layer.geometry_changes);
 
     for (uint32_t count = 0; count < pipe_info_vec.size(); count++) {
       HWPipeInfo *pipe_info = pipe_info_vec[count];
@@ -1567,7 +1566,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       if (pipe_info->valid && fb_id[pipe_info->cac_color]) {
         uint32_t pipe_id = pipe_info->pipe_id;
 
-        if (update_config && !can_skip_periphery) {
+        if (update_config && !can_skip_nochange) {
           uint32_t fg_alpha = layer.plane_alpha;
           uint32_t bg_alpha = 0xff - layer.plane_alpha;
 
@@ -2017,12 +2016,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   }
 
   hw_layers_info->sync_handle = release_fence;
-
-  if (hw_layers_info->common_info->flags.fovea_layer_present) {
-    periphery_layer_setup_done_ = true;
-  } else {
-    periphery_layer_setup_done_ = false;
-  }
 
   if (vrefresh_) {
     // Update current mode index if refresh rate is changed
