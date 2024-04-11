@@ -5397,14 +5397,36 @@ SnapError GrallocSnapHelperLegacy::MasteringDisplayHelper(SnapHandle *hnd, bool 
                                                           bool check_metadata_set,
                                                           int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
+  // Conversion factors for Snap <=> AIDL/AOSP conversion
+  // AIDL equivalent struct uses 1:1 units where as Snap uses 1/50k for primaries and whitepoint,
+  // and 1/10k for minDisplayLuminance
+  constexpr float snap_units[2] = {50000.0f, 10000.0f};
   if (gralloc_out_get != nullptr) {
     SnapMasteringDisplay snap_mastering_display_values = {};
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY,
                                      &snap_mastering_display_values);
     error = CheckMetadataSet(SnapMetadataType::MASTERING_DISPLAY, error, check_metadata_set);
     std::optional<GrallocSmpte2086> mastering_display_values = {};
-    memcpy(&mastering_display_values, &snap_mastering_display_values,
-           sizeof(snap_mastering_display_values));
+    GrallocSmpte2086 smpte2086;
+    if (snap_mastering_display_values.colorVolumeSEIEnabled) {
+      smpte2086.primaryRed = {
+          static_cast<float>(snap_mastering_display_values.primaryRed.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.primaryRed.y) / snap_units[0]};
+      smpte2086.primaryGreen = {
+          static_cast<float>(snap_mastering_display_values.primaryGreen.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.primaryGreen.y) / snap_units[0]};
+      smpte2086.primaryBlue = {
+          static_cast<float>(snap_mastering_display_values.primaryBlue.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.primaryBlue.y) / snap_units[0]};
+      smpte2086.whitePoint = {
+          static_cast<float>(snap_mastering_display_values.whitePoint.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.whitePoint.y) / snap_units[0]};
+      smpte2086.maxLuminance =
+          static_cast<float>(snap_mastering_display_values.maxDisplayLuminance);
+      smpte2086.minLuminance =
+          static_cast<float>(snap_mastering_display_values.minDisplayLuminance) / snap_units[1];
+      mastering_display_values = std::move(smpte2086);
+    }
     if (aidl_size) {
       *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2086>(
           mastering_display_values, gralloc_out_get, *mapper_return);
@@ -5438,8 +5460,23 @@ SnapError GrallocSnapHelperLegacy::MasteringDisplayHelper(SnapHandle *hnd, bool 
       mastering_display_values = *static_cast<std::optional<GrallocSmpte2086> *>(gralloc_in_set);
     }
     if (mastering_display_values != std::nullopt) {
-      memcpy(&snap_mastering_display_values, &mastering_display_values,
-             sizeof(mastering_display_values));
+      snap_mastering_display_values.colorVolumeSEIEnabled = true;
+      snap_mastering_display_values.primaryRed = {
+          static_cast<uint32_t>(mastering_display_values->primaryRed.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->primaryRed.y * snap_units[0])};
+      snap_mastering_display_values.primaryGreen = {
+          static_cast<uint32_t>(mastering_display_values->primaryGreen.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->primaryGreen.y * snap_units[0])};
+      snap_mastering_display_values.primaryBlue = {
+          static_cast<uint32_t>(mastering_display_values->primaryBlue.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->primaryBlue.y * snap_units[0])};
+      snap_mastering_display_values.whitePoint = {
+          static_cast<uint32_t>(mastering_display_values->whitePoint.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->whitePoint.y * snap_units[0])};
+      snap_mastering_display_values.maxDisplayLuminance =
+          static_cast<uint32_t>(mastering_display_values->maxLuminance);
+      snap_mastering_display_values.minDisplayLuminance =
+          static_cast<uint32_t>(mastering_display_values->minLuminance * snap_units[1]);
     } else {
       snap_mastering_display_values.colorVolumeSEIEnabled = false;
     }
@@ -5462,7 +5499,14 @@ SnapError GrallocSnapHelperLegacy::ContentLightLevelHelper(SnapHandle *hnd, bool
                                      &snap_content_light_level);
     error = CheckMetadataSet(SnapMetadataType::CONTENT_LIGHT_LEVEL, error, check_metadata_set);
     std::optional<GrallocCta861_3> content_light_level = {};
-    memcpy(&content_light_level, &snap_content_light_level, sizeof(snap_content_light_level));
+    GrallocCta861_3 cta861_3;
+    if (snap_content_light_level.lightLevelSEIEnabled) {
+      cta861_3.maxContentLightLevel =
+          static_cast<float>(snap_content_light_level.maxContentLightLevel);
+      cta861_3.maxFrameAverageLightLevel =
+          static_cast<float>(snap_content_light_level.maxFrameAverageLightLevel);
+      content_light_level = std::move(cta861_3);
+    }
     if (aidl_size) {
       *mapper_return = Mapper5Encode<StandardMetadataType::CTA861_3>(
           content_light_level, gralloc_out_get, *mapper_return);
@@ -5496,7 +5540,11 @@ SnapError GrallocSnapHelperLegacy::ContentLightLevelHelper(SnapHandle *hnd, bool
       content_light_level = *static_cast<std::optional<GrallocCta861_3> *>(gralloc_in_set);
     }
     if (content_light_level != std::nullopt) {
-      memcpy(&snap_content_light_level, &content_light_level, sizeof(content_light_level));
+      snap_content_light_level.lightLevelSEIEnabled = true;
+      snap_content_light_level.maxContentLightLevel =
+          static_cast<uint32_t>(content_light_level->maxContentLightLevel);
+      snap_content_light_level.maxFrameAverageLightLevel =
+          static_cast<uint32_t>(content_light_level->maxFrameAverageLightLevel);
     } else {
       snap_content_light_level.lightLevelSEIEnabled = false;
     }
