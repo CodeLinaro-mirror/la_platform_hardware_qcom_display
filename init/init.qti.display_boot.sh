@@ -104,6 +104,7 @@ case "$target" in
         setprop vendor.display.disable_rotator_ubwc 1
         setprop vendor.display.disable_get_screen_decorator_support 1
         setprop vendor.gralloc.use_uncached_heap 1
+        setprop vendor.display.allow_tonemap_native 1
         ;;
     esac
     ;;
