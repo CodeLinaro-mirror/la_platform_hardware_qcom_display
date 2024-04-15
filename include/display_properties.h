@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -173,7 +173,9 @@
  */
 #define DISPLAY_REBOOT_STRATEGY         DISPLAY_PROP("display_reboot_strategy")
 
-#define DISABLE_CONT_SPLASH_HANDOFF         DISPLAY_PROP("disable_cont_splash_handoff")
+#define DISABLE_CONT_SPLASH_HANDOFF          DISPLAY_PROP("disable_cont_splash_handoff")
+#define USE_CUSTOM_INTF_FORMAT               DISPLAY_PROP("use_custom_intf_format")
+#define CUSTOM_INTF_WIDTH                    DISPLAY_PROP("custom_intf_width")
 
 // Add all vendor.display properties above
 
