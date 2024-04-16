@@ -545,10 +545,25 @@ Error QtiMapper::DumpBufferMetadata(const private_handle_t *buffer, BufferDump *
   for (int i = 0; i < static_cast<int>(metadata_type_descriptions_.size()); i++) {
     auto type = metadata_type_descriptions_[i].metadataType;
     hidl_vec<uint8_t> metadata;
-    if (static_cast<IMapper_4_0_Error>(buf_mgr_->GetMetadata(
-            const_cast<private_handle_t *>(buffer), type.value, &metadata)) == Error::BAD_BUFFER) {
-      // If buffer is deleted during metadata dump, return BAD_BUFFER
-      return Error::BAD_BUFFER;
+    if (snap_helper_->IsSnapAllocEnabled()) {
+      auto err = static_cast<IMapper_4_0_Error>(snap_helper_->GetMetadata(
+          static_cast<native_handle_t *>(const_cast<private_handle_t *>(buffer)), type.value,
+          &metadata, true, false));
+      if (err == Error::BAD_BUFFER) {
+        // If buffer is deleted during metadata dump, return BAD_BUFFER
+        return Error::BAD_BUFFER;
+      } else if (err != Error::NONE) {
+        // Ignore other errors since some vendor metadata types like RGB address and custom metadata
+        // aren't supported for all cases
+        continue;
+      }
+    } else {
+      if (static_cast<IMapper_4_0_Error>(buf_mgr_->GetMetadata(
+              const_cast<private_handle_t *>(buffer), type.value, &metadata)) ==
+          Error::BAD_BUFFER) {
+        // If buffer is deleted during metadata dump, return BAD_BUFFER
+        return Error::BAD_BUFFER;
+      }
     }
     MetadataDump metadata_dump = {type, metadata};
     outBufferDump->metadataDump[i] = metadata_dump;
@@ -557,23 +572,6 @@ Error QtiMapper::DumpBufferMetadata(const private_handle_t *buffer, BufferDump *
 }
 Return<void> QtiMapper::dumpBuffer(void *buffer, dumpBuffer_cb hidl_cb) {
   BufferDump buffer_dump;
-  if (snap_helper_->IsSnapAllocEnabled()) {
-    buffer_dump.metadataDump.resize(metadata_type_descriptions_.size());
-    for (int i = 0; i < static_cast<int>(metadata_type_descriptions_.size()); i++) {
-      auto type = metadata_type_descriptions_[i].metadataType;
-      hidl_vec<uint8_t> metadata;
-      if (snap_helper_->GetMetadata(static_cast<native_handle_t *>(buffer), type.value, &metadata,
-                                    true, false)) {
-        // If buffer is deleted during metadata dump, return BAD_BUFFER
-        hidl_cb(Error::BAD_BUFFER, buffer_dump);
-        return Void();
-      }
-      MetadataDump metadata_dump = {type, metadata};
-      buffer_dump.metadataDump[i] = metadata_dump;
-    }
-    hidl_cb(Error::NONE, buffer_dump);
-    return Void();
-  }
   auto hnd = PRIV_HANDLE_CONST(buffer);
   if (buffer != nullptr) {
     if (DumpBufferMetadata(hnd, &buffer_dump) == Error::NONE) {
@@ -584,13 +582,34 @@ Return<void> QtiMapper::dumpBuffer(void *buffer, dumpBuffer_cb hidl_cb) {
   hidl_cb(Error::BAD_BUFFER, buffer_dump);
   return Void();
 }
+
 Return<void> QtiMapper::dumpBuffers(dumpBuffers_cb hidl_cb) {
   hidl_vec<BufferDump> buffers_dump;
+  Error error = Error::NONE;
+
   if (snap_helper_->IsSnapAllocEnabled()) {
-    ALOGD_IF(DEBUG, "dumpBuffers not implemented for Snapalloc");
-    hidl_cb(Error::UNSUPPORTED, buffers_dump);
+    std::vector<buffer_handle_t> handle_list{};
+    if (snap_helper_->GetAllHandles(&handle_list)) {
+      hidl_cb(Error::NO_RESOURCES, buffers_dump);
+      return Void();
+    }
+
+    buffers_dump.resize(handle_list.size());
+    for (int i = 0; i < handle_list.size(); i++) {
+      BufferDump buffer_dump;
+      error =
+          DumpBufferMetadata(static_cast<const private_handle_t *>(handle_list[i]), &buffer_dump);
+      if (error != Error::NONE) {
+        // Do not add failed buffer dumps to the output vector
+        continue;
+      } else {
+        buffers_dump[i] = buffer_dump;
+      }
+    }
+    hidl_cb(Error::NONE, buffers_dump);
     return Void();
   }
+
   std::vector<const private_handle_t *> handle_list;
   if (static_cast<IMapper_4_0_Error>(buf_mgr_->GetAllHandles(&handle_list)) != Error::NONE) {
     hidl_cb(Error::NO_RESOURCES, buffers_dump);
