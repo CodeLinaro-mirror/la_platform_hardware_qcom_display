@@ -17,6 +17,7 @@ PRODUCT_PACKAGES += \
     libqdMetaData.system \
     libdisplayconfig \
     libgralloc.qti \
+    mapper.qti \
     libdisplayconfig.qti \
     libdisplayconfig.vendor \
     vendor.qti.hardware.display.mapper@2.0.vendor \

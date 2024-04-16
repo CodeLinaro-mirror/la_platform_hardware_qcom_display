@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -87,7 +87,11 @@ class BufferManager {
   static BufferManager *GetInstance();
   void SetGrallocDebugProperties(gralloc::GrallocProperties props);
   Error GetMetadata(private_handle_t *handle, int64_t metadatatype_value, hidl_vec<uint8_t> *out);
+  int GetMetadata(private_handle_t *handle, int64_t metadatatype_value, void *outData,
+                  size_t outDataSize);
   Error SetMetadata(private_handle_t *handle, int64_t metadatatype_value, hidl_vec<uint8_t> in);
+  Error SetMetadata(private_handle_t *handle, int64_t metadatatype_value, const void *metadata,
+                    size_t metadataSize);
   Error GetReservedRegion(private_handle_t *handle, void **reserved_region,
                           uint64_t *reserved_region_size);
   Error FlushBuffer(const private_handle_t *handle);

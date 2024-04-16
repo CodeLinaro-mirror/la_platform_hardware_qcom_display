@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1112,6 +1112,7 @@ Error BufferManager::UnlockBuffer(const private_handle_t *handle) {
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf == nullptr) {
+    ALOGW("%s: A bad or an already unlocked buffer.", __FUNCTION__);
     return Error::BAD_BUFFER;
   }
 
@@ -1348,6 +1349,21 @@ Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved
   return Error::NONE;
 }
 
+int BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value, void *outData,
+                               size_t outDataSize) {
+  hidl_vec<uint8_t> out;
+  out.resize(outDataSize);
+
+  auto error = GetMetadata(handle, metadatatype_value, &out);
+  if (error == Error::NONE) {
+    if (outData != nullptr && out.size() <= outDataSize) {
+      memcpy(outData, out.data(), out.size());
+    }
+    return out.size();
+  }
+  return -(static_cast<int>(error));
+}
+
 Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> *out) {
   std::lock_guard<std::mutex> lock(buffer_lock_);
@@ -1364,6 +1380,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
   auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata);
 
   Error error = Error::NONE;
+  std::string metadata_name = "";
   switch (metadatatype_value) {
     case (int64_t)StandardMetadataType::BUFFER_ID:
       android::gralloc4::encodeBufferId((uint64_t)handle->id, out);
@@ -1481,6 +1498,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
             static_cast<float>(metadata->color.masteringDisplayInfo.minDisplayLuminance) / 10000.0f;
         android::gralloc4::encodeSmpte2086(mastering_display_values, out);
       } else {
+        out->resize(0);
         android::gralloc4::encodeSmpte2086(std::nullopt, out);
       }
       break;
@@ -1495,6 +1513,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
             10000.0f;
         android::gralloc4::encodeCta861_3(content_light_level, out);
       } else {
+        out->resize(0);
         android::gralloc4::encodeCta861_3(std::nullopt, out);
       }
       break;
@@ -1569,8 +1588,14 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
     case QTI_PRIVATE_FLAGS:
       android::gralloc4::encodeInt32(qtigralloc::MetadataType_PrivateFlags, handle->flags, out);
       break;
+    case (int64_t)StandardMetadataType::STRIDE:
+      metadata_name = "android.hardware.graphics.common.StandardMetadataType";
+      [[fallthrough]];
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
-      android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedWidthInPixels, handle->width,
+      if (metadata_name == "") {
+        metadata_name = qtigralloc::MetadataType_AlignedWidthInPixels.name;
+      }
+      android::gralloc4::encodeUint32({metadata_name, (int64_t)metadatatype_value}, handle->width,
                                       out);
       break;
     case QTI_ALIGNED_HEIGHT_IN_PIXELS:
@@ -1690,6 +1715,15 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 }
 
 Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_value,
+                                 const void *metadata, size_t metadataSize) {
+  hidl_vec<uint8_t> in;
+  in.resize(metadataSize);
+
+  memcpy(in.data(), metadata, metadataSize);
+  return SetMetadata(handle, metadatatype_value, in);
+}
+
+Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> in) {
   std::lock_guard<std::mutex> lock(buffer_lock_);
   if (!handle)
@@ -1701,9 +1735,6 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
 
   if (!handle->base_metadata) {
     return Error::BAD_BUFFER;
-  }
-  if (in.size() == 0) {
-    return Error::UNSUPPORTED;
   }
 
   auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata);
@@ -1736,6 +1767,7 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     case (int64_t)StandardMetadataType::CHROMA_SITING:
     case (int64_t)StandardMetadataType::INTERLACED:
     case (int64_t)StandardMetadataType::COMPRESSION:
+    case (int64_t)StandardMetadataType::STRIDE:
     case QTI_FD:
     case QTI_PRIVATE_FLAGS:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:

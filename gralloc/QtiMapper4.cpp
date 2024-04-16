@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -89,6 +89,7 @@ QtiMapper::QtiMapper() {
   extensions_ = new QtiMapperExtensions();
   buf_mgr_ = BufferManager::GetInstance();
   ALOGD_IF(DEBUG, "Created QtiMapper instance");
+  ALOGW("QtiMapper4 is deprecated, please use QtiMapper5!");
 }
 
 bool QtiMapper::ValidDescriptor(const BufferDescriptorInfo_4_0 &bd) {

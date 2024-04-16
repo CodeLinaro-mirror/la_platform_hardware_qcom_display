@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -38,8 +38,15 @@ class QtiAllocatorAIDL : public BnAllocator {
 
   ndk::ScopedAStatus allocate(const std::vector<uint8_t>& descriptor, int32_t count,
                                  AllocationResult* result) override;
+  ndk::ScopedAStatus allocate2(const BufferDescriptorInfo &in_descriptor, int32_t in_count,
+                               AllocationResult *_aidl_return) override;
+  ndk::ScopedAStatus getIMapperLibrarySuffix(std::string *_aidl_return) override;
+  ndk::ScopedAStatus isSupported(const BufferDescriptorInfo &in_descriptor,
+                                 bool *_aidl_return) override;
 
  private:
+  ndk::ScopedAStatus AllocateBuffer(gralloc::BufferDescriptor desc, int32_t count,
+                                    AllocationResult *result);
   BufferManager *buf_mgr_ = nullptr;
   bool enable_logs_;
 };

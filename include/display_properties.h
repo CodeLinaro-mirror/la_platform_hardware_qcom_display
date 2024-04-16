@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -169,6 +169,7 @@
 // Add all vendor.display properties above
 
 #define DISABLE_UBWC_PROP                    GRALLOC_PROP("disable_ubwc")
+#define ENABLE_LOGS_PROP                     GRALLOC_PROP("enable_logs")
 #define DISABLE_AHARDWAREBUFFER_PROP         GRALLOC_PROP("disable_ahardware_buffer")
 #define USE_SYSTEM_HEAP_FOR_SENSORS          GRALLOC_PROP("use_system_heap_for_sensors")
 
