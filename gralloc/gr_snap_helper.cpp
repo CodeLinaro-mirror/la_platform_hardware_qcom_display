@@ -2898,6 +2898,15 @@ UBWC_Version GrallocSnapHelper::GetGrallocUBWCVersion(SnapUBWCVersion version) {
   return UBWC_MAX_VERSION;
 }
 
+SnapError GrallocSnapHelper::ValidateGrallocUsage(uint64_t gralloc_usage) {
+  // Bits 33-47 must be zero and are reserved for future versions
+  uint64_t future_usage_bit_mask = static_cast<uint64_t>(0xFFFE00000000);
+  if ((gralloc_usage & future_usage_bit_mask) != 0) {
+    return SnapError::BAD_VALUE;
+  }
+  return SnapError::NONE;
+}
+
 SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc,
                                                SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
@@ -2909,6 +2918,12 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
     auto name_length = std::min(gr_desc.GetName().size(), static_cast<size_t>(MAX_NAME_LEN - 1));
     memcpy(snap_desc.name, gr_desc.GetName().data(), name_length);
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.GetUsage());
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu",
+            gr_desc.GetUsage());
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.GetUsage(), gr_desc.GetFormat());
     snap_desc.width = gr_desc.GetWidth();
     snap_desc.height = gr_desc.GetHeight();
@@ -2937,6 +2952,11 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
     return err;
   } else {
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.usage);
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu", gr_desc.usage);
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
     snap_desc.width = gr_desc.width;
     snap_desc.height = gr_desc.height;
@@ -6962,6 +6982,12 @@ SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor g
     auto name_length = std::min(gr_desc.GetName().size(), static_cast<size_t>(MAX_NAME_LEN - 1));
     memcpy(snap_desc.name, gr_desc.GetName().data(), name_length);
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.GetUsage());
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu",
+            gr_desc.GetUsage());
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.GetUsage(), gr_desc.GetFormat());
     snap_desc.width = gr_desc.GetWidth();
     snap_desc.height = gr_desc.GetHeight();
@@ -6981,6 +7007,15 @@ SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor g
   return SnapError::NONE;
 }
 
+SnapError GrallocSnapHelperLegacy::ValidateGrallocUsage(uint64_t gralloc_usage) {
+  // Bits 33-47 must be zero and are reserved for future versions
+  uint64_t future_usage_bit_mask = static_cast<uint64_t>(0xFFFE00000000);
+  if ((gralloc_usage & future_usage_bit_mask) != 0) {
+    return SnapError::BAD_VALUE;
+  }
+  return SnapError::NONE;
+}
+
 SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
                                                      SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
@@ -6990,6 +7025,11 @@ SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc
     return err;
   } else {
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.usage);
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu", gr_desc.usage);
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
     snap_desc.width = gr_desc.width;
     snap_desc.height = gr_desc.height;
