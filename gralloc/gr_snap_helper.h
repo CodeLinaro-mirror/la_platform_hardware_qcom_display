@@ -234,7 +234,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                         SnapPixelFormat *snap_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
-
+  SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
   SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
   SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
 
@@ -1223,7 +1223,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
   int GetGrallocPrivateFlags(SnapUsage snap_usage, int64_t is_ubwc, int64_t is_tile_rendered,
                              int64_t is_cached);
-
+  SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
   SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
   SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
   SnapMetadataType GetSnapMetadataType(uint64_t gr_metadata_type);
