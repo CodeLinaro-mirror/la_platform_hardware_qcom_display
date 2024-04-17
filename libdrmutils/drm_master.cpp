@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -58,6 +65,8 @@ namespace drm_utils {
 
 DRMMaster *DRMMaster::s_instance = nullptr;
 mutex DRMMaster::s_lock;
+int DRMMaster::dev_fd_ = -1;
+bool DRMMaster::client_set_ = false;
 
 int DRMMaster::GetInstance(DRMMaster **master) {
   lock_guard<mutex> obj(s_lock);
@@ -81,7 +90,17 @@ void DRMMaster::DestroyInstance() {
   s_instance = nullptr;
 }
 
+void DRMMaster::SetHandle(int fd) {
+  dev_fd_ = fd;
+  client_set_ = true;
+}
+
 int DRMMaster::Init() {
+  if (dev_fd_ >=0 && client_set_) {
+    DRM_LOGE("drmOpen already done by client dev_fd_:%d", dev_fd_);
+    return 0;
+  }
+
   uint8_t retry = 0;
   do {
     dev_fd_ = drmOpen("msm_drm", nullptr);
@@ -98,8 +117,10 @@ int DRMMaster::Init() {
 }
 
 DRMMaster::~DRMMaster() {
-  drmClose(dev_fd_);
-  dev_fd_ = -1;
+  if(!client_set_) {
+    drmClose(dev_fd_);
+    dev_fd_ = -1;
+  }
 }
 
 int DRMMaster::CreateFbId(const DRMBuffer &drm_buffer, uint32_t *fb_id) {

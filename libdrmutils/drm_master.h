@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_MASTER_H__
 #define __DRM_MASTER_H__
 
@@ -73,6 +80,11 @@ class DRMMaster {
    *   fd: Pointer to store master fd into
    */
   void GetHandle(int *fd) { *fd = dev_fd_; }
+  /* Set master DRM fd
+   * Input:
+   *   fd: fd to be set
+   */
+  static void SetHandle(int fd);
   /* Returns true if the ref counted version of rmfb is being used */
   bool IsRmFbRefCounted();
 
@@ -89,9 +101,10 @@ class DRMMaster {
   DRMMaster() {}
   int Init();
 
-  int dev_fd_ = -1;              // Master fd for DRM
+  static int dev_fd_;            // Master fd for DRM
   static DRMMaster *s_instance;  // Singleton instance
   static std::mutex s_lock;
+  static bool client_set_;
 };
 
 }  // namespace drm_utils
