@@ -643,7 +643,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {PLANE_LAYOUT_COMPONENT_TYPE_B, PLANE_COMPONENT_B},
       {PLANE_LAYOUT_COMPONENT_TYPE_A, PLANE_COMPONENT_A},
       {PLANE_LAYOUT_COMPONENT_TYPE_RAW, PLANE_COMPONENT_RAW},
-      {PLANE_LAYOUT_COMPONENT_TYPE_META, PLANE_COMPONENT_META},
+      // META def is QTI defined, should only use the latest definition from SnapAlloc for Mapper5
+      // Path
+      {PLANE_LAYOUT_COMPONENT_TYPE_META, static_cast<int>(PLANE_LAYOUT_COMPONENT_TYPE_META)},
   };
 
   std::unordered_map<SnapPlaneLayoutComponentType, GrallocExtendableType>
@@ -656,7 +658,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {PLANE_LAYOUT_COMPONENT_TYPE_B, android::gralloc4::PlaneLayoutComponentType_B},
           {PLANE_LAYOUT_COMPONENT_TYPE_A, android::gralloc4::PlaneLayoutComponentType_A},
           {PLANE_LAYOUT_COMPONENT_TYPE_RAW, android::gralloc4::PlaneLayoutComponentType_RAW},
-          {PLANE_LAYOUT_COMPONENT_TYPE_META, qtigralloc::PlaneLayoutComponentType_Meta},
+          {PLANE_LAYOUT_COMPONENT_TYPE_META, {"QTI", PLANE_LAYOUT_COMPONENT_TYPE_META}},
       };
 
   std::unordered_map<uint64_t, SnapUsage> gralloc_to_snap_usage_ = {
