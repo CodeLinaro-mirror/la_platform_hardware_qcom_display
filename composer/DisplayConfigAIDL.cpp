@@ -34,6 +34,9 @@
  */
 
 #include <QtiGralloc.h>
+#include <aidl/vendor/qti/hardware/display/demura/IDemuraFileFinder.h>
+#include <android/binder_manager.h>
+#include <utils/Timers.h>
 
 #include "DisplayConfigAIDL.h"
 
@@ -59,7 +62,7 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
   caps_ = sdm_factory->CreateCapsIntf();
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
-  lifecycle_->RegisterSideBandCallback(this);
+  lifecycle_->RegisterSideBandCallback(this, true);
   drawcycle_ = sdm_factory->CreateDrawCycleIntf();
   sideband_ = sdm_factory->CreateSideBandIntf();
   layer_builder_ = sdm_factory->CreateLayerBuilderIntf();
@@ -205,7 +208,6 @@ ScopedAStatus DisplayConfigAIDL::getDisplayAttributes(int config_index, DisplayT
   auto error = sdm::kErrorNone;
   int disp_id = MapDisplayType(dpy);
 
-  // TODO (aparmar): seq lk
   sdm::DisplayConfigVariableInfo var_info{};
   error = settings_->GetDisplayAttributes(disp_id, config_index, &var_info);
 
@@ -258,7 +260,6 @@ ScopedAStatus DisplayConfigAIDL::minHdcpEncryptionLevelChanged(DisplayType dpy, 
 }
 
 ScopedAStatus DisplayConfigAIDL::refreshScreen() {
-  // TODO(aparmar): seq lk
   drawcycle_->Refresh(sdm::HWC_DISPLAY_PRIMARY);
   return ScopedAStatus::ok();
 }
@@ -772,6 +773,19 @@ ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t 
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
+ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t fps) {
+  int ret = -1;
+
+  if (fps <= 0) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
+  ret = sideband_->SetContentFps(name, fps);
+
+  return ret == sdm::kErrorNone ? ScopedAStatus::ok()
+                                : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
+}
+
 ScopedAStatus DisplayConfigAIDL::registerCallback(
     const std::shared_ptr<IDisplayConfigCallback> &callback, int64_t *client_handle) {
   int ret = -1;
@@ -918,8 +932,236 @@ void DisplayConfigAIDL::NotifyIdleStatus(bool status) {
   }
 }
 
+void DisplayConfigAIDL::NotifyContentFps(const std::string &name, int32_t fps) {
+  std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
+
+  for (auto const &[id, callback] : callback_clients_) {
+    if (callback) {
+      callback->notifyContentFps(name, fps);
+    }
+  }
+}
+
 void DisplayConfigAIDL::OnHdmiHotplug(bool connected) {
-  // TODO(aparmar)
+  if (qservice_ == nullptr) {
+    qservice_ = sdm::QServiceBackend::GetInstance();
+  }
+
+  qservice_->OnHdmiHotplug(connected);
+}
+
+using ::aidl::vendor::qti::hardware::display::demura::IDemuraFileFinder;
+using DemuraFilePaths = IDemuraFileFinder::DemuraFilePaths;
+using sdm::DemuraPaths;
+
+int DisplayConfigAIDL::GetDemuraFilePaths(const GenericPayload &in, GenericPayload *out) {
+  int ret = 0;
+  std::shared_ptr<IDemuraFileFinder> demuraAidl = nullptr;
+  const std::string instance = std::string() + IDemuraFileFinder::descriptor + "/default";
+  if (!AServiceManager_isDeclared(instance.c_str())) {
+    ALOGE("demura hal service is not declared");
+    return -ENODEV;
+  }
+  auto demuraBinder = ::ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str()));
+  if (demuraBinder.get() == nullptr) {
+    ALOGE("demura hal service doesn't exist");
+    return -EINVAL;
+  }
+  demuraAidl = IDemuraFileFinder::fromBinder(demuraBinder);
+  if (demuraAidl == nullptr) {
+    ALOGE("Could not get IDemuraFileFinder");
+    return -ENODEV;
+  }
+  uint32_t sz = 0;
+  uint64_t *panel_id = nullptr;
+  DemuraPaths *file_paths = nullptr;
+  if ((ret = in.GetPayload(panel_id, &sz))) {
+    ALOGE("Failed to get input payload error = %d", ret);
+    return ret;
+  }
+  ALOGI("panel_id %" PRIu64, *panel_id);
+  if ((ret = out->GetPayload(file_paths, &sz))) {
+    ALOGE("Failed to get output payload error = %d", ret);
+    return ret;
+  }
+  DemuraFilePaths paths = {};
+  auto status = demuraAidl->getDemuraFilePaths(*panel_id, &paths);
+  if (!status.isOk()) {
+    ALOGE("getDemuraFilePaths failed, status: %d: %s", status.getStatus(), status.getMessage());
+    return -EINVAL;
+  }
+  file_paths->configPath = paths.configFilePath;
+  file_paths->signaturePath = paths.signatureFilePath;
+  file_paths->publickeyPath = paths.publickeyFilePath;
+
+  return 0;
+}
+
+GLRect SdmRectToGlRect(sdm::SDMRect &r) {
+  GLRect rect = {FLOAT(r.left), FLOAT(r.top), FLOAT(r.right), FLOAT(r.bottom)};
+  return rect;
+}
+
+void DisplayConfigAIDL::StitchLayers(uint64_t display, sdm::LayerStitchContext *ctx) {
+  if (layer_stitch_map_.find(display) == layer_stitch_map_.end()) {
+    ALOGW("GL Layer stitch not initialized for display %lu!", display);
+    return;
+  }
+
+  // convert from sdmclient defs to gl defs
+  std::vector<sdm::StitchParams> gl_params;
+  for (auto p : ctx->stitch_params) {
+    sdm::StitchParams param;
+    param.src_hnd = sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(p.src_hnd));
+    param.dst_hnd = sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(p.dst_hnd));
+    param.src_rect = SdmRectToGlRect(p.src_rect);
+    param.dst_rect = SdmRectToGlRect(p.dst_rect);
+    param.scissor_rect = SdmRectToGlRect(p.scissor_rect);
+    param.src_acquire_fence = p.src_acquire_fence;
+    param.dst_acquire_fence = p.dst_acquire_fence;
+    gl_params.push_back(param);
+  }
+
+  layer_stitch_map_.at(display)->Blit(gl_params, &(ctx->release_fence));
+}
+
+void DisplayConfigAIDL::InitLayerStitch(uint64_t display) {
+  if (layer_stitch_map_.find(display) == layer_stitch_map_.end()) {
+    layer_stitch_map_.insert({display, nullptr});
+  }
+
+  layer_stitch_map_.at(display) = GLLayerStitch::GetInstance(false);
+  if (layer_stitch_map_.at(display) == nullptr) {
+    ALOGW("Unable to initialize layer stitch: display %lu", display);
+    layer_stitch_map_.erase(display);
+  }
+}
+
+void DisplayConfigAIDL::DestroyLayerStitch(uint64_t display) {
+  auto stitch_layer = layer_stitch_map_.find(display);
+  if (stitch_layer == layer_stitch_map_.end()) {
+    return;
+  }
+
+  GLLayerStitch::Destroy(stitch_layer->second);
+  layer_stitch_map_.erase(stitch_layer);
+}
+
+void DisplayConfigAIDL::InitColorConvert(uint64_t display, bool secure) {
+  if (color_convert_map_.find(display) == color_convert_map_.end()) {
+    color_convert_map_.insert({display, nullptr});
+  }
+
+  color_convert_map_.at(display) = GLColorConvert::GetInstance(sdm::kTargetYUV, secure);
+}
+
+void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlitContext *ctx) {
+  if (color_convert_map_.find(display) == color_convert_map_.end()) {
+    ALOGW("Display %lu: GL Color convert is not initialized", display);
+    return;
+  }
+
+  GLRect src_rect = {FLOAT(ctx->src_rect.left), FLOAT(ctx->src_rect.top),
+                     FLOAT(ctx->src_rect.right), FLOAT(ctx->src_rect.bottom)};
+  GLRect dst_rect = {FLOAT(ctx->dst_rect.left), FLOAT(ctx->dst_rect.top),
+                     FLOAT(ctx->dst_rect.right), FLOAT(ctx->dst_rect.bottom)};
+  native_handle_t *legacy_src_handle =
+      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->src_hnd));
+  native_handle_t *legacy_dst_handle =
+      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->dst_hnd));
+
+  color_convert_map_.at(display)->Blit(legacy_src_handle, legacy_dst_handle, src_rect, dst_rect,
+                                       ctx->src_acquire_fence, ctx->dst_acquire_fence,
+                                       &(ctx->release_fence));
+}
+
+void DisplayConfigAIDL::ResetColorConvert(uint64_t display) {
+  if (color_convert_map_.find(display) == color_convert_map_.end()) {
+    return;
+  }
+
+  color_convert_map_.at(display)->Reset();
+}
+
+void DisplayConfigAIDL::DestroyColorConvert(uint64_t display) {
+  if (color_convert_map_.find(display) == color_convert_map_.end()) {
+    return;
+  }
+
+  auto convert = color_convert_map_.find(display);
+  GLColorConvert::Destroy(convert->second);
+  color_convert_map_.erase(convert);
+}
+
+void DisplayConfigAIDL::OnCECMessageReceived(char *message, int len) {
+  qservice_->OnCECMessageReceived(message, len);
+}
+
+void DisplayConfigAIDL::StartHistogram(uint64_t display, int max_frames) {
+  // if this is
+  if (histogram_map_.find(display) == histogram_map_.end()) {
+    histogram_map_.emplace(display, new histogram::HistogramCollector());
+  }
+
+  if (max_frames == 0) {
+    histogram_map_.at(display)->start();
+  } else {
+    histogram_map_.at(display)->start(max_frames);
+  }
+}
+
+void DisplayConfigAIDL::StopHistogram(uint64_t display, bool teardown) {
+  if (histogram_map_.find(display) == histogram_map_.end()) {
+    return;
+  }
+
+  histogram_map_.at(display)->stop();
+
+  if (teardown) {
+    delete histogram_map_.at(display);
+    histogram_map_.erase(histogram_map_.find(display));
+  }
+}
+
+void DisplayConfigAIDL::NotifyHistogram(uint64_t display, int fd, uint64_t blob_id,
+                                        uint32_t panel_width, uint32_t panel_height) {
+  if (histogram_map_.find(display) != histogram_map_.end()) {
+    histogram_map_.at(display)->notify_histogram_event(fd, blob_id, panel_width, panel_height);
+  }
+}
+std::string DisplayConfigAIDL::DumpHistogram(uint64_t display) {
+  if (histogram_map_.find(display) != histogram_map_.end()) {
+    return histogram_map_.at(display)->Dump();
+  }
+
+  return "";
+}
+
+void DisplayConfigAIDL::CollectHistogram(uint64_t display, uint64_t max_frames, uint64_t timestamp,
+                                         int32_t samples_size[NUM_HISTOGRAM_COLOR_COMPONENTS],
+                                         uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS],
+                                         uint64_t *numFrames) {
+  if (histogram_map_.find(display) == histogram_map_.end()) {
+    ALOGW("Display %lu: Histogram not initialized!", display);
+    return;
+  }
+
+  histogram_map_.at(display)->collect(max_frames, timestamp, samples_size, samples, numFrames);
+}
+
+sdm::DisplayError DisplayConfigAIDL::GetHistogramAttributes(uint64_t display, int32_t *format,
+                                                            int32_t *dataspace,
+                                                            uint8_t *supported_components) {
+  if (histogram_map_.find(display) == histogram_map_.end()) {
+    return sdm::kErrorNotSupported;
+  }
+
+  return static_cast<sdm::DisplayError>(
+      histogram_map_.at(display)->getAttributes(format, dataspace, supported_components));
+}
+
+sdm::nsecs_t DisplayConfigAIDL::SystemTime(int clock) {
+  return systemTime(clock);
 }
 
 }  // namespace config

@@ -31,6 +31,7 @@
 #include "QtiMapper5.h"
 #include "gr_snap_helper.h"
 #include "mapper_utils.h"
+#include "debug_callback_intf.h"
 
 using mapper::GetMapperInstance;
 
@@ -40,6 +41,8 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer3 {
+
+using ::sdm::DebugCallbackIntf;
 
 ComposerHandleImporter::ComposerHandleImporter() : mInitialized(false) {}
 
@@ -55,11 +58,11 @@ void ComposerHandleImporter::initialize() {
     ALOGE("Dlopen error for snapalloc impl: %s", dlerror());
   }
 
-  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   *reinterpret_cast<void **>(&LINK_FETCH_ISnapMapper) =
       ::dlsym(snap_impl_lib_, "FETCH_ISnapMapper");
   if (LINK_FETCH_ISnapMapper) {
-    snapmapper_ = LINK_FETCH_ISnapMapper();
+    snapmapper_ = LINK_FETCH_ISnapMapper(nullptr);
   } else {
     ALOGE("Failed to get snapalloc instance");
   }

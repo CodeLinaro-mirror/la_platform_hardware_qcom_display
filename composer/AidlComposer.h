@@ -29,6 +29,8 @@
 #include "AidlComposerClient.h"
 #include "DisplayConfigAIDL.h"
 
+#include "hwc_debugger.h"
+
 namespace aidl {
 namespace vendor {
 namespace qti {
@@ -43,6 +45,7 @@ using ::android::hardware::hidl_vec;
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
 
 using sdm::HWCBufferAllocator;
+using sdm::HWCDebugger;
 using sdm::HWCSocketHandler;
 
 class AidlComposer : public BnComposer {
@@ -74,8 +77,10 @@ class AidlComposer : public BnComposer {
   SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
   SDMDisplayLayerBuilderIntf *layers_ = nullptr;
   SDMDisplaySideBandIntf *sideband_ = nullptr;
+
   HWCSocketHandler socket_handler_;
   HWCBufferAllocator buffer_allocator_{};
+  HWCDebugger hwc_debugger_{};
 };
 
 }  // namespace composer3

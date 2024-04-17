@@ -101,7 +101,7 @@ bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
 ::android::status_t AidlComposerClient::notifyCallback(uint32_t command,
                                                        const ::android::Parcel *input_parcel,
                                                        ::android::Parcel *output_parcel) {
-  // TODO (aparmar) should be part of debug
+  // TODO (user) should be part of debug
   HWCParcel in(input_parcel);
   HWCParcel out(output_parcel);
 
@@ -355,7 +355,11 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     std::vector<DisplayConfiguration> *out_configs) {
   std::map<uint32_t, sdm::DisplayConfigVariableInfo> info;
   auto error = settings_->GetAllDisplayAttributes(in_display, &info);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  }
 
+  bool enable_vrr = settings_->SetupVRRConfig(in_display) == sdm::kErrorNone;
   out_configs->clear();
   out_configs->reserve(info.size());
 
@@ -369,8 +373,25 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup =
         settings_->GetDisplayConfigGroup(in_display, variable_config);
-    ALOGI("GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d", config_id,
-          variable_config.vsync_period_ns, display_configuration.configGroup);
+
+    ALOGI("GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, fps= %d",
+          config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
+          variable_config.fps);
+
+    if (enable_vrr && variable_config.avr_step > 0) {
+      display_configuration.vrrConfig = {
+          static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
+      int notify_ept_threshold_value = settings_->GetNotifyEptConfig(in_display);
+      if (variable_config.early_ept_timeout > 0 && notify_ept_threshold_value > 0) {
+        int notify_ept_heads_up =
+            static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000 *
+                                 notify_ept_threshold_value);
+        display_configuration.vrrConfig->notifyExpectedPresentConfig = {
+            notify_ept_heads_up, static_cast<int32_t>(variable_config.early_ept_timeout)};
+        ALOGI("NotifyEPT config early_ept_timeout= %d ns, notify_ept_heads_up= %d ns",
+              variable_config.early_ept_timeout, notify_ept_heads_up);
+      }
+    }
 
     out_configs->emplace_back(display_configuration);
   }
@@ -379,9 +400,16 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
 }
 
 ScopedAStatus AidlComposerClient::notifyExpectedPresent(
-    int64_t displayId, const ClockMonotonicTimestamp &expectedPresentTime,
-    int32_t frameIntervalNs) {
-  Error error = Error::Unsupported;
+    int64_t in_display, const ClockMonotonicTimestamp &expected_present_time,
+    int32_t frame_interval_ns) {
+  if (frame_interval_ns <= 0 || expected_present_time.timestampNanos <= 0) {
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
+  }
+
+  uint64_t ept = static_cast<uint64_t>(expected_present_time.timestampNanos);
+  uint32_t fi_ns = (uint32_t)frame_interval_ns;
+
+  auto error = drawcycle_->NotifyExpectedPresent(in_display, ept, fi_ns);
   return TO_BINDER_STATUS(INT32(error));
 }
 
@@ -1027,14 +1055,14 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
     ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
                    displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
     ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
-                   displayCmd.display, displayCmd.expectedPresentTime);
+                   displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
     ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
                    displayCmd.display);
     ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
                    displayCmd.display);
     ExecuteCommand(displayCmd.presentOrValidateDisplay,
                    &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
-                   displayCmd.expectedPresentTime);
+                   displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
 
     ++mCommandIndex;
 
@@ -1175,8 +1203,10 @@ void AidlComposerClient::CommandEngine::executeSetOutputBuffer(uint64_t display,
 }
 
 void AidlComposerClient::CommandEngine::executeValidateDisplay(
-    int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime) {
+    int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime,
+    int32_t frameIntervalNs) {
   executeSetExpectedPresentTimeInternal(display, expectedPresentTime);
+  executeSetFrameIntervalNsInternal(display, frameIntervalNs);
 
   auto err = validateDisplay(display);
 
@@ -1186,8 +1216,10 @@ void AidlComposerClient::CommandEngine::executeValidateDisplay(
 }
 
 void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
-    int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime) {
+    int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime,
+    int32_t frameIntervalNs) {
   executeSetExpectedPresentTimeInternal(display, expectedPresentTime);
+  executeSetFrameIntervalNsInternal(display, frameIntervalNs);
 
   // Handle unified commit.
   bool needsCommit = false;
@@ -1515,6 +1547,18 @@ void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(
   }
 
   auto err = mClient.drawcycle_->SetExpectedPresentTime(display, expectedPresentTimestamp);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetFrameIntervalNsInternal(int64_t display,
+                                                                          int32_t frameIntervalNs) {
+  if (frameIntervalNs <= 0) {
+    return;
+  }
+  uint32_t fi_ns = (uint32_t)frameIntervalNs;
+  auto err = mClient.drawcycle_->SetFrameIntervalNs(display, fi_ns);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }

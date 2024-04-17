@@ -42,7 +42,9 @@
 #include "DisplayConfigAIDL.h"
 #include "AidlComposer.h"
 #include "QtiComposer3Client.h"
+#include "DisplayAiqeAIDL.h"
 
+using aidl::vendor::qti::hardware::display::aiqe::DisplayAiqeAIDL;
 using aidl::vendor::qti::hardware::display::composer3::AidlComposer;
 using aidl::vendor::qti::hardware::display::composer3::QtiComposer3Client;
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
@@ -115,6 +117,22 @@ int main(int, char **) {
     ALOGW("Failed to register DisplayConfig AIDL as a service (status:%d)", status);
   } else {
     ALOGI("Successfully registered DisplayConfig AIDL as a service");
+  }
+
+  std::shared_ptr<DisplayAiqeAIDL> displayAiqe = ndk::SharedRefBase::make<DisplayAiqeAIDL>();
+  if (displayAiqe->isSupported()) {
+    ALOGI("Registering DisplayAiqe AIDL as a service");
+    const std::string instance3 = std::string() + DisplayAiqeAIDL::descriptor + "/default";
+    if (!displayAiqe->asBinder().get()) {
+      ALOGW("DisplayAiqe AIDL's binder is null");
+    }
+
+    status = AServiceManager_addService(displayAiqe->asBinder().get(), instance3.c_str());
+    if (status != STATUS_OK) {
+      ALOGW("Failed to register DisplayAiqe AIDL as a service (status:%d)", status);
+    } else {
+      ALOGI("Successfully registered DisplayAiqe AIDL as a service");
+    }
   }
 
   ps->setThreadPoolMaxThreadCount(4);

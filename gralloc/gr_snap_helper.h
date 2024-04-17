@@ -58,6 +58,7 @@
 #include <aidl/android/hardware/graphics/common/PixelFormat.h>
 
 #include "gr_buf_descriptor.h"
+#include "gr_snap_debugger.h"
 
 namespace aidl::android::hardware::graphics::allocator {
 class AllocationResult;
@@ -258,9 +259,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapAlloc> snapallocator_;
   bool snap_alloc_enable_ = false;
   void *snap_impl_lib_ = nullptr;
-  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)() = nullptr;
-  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
+  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)(DebugCallbackIntf *) = nullptr;
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   static GrallocSnapHelper *s_instance;
+  GrallocSnapDebugger debugger_impl_{};
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
@@ -469,8 +471,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR},
           {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR,
             .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR}
-  };
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR},
+          {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_4444},
+      };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
       snap_to_flat_format_ = {
@@ -592,7 +598,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::BGRX_1010102, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::BGRX_1010102},
           {{.format = SnapPixelFormat::BGR_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           SnapPixelFormat::BGR_888}};
+           SnapPixelFormat::BGR_888},
+          {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RGBA_4444},
+      };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
       snap_to_flat_ubwc_format_ = {
@@ -1244,9 +1255,10 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapAlloc> snapallocator_;
   bool snap_alloc_enable_ = false;
   void *snap_impl_lib_ = nullptr;
-  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)() = nullptr;
-  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
+  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)(DebugCallbackIntf *) = nullptr;
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   static GrallocSnapHelperLegacy *s_instance;
+  GrallocSnapDebugger debugger_impl_{};
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
@@ -1346,6 +1358,12 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::IMPLEMENTATION_DEFINED,
             .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
            static_cast<int>(PixelFormat::IMPLEMENTATION_DEFINED)},
+          {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_4444},
+          {{.format = SnapPixelFormat::Y16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           static_cast<int>(PixelFormat::Y16)},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;

@@ -53,8 +53,6 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_CO
 #SDR Dimming config file for vtdr6130, display id is 4630947039571902851
 PRODUCT_COPY_FILES += hardware/qcom/display/config/display_id_sample.xml:$(TARGET_COPY_OUT_VENDOR)/etc/displayconfig/display_id_4630947039571902851.xml
 
-PRODUCT_COPY_FILES += hardware/qcom/display/config/hwc_display_resolution_extn.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display/hwc_display_resolution_extn.xml
-
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.demo.hdmirotationlock=false \
     persist.sys.sf.color_saturation=1.0 \
@@ -94,7 +92,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_hdr10_gpu_target=1 \
     debug.sf.predict_hwc_composition_strategy=0 \
     debug.sf.treat_170m_as_sRGB=1 \
-    debug.graphics.game_default_frame_rate.disabled 1 \
+    debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.enable_display_extensions=1
 
 # Enable offline rotator for Bengal.
