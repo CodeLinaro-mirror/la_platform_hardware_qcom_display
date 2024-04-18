@@ -661,7 +661,7 @@ Return<void> QtiMapper::isSupported(const BufferDescriptorInfo_4_0 &descriptor_i
     if (supported) {
       hidl_cb(Error::NONE, true);
     } else {
-      ALOGE("Descriptor is not supported format %d usage %lu", desc.GetFormat(), desc.GetUsage());
+      ALOGW("Descriptor is not supported format %d usage %lu", desc.GetFormat(), desc.GetUsage());
       hidl_cb(Error::NONE, false);
     }
   } else {
