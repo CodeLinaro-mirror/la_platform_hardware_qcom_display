@@ -4020,7 +4020,7 @@ SnapError GrallocSnapHelperLegacy::PlaneLayoutsHelper(SnapHandle *hnd, bool hidl
       return SnapError::BAD_VALUE;
     }
   } else {
-    *static_cast<SnapBufferLayout *>(gralloc_out_get) = snap_buffer_layout;
+    *static_cast<std::vector<GrallocPlaneLayout> *>(gralloc_out_get) = gr_plane_layouts;
   }
   return error;
 }
