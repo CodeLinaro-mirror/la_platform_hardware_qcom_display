@@ -226,8 +226,8 @@ DisplayError DisplayBase::Deinit() {
       hw_intf_->UnsetScaleLutConfig();
     }
   }
-  HWEventsInterface::Destroy(hw_events_intf_);
   HWInterface::Destroy(hw_intf_);
+  HWEventsInterface::Destroy(hw_events_intf_);
 
   return kErrorNone;
 }
