@@ -2350,6 +2350,7 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
   switch (snap_pixel_format) {
     case SnapPixelFormat::RAW10:
     case SnapPixelFormat::RAW12:
+    case SnapPixelFormat::RAW14:
       individually_packed = false;
     case SnapPixelFormat::RAW8:
     case SnapPixelFormat::RAW16:
