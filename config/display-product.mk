@@ -50,6 +50,8 @@ ifneq ($(TARGET_IS_HEADLESS),true)
 ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.composer-service
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_get_screen_decorator_support=1
 else
 PRODUCT_PACKAGES += \
     android.hardware.graphics.composer@2.4-service
