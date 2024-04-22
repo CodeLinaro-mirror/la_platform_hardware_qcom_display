@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -192,6 +192,7 @@ DisplayError DPUCoreMux::GetHWPanelInfo(DisplayDeviceContext *device_ctx,
     }
     client_ctx->hw_panel_info.min_roi_width += i->second.min_roi_width;
     client_ctx->hw_panel_info.split_info.left_split += i->second.split_info.left_split;
+    client_ctx->hw_panel_info.max_panel_width += i->second.max_panel_width;
   }
 
   SetOpSyncHint(panel_info_map[core_ids_[0]].dpu_ctl_op_sync);

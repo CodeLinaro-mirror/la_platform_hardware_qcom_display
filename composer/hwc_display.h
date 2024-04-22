@@ -551,6 +551,7 @@ class HWCDisplay : public DisplayEventHandler {
   void DumpInputBuffers(void);
   void RetrieveFences(shared_ptr<Fence> *out_retire_fence);
   void SetDrawMethod();
+  bool IsFractionValue(float value);
 
   // CWB related methods
   void SetCwbState();
@@ -608,6 +609,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool client_connected_ = true;
   bool pending_config_ = false;
   bool has_client_composition_ = false;
+  bool is_primary_ = false;
   LayerRect window_rect_ = {};
   bool windowed_display_ = false;
   uint32_t vsyncs_to_apply_rate_change_ = 1;
@@ -626,6 +628,8 @@ class HWCDisplay : public DisplayEventHandler {
   DisplayDrawMethod draw_method_ = kDrawDefault;
   uint32_t fb_width_ = 0;
   uint32_t fb_height_ = 0;
+  uint32_t max_panel_width_ = 0;
+  uint32_t max_panel_height_ = 0;
 
   // CWB state & configuration
   CwbConfig cwb_config_ = {};

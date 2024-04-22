@@ -711,6 +711,26 @@ void HWDeviceDRM::GetCWBCapabilities() {
   }
 }
 
+void HWDeviceDRM::GetMaxPanelResolution(uint32_t *max_panel_width, uint32_t *max_panel_height) {
+  if (!max_panel_width || !max_panel_height) {
+    DLOGE("Invalid input params!");
+    return;
+  }
+
+  uint32_t max_width = 0, max_height = 0;
+  for (auto &disp_attribute : display_attributes_) {
+    if (max_width < disp_attribute.x_pixels) {
+      max_width = disp_attribute.x_pixels;
+    }
+    if (max_height < disp_attribute.y_pixels) {
+      max_height = disp_attribute.y_pixels;
+    }
+  }
+
+  *max_panel_width = max_width;
+  *max_panel_height = max_height;
+}
+
 DisplayError HWDeviceDRM::GetDisplayId(int32_t *display_id) {
   *display_id = display_id_;
   return kErrorNone;
@@ -986,6 +1006,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
              DRM_MODE_FLAG_VID_MODE_PANEL) {
     hw_panel_info_.mode = kModeVideo;
   }
+  GetMaxPanelResolution(&hw_panel_info_.max_panel_width, &hw_panel_info_.max_panel_height);
 
   DLOGI_IF(kTagDriverConfig, "%s, Panel Interface = %s, Panel Mode = %s, Is Primary = %d",
            device_name_, interface_str_.c_str(),
@@ -1008,6 +1029,8 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   DLOGI_IF(kTagDriverConfig, "Panel Minimum Transfer time = %d us",
     hw_panel_info_.min_transfer_time_us);
   DLOGI_IF(kTagDriverConfig, "Dynamic Bit Clk Support = %d", hw_panel_info_.dyn_bitclk_support);
+  DLOGI_IF(kTagDriverConfig, "Max supported panel resolution = %dX%d", hw_panel_info_.max_panel_width,
+           hw_panel_info_.max_panel_height);
 }
 
 DisplayError HWDeviceDRM::GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,

@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -539,6 +539,8 @@ struct HWPanelInfo {
   uint32_t qsync_fps = 0;              // Min qsync fps
   bool dpu_ctl_op_sync = false;        // Supports multi-core DPU Interface Sync
   HWDMSType dms_type = kDMSVIDDisabled;  // DMS type
+  uint32_t max_panel_width = 0;        // Max panel width
+  uint32_t max_panel_height = 0;       // Max panel height
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||

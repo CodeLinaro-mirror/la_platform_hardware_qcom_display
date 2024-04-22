@@ -360,6 +360,7 @@ class HWDeviceDRM : public HWInterface {
 
  private:
   void GetCWBCapabilities();
+  void GetMaxPanelResolution(uint32_t *max_width, uint32_t *max_height);
 
   std::string interface_str_ = "DSI";
   bool resolution_switch_enabled_ = false;
