@@ -380,7 +380,9 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
 
     if (enable_vrr && variable_config.avr_step > 0) {
       display_configuration.vrrConfig = {
-          static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
+          static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000),
+          {},
+          {}};
       int notify_ept_threshold_value = settings_->GetNotifyEptConfig(in_display);
       if (variable_config.early_ept_timeout > 0 && notify_ept_threshold_value > 0) {
         int notify_ept_heads_up =
@@ -1138,7 +1140,7 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
   uint32_t size = command.damage.size();
   const Rect *rect = reinterpret_cast<const Rect *>(command.damage.data());
 
-  sdm::SDMRegion region = {size};
+  sdm::SDMRegion region = {size, std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(rect, &region);
 
   auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
@@ -1335,8 +1337,8 @@ void AidlComposerClient::CommandEngine::executeSetLayerSurfaceDamage(
     int64_t display, int64_t layer, const std::vector<std::optional<Rect>> &damage) {
   // N rectangles
   const Rect *rect = reinterpret_cast<const Rect *>(damage.data());
-  ;
-  sdm::SDMRegion region = {damage.size()};
+
+  sdm::SDMRegion region = {damage.size(), std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(rect, &region);
 
   auto err = mClient.layer_builder_->SetLayerSurfaceDamage(display, layer, region);
@@ -1409,7 +1411,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerDisplayFrame(int64_t disp
                                                                     const Rect &rect) {
   uint32_t size = 1;
 
-  sdm::SDMRegion region = {size};
+  sdm::SDMRegion region = {size, std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(&rect, &region);
   auto err = mClient.layer_builder_->SetLayerDisplayFrame(display, layer, region.rects[0]);
   if (err != sdm::kErrorNone) {
@@ -1463,7 +1465,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerVisibleRegion(
   uint32_t size = visibleRegion.size();
   const Rect *rect = reinterpret_cast<const Rect *>(visibleRegion.data());
 
-  sdm::SDMRegion region = {size};
+  sdm::SDMRegion region = {size, std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(rect, &region);
 
   auto err = mClient.layer_builder_->SetLayerVisibleRegion(display, layer, region);
