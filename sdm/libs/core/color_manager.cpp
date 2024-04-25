@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2021-2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -766,7 +766,7 @@ void ColorManagerProxy::DumpColorMetaData(const ColorMetaData &color_metadata) {
 
 DisplayError ColorManagerProxy::ColorMgrGetStcModes(ColorModeList *mode_list) {
   if (!stc_intf_) {
-    DLOGE("STC interface is NULL");
+    DLOGW("STC interface is NULL");
     return kErrorUndefined;
   }
 

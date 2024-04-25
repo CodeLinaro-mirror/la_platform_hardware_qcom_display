@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -229,7 +229,7 @@ int DmaLegacyManager::SecureMemPerms(AllocData *data) {
   return ret;
 }
 
-void DmaLegacyManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format,
+void DmaLegacyManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format, bool use_uncached,
                                    std::string *ion_heap_name, std::vector<std::string> *vm_names,
                                    unsigned int *alloc_type, unsigned int *ion_flags,
                                    unsigned int *alloc_size) {

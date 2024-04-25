@@ -17,67 +17,112 @@
  * limitations under the License.
  */
 
-#ifndef __QTIQMAACOMPOSERCLIENT_H__
-#define __QTIQMAACOMPOSERCLIENT_H__
+/*
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
-#include <android/hardware/graphics/composer/2.4/IComposer.h>
-#include <android/hardware/graphics/composer/2.4/IComposerClient.h>
-#define HWC2_INCLUDE_STRINGIFICATION
-#define HWC2_USE_CPP11
-#include <hardware/hwcomposer2.h>
-#undef HWC2_INCLUDE_STRINGIFICATION
-#undef HWC2_USE_CPP11
+#pragma once
 
-#include <hidl/MQDescriptor.h>
-#include <hidl/Status.h>
 #include <log/log.h>
 #include <unordered_set>
 #include <unordered_map>
 #include <vector>
 #include <string>
-#include <unistd.h>
-
-#include "QtiQmaaComposerCommandBuffer.h"
+#include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
+#include <aidlcommonsupport/NativeHandle.h>
+#include <aidl/android/hardware/graphics/composer3/Capability.h>
 #include "QtiQmaaComposerHandleImporter.h"
+#include "QtiQmaaComposerServiceWriter.h"
+#define INT32(exp) static_cast<int32_t>(exp)
 
+namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer {
-namespace V3_0 {
-namespace implementation {
+namespace composer3 {
 
-namespace common_V1_0 = ::android::hardware::graphics::common::V1_0;
-namespace common_V1_1 = ::android::hardware::graphics::common::V1_1;
-namespace common_V1_2 = ::android::hardware::graphics::common::V1_2;
+#define TO_BINDER_STATUS(x) \
+  x == 0 ? ndk::ScopedAStatus::ok() : ndk::ScopedAStatus::fromServiceSpecificError(x)
 
-namespace composer_V2_1 = ::android::hardware::graphics::composer::V2_1;
-namespace composer_V2_2 = ::android::hardware::graphics::composer::V2_2;
-namespace composer_V2_3 = ::android::hardware::graphics::composer::V2_3;
-namespace composer_V2_4 = ::android::hardware::graphics::composer::V2_4;
-
-using PerFrameMetadataKey_V2 = composer_V2_2::IComposerClient::PerFrameMetadataKey;
-using PerFrameMetadataKey = composer_V2_3::IComposerClient::PerFrameMetadataKey;
-using VsyncPeriodNanos = composer_V2_4::VsyncPeriodNanos;
-using VsyncPeriodChangeTimeline = composer_V2_4::VsyncPeriodChangeTimeline;
-using HwcAttribute = composer_V2_4::IComposerClient::Attribute;
-using HwcDisplayConnectionType = composer_V2_4::IComposerClient::DisplayConnectionType;
-using HwcDisplayCapability = composer_V2_4::IComposerClient::DisplayCapability;
-using ColorMode = common_V1_2::ColorMode;
-using RenderIntent = common_V1_1::RenderIntent;
-
-using ::android::sp;
-using ::android::hardware::hidl_bitfield;
+using aidl::android::hardware::common::NativeHandle;
+using aidl::android::hardware::graphics::common::AlphaInterpretation;
+using aidl::android::hardware::graphics::common::Dataspace;
+using aidl::android::hardware::graphics::common::DisplayDecorationSupport;
+using aidl::android::hardware::graphics::common::FRect;
+using aidl::android::hardware::graphics::common::Hdr;
+using aidl::android::hardware::graphics::common::HdrConversionCapability;
+using aidl::android::hardware::graphics::common::HdrConversionStrategy;
+using aidl::android::hardware::graphics::common::PixelFormat;
+using aidl::android::hardware::graphics::common::Point;
+using aidl::android::hardware::graphics::common::Rect;
+using aidl::android::hardware::graphics::common::Transform;
+using aidl::android::hardware::graphics::composer3::BnComposerClient;
+using aidl::android::hardware::graphics::composer3::Buffer;
+using aidl::android::hardware::graphics::composer3::ClientTarget;
+using aidl::android::hardware::graphics::composer3::ClockMonotonicTimestamp;
+using FColor = aidl::android::hardware::graphics::composer3::Color;
+using aidl::android::hardware::graphics::composer3::Capability;
+using aidl::android::hardware::graphics::composer3::ColorMode;
+using aidl::android::hardware::graphics::composer3::CommandResultPayload;
+using aidl::android::hardware::graphics::composer3::ContentType;
+using aidl::android::hardware::graphics::composer3::DimmingStage;
+using aidl::android::hardware::graphics::composer3::DisplayAttribute;
+using aidl::android::hardware::graphics::composer3::DisplayBrightness;
+using aidl::android::hardware::graphics::composer3::DisplayCapability;
+using aidl::android::hardware::graphics::composer3::DisplayCommand;
+using aidl::android::hardware::graphics::composer3::DisplayConnectionType;
+using aidl::android::hardware::graphics::composer3::DisplayContentSample;
+using aidl::android::hardware::graphics::composer3::DisplayContentSamplingAttributes;
+using aidl::android::hardware::graphics::composer3::DisplayIdentification;
+using aidl::android::hardware::graphics::composer3::FormatColorComponent;
+using aidl::android::hardware::graphics::composer3::HdrCapabilities;
+using aidl::android::hardware::graphics::composer3::IComposerCallback;
+using aidl::android::hardware::graphics::composer3::LayerBrightness;
+using aidl::android::hardware::graphics::composer3::OverlayProperties;
+using aidl::android::hardware::graphics::composer3::ParcelableBlendMode;
+using aidl::android::hardware::graphics::composer3::ParcelableComposition;
+using aidl::android::hardware::graphics::composer3::ParcelableDataspace;
+using aidl::android::hardware::graphics::composer3::ParcelableTransform;
+using aidl::android::hardware::graphics::composer3::PerFrameMetadata;
+using aidl::android::hardware::graphics::composer3::PerFrameMetadataBlob;
+using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
+using aidl::android::hardware::graphics::composer3::PlaneAlpha;
+using aidl::android::hardware::graphics::composer3::PowerMode;
+using aidl::android::hardware::graphics::composer3::ReadbackBufferAttributes;
+using aidl::android::hardware::graphics::composer3::RenderIntent;
+using aidl::android::hardware::graphics::composer3::VirtualDisplay;
+using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeConstraints;
+using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeTimeline;
+using aidl::android::hardware::graphics::composer3::ZOrder;
 using ::android::hardware::hidl_handle;
-using ::android::hardware::hidl_string;
-using ::android::hardware::hidl_vec;
-using ::android::hardware::MQDescriptorSync;
-using ::android::hardware::Return;
-using ::android::hardware::Void;
-using ::android::hardware::graphics::composer::V2_1::Error;
-using ::android::hardware::graphics::composer::V2_4::IComposerClient;
-using std::string;
+using ndk::ScopedAStatus;
+using ndk::SpAIBinder;
+
+typedef uint64_t Display;
+typedef uint32_t Config;
+typedef int64_t LayerId;
+typedef uint32_t VsyncPeriodNanos;
+
+using std::shared_ptr;
+
+enum class Error : int32_t {
+  None = 0,
+  BadConfig = BnComposerClient::EX_BAD_CONFIG,
+  BadDisplay = BnComposerClient::EX_BAD_DISPLAY,
+  BadLayer = BnComposerClient::EX_BAD_LAYER,
+  BadParameter = BnComposerClient::EX_BAD_PARAMETER,
+  HasChanges,
+  NoResources = BnComposerClient::EX_NO_RESOURCES,
+  NotValidated = BnComposerClient::EX_NOT_VALIDATED,
+  Unsupported = BnComposerClient::EX_UNSUPPORTED,
+  SeamlessNotAllowed = BnComposerClient::EX_SEAMLESS_NOT_ALLOWED,
+};
+
+std::string to_string(Error error);
+std::string to_string(PowerMode mode);
+std::string to_string(Composition composition);
 
 class BufferCacheEntry {
  public:
@@ -98,168 +143,122 @@ class BufferCacheEntry {
   buffer_handle_t mHandle;
 };
 
-class QtiComposerClient : public IComposerClient {
-  QtiComposerClient();
-  virtual ~QtiComposerClient();
-  static QtiComposerClient *qti_composerclient_instance_;
-
+class QtiQmaaComposerClient : public BnComposerClient {
  public:
-  // Methods from ::android::hardware::graphics::composer::V2_1::IComposerClient follow.
-  Return<void> registerCallback(const sp<composer_V2_1::IComposerCallback> &callback) override;
-  Return<uint32_t> getMaxVirtualDisplayCount() override;
-  Return<void> createVirtualDisplay(uint32_t width, uint32_t height,
-                                    common_V1_0::PixelFormat formatHint,
-                                    uint32_t outputBufferSlotCount,
-                                    createVirtualDisplay_cb _hidl_cb) override;
-  Return<Error> destroyVirtualDisplay(uint64_t display) override;
-  Return<void> createLayer(uint64_t display, uint32_t bufferSlotCount,
-                           createLayer_cb _hidl_cb) override;
-  Return<Error> destroyLayer(uint64_t display, uint64_t layer) override;
-  Return<void> getActiveConfig(uint64_t display, getActiveConfig_cb _hidl_cb) override;
-  Return<Error> getClientTargetSupport(uint64_t display, uint32_t width, uint32_t height,
-                                       common_V1_0::PixelFormat format,
-                                       common_V1_0::Dataspace dataspace) override;
-  Return<void> getColorModes(uint64_t display, getColorModes_cb _hidl_cb) override;
-  Return<void> getDisplayAttribute(uint64_t display, uint32_t config,
-                                   composer_V2_1::IComposerClient::Attribute attribute,
-                                   getDisplayAttribute_cb _hidl_cb) override;
-  Return<void> getDisplayConfigs(uint64_t display, getDisplayConfigs_cb _hidl_cb) override;
-  Return<void> getDisplayName(uint64_t display, getDisplayName_cb _hidl_cb) override;
-  Return<void> getDisplayType(uint64_t display, getDisplayType_cb _hidl_cb) override;
-  Return<void> getDozeSupport(uint64_t display, getDozeSupport_cb _hidl_cb) override;
-  Return<void> getHdrCapabilities(uint64_t display, getHdrCapabilities_cb _hidl_cb) override;
-  Return<Error> setClientTargetSlotCount(uint64_t display, uint32_t clientTargetSlotCount) override;
-  Return<Error> setActiveConfig(uint64_t display, uint32_t config) override;
-  Return<Error> setColorMode(uint64_t display, common_V1_0::ColorMode mode) override;
-  Return<Error> setPowerMode(uint64_t display,
-                             composer_V2_1::IComposerClient::PowerMode mode) override;
-  Return<Error> setVsyncEnabled(uint64_t display,
-                                composer_V2_1::IComposerClient::Vsync enabled) override;
-  Return<Error> setInputCommandQueue(const MQDescriptorSync<uint32_t> &descriptor) override;
-  Return<void> getOutputCommandQueue(getOutputCommandQueue_cb _hidl_cb) override;
-  Return<void> executeCommands(uint32_t inLength, const hidl_vec<hidl_handle> &inHandles,
-                               executeCommands_cb _hidl_cb) override;
+  QtiQmaaComposerClient() {
+    default_variable_config_.vsync_period_ns = 16600000;
+    default_variable_config_.x_pixels = 1080;
+    default_variable_config_.y_pixels = 1920;
+    default_variable_config_.x_dpi = 300;
+    default_variable_config_.y_dpi = 300;
+    default_variable_config_.fps = 60;
+    default_variable_config_.is_yuv = false;
+  }
+  virtual ~QtiQmaaComposerClient();
+  bool init();
 
-  // Methods from ::android::hardware::graphics::composer::V2_2::IComposerClient follow.
-  Return<void> getPerFrameMetadataKeys(uint64_t display,
-                                       getPerFrameMetadataKeys_cb _hidl_cb) override;
-  Return<void> getReadbackBufferAttributes(uint64_t display,
-                                           getReadbackBufferAttributes_cb _hidl_cb) override;
-  Return<void> getReadbackBufferFence(uint64_t display,
-                                      getReadbackBufferFence_cb _hidl_cb) override;
-  Return<Error> setReadbackBuffer(uint64_t display, const hidl_handle &buffer,
-                                  const hidl_handle &releaseFence) override;
-  Return<void> createVirtualDisplay_2_2(uint32_t width, uint32_t height,
-                                        common_V1_1::PixelFormat formatHint,
-                                        uint32_t outputBufferSlotCount,
-                                        createVirtualDisplay_2_2_cb _hidl_cb) override;
-  Return<Error> getClientTargetSupport_2_2(uint64_t display, uint32_t width, uint32_t height,
-                                           common_V1_1::PixelFormat format,
-                                           common_V1_1::Dataspace dataspace) override;
-  Return<Error> setPowerMode_2_2(uint64_t display,
-                                 composer_V2_2::IComposerClient::PowerMode mode) override;
-  Return<void> getColorModes_2_2(uint64_t display, getColorModes_2_2_cb _hidl_cb) override;
-  Return<void> getRenderIntents(uint64_t display, common_V1_1::ColorMode mode,
-                                getRenderIntents_cb _hidl_cb) override;
-  Return<Error> setColorMode_2_2(uint64_t display, common_V1_1::ColorMode mode,
-                                 common_V1_1::RenderIntent intent) override;
-  Return<void> getDataspaceSaturationMatrix(common_V1_1::Dataspace dataspace,
-                                            getDataspaceSaturationMatrix_cb _hidl_cb) override;
-  Return<void> executeCommands_2_2(uint32_t inLength, const hidl_vec<hidl_handle> &inHandles,
-                                   executeCommands_2_2_cb _hidl_cb) override;
+  void setOnClientDestroyed(std::function<void()> onClientDestroyed) {
+    mOnClientDestroyed = onClientDestroyed;
+  }
 
-  // Methods from ::android::hardware::graphics::composer::V2_3::IComposerClient follow.
-  Return<void> getDisplayIdentificationData(uint64_t display,
-                                            getDisplayIdentificationData_cb _hidl_cb) override;
-  Return<void> getReadbackBufferAttributes_2_3(
-      uint64_t display, getReadbackBufferAttributes_2_3_cb _hidl_cb) override;
-  Return<Error> getClientTargetSupport_2_3(uint64_t display, uint32_t width, uint32_t height,
-                                           common_V1_2::PixelFormat format,
-                                           common_V1_2::Dataspace dataspace) override;
-  Return<void> getDisplayedContentSamplingAttributes(
-      uint64_t display, getDisplayedContentSamplingAttributes_cb _hidl_cb) override;
-  Return<Error> setDisplayedContentSamplingEnabled(
-      uint64_t display, composer_V2_3::IComposerClient::DisplayedContentSampling enable,
-      hidl_bitfield<FormatColorComponent> componentMask, uint64_t maxFrames) override;
-  Return<void> getDisplayedContentSample(uint64_t display, uint64_t maxFrames, uint64_t timestamp,
-                                         getDisplayedContentSample_cb _hidl_cb) override;
-  Return<void> executeCommands_2_3(uint32_t inLength, const hidl_vec<hidl_handle> &inHandles,
-                                   executeCommands_2_3_cb _hidl_cb) override;
-  Return<void> getRenderIntents_2_3(uint64_t display, common_V1_2::ColorMode mode,
-                                    getRenderIntents_2_3_cb _hidl_cb) override;
-  Return<void> getColorModes_2_3(uint64_t display, getColorModes_2_3_cb _hidl_cb) override;
-  Return<Error> setColorMode_2_3(uint64_t display, common_V1_2::ColorMode mode,
-                                 common_V1_1::RenderIntent intent) override;
-  Return<void> getDisplayCapabilities(uint64_t display,
-                                      getDisplayCapabilities_cb _hidl_cb) override;
-  Return<void> getPerFrameMetadataKeys_2_3(uint64_t display,
-                                           getPerFrameMetadataKeys_2_3_cb _hidl_cb) override;
-  Return<void> getHdrCapabilities_2_3(uint64_t display,
-                                      getHdrCapabilities_2_3_cb _hidl_cb) override;
-  Return<void> getDisplayBrightnessSupport(uint64_t display,
-                                           getDisplayBrightnessSupport_cb _hidl_cb) override;
-  Return<Error> setDisplayBrightness(uint64_t display, float brightness) override;
-
-  // Methods from ::android::hardware::graphics::composer::V2_4::IComposerClient follow.
-  Return<void> registerCallback_2_4(const sp<composer_V2_4::IComposerCallback> &callback) override;
-  Return<void> getDisplayCapabilities_2_4(uint64_t display,
-                                          getDisplayCapabilities_2_4_cb _hidl_cb) override;
-  Return<void> getDisplayConnectionType(uint64_t display,
-                                        getDisplayConnectionType_cb _hidl_cb) override;
-  Return<void> getDisplayAttribute_2_4(uint64_t display, uint32_t config,
-                                       composer_V2_4::IComposerClient::Attribute attribute,
-                                       getDisplayAttribute_2_4_cb _hidl_cb) override;
-
-  Return<void> getDisplayVsyncPeriod(uint64_t display, getDisplayVsyncPeriod_cb _hidl_cb) override;
-  Return<void> setActiveConfigWithConstraints(
-      uint64_t display, uint32_t config,
-      const VsyncPeriodChangeConstraints &vsyncPeriodChangeConstraints,
-      setActiveConfigWithConstraints_cb _hidl_cb) override;
-
-  Return<composer_V2_4::Error> setAutoLowLatencyMode(uint64_t display, bool on) override;
-
-  Return<void> getSupportedContentTypes(uint64_t display,
-                                        getSupportedContentTypes_cb _hidl_cb) override;
-  Return<composer_V2_4::Error> setContentType(
-      uint64_t display, composer_V2_4::IComposerClient::ContentType type) override;
-  Return<void> getLayerGenericMetadataKeys(getLayerGenericMetadataKeys_cb _hidl_cb) override;
+  // Methods from aidl::android::hardware::graphics::composer3::IComposerClient
+  ScopedAStatus createLayer(int64_t in_display, int32_t in_buffer_slot_count,
+                            int64_t *aidl_return) override;
+  ScopedAStatus createVirtualDisplay(int32_t in_width, int32_t in_height,
+                                     PixelFormat in_format_hint,
+                                     int32_t in_output_buffer_slot_count,
+                                     VirtualDisplay *aidl_return) override;
+  ScopedAStatus destroyLayer(int64_t in_display, int64_t in_layer) override;
+  ScopedAStatus destroyVirtualDisplay(int64_t in_display) override;
+  ScopedAStatus executeCommands(const std::vector<DisplayCommand> &in_commands,
+                                std::vector<CommandResultPayload> *aidl_return) override;
+  ScopedAStatus getActiveConfig(int64_t in_display, int32_t *aidl_return) override;
+  ScopedAStatus getColorModes(int64_t in_display, std::vector<ColorMode> *aidl_return) override;
+  ScopedAStatus getDataspaceSaturationMatrix(Dataspace in_dataspace,
+                                             std::vector<float> *aidl_return) override;
+  ScopedAStatus getDisplayAttribute(int64_t in_display, int32_t in_config,
+                                    DisplayAttribute in_attribute, int32_t *aidl_return) override;
+  ScopedAStatus getDisplayCapabilities(int64_t in_display,
+                                       std::vector<DisplayCapability> *aidl_return) override;
+  ScopedAStatus getDisplayConfigs(int64_t in_display, std::vector<int32_t> *aidl_return) override;
+  ScopedAStatus getDisplayConnectionType(int64_t in_display,
+                                         DisplayConnectionType *aidl_return) override;
+  ScopedAStatus getDisplayIdentificationData(int64_t in_display,
+                                             DisplayIdentification *aidl_return) override;
+  ScopedAStatus getDisplayName(int64_t in_display, std::string *aidl_return) override;
+  ScopedAStatus getDisplayVsyncPeriod(int64_t in_display, int32_t *aidl_return) override;
+  ScopedAStatus getDisplayedContentSample(int64_t in_display, int64_t in_max_frames,
+                                          int64_t in_timestamp,
+                                          DisplayContentSample *aidl_return) override;
+  ScopedAStatus getDisplayedContentSamplingAttributes(
+      int64_t in_display, DisplayContentSamplingAttributes *aidl_return) override;
+  ScopedAStatus getDisplayPhysicalOrientation(int64_t in_display, Transform *aidl_return) override;
+  ScopedAStatus getHdrCapabilities(int64_t in_display, HdrCapabilities *aidl_return) override;
+  ScopedAStatus getMaxVirtualDisplayCount(int32_t *aidl_return) override;
+  ScopedAStatus getOverlaySupport(OverlayProperties *aidl_return) override;
+  ScopedAStatus getPerFrameMetadataKeys(int64_t in_display,
+                                        std::vector<PerFrameMetadataKey> *aidl_return) override;
+  ScopedAStatus getReadbackBufferAttributes(int64_t in_display,
+                                            ReadbackBufferAttributes *aidl_return) override;
+  ScopedAStatus getReadbackBufferFence(int64_t in_display,
+                                       ::ndk::ScopedFileDescriptor *aidl_return) override;
+  ScopedAStatus getRenderIntents(int64_t in_display, ColorMode in_mode,
+                                 std::vector<RenderIntent> *aidl_return) override;
+  ScopedAStatus getSupportedContentTypes(int64_t in_display,
+                                         std::vector<ContentType> *aidl_return) override;
+  ScopedAStatus getDisplayDecorationSupport(
+      int64_t in_display, std::optional<DisplayDecorationSupport> *aidl_return) override;
+  ScopedAStatus registerCallback(const std::shared_ptr<IComposerCallback> &in_callback) override;
+  ScopedAStatus setActiveConfig(int64_t in_display, int32_t in_config) override;
+  ScopedAStatus setActiveConfigWithConstraints(
+      int64_t in_display, int32_t in_config,
+      const VsyncPeriodChangeConstraints &in_vsync_period_change_constraints,
+      VsyncPeriodChangeTimeline *aidl_return) override;
+  ScopedAStatus setBootDisplayConfig(int64_t in_display, int32_t in_config) override;
+  ScopedAStatus clearBootDisplayConfig(int64_t in_display) override;
+  ScopedAStatus getPreferredBootDisplayConfig(int64_t in_display, int32_t *aidl_return) override;
+  ScopedAStatus setAutoLowLatencyMode(int64_t in_display, bool in_on) override;
+  ScopedAStatus setClientTargetSlotCount(int64_t in_display,
+                                         int32_t in_client_target_slot_count) override;
+  ScopedAStatus setColorMode(int64_t in_display, ColorMode in_mode,
+                             RenderIntent in_intent) override;
+  ScopedAStatus setContentType(int64_t in_display, ContentType in_type) override;
+  ScopedAStatus setDisplayedContentSamplingEnabled(int64_t in_display, bool in_enable,
+                                                   FormatColorComponent in_component_mask,
+                                                   int64_t in_max_frames) override;
+  ScopedAStatus setPowerMode(int64_t in_display, PowerMode in_mode) override;
+  ScopedAStatus setReadbackBuffer(int64_t in_display, const NativeHandle &in_buffer,
+                                  const ::ndk::ScopedFileDescriptor &in_release_fence) override;
+  ScopedAStatus setVsyncEnabled(int64_t in_display, bool in_enabled) override;
+  ScopedAStatus setIdleTimerEnabled(int64_t in_display, int32_t in_timeout_ms) override;
+  ScopedAStatus getHdrConversionCapabilities(
+      std::vector<HdrConversionCapability> *_aidl_return) override;
+  ScopedAStatus setHdrConversionStrategy(const HdrConversionStrategy &in_conversionStrategy,
+                                         Hdr *_aidl_return) override;
+  ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t in_display,
+                                                          bool in_enabled) override;
 
   // Methods for RegisterCallback
-  void enableCallback(bool enable);
-  static void onHotplug(hwc2_callback_data_t callbackData, hwc2_display_t display,
-                        int32_t connected);
-  static void onRefresh(hwc2_callback_data_t callbackData, hwc2_display_t display);
-  static void onVsync(hwc2_callback_data_t callbackData, hwc2_display_t display, int64_t timestamp);
-  static void onVsync_2_4(hwc2_callback_data_t callbackData, hwc2_display_t display,
-                          int64_t timestamp, VsyncPeriodNanos vsyncPeriodNanos);
-  static void onVsyncPeriodTimingChanged(hwc2_callback_data_t callbackData, hwc2_display_t display,
-                                         hwc_vsync_period_change_timeline_t *updatedTimeline);
-  static void onSeamlessPossible(hwc2_callback_data_t callbackData, hwc2_display_t display);
+  void EnableCallback(bool enable);
+  static void OnHotplug(void *callback_data, int64_t in_display, bool in_connected);
+  static void OnRefresh(void *callback_data, int64_t in_display);
+  static void OnSeamlessPossible(void *callback_data, int64_t in_display);
+  static void OnVsync(void *callback_data, int64_t in_display, int64_t in_timestamp,
+                      int32_t in_vsync_period_nanos);
+  static void OnVsyncPeriodTimingChanged(void *callback_data, int64_t in_display,
+                                         const VsyncPeriodChangeTimeline &in_updated_timeline);
+  static void OnVsyncIdle(void *callback_data, int64_t in_display);
 
   // Methods for ConcurrentWriteBack
-  hidl_handle getFenceHandle(const shared_ptr<int32_t> &fence, char *handleStorage);
-  Error getFence(const hidl_handle &fenceHandle, shared_ptr<int32_t> *outFence, const string &name);
-  Error getDisplayReadbackBuffer(Display display, const native_handle_t *rawHandle,
+  Error getDisplayReadbackBuffer(int64_t display, const native_handle_t *rawHandle,
                                  const native_handle_t **outHandle);
 
-  // Methods to check support of specific features like skip_validate
-  std::unordered_set<hwc2_capability_t> mCapabilities;
   void getCapabilities();
-  bool hasCapability(hwc2_capability_t capability) { return (mCapabilities.count(capability) > 0); }
+  bool hasCapability(Capability capability) { return (mCapabilities.count(capability) > 0); }
+  std::unordered_set<Capability> mCapabilities;
 
-  static QtiComposerClient *CreateQtiComposerClientInstance() {
-    if (!qti_composerclient_instance_) {
-      qti_composerclient_instance_ = new QtiComposerClient();
-      return qti_composerclient_instance_;
-    }
-    return nullptr;
-  }
-
-  void onLastStrongRef(const void *id) {
-    if (qti_composerclient_instance_) {
-      qti_composerclient_instance_ = nullptr;
-    }
-  }
+ protected:
+  SpAIBinder createBinder() override;
 
  private:
   struct LayerBuffers {
@@ -286,20 +285,6 @@ class QtiComposerClient : public IComposerClient {
     }
   };
 
-  struct QMAADisplayConfigFixedInfo {
-    bool underscan = false;
-    bool secure = false;
-    bool is_cmdmode = false;
-    bool hdr_supported = false;
-    bool hdr_plus = false;
-    bool hdr_metadata_type_one = false;
-    uint32_t hdr_eotf = 0;
-    float max_luminance = 0.0f;
-    float average_luminance = 0.0f;
-    float min_luminance = 0.0f;
-    bool partial_update = false;
-  };
-
   const std::vector<uint8_t> edid_{
       0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x44, 0x6D, 0x01, 0x00, 0x01, 0x00, 0x00,
       0x00, 0x1B, 0x10, 0x01, 0x03, 0x80, 0x50, 0x2D, 0x78, 0x0A, 0x0D, 0xC9, 0xA0, 0x57, 0x47,
@@ -317,67 +302,91 @@ class QtiComposerClient : public IComposerClient {
     std::vector<BufferCacheEntry> ClientTargets;
     std::vector<BufferCacheEntry> OutputBuffers;
 
-    std::unordered_map<Layer, LayerBuffers> Layers;
+    std::unordered_map<LayerId, LayerBuffers> Layers;
 
+    DisplayData() {}
     explicit DisplayData(bool isVirtual) : IsVirtual(isVirtual) {}
   };
 
-  class CommandReader : public CommandReaderBase {
+  class CommandEngine {
    public:
-    explicit CommandReader(QtiComposerClient &client);
-    Error parse();
-    Error validateDisplay(Display display, std::vector<Layer> &changedLayers,
-                          std::vector<IComposerClient::Composition> &compositionTypes,
-                          uint32_t &displayRequestMask, std::vector<Layer> &requestedLayers,
-                          std::vector<uint32_t> &requestMasks);
+    CommandEngine(QtiQmaaComposerClient &client) : mClient(client){};
+    bool init();
+    Error execute(const std::vector<DisplayCommand> &in_commands,
+                  std::vector<CommandResultPayload> *aidl_return);
+    Error validateDisplay(int64_t display);
+    Error presentDisplay(int64_t display);
 
-    Error presentDisplay(Display display, std::vector<Layer> &layers);
+    void reset() { mWriter->reset(); }
 
    private:
-    // Commands from ::android::hardware::graphics::composer::V2_1::IComposerClient follow.
-    bool parseSelectDisplay(uint16_t length);
-    bool parseSelectLayer(uint16_t length);
-    bool parseSetColorTransform(uint16_t length);
-    bool parseSetClientTarget(uint16_t length);
-    bool parseSetOutputBuffer(uint16_t length);
-    bool parseValidateDisplay(uint16_t length);
-    bool parseAcceptDisplayChanges(uint16_t length);
-    bool parsePresentDisplay(uint16_t length);
-    bool parsePresentOrValidateDisplay(uint16_t length);
-    bool parseSetLayerCursorPosition(uint16_t length);
-    bool parseSetLayerBuffer(uint16_t length);
-    bool parseSetLayerSurfaceDamage(uint16_t length);
-    bool parseSetLayerBlendMode(uint16_t length);
-    bool parseSetLayerColor(uint16_t length);
-    bool parseSetLayerCompositionType(uint16_t length);
-    bool parseSetLayerDataspace(uint16_t length);
-    bool parseSetLayerDisplayFrame(uint16_t length);
-    bool parseSetLayerPlaneAlpha(uint16_t length);
-    bool parseSetLayerSidebandStream(uint16_t length);
-    bool parseSetLayerSourceCrop(uint16_t length);
-    bool parseSetLayerTransform(uint16_t length);
-    bool parseSetLayerVisibleRegion(uint16_t length);
-    bool parseSetLayerZOrder(uint16_t length);
-    bool parseSetLayerType(uint16_t length);
+    template <typename field, typename... Args, typename... prototypeParams>
+    void ExecuteCommand(field &commandField, void (CommandEngine::*func)(prototypeParams...),
+                        Args &&...args) {
+      if ((static_cast<bool>(commandField))) {
+        (this->*func)(std::forward<Args>(args)...);
+      }
+    }
+    __attribute__((always_inline)) inline void writeError(std::string function, Error err) {
+      ALOGW("%s: error: %d", function.c_str(), err);
+      mWriter->setError(mCommandIndex, INT32(err));
+    }
 
-    // Commands from ::android::hardware::graphics::composer::V2_2::IComposerClient follow.
-    bool parseSetLayerPerFrameMetadata(uint16_t length);
-    bool parseSetLayerFloatColor(uint16_t length);
+    // Commands from aidl::android::hardware::graphics::composer3::IComposerClient follow.
+    void executeSetColorTransform(int64_t display, const std::vector<float> &matrix);
+    void executeSetClientTarget(int64_t display, const ClientTarget &command);
+    void executeSetDisplayBrightness(uint64_t display, const DisplayBrightness &command);
+    void executeSetOutputBuffer(uint64_t display, const Buffer &buffer);
+    void executeValidateDisplay(int64_t display,
+                                const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
+    void executePresentOrValidateDisplay(
+        int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
+    void executeAcceptDisplayChanges(int64_t display);
+    void executePresentDisplay(int64_t display);
 
-    // Commands from ::android::hardware::graphics::composer::V2_3::IComposerClient follow.
-    bool parseSetLayerColorTransform(uint16_t length);
-    bool parseSetLayerPerFrameMetadataBlobs(uint16_t length);
-    bool parseSetDisplayElapseTime(uint16_t length);
+    void executeSetLayerCursorPosition(int64_t display, int64_t layer, const Point &cursorPosition);
+    void executeSetLayerBuffer(int64_t display, int64_t layer, const Buffer &buffer);
+    void executeSetLayerSurfaceDamage(int64_t display, int64_t layer,
+                                      const std::vector<std::optional<Rect>> &damage);
+    void executeSetLayerBlendMode(int64_t display, int64_t layer,
+                                  const ParcelableBlendMode &blendMode);
+    void executeSetLayerColor(int64_t display, int64_t layer, const FColor &color);
+    void executeSetLayerComposition(int64_t display, int64_t layer,
+                                    const ParcelableComposition &composition);
+    void executeSetLayerDataspace(int64_t display, int64_t layer,
+                                  const ParcelableDataspace &dataspace);
+    void executeSetLayerDisplayFrame(int64_t display, int64_t layer, const Rect &rect);
+    void executeSetLayerPlaneAlpha(int64_t display, int64_t layer, const PlaneAlpha &planeAlpha);
+    void executeSetLayerSidebandStream(int64_t display, int64_t layer,
+                                       const NativeHandle &sidebandStream);
+    void executeSetLayerSourceCrop(int64_t display, int64_t layer, const FRect &sourceCrop);
+    void executeSetLayerTransform(int64_t display, int64_t layer,
+                                  const ParcelableTransform &transform);
+    void executeSetLayerVisibleRegion(int64_t display, int64_t layer,
+                                      const std::vector<std::optional<Rect>> &visibleRegion);
+    void executeSetLayerZOrder(int64_t display, int64_t layer, const ZOrder &zOrder);
+    void executeSetLayerPerFrameMetadata(
+        int64_t display, int64_t layer,
+        const std::vector<std::optional<PerFrameMetadata>> &perFrameMetadata);
+    void executeSetLayerColorTransform(int64_t display, int64_t layer,
+                                       const std::vector<float> &colorTransform);
+    void executeSetLayerPerFrameMetadataBlobs(
+        int64_t display, int64_t layer,
+        const std::vector<std::optional<PerFrameMetadataBlob>> &perFrameMetadataBlob);
+    void executeSetLayerBrightness(int64_t display, int64_t layer,
+                                   const LayerBrightness &brightness);
 
-    bool parseCommonCmd(IComposerClient::Command command, uint16_t length);
+    void executeSetExpectedPresentTimeInternal(
+        int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
+    void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
+                                       const std::vector<std::optional<Rect>> &blockingRegion);
 
-    hwc_rect_t readRect();
-    std::vector<hwc_rect_t> readRegion(size_t count);
-    hwc_frect_t readFRect();
-    QtiComposerClient &mClient;
-    CommandWriter &mWriter;
-    Display mDisplay;
-    Layer mLayer;
+    Rect readRect();
+    std::vector<Rect> readRegion(size_t count);
+    FRect readFRect();
+    QtiQmaaComposerClient &mClient;
+    std::unique_ptr<ComposerServiceWriter> mWriter;
+    int32_t mCommandIndex;
 
     // Buffer cache impl
     enum class BufferCache {
@@ -387,42 +396,38 @@ class QtiComposerClient : public IComposerClient {
       LAYER_SIDEBAND_STREAMS,
     };
 
-    Error lookupBufferCacheEntryLocked(BufferCache cache, uint32_t slot,
-                                       BufferCacheEntry **outEntry);
-    Error lookupBuffer(BufferCache cache, uint32_t slot, bool useCache, buffer_handle_t handle,
-                       buffer_handle_t *outHandle);
-    Error updateBuffer(BufferCache cache, uint32_t slot, bool useCache, buffer_handle_t handle);
+    Error lookupBufferCacheEntryLocked(int64_t display, int64_t layer, BufferCache cache,
+                                       uint32_t slot, BufferCacheEntry **outEntry);
+    Error lookupBuffer(int64_t display, int64_t layer, BufferCache cache, uint32_t slot,
+                       bool useCache, buffer_handle_t handle, buffer_handle_t *outHandle);
+    Error updateBuffer(int64_t display, int64_t layer, BufferCache cache, uint32_t slot,
+                       bool useCache, buffer_handle_t handle);
 
-    Error lookupLayerSidebandStream(buffer_handle_t handle, buffer_handle_t *outHandle) {
-      return lookupBuffer(BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle, outHandle);
+    Error lookupLayerSidebandStream(int64_t display, int64_t layer, buffer_handle_t handle,
+                                    buffer_handle_t *outHandle) {
+      return lookupBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle,
+                          outHandle);
     }
-    Error updateLayerSidebandStream(buffer_handle_t handle) {
-      return updateBuffer(BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle);
+    Error updateLayerSidebandStream(int64_t display, int64_t layer, buffer_handle_t handle) {
+      return updateBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle);
     }
+    Error postPresentDisplay(int64_t display);
+    Error postValidateDisplay(int64_t display, uint32_t &types_count, uint32_t &reqs_count);
   };
 
-  sp<composer_V2_1::IComposerCallback> callback_ = nullptr;
-  sp<composer_V2_4::IComposerCallback> callback24_ = nullptr;
-  bool mUseCallback24_ = false;
+  std::shared_ptr<IComposerCallback> callback_ = nullptr;
   uint32_t layer_count_ = 0;
-  std::mutex mCommandMutex;
-  // 64KiB minus a small space for metadata such as read/write pointers */
-  static constexpr size_t kWriterInitialSize = 64 * 1024 / sizeof(uint32_t) - 16;
-  QMAADisplayConfigVariableInfo default_variable_config_ = {};
-  QMAADisplayConfigFixedInfo default_fixed_config_ = {};
-
-  CommandWriter mWriter;
-  CommandReader mReader;
-  std::mutex mDisplayDataMutex;
+  std::mutex m_command_mutex_;
+  std::mutex m_display_data_mutex_;
+  std::unique_ptr<CommandEngine> mCommandEngine;
+  std::function<void()> mOnClientDestroyed;
   std::unordered_map<Display, DisplayData> mDisplayData;
+  QMAADisplayConfigVariableInfo default_variable_config_ = {};
 };
 
-}  // namespace implementation
-}  // namespace V3_0
-}  // namespace composer
+}  // namespace composer3
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
-
-#endif  // __QTIQMAACOMPOSERCLIENT_H__
+}  // namespace aidl

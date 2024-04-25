@@ -222,6 +222,7 @@
 #define USE_DMA_BUF_HEAPS_PROP               GRALLOC_PROP("use_dma_buf_heaps")
 #define USE_SYSTEM_HEAP_FOR_SENSORS_PROP     GRALLOC_PROP("use_system_heap_for_sensors")
 #define HW_SUPPORTS_UBWCP                    GRALLOC_PROP("hw_supports_ubwcp")
+#define USE_UNCACHED_HEAP                    GRALLOC_PROP("use_uncached_heap")
 
 // Add all vendor.gralloc.properties above
 

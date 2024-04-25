@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,7 @@ DmaManager *DmaManager::GetInstance() {
   if (!dma_manager_) {
     dma_manager_ = new DmaManager();
     dma_manager_->enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
+    dma_manager_->GetUncachedHeapUsage();
   }
   return dma_manager_;
 }
@@ -276,7 +277,7 @@ bool DmaManager::CSFEnabled() {
   return false;
 }
 
-void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format,
+void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format, bool use_uncached,
                              std::string *dma_heap_name, std::vector<std::string> *dma_vm_names,
                              unsigned int *alloc_type, unsigned int * /* dmaflags */,
                              unsigned int *alloc_size) {
@@ -284,6 +285,9 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format,
   GetCSFVersion();
   std::string heap_name = "qcom,system";
 
+  if (uncached_heap_prop_ && use_uncached) {
+    heap_name = "qcom,system-uncached";
+  }
   unsigned int type = 0;
   if (usage & GRALLOC_USAGE_PROTECTED) {
     if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
@@ -312,6 +316,7 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, int format,
             dma_vm_names->push_back("qcom,cp_camera_preview");
           } else {
             dma_vm_names->push_back("qcom,cp_camera");
+            dma_vm_names->push_back("qcom,cp_camera_preview");
           }
         } else {
           dma_vm_names->push_back("qcom,cp_camera");
@@ -412,6 +417,16 @@ int DmaManager::SetBufferPermission(int fd, BufferPermission *buf_perm, int64_t 
     ALOGI("fd %d mem_hdl %lld ret %d", fd, *mem_hdl, ret);
   }
   return ret;
+}
+
+void DmaManager::GetUncachedHeapUsage() {
+  char property[PROPERTY_VALUE_MAX];
+  if (property_get(USE_UNCACHED_HEAP, property, NULL) > 0) {
+    uncached_heap_prop_ = atoi(property);
+    return;
+  }
+  uncached_heap_prop_ = false;
+  return;
 }
 
 }  // namespace gralloc

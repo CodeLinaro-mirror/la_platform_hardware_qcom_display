@@ -27,53 +27,70 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __QTIQMAACOMPOSER_H__
-#define __QTIQMAACOMPOSER_H__
+/*
+ * Copyright 2022 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#include <QtiQmaaComposerClient.h>
+/*
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
-// TODO(user): recheck on this header inclusion
-#include <hardware/hwcomposer2.h>
-#include <log/log.h>
+#pragma once
 
-#include <unordered_set>
+#include <memory>
+#include <aidl/android/hardware/graphics/composer3/BnComposer.h>
+#include <utils/Mutex.h>
+#include "QtiQmaaComposerClient.h"
 
+namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer {
-namespace V3_0 {
-namespace implementation {
+namespace composer3 {
+using aidl::android::hardware::graphics::composer3::BnComposer;
+using aidl::android::hardware::graphics::composer3::IComposerClient;
+using ::android::hardware::hidl_vec;
 
-using ::android::hardware::graphics::composer::V2_4::IComposer;
-
-class QtiComposer : public IComposer {
+class QtiQmaaComposer : public BnComposer {
  public:
-  QtiComposer();
-  virtual ~QtiComposer();
-  // Methods from ::android::hardware::graphics::composer::V2_1::IComposer follow.
-  Return<void> getCapabilities(getCapabilities_cb _hidl_cb) override;
-  Return<void> dumpDebugInfo(dumpDebugInfo_cb _hidl_cb) override;
-  Return<void> createClient(createClient_cb _hidl_cb) override;
+  QtiQmaaComposer();
+  virtual ~QtiQmaaComposer();
 
-  // Methods from ::android::hardware::graphics::composer::V2_3::IComposer follow.
-  Return<void> createClient_2_3(createClient_2_3_cb _hidl_cb) override;
+  binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
-  // Methods from ::android::hardware::graphics::composer::V2_4::IComposer follow.
-  Return<void> createClient_2_4(createClient_2_4_cb _hidl_cb) override;
+  // Composer3 API
+  ScopedAStatus createClient(std::shared_ptr<IComposerClient> *aidl_return) override;
+  ScopedAStatus getCapabilities(std::vector<Capability> *aidl_return) override;
 
-  // Methods from ::android::hidl::base::V1_0::IBase follow.
+ protected:
+  SpAIBinder createBinder() override;
 
-  static QtiComposer *initialize();
+ private:
+  bool waitForClientDestroyedLocked(std::unique_lock<std::mutex> &lock);
+  void onClientDestroyed();
+
+  std::mutex mClientMutex;
+  bool mClientAlive GUARDED_BY(mClientMutex) = false;
+  std::condition_variable mClientDestroyedCondition;
 };
 
-}  // namespace implementation
-}  // namespace V3_0
-}  // namespace composer
+}  // namespace composer3
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
-
-#endif  // __QTIQMAACOMPOSER_H__
+}  // namespace aidl
