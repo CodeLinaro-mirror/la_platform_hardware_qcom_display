@@ -6,6 +6,8 @@
 #ifndef __GR_SNAP_DEBUGGER_H__
 #define __GR_SNAP_DEBUGGER_H__
 
+#define DISPLAY_ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
+
 #include <unordered_map>
 #include <log/log.h>
 #include <utils/Trace.h>
