@@ -34,5 +34,6 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             vendor.qti.hardware.display.demura-service \
                             modetest \
                             libdisplayconfig.qti \
-                            vendor.qti.hardware.display.snapalloc-impl
+                            vendor.qti.hardware.display.snapalloc-impl \
+                            libhwfenceclient
 endif
