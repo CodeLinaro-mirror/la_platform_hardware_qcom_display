@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1169,6 +1169,7 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
   return HWC3::Error::None;
 }
 
+#ifdef COMPOSER3_V3
 HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
   out_configs->clear();
   out_configs->reserve(variable_config_map_.size());
@@ -1188,6 +1189,7 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
   }
   return HWC3::Error::None;
 }
+#endif
 
 HWC3::Error HWCDisplay::GetDisplayName(uint32_t *out_size, char *out_name) {
   // TODO(user): Get panel name and EDID name and populate it here

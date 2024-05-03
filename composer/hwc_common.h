@@ -15,9 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -29,7 +28,9 @@
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
+#ifdef COMPOSER3_V3
 #include <aidl/android/hardware/graphics/composer3/DisplayConfiguration.h>
+#endif
 #include <aidl/android/hardware/graphics/composer3/Capability.h>
 #include <aidl/android/hardware/graphics/common/ColorTransform.h>
 #include <functional>
