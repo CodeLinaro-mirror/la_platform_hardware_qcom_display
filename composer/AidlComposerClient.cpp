@@ -382,6 +382,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
+#ifdef COMPOSER3_V3
 ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs,
     std::vector<DisplayConfiguration> *out_configs) {
@@ -447,6 +448,7 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
   auto error = drawcycle_->NotifyExpectedPresent(in_display, ept, fi_ns);
   return TO_BINDER_STATUS(INT32(error));
 }
+#endif
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
@@ -1127,15 +1129,17 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
                    displayCmd.display, *displayCmd.clientTarget);
     ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
                    displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
-    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
-                   displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
     ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
                    displayCmd.display);
     ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
                    displayCmd.display);
+#ifdef COMPOSER3_V3
+    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                   displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
     ExecuteCommand(displayCmd.presentOrValidateDisplay,
                    &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                    displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+#endif
 
     ++mCommandIndex;
 
