@@ -52,7 +52,6 @@ enum PanelFeaturePropertyID {
   kPanelFeatureRCInitCfg,
   kPanelFeatureDemuraPanelId,
   kPanelFeatureSPRUDCCfg,
-  kPanelFeatureDemuraCfg0Param2,
   kPanelFeaturePropertyIDMax
 };
 
