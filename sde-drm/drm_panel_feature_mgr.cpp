@@ -28,40 +28,40 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *    * Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *
- *    * Redistributions in binary form must reproduce the above
- *      copyright notice, this list of conditions and the following
- *      disclaimer in the documentation and/or other materials provided
- *      with the distribution.
- *
- *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted (subject to the limitations in the
+* disclaimer below) provided that the following conditions are met:
+*
+*    * Redistributions of source code must retain the above copyright
+*      notice, this list of conditions and the following disclaimer.
+*
+*    * Redistributions in binary form must reproduce the above
+*      copyright notice, this list of conditions and the following
+*      disclaimer in the documentation and/or other materials provided
+*      with the distribution.
+*
+*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+*      contributors may be used to endorse or promote products derived
+*      from this software without specific prior written permission.
+*
+* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 
 #include <sstream>
 #include <string>
@@ -132,7 +132,7 @@ void DRMPanelFeatureMgr::Init(int fd, drmModeRes* res) {
   drm_property_map_[kDRMPanelFeatureDemuraResources] = DRMProperty::DEMURA_BOOT_PLANE_V1;
   drm_property_map_[kDRMPanelFeatureDemuraInit] = DRMProperty::DEMURA_INIT_CFG_V1;
   drm_property_map_[kDRMPanelFeaturePanelId] = DRMProperty::DEMURA_PANEL_ID;
-  drm_property_map_[kDRMPanelFeatureSPRUDC] = DRMProperty::SPR_UDC_CFG_V2;
+  drm_property_map_[kDRMPanelFeatureSPRInit] = DRMProperty::SPR_INIT_CFG_V1;
   drm_property_map_[kDRMPanelFeatureSPRPackType] = DRMProperty::CAPABILITIES;
   drm_property_map_[kDRMPanelFeatureDsppIndex] = DRMProperty::DSPP_CAPABILITIES;
   drm_property_map_[kDRMPanelFeatureDsppSPRInfo] = DRMProperty::DSPP_CAPABILITIES;
@@ -144,7 +144,6 @@ void DRMPanelFeatureMgr::Init(int fd, drmModeRes* res) {
   drm_prop_type_map_[kDRMPanelFeatureDemuraInit] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeaturePanelId] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureSPRInit] = DRMPropType::kPropBlob;
-  drm_prop_type_map_[kDRMPanelFeatureSPRUDC] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureRCInit] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureSPRPackType] = DRMPropType::kPropBlob;
   drm_prop_type_map_[kDRMPanelFeatureDsppIndex] = DRMPropType::kPropRange;
@@ -158,8 +157,8 @@ void DRMPanelFeatureMgr::Init(int fd, drmModeRes* res) {
       DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_dem_cfg), 0};
   feature_info_tbl_[kDRMPanelFeaturePanelId] = DRMPanelFeatureInfo {kDRMPanelFeaturePanelId,
       DRM_MODE_OBJECT_CONNECTOR, UINT32_MAX, 1, sizeof(uint64_t), 0};
-  feature_info_tbl_[kDRMPanelFeatureSPRUDC] = DRMPanelFeatureInfo{
-      kDRMPanelFeatureSPRUDC, DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_spr_udc_cfg), 0};
+  feature_info_tbl_[kDRMPanelFeatureSPRInit] = DRMPanelFeatureInfo {kDRMPanelFeatureSPRInit,
+      DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_spr_init_cfg), 0};
   feature_info_tbl_[kDRMPanelFeatureRCInit] = DRMPanelFeatureInfo {
       kDRMPanelFeatureRCInit, DRM_MODE_OBJECT_CRTC, UINT32_MAX, 1, sizeof(drm_msm_rc_mask_cfg), 0};
   feature_info_tbl_[kDRMPanelFeatureSPRPackType] = DRMPanelFeatureInfo {kDRMPanelFeatureSPRPackType,
@@ -216,24 +215,6 @@ int DRMPanelFeatureMgr::InitObjectProps(int obj_id, int obj_type) {
       DRM_LOGD("DRMProperty %s missing from global property mapping", info->name);
       drmModeFreeProperty(info);
       continue;
-    }
-
-    if (prop_enum == DRMProperty::SPR_INIT_CFG_V1) {
-      drm_property_map_[kDRMPanelFeatureSPRInit] = DRMProperty::SPR_INIT_CFG_V1;
-      feature_info_tbl_[kDRMPanelFeatureSPRInit] = DRMPanelFeatureInfo{kDRMPanelFeatureSPRInit,
-                                                                       DRM_MODE_OBJECT_CRTC,
-                                                                       UINT32_MAX,
-                                                                       1,
-                                                                       sizeof(drm_msm_spr_init_cfg),
-                                                                       0};
-    } else if (prop_enum == DRMProperty::SPR_INIT_CFG_V2) {
-      drm_property_map_[kDRMPanelFeatureSPRInit] = DRMProperty::SPR_INIT_CFG_V2;
-      feature_info_tbl_[kDRMPanelFeatureSPRInit] = DRMPanelFeatureInfo{kDRMPanelFeatureSPRInit,
-                                                                       DRM_MODE_OBJECT_CRTC,
-                                                                       UINT32_MAX,
-                                                                       2,
-                                                                       sizeof(drm_msm_spr_init_cfg),
-                                                                       0};
     }
 
     prop_mgr_.SetPropertyId(prop_enum, info->prop_id);
@@ -533,12 +514,6 @@ void DRMPanelFeatureMgr::ResetPanelFeatures(drmModeAtomicReq *req,
 
   info.prop_id = kDRMPanelFeatureDemuraInit;
   ApplyDirtyFeature(req, token, info);
-
-  info.prop_id = kDRMPanelFeatureSPRUDC;
-  uint32_t prop_id = prop_mgr_.GetPropertyId(drm_property_map_[info.prop_id]);
-  if (prop_id) {
-    ApplyDirtyFeature(req, token, info);
-  }
 }
 // LCOV_EXCL_STOP
 
