@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -41,10 +41,12 @@
 #define DISP_PROP_PREFIX                     "vendor.display."
 #define GRALLOC_PROP_PREFIX                  "vendor.gralloc."
 #define PERSIST_DISP_PROP_PREFIX             "persist.vendor.display."
+#define SDM_PROP_PREFIX                      "sdm."
 
 #define DISPLAY_PROP(prop_name)              DISP_PROP_PREFIX prop_name
 #define GRALLOC_PROP(prop_name)              GRALLOC_PROP_PREFIX prop_name
 #define PERSIST_DISPLAY_PROP(prop_name)      PERSIST_DISP_PROP_PREFIX prop_name
+#define SDM_PROP(prop_name)                  SDM_PROP_PREFIX prop_name
 
 // Start of property
 #define COMPOSITION_MASK_PROP                DISPLAY_PROP("comp_mask")
@@ -235,6 +237,7 @@
 #define DISABLE_CWB_IDLE_FALLBACK            DISPLAY_PROP("disable_cwb_idle_fallback")
 #define PRIORITIZE_CLIENT_CWB                DISPLAY_PROP("prioritize_client_cwb")
 #define TRANSIENT_FPS_CYCLE_COUNT            DISPLAY_PROP("transient_fps_cycle_count")
+#define MAX_PIPE_CONFIG                      SDM_PROP("max_pipe_config")
 
 // Add all other.properties above
 // End of property
