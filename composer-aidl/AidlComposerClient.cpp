@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1291,7 +1291,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerPerFrameMetadataBlobs(
 
 void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
     int64_t display, int64_t layer, const LayerBrightness &brightness) {
-  //writeError(__FUNCTION__, Error::Unsupported);
+  if (std::isnan(brightness.brightness) || brightness.brightness < 0.0f || brightness.brightness > 1.0f) {
+    writeError(__FUNCTION__, Error::BadParameter);
+  }
 }
 
 void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(
