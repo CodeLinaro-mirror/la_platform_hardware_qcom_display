@@ -257,6 +257,7 @@ class DisplayBase : public DisplayInterface {
   bool pending_power_on_ = false;
   QSyncMode qsync_mode_ = kQSyncModeNone;
   bool needs_avr_update_ = false;
+  int use_custom_intf_format_ = 0;
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;

@@ -203,6 +203,13 @@ DisplayError DisplayBase::Init() {
   Debug::GetProperty(DISABLE_HW_RECOVERY_DUMP_PROP, &disable_hw_recovery_dump_);
   DLOGI("disable_hw_recovery_dump_ set to %d", disable_hw_recovery_dump_);
 
+  DisplayPort port;
+  GetDisplayPort(&port);
+  Debug::GetProperty(USE_CUSTOM_INTF_FORMAT, &use_custom_intf_format_);
+  use_custom_intf_format_ = use_custom_intf_format_ && (port == kPortDP);
+  DLOGI("Custom interface format enabled and GPU composition enforced for DP intf = %d",
+         use_custom_intf_format_);
+
   Debug::Get()->GetProperty(DROP_SKEWED_VSYNC, &drop_vsync);
   drop_skewed_vsync_ = (drop_vsync == 1);
 
@@ -242,6 +249,11 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
   for (auto &layer : layers) {
     if (layer->buffer_map == nullptr) {
       layer->buffer_map = std::make_shared<LayerBufferMap>();
+    }
+    // For custom intf format logic
+    if (use_custom_intf_format_ && layer->composition != kCompositionGPUTarget) {
+      layer->flags.skip = true;
+      layer_stack->flags.skip_present = true;
     }
     if (layer->composition == kCompositionGPUTarget) {
       hw_layers_info.gpu_target_index = hw_layers_info.app_layer_count;
