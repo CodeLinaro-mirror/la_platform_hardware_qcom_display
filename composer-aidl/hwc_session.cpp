@@ -188,7 +188,7 @@ int HWCSession::Init() {
   // Start QService and connect to it.
   qService::QService::init();
   android::sp<qService::IQService> iqservice = android::interface_cast<qService::IQService>(
-      android::defaultServiceManager()->getService(android::String16(qservice_name)));
+      android::defaultServiceManager()->checkService(android::String16(qservice_name)));
   if (iqservice.get()) {
     iqservice->connect(android::sp<qClient::IQClient>(this));
     qservice_ = reinterpret_cast<qService::QService *>(iqservice.get());
@@ -437,7 +437,7 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   if (outCapabilities != nullptr && (*outCount >= count)) {
     outCapabilities[0] = INT32(Capability::SKIP_CLIENT_COLOR_TRANSFORM);
     if (!disable_skip_validate) {
-      outCapabilities[1] = INT32(Capability::SKIP_VALIDATE);
+      outCapabilities[1] = INT32(Capability::INVALID);
     }
     outCapabilities[2] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
   }
