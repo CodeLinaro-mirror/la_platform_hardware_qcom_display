@@ -522,7 +522,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   void PostInit();
   int GetDispTypeFromPhysicalId(uint64_t physical_disp_id, DispType *disp_type);
 
-  int SetBestNullDisplayResolution();
   bool IsFrameworkRebootRequired(bool is_primary);
 
   // Uevent handler
