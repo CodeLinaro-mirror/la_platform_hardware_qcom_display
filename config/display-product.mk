@@ -3,9 +3,6 @@ include hardware/qcom/display/config/display-modules.mk
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
-#Multi-stc libraries config xml file
-PRODUCT_COPY_FILES += hardware/qcom/display/config/snapdragon_color_libs_config.xml:$(TARGET_COPY_OUT_VENDOR)/etc/snapdragon_color_libs_config.xml
-
 #Clstc library config xml file
 ifeq (,$(wildcard $(QCPATH)/display-prebuilts-noship))
     PRODUCT_COPY_FILES += hardware/qcom/display/config/clstc_config_library.xml:$(TARGET_COPY_OUT_VENDOR)/etc/clstc_config_library.xml
