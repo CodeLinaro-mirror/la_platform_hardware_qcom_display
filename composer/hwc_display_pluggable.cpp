@@ -261,6 +261,10 @@ void HWCDisplayPluggable::GetDownscaleResolution(uint32_t primary_width, uint32_
   }
 }
 
+int HWCDisplayPluggable::UpdateFBResolution(int width, int height) {
+   return SetFrameBufferResolution(width, height);
+}
+
 int HWCDisplayPluggable::SetState(bool connected) {
   DisplayError error = kErrorNone;
   DisplayState state = kStateOff;

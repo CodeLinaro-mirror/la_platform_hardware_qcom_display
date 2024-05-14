@@ -704,6 +704,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int composer_setup_mode_ = kCompSetupModeDefault;
   int display_reboot_strategy_ = kRebootStrategyDefault;
   bool null_display_active_ = false;
+  int send_primary_hotplug_to_sf_ = 0;
 };
 }  // namespace sdm
 
