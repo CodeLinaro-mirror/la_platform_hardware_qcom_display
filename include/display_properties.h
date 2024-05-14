@@ -238,7 +238,7 @@
 #define DISABLE_CWB_IDLE_FALLBACK            DISPLAY_PROP("disable_cwb_idle_fallback")
 #define PRIORITIZE_CLIENT_CWB                DISPLAY_PROP("prioritize_client_cwb")
 #define TRANSIENT_FPS_CYCLE_COUNT            DISPLAY_PROP("transient_fps_cycle_count")
-
+#define ENABLE_PRIMARY_HOTPLUG_TO_SF         "ro.surface_flinger.update_device_product_info_on_hotplug_reconnect"
 // Add all other.properties above
 // End of property
 // clang-format on

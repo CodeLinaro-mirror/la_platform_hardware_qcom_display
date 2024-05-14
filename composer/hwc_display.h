@@ -285,6 +285,8 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int SetState(bool connected) { return kErrorNotSupported; }
   virtual DisplayError Flush() { return kErrorNotSupported; }
 
+  virtual int UpdateFBResolution(int width, int height) {return 0;}
+
   uint32_t GetMaxRefreshRate() { return max_refresh_rate_; }
   int ToggleScreenUpdates(bool enable);
   int ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload, PPDisplayAPIPayload *out_payload,
