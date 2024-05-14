@@ -29,7 +29,7 @@
 
 /* Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -202,6 +202,7 @@
 #define WINDOW_RECT_PROP_SECONDARY           DISPLAY_PROP("window_rect_secondary")
 #define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
+#define ENABLE_PRIMARY_HOTPLUG_TO_SF         "ro.surface_flinger.update_device_product_info_on_hotplug_reconnect"
 // Add all other.properties above
 // End of property
 #endif  // __DISPLAY_PROPERTIES_H__

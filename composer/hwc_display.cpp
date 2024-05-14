@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -587,6 +587,7 @@ void HWCDisplay::UpdateConfigs() {
   // For each config store the corresponding index which client understands.
   hwc_config_map_.resize(num_configs_);
 
+  variable_config_map_.clear();
   for (uint32_t i = 0; i < num_configs_; i++) {
     DisplayConfigVariableInfo info = {};
     GetDisplayAttributesForConfig(INT(i), &info);
@@ -1123,6 +1124,7 @@ HWC2::Error HWCDisplay::GetDisplayConfigs(uint32_t *out_num_configs, hwc2_config
     return HWC2::Error::BadParameter;
   }
 
+  UpdateConfigs();
   if (out_configs == nullptr) {
     *out_num_configs = num_configs_;
     return HWC2::Error::None;
