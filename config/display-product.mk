@@ -37,7 +37,7 @@ SOONG_CONFIG_NAMESPACES += display_config_idl
 SOONG_CONFIG_display_config_idl += target_aidl_or_hidl
 # Soong Values
 
-ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
 $(warning "Android-U compiling AIDL")
 SOONG_CONFIG_display_config_idl_target_aidl_or_hidl := target_aidl
 else
@@ -47,7 +47,7 @@ endif
 
 
 ifneq ($(TARGET_IS_HEADLESS),true)
-ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.composer-service
 PRODUCT_PROPERTY_OVERRIDES += \
