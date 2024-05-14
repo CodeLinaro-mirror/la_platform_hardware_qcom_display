@@ -188,9 +188,11 @@ DisplayError DisplayBase::Init() {
     return error;
   }
 
-  // Override x_pixels and y_pixels of frame buffer with mixer width and height
-  dpu_core_mux_->GetFbConfig(client_ctx_.mixer_attributes.width,
-                             client_ctx_.mixer_attributes.height, &device_ctx_, &client_ctx_);
+  // Override x_pixels and y_pixels of frame buffer with mixer width and height based on components
+  auto width = (client_ctx_.mixer_attributes.width * 3) /
+                client_ctx_.hw_panel_info.components_per_pixel;
+  auto height = client_ctx_.mixer_attributes.height;
+  dpu_core_mux_->GetFbConfig(width, height, &device_ctx_, &client_ctx_);
 
   if (IsPrimaryDisplayLocked()) {
     HWScaleLutInfo lut_info = {};
@@ -1781,6 +1783,10 @@ DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *v
       variable_info->x_pixels = client_ctx_.fb_config.x_pixels;
       variable_info->y_pixels = client_ctx_.fb_config.y_pixels;
     }
+
+  variable_info->x_pixels = (variable_info->x_pixels * 3) /
+                            client_ctx_.hw_panel_info.components_per_pixel;
+
     return kErrorNone;
   }
 
@@ -2958,7 +2964,8 @@ DisplayError DisplayBase::GetMixerResolution(uint32_t *width, uint32_t *height) 
     return kErrorParameters;
   }
 
-  *width = client_ctx_.mixer_attributes.width;
+  *width = (client_ctx_.mixer_attributes.width * 3) /
+            client_ctx_.hw_panel_info.components_per_pixel;
   *height = client_ctx_.mixer_attributes.height;
 
   return kErrorNone;
@@ -3024,6 +3031,8 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   uint32_t display_width = client_ctx_.display_attributes.x_pixels;
   uint32_t display_height = client_ctx_.display_attributes.y_pixels;
   bool xr_variant = IsXRVariant();
+
+  fb_width = (fb_width * client_ctx_.hw_panel_info.components_per_pixel) / 3;
 
   if (xr_variant || (HasConcurrentWriteback() && layer_stack->output_buffer)) {
     DLOGV_IF(kTagDisplay, "Found concurrent writeback, configure LM width:%d height:%d",

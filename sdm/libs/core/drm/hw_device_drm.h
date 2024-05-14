@@ -272,7 +272,7 @@ class HWDeviceDRM : public HWInterface {
    public:
     explicit Registry(BufferAllocator *buffer_allocator);
     // Init master
-    void Init(Handle master) {master_ = master;}
+    void Init(Handle master, uint32_t core_id, uint32_t components_per_pixel);
     // Called on each Validate and Commit to map the handle_id to fb_id of each layer buffer.
     void Register(HWLayersInfo *hw_layers_info);
     // Called on display disconnect to clear output buffer map and remove fb_ids.
@@ -287,7 +287,6 @@ class HWDeviceDRM : public HWInterface {
     std::vector<uint32_t> GetFbId(Layer *layer, uint64_t handle_id);
     // Find fb_id for given handle_id in output buffer map.
     uint32_t GetOutputFbId(uint64_t handle_id);
-    uint32_t core_id_;
 
    private:
     bool disable_fbid_cache_ = false;
@@ -295,6 +294,8 @@ class HWDeviceDRM : public HWInterface {
     BufferAllocator *buffer_allocator_ = {};
     uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
     Handle master_ = nullptr;
+    uint32_t components_per_pixel_ = 0;
+    uint32_t core_id_ = 0;
   };
 
  protected:

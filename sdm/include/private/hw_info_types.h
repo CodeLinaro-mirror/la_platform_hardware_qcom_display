@@ -541,6 +541,7 @@ struct HWPanelInfo {
   HWDMSType dms_type = kDMSVIDDisabled;  // DMS type
   uint32_t max_panel_width = 0;        // Max panel width
   uint32_t max_panel_height = 0;       // Max panel height
+  uint32_t components_per_pixel = 3;   // No of components panel displays in one pixel
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||
