@@ -295,6 +295,7 @@ void HWTVDRM::PopulateHWPanelInfo() {
   hw_panel_info_.hdr_metadata_type_one = connector_info_.ext_hdr_prop.hdr_metadata_type_one;
   hw_panel_info_.hdr_eotf = connector_info_.ext_hdr_prop.hdr_eotf;
   hw_panel_info_.supported_colorspaces = connector_info_.supported_colorspaces;
+  hw_panel_info_.is_pluggable = true;
 
   // Convert the raw luminance values from driver to Candela per meter^2 unit.
   float max_luminance = FLOAT(connector_info_.ext_hdr_prop.hdr_max_luminance);
