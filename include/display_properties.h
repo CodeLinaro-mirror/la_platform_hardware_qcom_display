@@ -193,6 +193,7 @@
 
 // Add properties for optimized clock calculation
 #define ENABLE_CLOCK_CALC_OPTIMIZED          DISPLAY_PROP("enable_clock_calc_optimized")
+#define ENABLE_PRIMARY_HOTPLUG_TO_SF         "ro.surface_flinger.update_device_product_info_on_hotplug_reconnect"
 // Add all other.properties above
 // End of property
 #endif  // __DISPLAY_PROPERTIES_H__
