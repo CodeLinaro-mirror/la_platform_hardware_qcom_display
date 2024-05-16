@@ -82,6 +82,7 @@ static const uint32_t kBrightnessScaleMax = 100;
 static const uint32_t kSvBlScaleMax = 65535;
 Locker HWCSession::vm_release_locker_[HWCCallbacks::kNumDisplays];
 std::bitset<HWCCallbacks::kNumDisplays> HWCSession::clients_waiting_for_vm_release_;
+std::set<Display> HWCSession::active_displays_;
 
 // Map the known color modes to dataspace.
 int32_t GetDataspaceFromColorMode(ColorMode mode) {
@@ -570,6 +571,16 @@ HWC3::Error HWCSession::DestroyVirtualDisplay(Display display) {
   }
 
   return HWC3::Error::None;
+}
+
+int32_t HWCSession::GetVirtualDisplayId(HWDisplayInfo &info) {
+  for (auto &map_info : map_info_virtual_) {
+    if (map_info.sdm_id == info.display_id) {
+      return -1;
+    }
+  }
+
+  return info.display_id;
 }
 
 void HWCSession::Dump(uint32_t *out_size, char *out_buffer) {
@@ -1219,11 +1230,16 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
     return HWC3::Error::None;
   }
 
-    auto error =
-        CallDisplayFunction(display, &HWCDisplay::SetPowerMode, mode, false /* teardown */);
-    if (error != HWC3::Error::None) {
-      return error;
-    }
+  if (mode == PowerMode::OFF || mode == PowerMode::DOZE_SUSPEND) {
+    active_displays_.erase(display);
+  } else {
+    active_displays_.insert(display);
+  }
+
+  auto error = CallDisplayFunction(display, &HWCDisplay::SetPowerMode, mode, false /* teardown */);
+  if (error != HWC3::Error::None) {
+    return error;
+  }
   // Reset idle pc ref count on suspend, as we enable idle pc during suspend.
   if (mode == PowerMode::OFF) {
     idle_pc_ref_cnt_ = 0;
@@ -1346,11 +1362,22 @@ HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
     }
   }
 
-  // Request to get virtual display id corresponds writeback block, which could be used for WFD.
   int32_t display_id = -1;
-  auto err = core_intf_->RequestVirtualDisplayId(&display_id);
-  if (err != kErrorNone || display_id == -1) {
-    return HWC3::Error::NoResources;
+
+  if (!virtual_display_factory_.IsGPUColorConvertSupported()) {
+    // Request to get virtual display id corresponds writeback block, which could be used for WFD.
+    auto err = core_intf_->RequestVirtualDisplayId(&display_id);
+    if (err != kErrorNone || display_id == -1) {
+      return HWC3::Error::NoResources;
+    }
+  } else {
+    for (auto &vdl : virtual_display_list_) {
+      display_id = GetVirtualDisplayId(vdl);
+      if (display_id == -1) {
+        continue;
+      }
+      break;
+    }
   }
 
   // Lock confined to this scope
@@ -3343,6 +3370,7 @@ void HWCSession::DestroyPluggableDisplayLocked(DisplayMapInfo *map_info) {
   }
 
   map_active_displays_.erase(client_id);
+  active_displays_.erase(client_id);
   display_ready_.reset(UINT32(client_id));
   pending_power_mode_[client_id] = false;
   hwc_display = nullptr;
@@ -3379,6 +3407,7 @@ void HWCSession::DestroyNonPluggableDisplayLocked(DisplayMapInfo *map_info) {
   }
 
   map_active_displays_.erase(client_id);
+  active_displays_.erase(client_id);
 
   pending_power_mode_[client_id] = false;
   hwc_display = nullptr;
@@ -3616,8 +3645,10 @@ void HWCSession::HandlePendingPowerMode(Display disp_id, const shared_ptr<Fence>
 
     if (pending_mode == PowerMode::OFF || pending_mode == PowerMode::DOZE_SUSPEND) {
       map_active_displays_.erase(display);
+      active_displays_.erase(display);
     } else {
       map_active_displays_.insert(std::make_pair(disp_map_info->client_id, disp_map_info));
+      active_displays_.insert(display);
     }
     HWC3::Error error = hwc_display_[display]->SetPowerMode(pending_mode, false);
     if (HWC3::Error::None == error) {
@@ -4396,7 +4427,7 @@ android::status_t HWCSession::TUITransitionEndLocked(int disp_id) {
         DLOGE("Device unassign failed with error %d", ret);
       }
       TUITransitionUnPrepare(disp_id);
-      return -EINVAL;
+      return 0;
     }
   }
 
@@ -4576,7 +4607,7 @@ HWC3::Error HWCSession::CommitOrPrepare(Display display, bool validate_only,
   {
     SEQUENCE_ENTRY_SCOPE_LOCK(locker_[display]);
     hwc_display_[display]->ProcessActiveConfigChange();
-    hwc_display_[display]->IsMultiDisplay((map_active_displays_.size() > 1) ? true : false);
+    hwc_display_[display]->IsMultiDisplay((active_displays_.size() > 1) ? true : false);
     status = hwc_display_[display]->CommitOrPrepare(validate_only, out_retire_fence, out_num_types,
                                                     out_num_requests, needs_commit);
   }

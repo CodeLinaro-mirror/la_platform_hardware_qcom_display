@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -77,9 +77,9 @@ int Allocator::AllocateMem(AllocData *alloc_data, uint64_t usage, int format) {
 
   // After this point we should have the right heap set, there is no fallback
 
-  alloc_intf->GetHeapInfo(usage, use_system_heap_for_sensors_, format, &alloc_data->heap_name,
-                          &alloc_data->vm_names, &alloc_data->alloc_type, &alloc_data->flags,
-                          &alloc_data->size);
+  alloc_intf->GetHeapInfo(usage, use_system_heap_for_sensors_, format, alloc_data->uncached,
+                          &alloc_data->heap_name, &alloc_data->vm_names, &alloc_data->alloc_type,
+                          &alloc_data->flags, &alloc_data->size);
 
   ret = alloc_intf->AllocBuffer(alloc_data);
   if (ret >= 0) {
@@ -175,8 +175,8 @@ bool Allocator::CheckForBufferSharing(uint32_t num_descriptors,
     // Check Cached vs non-cached and all the flags
     cur_uncached = UseUncached(descriptors[i]->GetFormat(), descriptors[i]->GetUsage());
     alloc_intf->GetHeapInfo(descriptors[i]->GetUsage(), use_system_heap_for_sensors_,
-                            descriptors[i]->GetFormat(), &cur_heap_name, &cur_vm_names,
-                            &cur_alloc_type, &cur_flags, &cur_size);
+                            descriptors[i]->GetFormat(), cur_uncached, &cur_heap_name,
+                            &cur_vm_names, &cur_alloc_type, &cur_flags, &cur_size);
 
     if (i > 0 &&
         (cur_heap_name != prev_heap_name || cur_alloc_type != prev_alloc_type ||

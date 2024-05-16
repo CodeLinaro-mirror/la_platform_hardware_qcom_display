@@ -153,6 +153,7 @@ DisplayError HWTVDRM::SetDisplayAttributes(uint32_t index) {
     return kErrorNotSupported;
   }
 
+  seamless_mode_switch_ = false;
   current_mode_index_ = index;
   PopulateHWPanelInfo();
   UpdateMixerAttributes();

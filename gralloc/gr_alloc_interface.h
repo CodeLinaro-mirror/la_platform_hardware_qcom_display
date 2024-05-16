@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023  Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024  Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -142,9 +142,10 @@ class AllocInterface {
     @param[out] alloc_size - align the size to be allocated based on alignment requirement of heap
 
   */
-  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, int format, std::string *heap_name,
-                           std::vector<std::string> *vm_names, unsigned int *alloc_type,
-                           unsigned int *flags, unsigned int *alloc_size) = 0;
+  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, int format, bool use_uncached,
+                           std::string *heap_name, std::vector<std::string> *vm_names,
+                           unsigned int *alloc_type, unsigned int *flags,
+                           unsigned int *alloc_size) = 0;
 
   virtual int SetBufferPermission(int fd, BufferPermission *buffer_perm, int64_t *mem_hdl) = 0;
 

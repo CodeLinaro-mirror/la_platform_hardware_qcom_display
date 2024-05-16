@@ -17,25 +17,35 @@
  * limitations under the License.
  */
 
-#ifndef __QTIQMAACOMPOSERHANDLEIMPORTER_H__
-#define __QTIQMAACOMPOSERHANDLEIMPORTER_H__
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
-#include <android/hardware/graphics/mapper/2.0/IMapper.h>
-#include <android/hardware/graphics/mapper/3.0/IMapper.h>
+#ifndef __AIDLCOMPOSERHANDLEIMPORTER_H__
+#define __AIDLCOMPOSERHANDLEIMPORTER_H__
+
+#include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <utils/Mutex.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
+namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer {
-namespace V3_0 {
+namespace composer3 {
 
-using IMapperV2 = ::android::hardware::graphics::mapper::V2_0::IMapper;
-using IMapperV3 = ::android::hardware::graphics::mapper::V3_0::IMapper;
+#define MAX_INO_VALS 100
+
 using ::android::Mutex;
 using ::android::sp;
 using ::android::hardware::hidl_handle;
+using ::android::hardware::graphics::mapper::V4_0::IMapper;
 
 class ComposerHandleImporter {
  public:
@@ -48,19 +58,22 @@ class ComposerHandleImporter {
   void freeBuffer(buffer_handle_t handle);
   void initialize();
   void cleanup();
+  void InoFdMapInsert(int fd);
+  void InoFdMapRemove(int fd);
 
  private:
   Mutex mLock;
   bool mInitialized = false;
-  sp<IMapperV2> mMapper_V2;
-  sp<IMapperV3> mMapper_V3;
+  bool enable_memory_mapping_ = false;
+  std::map<uint64_t, std::vector<uint32_t>> ino_fds_map_;
+  sp<IMapper> mMapper;
 };
 
-}  // namespace V3_0
-}  // namespace composer
+}  // namespace composer3
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
+}  // namespace aidl
 
-#endif  // __QTIQMAACOMPOSERHANDLEIMPORTER_H__
+#endif  // __AIDLCOMPOSERHANDLEIMPORTER_H__

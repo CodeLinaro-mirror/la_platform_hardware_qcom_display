@@ -378,6 +378,7 @@ class HWDeviceDRM : public HWInterface {
   bool enable_brightness_drm_prop_ = false;
   int cached_brightness_level_ = -1;
   int current_brightness_ = -1;
+  bool seamless_mode_switch_ = false;
 
  private:
   void GetCWBCapabilities();
@@ -390,7 +391,6 @@ class HWDeviceDRM : public HWInterface {
   bool resolution_switch_enabled_ = false;
   bool autorefresh_ = false;
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr_ = {};
-  bool seamless_mode_switch_ = false;
   float aspect_ratio_threshold_ = 1.0;
 };
 

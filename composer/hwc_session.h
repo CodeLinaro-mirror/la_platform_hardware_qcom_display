@@ -341,6 +341,7 @@ class HWCSession : public HWCUEvent,
   static int commit_error_[HWCCallbacks::kNumDisplays];
   static Locker vm_release_locker_[HWCCallbacks::kNumDisplays];
   static std::bitset<HWCCallbacks::kNumDisplays> clients_waiting_for_vm_release_;
+  static std::set<Display> active_displays_;
 
  private:
   class CWB {
@@ -518,6 +519,7 @@ class HWCSession : public HWCUEvent,
   Display GetActiveBuiltinDisplay();
   void HandlePendingRefresh();
   void NotifyClientStatus(bool connected);
+  int32_t GetVirtualDisplayId(HWDisplayInfo &info);
   android::status_t TUITransitionPrepare(int disp_id);
   android::status_t TUITransitionStart(int disp_id);
   android::status_t TUITransitionEnd(int disp_id);

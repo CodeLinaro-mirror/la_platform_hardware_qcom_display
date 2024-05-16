@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -66,9 +66,9 @@ class DmaManager : public AllocInterface {
   virtual int CleanBuffer(void *base, unsigned int size, unsigned int offset, int handle, int op,
                           int fd);
   virtual int SecureMemPerms(AllocData *data);
-  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, int format, std::string *heap_name,
-                           std::vector<std::string> *vm_names, unsigned int *alloc_type,
-                           unsigned int *flags, unsigned int *alloc_size);
+  virtual void GetHeapInfo(uint64_t usage, bool sensor_flag, int format, bool use_uncached,
+                           std::string *heap_name, std::vector<std::string> *vm_names,
+                           unsigned int *alloc_type, unsigned int *flags, unsigned int *alloc_size);
   virtual int SetBufferPermission(int fd, BufferPermission *buf_perm, int64_t *mem_hdl);
 
   static DmaManager *GetInstance();
@@ -98,6 +98,10 @@ class DmaManager : public AllocInterface {
   DestroyMemBufInterface DestroyMemBuf_ = nullptr;
   bool movable_heap_system_available_ = false;
   bool movable_heap_ubwcp_available_ = false;
+  void GetUncachedHeapUsage();
+  bool uncached_heap_prop_ = false;
+  void GetCameraPreviewPerms();
+  bool allow_camera_preview_write_ = false;
 };
 
 }  // namespace gralloc

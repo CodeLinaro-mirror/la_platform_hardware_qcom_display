@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -241,6 +241,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DisplayError SetUpCommit(LayerStack *layer_stack) override;
   DisplayError PostCommit(HWLayersInfo *hw_layers_info) override;
   DisplayError GetQsyncFps(uint32_t *qsync_fps) override;
+  DisplayError SetQSyncModeLocked(QSyncMode qsync_mode);
 
  private:
   bool CanCompareFrameROI(LayerStack *layer_stack);

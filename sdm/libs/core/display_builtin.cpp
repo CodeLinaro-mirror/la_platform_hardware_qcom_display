@@ -35,6 +35,7 @@
 #include <utils/utils.h>
 #include <utils/formats.h>
 #include <core/buffer_allocator.h>
+#include <core/core_interface.h>
 #include <sys/mman.h>
 #include <private/hw_interface.h>
 #include <private/hw_info_interface.h>
@@ -1063,7 +1064,7 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
 void DisplayBuiltIn::HandleQsyncPostCommit() {
   if (qsync_mode_ == kQsyncModeOneShot) {
     // Reset qsync mode.
-    SetQSyncMode(kQSyncModeNone);
+    SetQSyncModeLocked(kQSyncModeNone);
   } else if (qsync_mode_ == kQsyncModeOneShotContinuous) {
     // No action needed.
   } else if (qsync_mode_ == kQSyncModeContinuous) {
@@ -2124,24 +2125,8 @@ DisplayError DisplayBuiltIn::GetQSyncMode(QSyncMode *qsync_mode) {
 
 DisplayError DisplayBuiltIn::SetQSyncMode(QSyncMode qsync_mode) {
   ClientLock lock(disp_mutex_);
-
-  if (!hw_panel_info_.qsync_support || first_cycle_) {
-    DLOGW("Failed: qsync_support: %d first_cycle %d", hw_panel_info_.qsync_support,
-          first_cycle_);
-    return kErrorNotSupported;
-  }
-
-  // force clear qsync mode if set by idle timeout.
-  if (qsync_mode_ ==  active_qsync_mode_ && qsync_mode_ == qsync_mode) {
-    DLOGW("Qsync mode already set as requested mode: qsync_mode_=%d", qsync_mode_);
-    return kErrorNone;
-  }
-
-  qsync_mode_ = qsync_mode;
-  needs_avr_update_ = true;
-  validated_ = false;
-  event_handler_->Refresh();
-  return kErrorNone;
+  DisplayError err = SetQSyncModeLocked(qsync_mode);
+  return err;
 }
 
 DisplayError DisplayBuiltIn::ControlIdlePowerCollapse(bool enable, bool synchronous) {
@@ -2977,12 +2962,27 @@ void DisplayBuiltIn::InitCWBBuffer() {
     return;
   }
 
+  HWDisplaysInfo hw_displays_info = {};
+  bool is_wb_ubwc_supported = false;
+  hw_info_intf_->GetDisplaysStatus(&hw_displays_info);
+  for (auto &iter : hw_displays_info) {
+    auto &info = iter.second;
+    if (info.display_type == kVirtual && info.is_wb_ubwc_supported) {
+      is_wb_ubwc_supported = true;
+      break;
+    }
+  }
+
   // Initialize CWB buffer with display resolution to get full size buffer
   // as mixer or fb can init with custom values based on property
   output_buffer_info_.buffer_config.width = display_attributes_.x_pixels;
   output_buffer_info_.buffer_config.height = display_attributes_.y_pixels;
 
-  output_buffer_info_.buffer_config.format = kFormatRGBX8888Ubwc;
+  if (is_wb_ubwc_supported) {
+    output_buffer_info_.buffer_config.format = kFormatRGBX8888Ubwc;
+  } else {
+    output_buffer_info_.buffer_config.format = kFormatRGB888;
+  }
   output_buffer_info_.buffer_config.buffer_count = 1;
   if (buffer_allocator_->AllocateBuffer(&output_buffer_info_) != 0) {
     DLOGE("Buffer allocation failed");
@@ -3295,6 +3295,25 @@ DisplayError DisplayBuiltIn::SetDemuraConfig(int demura_idx) {
 DisplayError DisplayBuiltIn::PanelOprInfo(const std::string &client_name, bool enable,
                                           SdmDisplayCbInterface<PanelOprPayload> *cb_intf) {
   return event_proxy_info_.PanelOprInfo(client_name, enable, cb_intf);
+}
+
+DisplayError DisplayBuiltIn::SetQSyncModeLocked(QSyncMode qsync_mode) {
+  if (!hw_panel_info_.qsync_support || first_cycle_) {
+    DLOGW("Failed: qsync_support: %d first_cycle %d", hw_panel_info_.qsync_support, first_cycle_);
+    return kErrorNotSupported;
+  }
+
+  // force clear qsync mode if set by idle timeout.
+  if (qsync_mode_ == active_qsync_mode_ && qsync_mode_ == qsync_mode) {
+    DLOGW("Qsync mode already set as requested mode: qsync_mode_=%d", qsync_mode_);
+    return kErrorNone;
+  }
+
+  qsync_mode_ = qsync_mode;
+  needs_avr_update_ = true;
+  validated_ = false;
+  event_handler_->Refresh();
+  return kErrorNone;
 }
 
 DisplayError EventProxyInfo::Init(const std::string &panel_name, DisplayInterface *intf,
