@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1120,11 +1120,35 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
       *out_value = GetDisplayConfigGroup(variable_config);
       break;
     default:
-      DLOGW("Spurious attribute type = %s", composer_V3::toString(attribute).c_str());
+      DLOGW("Spurious attribute type = %s", composer3::toString(attribute).c_str());
       *out_value = -1;
       return HWC3::Error::BadParameter;
   }
 
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
+  out_configs->clear();
+  out_configs->reserve(variable_config_map_.size());
+  for (const auto &[config_id, variable_config] : variable_config_map_) {
+    DisplayConfiguration display_configuration;
+    display_configuration.configId = config_id;
+    display_configuration.width = variable_config.x_pixels;
+    display_configuration.height = variable_config.y_pixels;
+    display_configuration.dpi = {static_cast<float>(variable_config.x_dpi),
+                                 static_cast<float>(variable_config.y_dpi)};
+    display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
+    display_configuration.configGroup = GetDisplayConfigGroup(variable_config);
+    display_configuration.vrrConfig = {
+                             static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps))
+                             * 1000000)};
+    DLOGI(
+        "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, minFrameInterval= "
+        "%d", config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
+        display_configuration.vrrConfig->minFrameIntervalNs);
+    out_configs->emplace_back(display_configuration);
+  }
   return HWC3::Error::None;
 }
 
@@ -2852,7 +2876,7 @@ HWC3::Error HWCDisplay::GetClientTargetProperty(ClientTargetProperty *out_client
     return HWC3::Error::BadParameter;
   }
   out_client_target_property->dataspace = dataspace;
-  out_client_target_property->pixelFormat = (PixelFormat_V3)format;
+  out_client_target_property->pixelFormat = (APixelFormat)format;
 
   return HWC3::Error::None;
 }

@@ -20,18 +20,19 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __AIDLCOMPOSERHANDLEIMPORTER_H__
 #define __AIDLCOMPOSERHANDLEIMPORTER_H__
 
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
+#include <android/hardware/graphics/mapper/IMapper.h>
 #include <utils/Mutex.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <map>
 
 namespace aidl {
 namespace vendor {
@@ -43,9 +44,6 @@ namespace composer3 {
 #define MAX_INO_VALS 100
 
 using ::android::Mutex;
-using ::android::sp;
-using ::android::hardware::hidl_handle;
-using ::android::hardware::graphics::mapper::V4_0::IMapper;
 
 class ComposerHandleImporter {
  public:
@@ -66,7 +64,7 @@ class ComposerHandleImporter {
   bool mInitialized = false;
   bool enable_memory_mapping_ = false;
   std::map<uint64_t, std::vector<uint32_t>> ino_fds_map_;
-  sp<IMapper> mMapper;
+  AIMapper *mMapper;
 };
 
 }  // namespace composer3

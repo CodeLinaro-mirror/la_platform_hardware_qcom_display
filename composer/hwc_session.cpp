@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -720,6 +720,11 @@ HWC3::Error HWCSession::GetDisplayConfigs(Display display, uint32_t *out_num_con
                                           Config *out_configs) {
   return CallDisplayFunction(display, &HWCDisplay::GetDisplayConfigs, out_num_configs,
                              out_configs);
+}
+
+HWC3::Error HWCSession::GetDisplayConfigurations(Display display,
+                                                 std::vector<DisplayConfiguration> *out_configs) {
+  return CallDisplayFunction(display, &HWCDisplay::GetDisplayConfigurations, out_configs);
 }
 
 HWC3::Error HWCSession::GetDisplayName(Display display, uint32_t *out_size, char *out_name) {
@@ -3708,10 +3713,10 @@ HWC3::Error HWCSession::SetExpectedPresentTime(Display display, uint64_t expecte
 
 HWC3::Error HWCSession::GetOverlaySupport(OverlayProperties *supported_props) {
   // All individually supported properties by hardware
-  static std::vector<PixelFormat_V3> pixel_formats{
-      PixelFormat_V3::RGBA_8888,    PixelFormat_V3::RGBX_8888,    PixelFormat_V3::RGB_888,
-      PixelFormat_V3::RGB_565,      PixelFormat_V3::BGRA_8888,    PixelFormat_V3::YV12,
-      PixelFormat_V3::YCRCB_420_SP, PixelFormat_V3::RGBA_1010102, PixelFormat_V3::RGBA_FP16};
+  static std::vector<APixelFormat> pixel_formats{
+      APixelFormat::RGBA_8888,    APixelFormat::RGBX_8888,    APixelFormat::RGB_888,
+      APixelFormat::RGB_565,      APixelFormat::BGRA_8888,    APixelFormat::YV12,
+      APixelFormat::YCRCB_420_SP, APixelFormat::RGBA_1010102, APixelFormat::RGBA_FP16};
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};

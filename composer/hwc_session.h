@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -95,10 +95,11 @@ using android::hardware::hidl_handle;
 using ::android::hardware::hidl_vec;
 using ::android::sp;
 using ::android::hardware::Void;
-namespace composer_V3 = aidl::android::hardware::graphics::composer3;
-using HwcDisplayCapability = composer_V3::DisplayCapability;
-using HwcDisplayConnectionType = composer_V3::DisplayConnectionType;
-using HwcClientTargetProperty = composer_V3::ClientTargetProperty;
+namespace composer3 = aidl::android::hardware::graphics::composer3;
+using DisplayConfiguration = composer3::DisplayConfiguration;
+using HwcDisplayCapability = composer3::DisplayCapability;
+using HwcDisplayConnectionType = composer3::DisplayConnectionType;
+using HwcClientTargetProperty = composer3::ClientTargetProperty;
 using ::aidl::vendor::qti::hardware::display::config::Attributes;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
@@ -107,7 +108,7 @@ using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
 
 namespace sdm {
 
-using composer_V3::IComposerClient;
+using composer3::IComposerClient;
 
 int32_t GetDataspaceFromColorMode(ColorMode mode);
 
@@ -251,6 +252,8 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   HWC3::Error GetDisplayType(Display display, int32_t *out_type);
   HWC3::Error GetDisplayAttribute(Display display, Config config, HwcAttribute attribute,
                                   int32_t *out_value);
+  HWC3::Error GetDisplayConfigurations(Display display,
+                                       std::vector<DisplayConfiguration> *out_configs);
   HWC3::Error GetActiveConfig(Display display, Config *out_config);
   HWC3::Error GetColorModes(Display display, uint32_t *out_num_modes,
                             int32_t /*ColorMode*/ *int_out_modes);

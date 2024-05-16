@@ -17,7 +17,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -278,6 +278,20 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
                                                       DisplayAttribute in_attribute,
                                                       int32_t *aidl_return) {
   auto error = hwc_session_->GetDisplayAttribute(in_display, in_config, in_attribute, aidl_return);
+  return TO_BINDER_STATUS(INT32(error));
+}
+
+ScopedAStatus AidlComposerClient::getDisplayConfigurations(
+    int64_t in_display, int32_t maxFrameIntervalNs,
+    std::vector<DisplayConfiguration> *out_configs) {
+  auto error = hwc_session_->GetDisplayConfigurations(in_display, out_configs);
+  return TO_BINDER_STATUS(INT32(error));
+}
+
+ScopedAStatus AidlComposerClient::notifyExpectedPresent(
+    int64_t displayId, const ClockMonotonicTimestamp &expectedPresentTime,
+    int32_t frameIntervalNs) {
+  Error error = Error::Unsupported;
   return TO_BINDER_STATUS(INT32(error));
 }
 

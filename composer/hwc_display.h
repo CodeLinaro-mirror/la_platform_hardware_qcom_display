@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -57,7 +57,6 @@
 #define __HWC_DISPLAY_H__
 
 #include <QService.h>
-#include <android/hardware/graphics/common/1.2/types.h>
 #include <core/core_interface.h>
 #include <hardware/hwcomposer.h>
 #include <private/color_params.h>
@@ -78,15 +77,16 @@
 #include "hwc_layers.h"
 #include "hwc_buffer_sync_handler.h"
 
-namespace composer_V3 = aidl::android::hardware::graphics::composer3;
+namespace composer3 = aidl::android::hardware::graphics::composer3;
 using aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::Hdr;
-using composer_V3::ColorMode;
-using composer_V3::RenderIntent;
-using HwcAttribute = composer_V3::DisplayAttribute;
-using VsyncPeriodChangeConstraints = composer_V3::VsyncPeriodChangeConstraints;
-using ClientTargetProperty = composer_V3::ClientTargetProperty;
-using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
+using DisplayConfiguration = composer3::DisplayConfiguration;
+using composer3::ColorMode;
+using composer3::RenderIntent;
+using HwcAttribute = composer3::DisplayAttribute;
+using VsyncPeriodChangeConstraints = composer3::VsyncPeriodChangeConstraints;
+using ClientTargetProperty = composer3::ClientTargetProperty;
+using APixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
 
 typedef uint32_t VsyncPeriodNanos;
 
@@ -384,6 +384,7 @@ class HWCDisplay : public DisplayEventHandler {
     return HWC3::Error::Unsupported;
   }
   virtual HWC3::Error GetDisplayConfigs(uint32_t *out_num_configs, Config *out_configs);
+  virtual HWC3::Error GetDisplayConfigurations(std::vector<DisplayConfiguration> *outConfigs);
   virtual HWC3::Error GetDisplayAttribute(Config config, HwcAttribute attribute,
                                           int32_t *out_value);
   virtual HWC3::Error GetClientTargetSupport(uint32_t width, uint32_t height, int32_t format,

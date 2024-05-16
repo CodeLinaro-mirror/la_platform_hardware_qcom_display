@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -45,12 +45,13 @@
 #include <aidl/android/hardware/graphics/allocator/IAllocator.h>
 #include <android/binder_manager.h>
 #include <aidlcommonsupport/NativeHandle.h>
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <QtiGrallocPriv.h>
+#include "QtiMapper5.h"
+#include <android/hardware/graphics/mapper/IMapper.h>
+#include <android/hardware/graphics/mapper/utils/IMapperMetadataTypes.h>
 
 using aidl::android::hardware::graphics::allocator::AllocationResult;
 using aidl::android::hardware::graphics::allocator::IAllocator;
-using android::hardware::graphics::mapper::V4_0::IMapper;
 namespace sdm {
 
 template <class Type>
@@ -79,7 +80,7 @@ class HWCBufferAllocator : public BufferAllocator {
 
  private:
   DisplayError GetGrallocInstance();
-  android::sp<IMapper> mapper_;
+  AIMapper *mapper_;
   std::shared_ptr<IAllocator> allocator_;
 };
 

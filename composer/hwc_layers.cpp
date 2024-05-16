@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -31,22 +31,46 @@
 #include <utility>
 #include <cmath>
 #include <gr_utils.h>
+#include <android/hardware/graphics/mapper/IMapper.h>
 
 #define __CLASS__ "HWCLayer"
 using aidl::android::hardware::graphics::common::StandardMetadataType;
+using mapper::GetMapperInstance;
+using mapper::GetStandardMetadata;
 
 namespace sdm {
 
 std::atomic<LayerId> HWCLayer::next_id_(1);
 
 DisplayError SetCSC(const qtigralloc::private_handle_t *pvt_handle, ColorMetaData *color_metadata) {
-  void *hnd = const_cast<private_handle_t *>(pvt_handle);
-  auto error =
-      gralloc::GetMetaDataValue(hnd, qtigralloc::MetadataType_ColorMetadata.value, color_metadata);
-  if (error != gralloc::Error::NONE) {
+  int32_t error = 0;
+  bool metadata_set = false;
+  //TODO: Investigate performance hit of moving to fetching smaller color metadata structs
+  auto mapper = GetMapperInstance();
+  if (!mapper) {
+    return kErrorResources;
+  }
+  auto mapper_err =
+      gralloc::GetMetaDataValue(const_cast<private_handle_t *>(pvt_handle),
+                                (int64_t)static_cast<StandardMetadataType>(QTI_COLOR_METADATA),
+                                &metadata_set);
+  if (metadata_set) {
+    error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(pvt_handle),
+                                             VENDOR_QTI_METADATA(QTI_COLOR_METADATA),
+                                             color_metadata, sizeof(*color_metadata));
+  }
+  if (error >= 0) {
     int csc = HAL_CSC_ITU_R_601;
-    error = gralloc::GetMetaDataValue(hnd, qtigralloc::MetadataType_ColorSpace.value, &csc);
-    if (error == gralloc::Error::NONE) {
+    mapper_err = gralloc::GetMetaDataValue(const_cast<private_handle_t *>(pvt_handle),
+                                         (int64_t)static_cast<StandardMetadataType>(QTI_COLORSPACE),
+                                         &metadata_set);
+    if (metadata_set) {
+      error =
+          STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(pvt_handle),
+                                           VENDOR_QTI_METADATA(QTI_COLORSPACE), &csc, sizeof(csc));
+    }
+
+    if (error >= 0) {
       if (csc == HAL_CSC_ITU_R_601_FR || csc == HAL_CSC_ITU_R_2020_FR) {
         color_metadata->range = Range_Full;
       }
