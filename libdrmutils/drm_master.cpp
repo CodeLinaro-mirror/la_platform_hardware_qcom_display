@@ -141,9 +141,14 @@ int DRMMaster::Init(uint32_t card) {
           }
            /* Revisit the exit logic for more than 2 DPUs*/
           if (first_match)
+	  {
+            close(fd);
             continue;
+          }
           else
+          {
             break;
+          }
         }
       }
 
