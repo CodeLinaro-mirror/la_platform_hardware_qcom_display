@@ -38,6 +38,7 @@ class DisplayAiqeAIDL : public BnDisplayAiqe {
  private:
   sdm::SDMDisplayAiqeIntf *aiqe_intf_ = nullptr;
   sdm::SDMDisplaySideBandIntf *sideband_ = nullptr;
+  int ssrc_enable_ = 0;
 };
 
 }  // End of namespace aiqe

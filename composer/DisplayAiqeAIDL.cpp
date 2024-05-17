@@ -22,47 +22,53 @@ DisplayAiqeAIDL::DisplayAiqeAIDL() {
 
   aiqe_intf_ = sdm_factory->CreateAiqeIntf();
   sideband_ = sdm_factory->CreateSideBandIntf();
+
+  if (!sideband_) {
+    ALOGE("Unable to query display property states");
+    return;
+  }
+
+  sideband_->GetProperty(AIQE_SSRC_ENABLE, &ssrc_enable_);
 }
 
 DisplayAiqeAIDL::DisplayAiqeAIDL(sdm::SDMInterfaceFactory *sdm_factory) {
   aiqe_intf_ = sdm_factory->CreateAiqeIntf();
   sideband_ = sdm_factory->CreateSideBandIntf();
-}
-
-bool DisplayAiqeAIDL::isSupported() {
-  int enable = 0;
 
   if (!sideband_) {
     ALOGE("Unable to query display property states");
+    return;
+  }
+
+  sideband_->GetProperty(AIQE_SSRC_ENABLE, &ssrc_enable_);
+}
+
+bool DisplayAiqeAIDL::isSupported() {
+  if (!aiqe_intf_) {
+    ALOGE("SDM does not support the AIQE interface");
     return false;
   }
 
-  sideband_->GetProperty(AIQE_SSRC_ENABLE, &enable);
-  if (enable) {
-    if (!aiqe_intf_) {
-      ALOGE("SDM does not support the AIQE interface");
-      return false;
-    }
-
-    return true;
-  } else {
-    ALOGI("No known features requiring AIQE interface");
-    return false;
-  }
+  return true;
 }
 
 ScopedAStatus DisplayAiqeAIDL::setSsrcMode(int32_t in_disp_id, const std::string &in_mode_name) {
-  if (aiqe_intf_) {
-    int rc = aiqe_intf_->SetSsrcMode(in_disp_id, in_mode_name);
-    if (rc) {
-      ALOGE("%s: Unable to set SSRC Mode '%s'", __FUNCTION__, in_mode_name.c_str());
+  if (ssrc_enable_) {
+    if (aiqe_intf_) {
+      int rc = aiqe_intf_->SetSsrcMode(in_disp_id, in_mode_name);
+      if (rc) {
+        ALOGE("%s: Unable to set SSRC Mode '%s'", __FUNCTION__, in_mode_name.c_str());
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+      }
+
+      return ScopedAStatus::ok();
+    } else {
+      ALOGE("%s: Unable to set SSRC mode. Interface initalized with bad session instance",
+            __FUNCTION__);
       return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
     }
-
-    return ScopedAStatus::ok();
   } else {
-    ALOGE("%s: Unable to set SSRC mode. Interface initalized with bad session instance",
-          __FUNCTION__);
+    ALOGE("%s: Unable to set SSRC mode. SSRC is not enabled", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 }
