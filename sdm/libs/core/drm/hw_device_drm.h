@@ -360,13 +360,13 @@ class HWDeviceDRM : public HWInterface {
 
  private:
   void GetCWBCapabilities();
+  void GetMaxPanelResolution(uint32_t *max_width, uint32_t *max_height);
 
   std::string interface_str_ = "DSI";
   bool resolution_switch_enabled_ = false;
   bool autorefresh_ = false;
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr_ = {};
   bool seamless_mode_switch_ = false;
-  bool periphery_layer_setup_done_ = false;
 };
 
 }  // namespace sdm

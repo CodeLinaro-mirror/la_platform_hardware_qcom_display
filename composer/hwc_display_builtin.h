@@ -236,7 +236,6 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool enable_optimize_refresh_ = false;
   bool enable_poms_during_doze_ = false;
 
-  bool is_primary_ = false;
   bool disable_layer_stitch_ = true;
   HWCLayer* stitch_target_ = nullptr;
   SyncTask<LayerStitchTaskCode> layer_stitch_task_;

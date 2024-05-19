@@ -19,7 +19,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -510,6 +510,14 @@ int HWCDisplay::Init() {
     }
   }
 
+  is_primary_ = display_intf_->IsPrimaryDisplay();
+  if (type_ == kBuiltIn) {
+    windowed_display_ = Debug::GetWindowRect(is_primary_, &window_rect_.left, &window_rect_.top,
+                               &window_rect_.right, &window_rect_.bottom) == 0;
+    DLOGV_IF(kTagClient, "Window rect : [%f %f %f %f] is_primary_=%d", window_rect_.left,
+                          window_rect_.top, window_rect_.right, window_rect_.bottom, is_primary_);
+  }
+
   HWCDebugHandler::Get()->GetProperty(DISABLE_HDR, &disable_hdr_handling_);
   if (disable_hdr_handling_) {
     DLOGI("HDR Handling disabled");
@@ -565,6 +573,10 @@ bool HWCDisplay::IsPanelConfig(uint32_t x, uint32_t y) {
   return false;
 }
 
+bool HWCDisplay::IsFractionValue(float value) {
+  return (value - static_cast<int>(value)) != 0;
+}
+
 void HWCDisplay::PopulateHWCExtendedDisplayResolution() {
   // Extended display resolutions are calculated w.r.t. highest supported resolution only.
   uint32_t highest_res_config_index = 0;
@@ -575,15 +587,15 @@ void HWCDisplay::PopulateHWCExtendedDisplayResolution() {
     }
   }
 
-  uint32_t panel_width = variable_config_map_[highest_res_config_index].x_pixels;
-  uint32_t panel_height = variable_config_map_[highest_res_config_index].y_pixels;
+  max_panel_width_ = variable_config_map_[highest_res_config_index].x_pixels;
+  max_panel_height_ = variable_config_map_[highest_res_config_index].y_pixels;
 
   // Populate extended display resolutions supported using dest scaler
   HWCDisplayResolutionExtn disp_res_ext;
   // vector<pair<width, height>>
   std::vector<std::pair<uint32_t, uint32_t>> extended_display_resolutions = {};
-  DisplayError error = disp_res_ext.GetExtendedDisplayResolutions(panel_width, panel_height,
-                                                        &extended_display_resolutions);
+  DisplayError error = disp_res_ext.GetExtendedDisplayResolutions(max_panel_width_,
+                       max_panel_height_, &extended_display_resolutions);
 
   if (error != kErrorNone) {
     DLOGI("Extended display resolution not supported");
@@ -601,16 +613,38 @@ void HWCDisplay::PopulateHWCExtendedDisplayResolution() {
       continue;
     }
 
+    if (windowed_display_) {
+      auto x_scale = static_cast<float>(max_panel_width_) /
+                     extended_display_resolutions.at(res_index).first;
+      auto y_scale = static_cast<float>(max_panel_height_) /
+                     extended_display_resolutions.at(res_index).second;
+      if (IsFractionValue((window_rect_.left + window_rect_.right) / x_scale) ||
+          IsFractionValue((window_rect_.top + window_rect_.bottom) / y_scale)) {
+        DLOGW("Discarding resulution %d X %d with window rect",
+               extended_display_resolutions.at(res_index).first,
+               extended_display_resolutions.at(res_index).second);
+        continue;
+      }
+      if (UINT32((window_rect_.left + window_rect_.right) / x_scale) % 2 != 0 ||
+          UINT32((window_rect_.top + window_rect_.bottom) / y_scale) % 2 != 0) {
+        DLOGW("Discarding resulution %d X %d with window rect: Not a even number",
+               extended_display_resolutions.at(res_index).first,
+               extended_display_resolutions.at(res_index).second);
+        continue;
+      }
+    }
+
     for (auto &config : variable_config_map_) {
-      if (config.second.x_pixels == panel_width && config.second.y_pixels == panel_height) {
+      if (config.second.x_pixels == max_panel_width_ &&
+          config.second.y_pixels == max_panel_height_) {
         DisplayConfigVariableInfo info = {};
         info = config.second;
         info.x_pixels = extended_display_resolutions.at(res_index).first;
         info.y_pixels = extended_display_resolutions.at(res_index).second;
-        info.x_dpi *= (info.x_pixels / panel_width);
-        info.y_dpi *= (info.y_pixels / panel_height);
-        info.h_total -= (panel_width - info.x_pixels);
-        info.v_total -= (panel_height - info.y_pixels);
+        info.x_dpi *= (info.x_pixels / max_panel_width_);
+        info.y_dpi *= (info.y_pixels / max_panel_height_);
+        info.h_total -= (max_panel_width_ - info.x_pixels);
+        info.v_total -= (max_panel_height_ - info.y_pixels);
         info.is_virtual_config = true;
         info.parent_config_index = highest_res_config_index;
         variable_config_map_[config_index] = info;
@@ -1204,8 +1238,12 @@ HWC2::Error HWCDisplay::GetDisplayAttribute(hwc2_config_t config, HwcAttribute a
 
   DisplayConfigVariableInfo variable_config = variable_config_map_.at(config);
 
-  variable_config.x_pixels -= UINT32(window_rect_.right + window_rect_.left);
-  variable_config.y_pixels -= UINT32(window_rect_.bottom + window_rect_.top);
+  if (windowed_display_) {
+    auto x_scale = static_cast<float>(max_panel_width_) / variable_config.x_pixels;
+    auto y_scale = static_cast<float>(max_panel_height_) / variable_config.y_pixels;
+    variable_config.x_pixels -= UINT32((window_rect_.right + window_rect_.left) / x_scale);
+    variable_config.y_pixels -= UINT32((window_rect_.bottom + window_rect_.top) / y_scale);
+  }
   if (variable_config.x_pixels <= 0 || variable_config.y_pixels <= 0) {
     DLOGE("window rects are not within the supported range");
     return HWC2::Error::BadDisplay;
@@ -2228,8 +2266,10 @@ int HWCDisplay::SetFrameBufferConfig(uint32_t x_pixels, uint32_t y_pixels) {
   // SF sending reduced FBT but here the src_rect is equal to mixer which is
   // higher than allocated buffer of FBT.
   if (windowed_display_) {
-    x_pixels -= UINT32(window_rect_.right + window_rect_.left);
-    y_pixels -= UINT32(window_rect_.bottom + window_rect_.top);
+    auto x_scale = static_cast<float>(max_panel_width_) / x_pixels;
+    auto y_scale = static_cast<float>(max_panel_height_) / y_pixels;
+    x_pixels -= UINT32((window_rect_.right + window_rect_.left) / x_scale);
+    y_pixels -= UINT32((window_rect_.bottom + window_rect_.top) / y_scale);
   }
 
   if (x_pixels <= 0 || y_pixels <= 0) {
@@ -2259,8 +2299,10 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   }
 
   if (windowed_display_) {
-    x_pixels -= UINT32(window_rect_.right + window_rect_.left);
-    y_pixels -= UINT32(window_rect_.bottom + window_rect_.top);
+    auto x_scale = static_cast<float>(max_panel_width_) / x_pixels;
+    auto y_scale = static_cast<float>(max_panel_height_) / y_pixels;
+    x_pixels -= UINT32((window_rect_.right + window_rect_.left) / x_scale);
+    y_pixels -= UINT32((window_rect_.bottom + window_rect_.top) / y_scale);
   }
   auto client_target_layer = client_target_->GetSDMLayer();
 

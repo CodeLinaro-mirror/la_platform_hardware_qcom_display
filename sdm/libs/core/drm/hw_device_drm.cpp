@@ -711,6 +711,26 @@ void HWDeviceDRM::GetCWBCapabilities() {
   }
 }
 
+void HWDeviceDRM::GetMaxPanelResolution(uint32_t *max_panel_width, uint32_t *max_panel_height) {
+  if (!max_panel_width || !max_panel_height) {
+    DLOGE("Invalid input params!");
+    return;
+  }
+
+  uint32_t max_width = 0, max_height = 0;
+  for (auto &disp_attribute : display_attributes_) {
+    if (max_width < disp_attribute.x_pixels) {
+      max_width = disp_attribute.x_pixels;
+    }
+    if (max_height < disp_attribute.y_pixels) {
+      max_height = disp_attribute.y_pixels;
+    }
+  }
+
+  *max_panel_width = max_width;
+  *max_panel_height = max_height;
+}
+
 DisplayError HWDeviceDRM::GetDisplayId(int32_t *display_id) {
   *display_id = display_id_;
   return kErrorNone;
@@ -986,6 +1006,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
              DRM_MODE_FLAG_VID_MODE_PANEL) {
     hw_panel_info_.mode = kModeVideo;
   }
+  GetMaxPanelResolution(&hw_panel_info_.max_panel_width, &hw_panel_info_.max_panel_height);
 
   DLOGI_IF(kTagDriverConfig, "%s, Panel Interface = %s, Panel Mode = %s, Is Primary = %d",
            device_name_, interface_str_.c_str(),
@@ -1008,6 +1029,8 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   DLOGI_IF(kTagDriverConfig, "Panel Minimum Transfer time = %d us",
     hw_panel_info_.min_transfer_time_us);
   DLOGI_IF(kTagDriverConfig, "Dynamic Bit Clk Support = %d", hw_panel_info_.dyn_bitclk_support);
+  DLOGI_IF(kTagDriverConfig, "Max supported panel resolution = %dX%d", hw_panel_info_.max_panel_width,
+           hw_panel_info_.max_panel_height);
 }
 
 DisplayError HWDeviceDRM::GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
@@ -1546,12 +1569,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       continue;
     }
 
-    /* when it's fovea use case and layer has no geometry, can skip some properties
-     * after first drawcycle setup.
+    /* When layer stack only has position change, and a layer doesn't have geometry change, we can
+     * assume it has no any change so we can skip.
      */
-    bool can_skip_periphery = (hw_layers_info->common_info->flags.fovea_layer_present
-                              && !layer.geometry_changes && periphery_layer_setup_done_
-                              && !layer.update_mask.test(kSecurity));
+    bool can_skip_nochange = (hw_layers_info->common_info->flags.only_position_geometry_changed
+                              && !layer.geometry_changes);
 
     for (uint32_t count = 0; count < pipe_info_vec.size(); count++) {
       HWPipeInfo *pipe_info = pipe_info_vec[count];
@@ -1567,7 +1589,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
       if (pipe_info->valid && fb_id[pipe_info->cac_color]) {
         uint32_t pipe_id = pipe_info->pipe_id;
 
-        if (update_config && !can_skip_periphery) {
+        if (update_config && !can_skip_nochange) {
           uint32_t fg_alpha = layer.plane_alpha;
           uint32_t bg_alpha = 0xff - layer.plane_alpha;
 
@@ -2017,12 +2039,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   }
 
   hw_layers_info->sync_handle = release_fence;
-
-  if (hw_layers_info->common_info->flags.fovea_layer_present) {
-    periphery_layer_setup_done_ = true;
-  } else {
-    periphery_layer_setup_done_ = false;
-  }
 
   if (vrefresh_) {
     // Update current mode index if refresh rate is changed
