@@ -204,6 +204,13 @@ ScopedAStatus AidlComposerClient::createVirtualDisplay(int32_t in_width, int32_t
 }
 
 ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_layer) {
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
+
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
   drawcycle_->LayerStackUpdated(in_display);
@@ -244,9 +251,9 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
                                                   std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
-  // TODO(aparmar): std::lock_guard<std::mutex> hwc_lock(conn_mgr_->command_seq_mutex_);
-
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
   Error error = mCommandEngine->execute(in_commands, aidl_return);
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
 }
@@ -256,14 +263,21 @@ ScopedAStatus AidlComposerClient::executeQtiCommands(
     std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
-  // TODO(aparmar) std::lock_guard<std::mutex> hwc_lock(conn_mgr_->command_seq_mutex_);
-
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
   Error error = mCommandEngine->qtiExecute(in_commands, aidl_return);
+  lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
 ScopedAStatus AidlComposerClient::getActiveConfig(int64_t in_display, int32_t *aidl_return) {
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
+
   auto error = settings_->GetActiveConfig(in_display, (sdm::Config *)aidl_return);
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::BadConfig));
@@ -275,6 +289,13 @@ ScopedAStatus AidlComposerClient::getActiveConfig(int64_t in_display, int32_t *a
 ScopedAStatus AidlComposerClient::getColorModes(int64_t in_display,
                                                 std::vector<ColorMode> *aidl_return) {
   uint32_t count = 0;
+
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
 
   auto error = settings_->GetColorModes(in_display, &count, nullptr);
   if (error != sdm::kErrorNone) {
@@ -380,7 +401,9 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
 
     if (enable_vrr && variable_config.avr_step > 0) {
       display_configuration.vrrConfig = {
-          static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
+          static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000),
+          {},
+          {}};
       int notify_ept_threshold_value = settings_->GetNotifyEptConfig(in_display);
       if (variable_config.early_ept_timeout > 0 && notify_ept_threshold_value > 0) {
         int notify_ept_heads_up =
@@ -520,6 +543,13 @@ ScopedAStatus AidlComposerClient::getDisplayName(int64_t in_display, std::string
 }
 
 ScopedAStatus AidlComposerClient::getDisplayVsyncPeriod(int64_t in_display, int32_t *aidl_return) {
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
+
   sdm::VsyncPeriodNanos vsync_period;
   auto error = settings_->GetDisplayVsyncPeriod(in_display, &vsync_period);
   if (error != sdm::kErrorNone) {
@@ -692,14 +722,20 @@ ScopedAStatus AidlComposerClient::getRenderIntents(int64_t in_display, ColorMode
                                                    std::vector<RenderIntent> *aidl_return) {
   uint32_t count = 0;
 
-  auto error = settings_->GetRenderIntents(in_display, int32_t(in_mode), &count, nullptr);
-  if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
   }
 
-  std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-  if (mDisplayData.find(in_display) == mDisplayData.end()) {
-    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  auto error = settings_->GetRenderIntents(in_display, int32_t(in_mode), &count, nullptr);
+  if (error != sdm::kErrorNone) {
+    if (error == sdm::kErrorParameters) {
+      return TO_BINDER_STATUS(INT32(Error::BadParameter));
+    } else {
+      return TO_BINDER_STATUS(INT32(Error::Unsupported));
+    }
   }
 
   aidl_return->resize(count);
@@ -757,6 +793,13 @@ ScopedAStatus AidlComposerClient::setActiveConfigWithConstraints(
     int64_t in_display, int32_t in_config,
     const VsyncPeriodChangeConstraints &in_vsync_period_change_constraints,
     VsyncPeriodChangeTimeline *aidl_return) {
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
+
   sdm::SDMVsyncPeriodChangeTimeline timeline{};
   sdm::SDMVsyncPeriodChangeConstraints constraints{};
 
@@ -814,10 +857,17 @@ ScopedAStatus AidlComposerClient::setClientTargetSlotCount(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::setColorMode(int64_t in_display, ColorMode in_mode,
                                                RenderIntent in_intent) {
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
+
   auto error = settings_->SetColorModeWithRenderIntent(in_display, static_cast<int32_t>(in_mode),
                                                        static_cast<int32_t>(in_intent));
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -842,9 +892,16 @@ ScopedAStatus AidlComposerClient::setDisplayedContentSamplingEnabled(
 }
 
 ScopedAStatus AidlComposerClient::setPowerMode(int64_t in_display, PowerMode in_mode) {
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
+
   auto error = lifecycle_->SetPowerMode(in_display, static_cast<int32_t>(in_mode));
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -1138,7 +1195,7 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
   uint32_t size = command.damage.size();
   const Rect *rect = reinterpret_cast<const Rect *>(command.damage.data());
 
-  sdm::SDMRegion region = {size};
+  sdm::SDMRegion region = {size, std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(rect, &region);
 
   auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
@@ -1335,8 +1392,8 @@ void AidlComposerClient::CommandEngine::executeSetLayerSurfaceDamage(
     int64_t display, int64_t layer, const std::vector<std::optional<Rect>> &damage) {
   // N rectangles
   const Rect *rect = reinterpret_cast<const Rect *>(damage.data());
-  ;
-  sdm::SDMRegion region = {damage.size()};
+
+  sdm::SDMRegion region = {damage.size(), std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(rect, &region);
 
   auto err = mClient.layer_builder_->SetLayerSurfaceDamage(display, layer, region);
@@ -1409,7 +1466,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerDisplayFrame(int64_t disp
                                                                     const Rect &rect) {
   uint32_t size = 1;
 
-  sdm::SDMRegion region = {size};
+  sdm::SDMRegion region = {size, std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(&rect, &region);
   auto err = mClient.layer_builder_->SetLayerDisplayFrame(display, layer, region.rects[0]);
   if (err != sdm::kErrorNone) {
@@ -1463,7 +1520,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerVisibleRegion(
   uint32_t size = visibleRegion.size();
   const Rect *rect = reinterpret_cast<const Rect *>(visibleRegion.data());
 
-  sdm::SDMRegion region = {size};
+  sdm::SDMRegion region = {size, std::vector<sdm::SDMRect>()};
   GetSDMRectFromRect(rect, &region);
 
   auto err = mClient.layer_builder_->SetLayerVisibleRegion(display, layer, region);

@@ -21,7 +21,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -137,6 +137,7 @@ public:
       SET_DEMURA_CONFIG = 61,                  // Set the demura configuration index
       SET_BPP_MODE = 62,                       // Set Panel bpp to 24bpp or 30bpp
       PERFORM_CAC_CONFIG = 63,                 // Set CAC Configuration for the display
+      SET_PANEL_FEATURE_CONFIG = 64,           // Common function, Set cfg for panel features
       COMMAND_LIST_END = 400,
     };
 

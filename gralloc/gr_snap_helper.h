@@ -234,7 +234,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                         SnapPixelFormat *snap_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
-
+  SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
   SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
   SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
 
@@ -326,6 +326,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_RAW10},
           {{.format = SnapPixelFormat::RAW12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW12},
+          {{.format = SnapPixelFormat::RAW14, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RAW14},
           {{.format = SnapPixelFormat::RAW16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW16},
           {{.format = SnapPixelFormat::DEPTH_16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -537,6 +539,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::RAW10},
           {{.format = SnapPixelFormat::RAW12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::RAW12},
+          {{.format = SnapPixelFormat::RAW14, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RAW14},
           {{.format = SnapPixelFormat::RAW16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::RAW16},
           {{.format = SnapPixelFormat::DEPTH_16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -656,7 +660,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {PLANE_LAYOUT_COMPONENT_TYPE_B, PLANE_COMPONENT_B},
       {PLANE_LAYOUT_COMPONENT_TYPE_A, PLANE_COMPONENT_A},
       {PLANE_LAYOUT_COMPONENT_TYPE_RAW, PLANE_COMPONENT_RAW},
-      {PLANE_LAYOUT_COMPONENT_TYPE_META, PLANE_COMPONENT_META},
+      // META def is QTI defined, should only use the latest definition from SnapAlloc for Mapper5
+      // Path
+      {PLANE_LAYOUT_COMPONENT_TYPE_META, static_cast<int>(PLANE_LAYOUT_COMPONENT_TYPE_META)},
   };
 
   std::unordered_map<SnapPlaneLayoutComponentType, GrallocExtendableType>
@@ -669,7 +675,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {PLANE_LAYOUT_COMPONENT_TYPE_B, android::gralloc4::PlaneLayoutComponentType_B},
           {PLANE_LAYOUT_COMPONENT_TYPE_A, android::gralloc4::PlaneLayoutComponentType_A},
           {PLANE_LAYOUT_COMPONENT_TYPE_RAW, android::gralloc4::PlaneLayoutComponentType_RAW},
-          {PLANE_LAYOUT_COMPONENT_TYPE_META, qtigralloc::PlaneLayoutComponentType_Meta},
+          {PLANE_LAYOUT_COMPONENT_TYPE_META, {"QTI", PLANE_LAYOUT_COMPONENT_TYPE_META}},
       };
 
   std::unordered_map<uint64_t, SnapUsage> gralloc_to_snap_usage_ = {
@@ -1228,7 +1234,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
   int GetGrallocPrivateFlags(SnapUsage snap_usage, int64_t is_ubwc, int64_t is_tile_rendered,
                              int64_t is_cached);
-
+  SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
   SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
   SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
   SnapMetadataType GetSnapMetadataType(uint64_t gr_metadata_type);
@@ -1322,6 +1328,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_RAW10},
           {{.format = SnapPixelFormat::RAW12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW12},
+          {{.format = SnapPixelFormat::RAW14, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RAW14},
           {{.format = SnapPixelFormat::RAW16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW16},
           {{.format = SnapPixelFormat::DEPTH_16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},

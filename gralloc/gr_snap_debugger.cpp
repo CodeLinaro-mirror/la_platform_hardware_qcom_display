@@ -36,15 +36,15 @@ int GrallocSnapDebugger::GetProperty(const char *property_name, char *value) {
 
 void GrallocSnapDebugger::BeginTrace(const char *class_name, const char *function_name,
                                      const char *custom_string) {
-  if (atrace_is_tag_enabled(ATRACE_TAG)) {
+  if (atrace_is_tag_enabled(DISPLAY_ATRACE_TAG)) {
     char name[PATH_MAX] = {0};
     snprintf(name, sizeof(name), "%s::%s::%s", class_name, function_name, custom_string);
-    atrace_begin(ATRACE_TAG, name);
+    atrace_begin(DISPLAY_ATRACE_TAG, name);
   }
 }
 
 void GrallocSnapDebugger::EndTrace() {
-  atrace_end(ATRACE_TAG);
+  atrace_end(DISPLAY_ATRACE_TAG);
 }
 
 void GrallocSnapDebugger::ATrace(const char *custom_string, const int bit) {
