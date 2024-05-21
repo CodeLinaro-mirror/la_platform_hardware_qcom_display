@@ -29,6 +29,7 @@ DisplayAiqeAIDL::DisplayAiqeAIDL() {
   }
 
   sideband_->GetProperty(AIQE_SSRC_ENABLE, &ssrc_enable_);
+  sideband_->GetProperty(ENABLE_ABC, &abc_enable_);
 }
 
 DisplayAiqeAIDL::DisplayAiqeAIDL(sdm::SDMInterfaceFactory *sdm_factory) {
@@ -41,6 +42,7 @@ DisplayAiqeAIDL::DisplayAiqeAIDL(sdm::SDMInterfaceFactory *sdm_factory) {
   }
 
   sideband_->GetProperty(AIQE_SSRC_ENABLE, &ssrc_enable_);
+  sideband_->GetProperty(ENABLE_ABC, &abc_enable_);
 }
 
 bool DisplayAiqeAIDL::isSupported() {
@@ -83,51 +85,60 @@ ndk::ScopedAStatus DisplayAiqeAIDL::getCoprStats(int32_t disp_id,
 }
 
 ScopedAStatus DisplayAiqeAIDL::setABCState(int32_t disp_id, int32_t enable) {
-  if (aiqe_intf_) {
-    int rc = aiqe_intf_->SetABCState(disp_id, enable);
-    if (rc) {
-      ALOGE("%s: Unable to set ABC state '%d'", __FUNCTION__, enable);
+  if (abc_enable_) {
+    if (aiqe_intf_) {
+      int rc = aiqe_intf_->SetABCState(disp_id, enable);
+      if (rc) {
+        ALOGE("%s: Unable to set ABC state '%d'", __FUNCTION__, enable);
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+      }
+
+      return ScopedAStatus::ok();
+    } else {
+      ALOGE("%s: Unable to set ABC state. Interface initalized with bad session instance",
+            __FUNCTION__);
       return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
     }
-
-    return ScopedAStatus::ok();
-  } else {
-    ALOGE("%s: Unable to set ABC state. Interface initalized with bad session instance",
-          __FUNCTION__);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
+  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
 }
 
 ScopedAStatus DisplayAiqeAIDL::setABCReconfig(int32_t disp_id) {
-  if (aiqe_intf_) {
-    int rc = aiqe_intf_->SetABCReconfig(disp_id);
-    if (rc) {
-      ALOGE("%s: Unable to set ABC Config ", __FUNCTION__);
+  if (abc_enable_) {
+    if (aiqe_intf_) {
+      int rc = aiqe_intf_->SetABCReconfig(disp_id);
+      if (rc) {
+        ALOGE("%s: Unable to set ABC Config ", __FUNCTION__);
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+      }
+
+      return ScopedAStatus::ok();
+    } else {
+      ALOGE("%s: Unable to set ABC Config. Interface initalized with bad session instance",
+            __FUNCTION__);
       return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
     }
-
-    return ScopedAStatus::ok();
-  } else {
-    ALOGE("%s: Unable to set ABC Config. Interface initalized with bad session instance",
-          __FUNCTION__);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
+  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
 }
 
 ScopedAStatus DisplayAiqeAIDL::setABCMode(int32_t disp_id, const std::string &mode_name) {
-  if (aiqe_intf_) {
-    int rc = aiqe_intf_->SetABCMode(disp_id, mode_name);
-    if (rc) {
-      ALOGE("%s: Unable to set ABC Mode '%s'", __FUNCTION__, mode_name.c_str());
+  if (abc_enable_) {
+    if (aiqe_intf_) {
+      int rc = aiqe_intf_->SetABCMode(disp_id, mode_name);
+      if (rc) {
+        ALOGE("%s: Unable to set ABC Mode '%s'", __FUNCTION__, mode_name.c_str());
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+      }
+
+      return ScopedAStatus::ok();
+    } else {
+      ALOGE("%s: Unable to set ABC mode. Interface initalized with bad session instance",
+            __FUNCTION__);
       return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
     }
-
-    return ScopedAStatus::ok();
-  } else {
-    ALOGE("%s: Unable to set ABC mode. Interface initalized with bad session instance",
-          __FUNCTION__);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
+  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
 }
 
 }  // End of namespace aiqe
