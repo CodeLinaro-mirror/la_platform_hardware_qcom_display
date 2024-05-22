@@ -564,7 +564,9 @@ void HWInfoDRM::GetWBInfo(HWResourceInfo *hw_resource) {
   // Fake register
   ret = drm_mgr_intf_->RegisterDisplay(sde_drm::DRMDisplayType::VIRTUAL, &token);
   if (ret) {
-    DLOGE("Failed registering display %d. Error: %d.", sde_drm::DRMDisplayType::VIRTUAL, ret);
+    if (ret != -ENODEV) {
+      DLOGE("Failed registering display %d. Error: %d.", sde_drm::DRMDisplayType::VIRTUAL, ret);
+    }
     return;
   }
 
