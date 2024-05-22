@@ -157,7 +157,7 @@ int DRMMaster::Init(uint32_t card) {
   }
 
   if (dev_fd_ < 0) {
-    DRM_LOGE("drmOpen failed with error %d", dev_fd_);
+    DRM_LOGD("drmOpen failed with error %d for card%d", dev_fd_, card);
     return -ENODEV;
   }
 
