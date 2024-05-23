@@ -1306,7 +1306,16 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_BLEND_TYPE, pipe_id, blending);
 
           DRMRect src = {};
-          SetRect(pipe_info->src_roi, &src);
+          if (use_custom_intf_format_) {
+            if (count == 0) {
+              src = {0, 0, custom_mixer_attributes_.split_left, custom_mixer_attributes_.height};
+            } else {
+              src = {custom_mixer_attributes_.split_left, 0, custom_mixer_attributes_.width,
+                     custom_mixer_attributes_.height};
+            }
+          } else {
+            SetRect(pipe_info->src_roi, &src);
+          }
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SRC_RECT, pipe_id, src);
 
           DRMRect dst = {};
@@ -1333,7 +1342,17 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
                        dst_roi.left, dst_roi.top, dst_roi.right, dst_roi.bottom);
             }
           }
-          SetRect(dst_roi, &dst);
+          if (use_custom_intf_format_) {
+            if (count == 0) {
+              dst = {0, 0, custom_mixer_attributes_.split_left, custom_mixer_attributes_.height};
+            } else {
+              dst = {custom_mixer_attributes_.split_left, 0, custom_mixer_attributes_.width,
+                     custom_mixer_attributes_.height};
+            }
+          } else {
+            SetRect(dst_roi, &dst);
+          }
+
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_DST_RECT, pipe_id, dst);
 
           // Update Layout index.
@@ -2167,6 +2186,28 @@ void HWDeviceDRM::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const {
   *token = token_;
 }
 
+void HWDeviceDRM::UpdateCustomMixerAttributes() {
+  uint32_t index = custom_intf_mode_index_;
+
+  custom_mixer_attributes_.width = display_attributes_[index].x_pixels;
+  custom_mixer_attributes_.height = display_attributes_[index].y_pixels;
+  custom_mixer_attributes_.split_left = display_attributes_[index].is_device_split
+                                     ? custom_mixer_attributes_.width / 2
+                                     : custom_mixer_attributes_.width;
+  custom_mixer_attributes_.split_type = kNoSplit;
+  if (display_attributes_[index].is_device_split) {
+    custom_mixer_attributes_.split_type = kDualSplit;
+    if (display_attributes_[index].topology == kQuadLMMerge ||
+        display_attributes_[index].topology == kQuadLMDSCMerge ||
+        display_attributes_[index].topology == kQuadLMMergeDSC) {
+      custom_mixer_attributes_.split_type = kQuadSplit;
+    }
+  }
+
+  DLOGI("Custom Mixer WxH %dx%d-%d for %s", mixer_attributes_.width, mixer_attributes_.height,
+        mixer_attributes_.split_type, device_name_);
+}
+
 void HWDeviceDRM::UpdateMixerAttributes() {
   uint32_t index = current_mode_index_;
 
@@ -2187,6 +2228,7 @@ void HWDeviceDRM::UpdateMixerAttributes() {
 
   DLOGI("Mixer WxH %dx%d-%d for %s", mixer_attributes_.width, mixer_attributes_.height,
         mixer_attributes_.split_type, device_name_);
+  UpdateCustomMixerAttributes();
   update_mode_ = true;
 }
 
