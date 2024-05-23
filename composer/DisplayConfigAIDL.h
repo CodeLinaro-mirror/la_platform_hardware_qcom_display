@@ -270,12 +270,12 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   uint64_t callback_client_id_ = 0;
   bool enable_aidl_idle_notification_ = false;
 
-  SDMDisplayCapsIntf *caps_ = nullptr;
-  SDMDisplaySettingsIntf *settings_ = nullptr;
-  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
-  SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
-  SDMDisplaySideBandIntf *sideband_ = nullptr;
-  SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
+  std::shared_ptr<SDMDisplayCapsIntf> caps_;
+  std::shared_ptr<SDMDisplaySettingsIntf> settings_;
+  std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
+  std::shared_ptr<SDMDisplayLayerBuilderIntf> layer_builder_;
   sdm::Locker *locker_ = nullptr;
   ComposerHandleImporter handle_importer_;
 
