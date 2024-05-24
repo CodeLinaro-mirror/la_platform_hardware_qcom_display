@@ -76,10 +76,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_layer_stitch=0
 endif
 
-ifeq ($(TARGET_BOARD_PLATFORM),qcs605)
-PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.disable_cont_splash_handoff=1
-endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),kona)
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -145,7 +141,7 @@ PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 SOONG_CONFIG_NAMESPACES += qtidisplay
 
 # Soong Keys
-SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 kernel_5_4 kernel_5_15
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 kernel_5_4 kernel_5_15 nocamera_utils
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -159,6 +155,13 @@ SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_kernel_5_4 := false
 SOONG_CONFIG_qtidisplay_kernel_5_15 := false
+SOONG_CONFIG_qtidisplay_nocamera_utils := false
+
+ifeq ($(TARGET_BOARD_PLATFORM),qcs605)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_cont_splash_handoff=1
+    SOONG_CONFIG_qtidisplay_nocamera_utils := true
+endif
 
 ifeq ($(call is-vendor-board-platform,QCOM),true)
     SOONG_CONFIG_qtidisplay_displayconfig_enabled := true

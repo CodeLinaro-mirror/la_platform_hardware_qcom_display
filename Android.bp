@@ -9,6 +9,7 @@ soong_config_module_type {
         "gralloc4",
         "kernel_5_4",
         "kernel_5_15",
+        "nocamera_utils",
     ],
     properties: [
         "cflags",
@@ -51,6 +52,9 @@ qtidisplay_cc_defaults {
         },
         kernel_5_15: {
             cflags: ["-DKERNEL_5_15"],
+        },
+        nocamera_utils: {
+            cflags: ["-DNOCAMERA_UTILS"],
         },
     },
 }
