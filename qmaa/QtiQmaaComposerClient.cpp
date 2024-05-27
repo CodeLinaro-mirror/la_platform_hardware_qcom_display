@@ -212,7 +212,7 @@ implementation::Return<void> implementation::QtiComposerClient::registerCallback
     const sp<composer_V2_1::IComposerCallback> &callback) {
   callback_ = callback;
 
-  onHotplug(this, sdm::HWC_DISPLAY_PRIMARY, (int32_t)(HWC2::Connection::Connected));
+  onHotplug(this, HWC_DISPLAY_PRIMARY, (int32_t)(HWC2::Connection::Connected));
 
   return Void();
 }
@@ -706,7 +706,7 @@ implementation::Return<void> implementation::QtiComposerClient::registerCallback
   callback24_ = callback;
   mUseCallback24_ = true;
 
-  onHotplug(this, sdm::HWC_DISPLAY_PRIMARY, (int32_t)(HWC2::Connection::Connected));
+  onHotplug(this, HWC_DISPLAY_PRIMARY, (int32_t)(HWC2::Connection::Connected));
 
   return Void();
 }

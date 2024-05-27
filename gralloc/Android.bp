@@ -2,7 +2,6 @@
 cc_library_shared {
     name: "libgrallocutils",
     defaults: [
-        "qtidisplay_defaults",
         "qtidisplay_common_defaults",
         "qtidisplay_libubwcp_header_defaults"
     ],
@@ -56,7 +55,6 @@ cc_library_shared {
 cc_library_shared {
     name: "libmapperutils",
     defaults: [
-       "qtidisplay_defaults",
        "qtidisplay_common_defaults",
     ],
     vendor: true,
@@ -222,7 +220,6 @@ cc_library_shared {
         "QtiMapper4.cpp",
         "QtiMapperExtensions.cpp",
     ],
-    vintf_fragments: ["android.hardware.graphics.mapper-impl-qti-display.xml"],
 }
 
 //mapper5
