@@ -1182,6 +1182,22 @@ SnapError GrallocSnapHelper::BufferDequeueDurationHelper(
   return error;
 }
 
+SnapError GrallocSnapHelper::CompressionMetadataHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                                       void *gralloc_in_set, void *gralloc_out_get,
+                                                       SnapDescriptor *buf_des,
+                                                       bool check_metadata_set,
+                                                       int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA,
+                                     gralloc_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA,
+                                     gralloc_in_set);
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::PPParamInterlacedHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                      void *gralloc_in_set, void *gralloc_out_get,
                                                      SnapDescriptor *buf_des,
@@ -4446,6 +4462,38 @@ SnapError GrallocSnapHelperLegacy::BufferDequeueDurationHelper(
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION,
                                      &dequeue_duration);
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelperLegacy::CompressionMetadataHelper(
+    SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size, void *gralloc_in_set,
+    void *gralloc_out_get, SnapDescriptor *buf_des, bool check_metadata_set,
+    int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    SnapAnamorphicMetadata anamorphic_metadata;
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA,
+                                     &anamorphic_metadata);
+    error = CheckMetadataSet(SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA, error,
+                             check_metadata_set);
+    if (hidl_bytestream) {
+      hidl_vec<uint8_t> *in = static_cast<hidl_vec<uint8_t> *>(gralloc_out_get);
+      in->resize(sizeof(SnapAnamorphicMetadata));
+      memcpy(in->data(), &anamorphic_metadata, sizeof(anamorphic_metadata));
+    } else {
+      *static_cast<SnapAnamorphicMetadata *>(gralloc_out_get) = anamorphic_metadata;
+    }
+  } else if (gralloc_in_set != nullptr) {
+    SnapAnamorphicMetadata anamorphic_metadata;
+    if (hidl_bytestream) {
+      hidl_vec<uint8_t> *in = static_cast<hidl_vec<uint8_t> *>(gralloc_in_set);
+      memcpy(&anamorphic_metadata, in->data(), sizeof(anamorphic_metadata));
+    } else {
+      anamorphic_metadata = *static_cast<SnapAnamorphicMetadata *>(gralloc_in_set);
+    }
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA,
+                                     &anamorphic_metadata);
   }
   return error;
 }
