@@ -15,6 +15,9 @@
 
 #include "gr_buf_mgr.h"
 #include "gr_utils.h"
+#include <json/json.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 namespace aidl {
 namespace android {
@@ -31,6 +34,8 @@ using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 using gralloc::BufferManager;
+
+using AidlPlaneLayout = aidl::android::hardware::graphics::common::PlaneLayout;
 
 class QtiAllocatorAIDL : public BnAllocator {
  public:
@@ -49,6 +54,13 @@ class QtiAllocatorAIDL : public BnAllocator {
                                     AllocationResult *result);
   BufferManager *buf_mgr_ = nullptr;
   bool enable_logs_;
+  bool enable_allocation_data_dumping_ = false;
+  std::string json_file_name_;
+  std::mutex json_dump_lock_;
+  bool is_json_first_entry_ = true;
+  int dumpAllocationData(std::vector<buffer_handle_t> buffers, AllocationResult *result,
+                         gralloc::BufferDescriptor desc, int32_t count);
+  void LoadQtiMapper5();
 };
 
 }  // namespace impl

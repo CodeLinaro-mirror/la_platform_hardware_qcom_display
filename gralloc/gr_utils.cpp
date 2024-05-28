@@ -198,6 +198,20 @@ bool IsCompressedRGBFormat(int format) {
   return false;
 }
 
+bool IsGpuDepthStencilFormat(int format) {
+  switch (format) {
+    case static_cast<int>(PixelFormat::DEPTH_16):
+    case static_cast<int>(PixelFormat::DEPTH_24):
+    case static_cast<int>(PixelFormat::DEPTH_24_STENCIL_8):
+    case static_cast<int>(PixelFormat::DEPTH_32F):
+    case static_cast<int>(PixelFormat::STENCIL_8):
+      return true;
+    default:
+      break;
+  }
+  return false;
+}
+
 bool IsCameraCustomFormat(int format) {
   switch (format) {
     case HAL_PIXEL_FORMAT_NV21_ZSL:
@@ -834,6 +848,12 @@ bool IsUBwcSupported(int format) {
   }
 
   return false;
+}
+
+// Check if the format must be macro-tiled. Later if the lists of tiled formats and Depth/Stencil
+// formats gets updated, then handle it here appropriately.
+bool IsTileRendered(int format) {
+  return IsGpuDepthStencilFormat(format);
 }
 
 bool IsUBwcPISupported(int format, uint64_t usage) {

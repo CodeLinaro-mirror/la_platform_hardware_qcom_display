@@ -219,6 +219,7 @@ cc_binary {
         "vendor.qti.hardware.display.mapperextensions@1.3",
         "android.hardware.graphics.allocator-V2-ndk",
         "libvndksupport",
+        "libjsoncpp",
     ],
     static_libs: [
         "libaidlcommonsupport",

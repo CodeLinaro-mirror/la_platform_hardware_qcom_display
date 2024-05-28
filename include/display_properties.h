@@ -172,6 +172,7 @@
 #define ENABLE_LOGS_PROP                     GRALLOC_PROP("enable_logs")
 #define DISABLE_AHARDWAREBUFFER_PROP         GRALLOC_PROP("disable_ahardware_buffer")
 #define USE_SYSTEM_HEAP_FOR_SENSORS          GRALLOC_PROP("use_system_heap_for_sensors")
+#define ENABLE_ALLOCATION_DATA_DUMPING       GRALLOC_PROP("enable_allocation_data_dumping")
 
 // Add all vendor.gralloc.properties above
 
