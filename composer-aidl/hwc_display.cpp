@@ -19,7 +19,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1079,6 +1079,32 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
 
   return HWC3::Error::None;
 }
+
+#ifdef ENABLE_COMPOSER3_V3
+HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
+  out_configs->clear();
+  out_configs->reserve(variable_config_map_.size());
+  for (const auto &[config_id, variable_config] : variable_config_map_) {
+    DisplayConfiguration display_configuration;
+    display_configuration.configId = config_id;
+    display_configuration.width = variable_config.x_pixels;
+    display_configuration.height = variable_config.y_pixels;
+    display_configuration.dpi = {static_cast<float>(variable_config.x_dpi),
+                                 static_cast<float>(variable_config.y_dpi)};
+    display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
+    display_configuration.configGroup = GetDisplayConfigGroupId(variable_config);
+    display_configuration.vrrConfig = {
+        static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
+    DLOGI(
+        "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, minFrameInterval= "
+        "%d",
+        config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
+        display_configuration.vrrConfig->minFrameIntervalNs);
+    out_configs->emplace_back(display_configuration);
+  }
+  return HWC3::Error::None;
+}
+#endif
 
 HWC3::Error HWCDisplay::GetDisplayName(uint32_t *out_size, char *out_name) {
   // TODO(user): Get panel name and EDID name and populate it here

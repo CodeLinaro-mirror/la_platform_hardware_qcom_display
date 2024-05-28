@@ -17,6 +17,10 @@ composer_lib_defaults {
        },
 
        version_3: {
+          cflags: [
+              "-DENABLE_COMPOSER3_V3=1",
+          ],
+
           shared_libs: [
               "android.hardware.graphics.composer3-V3-ndk",
           ],
