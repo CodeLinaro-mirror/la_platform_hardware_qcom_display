@@ -1081,6 +1081,9 @@ HWC3::Error HWCSession::SetLayerColor(Display display, LayerId layer, Color colo
 
 HWC3::Error HWCSession::SetLayerCompositionType(Display display, LayerId layer, int32_t int_type) {
   auto type = static_cast<Composition>(int_type);
+  if (disable_get_screen_decorator_support_ && type == Composition::DISPLAY_DECORATION) {
+    return HWC3::Error::Unsupported;
+  }
   return CallLayerFunction(display, layer, &HWCLayer::SetLayerCompositionType, type);
 }
 
