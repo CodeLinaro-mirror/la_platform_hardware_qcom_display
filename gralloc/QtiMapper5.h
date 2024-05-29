@@ -52,6 +52,10 @@
 
 #include "gr_buf_mgr.h"
 #include "mapper_utils.h"
+#include "color_extensions.h"
+
+#define QTI_UBWC_STATS_ARRAY_SIZE 2
+
 namespace stablec {
 namespace vendor {
 namespace qti {
@@ -72,7 +76,8 @@ using mapper::isStandardMetadata;
 using mapper::isVendorMetadata;
 using mapper::STANDARD_METADATA_NAME;
 using mapper::VENDOR_QTI_METADATA_NAME;
-
+using GrallocSmpte2086 = aidl::android::hardware::graphics::common::Smpte2086;
+using GrallocCta861_3 = aidl::android::hardware::graphics::common::Cta861_3;
 
 #define REQUIRE_DRIVER()                                       \
   ALOGE("Failed to %s. Driver is uninitialized.", __func__); \
@@ -161,7 +166,45 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(QTI_PRIVATE_FLAGS), sizeof(int32_t)},
       {static_cast<uint64_t>(QTI_COLORSPACE), sizeof(uint32_t)},
       {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
-      // TODO: Add support for missing StandardMetadataType
+      {static_cast<uint64_t>(QTI_VT_TIMESTAMP), sizeof(uint64_t)},
+      {static_cast<uint64_t>(QTI_PP_PARAM_INTERLACED), sizeof(int32_t)},
+      {static_cast<uint64_t>(QTI_VIDEO_PERF_MODE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_GRAPHICS_METADATA),
+       sizeof(((GraphicsMetadata *)(0))->data)},
+      {static_cast<uint64_t>(QTI_UBWC_CR_STATS_INFO),
+       (sizeof(UBWCStats) * QTI_UBWC_STATS_ARRAY_SIZE)},
+      {static_cast<uint64_t>(QTI_REFRESH_RATE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_MAP_SECURE_BUFFER), sizeof(int32_t)},
+      {static_cast<uint64_t>(QTI_LINEAR_FORMAT), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_SINGLE_BUFFER_MODE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_CVP_METADATA), sizeof(CVPMetadata)},
+      {static_cast<uint64_t>(QTI_VIDEO_HISTOGRAM_STATS),
+       sizeof(VideoHistogramMetadata)},
+      {static_cast<uint64_t>(QTI_FD), sizeof(int32_t)},
+      {static_cast<uint64_t>(QTI_ALIGNED_WIDTH_IN_PIXELS), sizeof(uint32_t)},
+      {static_cast<uint64_t>(StandardMetadataType::STRIDE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_ALIGNED_HEIGHT_IN_PIXELS), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_STANDARD_METADATA_STATUS),
+       (sizeof(bool) * METADATA_SET_SIZE)},
+      {static_cast<uint64_t>(QTI_VENDOR_METADATA_STATUS),
+       (sizeof(bool) * METADATA_SET_SIZE)},
+      {static_cast<uint64_t>(QTI_BUFFER_TYPE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_VIDEO_TS_INFO), sizeof(VideoTimestampInfo)},
+      {static_cast<uint64_t>(QTI_CUSTOM_DIMENSIONS_STRIDE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_CUSTOM_DIMENSIONS_HEIGHT), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_RGB_DATA_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(QTI_BUFFER_PERMISSION), sizeof(BufferPermission)},
+      {static_cast<uint64_t>(QTI_MEM_HANDLE), sizeof(int64_t)},
+      {static_cast<uint64_t>(QTI_TIMED_RENDERING), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_CUSTOM_CONTENT_METADATA),
+       sizeof(CustomContentMetadata)},
+      {static_cast<uint64_t>(QTI_VIDEO_TRANSCODE_STATS),
+       sizeof(VideoTranscodeStatsMetadata)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2086),
+       sizeof(std::optional<GrallocSmpte2086>)},
+      {static_cast<uint64_t>(StandardMetadataType::CTA861_3),
+       sizeof(std::optional<GrallocCta861_3>)},
+      {static_cast<uint64_t>(QTI_HEAP_NAME), sizeof(std::string)},
   };
 };
 
