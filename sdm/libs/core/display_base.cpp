@@ -97,14 +97,6 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
   disp_stack_index_ = 0;
   disp_layer_stack_ = &disp_layer_stacks_[0];
 
-  // TODO(user): fix after enabling virtual driver for multi-dpu usecase
-  core_count_ = 1;
-  core_id_ = std::bitset<32>(1);
-  default_clock_hz_.insert(std::pair<uint32_t, uint32_t>(0, 0));
-  cached_framebuffer_.insert(std::pair<uint32_t, LayerBuffer>(0, {}));
-  cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(0, {}));
-  disp_layer_stack_->info.insert(std::pair<uint32_t, HWLayersInfo>(0, {}));
-
   // Start commit worker thread and wait for thread response.
   StartCommitThread();
 }
@@ -140,16 +132,6 @@ DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
   std::bitset<32> core_id_bitset = std::bitset<32>(core_id_);
   core_count_ = core_id_bitset.count();
 
-  for (int i = 0; i < core_id_.size(); i++) {
-    if (!core_id_[i]) {
-      continue;
-    }
-    default_clock_hz_.insert(std::pair<uint32_t, uint32_t>(i, 0));
-    cached_framebuffer_.insert(std::pair<uint32_t, LayerBuffer>(i, {}));
-    cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(i, {}));
-    disp_layer_stack_->info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
-  }
-
   // Start commit worker thread and wait for thread response.
   StartCommitThread();
 }
@@ -168,6 +150,17 @@ DisplayBase::~DisplayBase() {
 DisplayError DisplayBase::Init() {
   ClientLock lock(disp_mutex_);
   DisplayError error = kErrorNone;
+
+  for (int i = 0; i < core_id_.size(); i++) {
+    if (!core_id_[i]) {
+      continue;
+    }
+    default_clock_hz_.insert(std::pair<uint32_t, uint32_t>(i, 0));
+    cached_framebuffer_.insert(std::pair<uint32_t, LayerBuffer>(i, {}));
+    cached_qos_data_.insert(std::pair<uint32_t, HWQosData>(i, {}));
+    disp_layer_stack_->info.insert(std::pair<uint32_t, HWLayersInfo>(i, {}));
+  }
+
   dpu_core_mux_->GetHWPanelInfo(&device_ctx_, &client_ctx_);
   default_panel_mode_ = client_ctx_.hw_panel_info.mode;
   for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
@@ -260,6 +253,7 @@ DisplayError DisplayBase::Init() {
       }
     }
   }
+
   error = comp_manager_->RegisterDisplay(display_id_info_, display_type_, device_ctx_,
                                          client_ctx_, &display_comp_ctx_, &cached_qos_data_, this);
   if (error != kErrorNone) {
