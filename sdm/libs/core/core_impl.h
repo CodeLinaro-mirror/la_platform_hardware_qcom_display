@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -40,6 +40,7 @@
 #include <private/hw_interface.h>
 #include <utils/locker.h>
 #include <utils/sys.h>
+#include <utils/multi_core_instantiator.h>
 
 #include <memory>
 #include <vector>
@@ -126,7 +127,7 @@ class CoreImpl : public CoreInterface {
   BufferAllocator *buffer_allocator_ = NULL;
   std::vector<HWResourceInfo> hw_resource_;
   CompManager comp_mgr_;
-  std::vector<HWInfoInterface*> hw_info_intf_;
+  sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf_;
   DynLib extension_lib_;
   ExtensionInterface *extension_intf_ = NULL;
   CreateExtensionInterface create_extension_intf_ = NULL;

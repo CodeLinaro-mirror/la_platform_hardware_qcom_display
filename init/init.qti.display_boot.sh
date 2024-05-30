@@ -38,9 +38,10 @@ fi
 
 case "$target" in
     "anorak61")
-    #SOC ID for Anorak is 549
+    #SOC ID for Anorak61 is 549
+    #SOC ID for Anorak61 p is 649
     case "$soc_hwid" in
-        549)
+        549|649)
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 0
         setprop vendor.display.enable_allow_idle_fallback 1

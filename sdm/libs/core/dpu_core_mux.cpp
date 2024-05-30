@@ -1,7 +1,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -17,14 +17,15 @@
 namespace sdm {
 
 DPUCoreMux::DPUCoreMux(DisplayId display_id, DisplayType type,
-                       std::vector<HWInfoInterface*> hw_info_intf,
-                       BufferAllocator *buffer_allocator) : display_id_(display_id) {
+                       sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
+                       BufferAllocator *buffer_allocator)
+    : display_id_(display_id) {
   DisplayError error = kErrorNone;
-  for (uint32_t i = 0; i < hw_info_intf.size(); i++) {
+  for (auto intf = hw_info_intf.Begin(); intf != hw_info_intf.End(); intf++) {
     HWInterface *hw = nullptr;
-    uint32_t core_id = hw_info_intf[i]->GetCoreId();
-    error = HWInterface::Create(display_id.GetConnId(core_id), type, hw_info_intf[i],
-                                buffer_allocator, &hw);
+    uint32_t core_id = intf->first;
+    error = HWInterface::Create(display_id.GetConnId(core_id), type, intf->second, buffer_allocator,
+                                &hw);
     if (error != kErrorNone) {
       DLOGE("HW interface create failed");
     }

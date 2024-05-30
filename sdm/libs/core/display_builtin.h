@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -137,12 +137,14 @@ class DisplayIPCVmCallbackImpl : public IPCVmCallbackIntf {
 
 class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
  public:
-  DisplayBuiltIn(DisplayEventHandler *event_handler, std::vector<HWInfoInterface*> hw_info_intf,
+  DisplayBuiltIn(DisplayEventHandler *event_handler,
+                 sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
                  BufferAllocator *buffer_allocator, CompManager *comp_manager,
                  std::shared_ptr<IPCIntf> ipc_intf);
   DisplayBuiltIn(DisplayId display_id, DisplayEventHandler *event_handler,
-                 std::vector<HWInfoInterface*> hw_info_intf, BufferAllocator *buffer_allocator,
-                 CompManager *comp_manager, std::shared_ptr<IPCIntf> ipc_intf);
+                 sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf,
+                 BufferAllocator *buffer_allocator, CompManager *comp_manager,
+                 std::shared_ptr<IPCIntf> ipc_intf);
   virtual ~DisplayBuiltIn();
 
   DisplayError Init() override;

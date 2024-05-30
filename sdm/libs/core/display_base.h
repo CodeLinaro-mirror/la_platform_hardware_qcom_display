@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -44,6 +44,7 @@
 #include <private/noise_plugin_dbg.h>
 #include <private/hw_interface.h>
 #include <private/hw_events_interface.h>
+#include <utils/multi_core_instantiator.h>
 
 #include <limits.h>
 #include <map>
@@ -78,10 +79,12 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
  public:
   DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf);
+              CompManager *comp_manager,
+              sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf);
   DisplayBase(DisplayId display_id, DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf);
+              CompManager *comp_manager,
+              sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf);
   virtual ~DisplayBase();
   virtual DisplayError Init();
   virtual DisplayError Deinit();
@@ -386,7 +389,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   bool needs_validate_ = true;  // maintains validation state between Prepare/Commit Cycle
   bool vsync_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
-  std::vector<HWInfoInterface*> hw_info_intf_;
+  sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf_;
   std::bitset<32> core_id_;
   uint32_t primary_core_id_ = 0;
   int core_count_ = 0;

@@ -29,7 +29,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -192,7 +192,7 @@ const char* GetSocName() {
     return "";
   }
   int soc_id_num = stoi(soc_id);
-  if (soc_id_num == kAnorakSocId) {
+  if ((soc_id_num == kAnorakSocId1) || (soc_id_num == kAnorakSocId2)) {
     return kAnorakSocName;
   }
 

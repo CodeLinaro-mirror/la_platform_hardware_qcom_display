@@ -24,7 +24,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -83,7 +83,8 @@ static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
 // TODO(user): Have a single structure handle carries all the interface pointers and variables.
 DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
                          HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-                         CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf)
+                         CompManager *comp_manager,
+                         sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf)
     : display_type_(display_type),
       event_handler_(event_handler),
       hw_device_type_(hw_device_type),
@@ -123,9 +124,13 @@ void DisplayBase::StartCommitThread() {
 DisplayBase::DisplayBase(DisplayId display_id, DisplayType display_type,
                          DisplayEventHandler *event_handler, HWDeviceType hw_device_type,
                          BufferAllocator *buffer_allocator, CompManager *comp_manager,
-                         std::vector<HWInfoInterface*> hw_info_intf)
-  : display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
-    buffer_allocator_(buffer_allocator), comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
+                         sdm::MultiCoreInstance<uint32_t, HWInfoInterface *> hw_info_intf)
+    : display_type_(display_type),
+      event_handler_(event_handler),
+      hw_device_type_(hw_device_type),
+      buffer_allocator_(buffer_allocator),
+      comp_manager_(comp_manager),
+      hw_info_intf_(hw_info_intf) {
   display_id_info_ = display_id;
   display_id_ = display_id_info_.GetDisplayId();
   core_id_ = display_id_info_.GetCoreIdMap();
@@ -165,9 +170,9 @@ DisplayError DisplayBase::Init() {
   DisplayError error = kErrorNone;
   dpu_core_mux_->GetHWPanelInfo(&device_ctx_, &client_ctx_);
   default_panel_mode_ = client_ctx_.hw_panel_info.mode;
-  for (auto info_intf : hw_info_intf_) {
+  for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
     HWResourceInfo res_info;
-    info_intf->GetHWResourceInfo(&res_info);
+    info_intf->second->GetHWResourceInfo(&res_info);
     hw_resource_info_.push_back(res_info);
   }
 
@@ -1896,13 +1901,13 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   bool hdr_supported = true;
   bool has_concurrent_writeback = true;
 
-  for (auto info_intf : hw_info_intf_) {
+  for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    info_intf->GetHWResourceInfo(&hw_resource_info);
+    info_intf->second->GetHWResourceInfo(&hw_resource_info);
     hdr_supported &= hw_resource_info.has_hdr;
     has_concurrent_writeback &= hw_resource_info.has_concurrent_writeback;
     HWDisplayInterfaceInfo hw_disp_info = {};
-    info_intf->GetFirstDisplayInterfaceType(&hw_disp_info);
+    info_intf->second->GetFirstDisplayInterfaceType(&hw_disp_info);
     if (hw_disp_info.type == kHDMI) {
       hdr_supported &= (hdr_supported && client_ctx_.hw_panel_info.hdr_enabled);
     }
@@ -4685,8 +4690,8 @@ bool DisplayBase::HandleCwbTeardown() {
 
 uint32_t DisplayBase::GetAvailableMixerCount() {
   uint32_t max_count = UINT32_MAX;
-  for (auto info_intf : hw_info_intf_) {
-    max_count = std::min(max_count, info_intf->GetMaxMixerCount());
+  for (auto info_intf = hw_info_intf_.Begin(); info_intf != hw_info_intf_.End(); info_intf++) {
+    max_count = std::min(max_count, info_intf->second->GetMaxMixerCount());
   }
   uint32_t cur_count = comp_manager_->GetMixerCount(DisplayId(display_id_));
 
