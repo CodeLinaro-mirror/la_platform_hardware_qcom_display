@@ -1424,13 +1424,14 @@ HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
     return HWC2::Error::None;
   }
 
-  hwc2_config_t real_config_for_fps_switch = config;
+  hwc2_config_t real_config = config;
+
   if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
-    HWC2::Error error = SetFBForExtendedResolution(config, &real_config_for_fps_switch);
-    if (!virtual_config_fps_switch_) {
+    HWC2::Error error = SetFBForExtendedResolution(config, &real_config);
+    if (!need_mode_switch_) {
       return error;
     } else {
-      config = real_config_for_fps_switch;
+      config = real_config;
     }
   }
 
@@ -2039,7 +2040,7 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence
     pending_first_commit_config_ = false;
     SetActiveConfig(pending_first_commit_config_index_);
   }
-  virtual_config_fps_switch_ = false;
+  need_mode_switch_ = false;
 
   return status;
 }
@@ -2956,13 +2957,13 @@ HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
     DLOGE("Invalid config: %d", config);
     return HWC2::Error::BadConfig;
   }
-  hwc2_config_t real_config_for_fps_switch = config;
+  hwc2_config_t real_config = config;
   if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
-    HWC2::Error error = SetFBForExtendedResolution(config, &real_config_for_fps_switch);
-    if (!virtual_config_fps_switch_) {
+    HWC2::Error error = SetFBForExtendedResolution(config, &real_config);
+    if (!need_mode_switch_) {
       return error;
     } else {
-      config = real_config_for_fps_switch;
+      config = real_config;
     }
   }
 
@@ -3233,7 +3234,7 @@ void HWCDisplay::SetActiveConfigIndex(int index) {
   // to reflect fps switch.
   // So avoid overriding of active_config_index_ from SubmitDisplayConfig in above scenario
 
-  if (!virtual_config_fps_switch_) {
+  if (!need_mode_switch_) {
     active_config_index_ = index;
   }
 }
@@ -3761,7 +3762,7 @@ bool HWCDisplay::IsVirtualConfig(hwc2_config_t config) {
 }
 
 HWC2::Error HWCDisplay::SetFBForExtendedResolution(hwc2_config_t config,
-                                                   hwc2_config_t *real_config_for_fps_switch) {
+                                                   hwc2_config_t *real_config) {
   uint32_t new_config_width = variable_config_map_[config].x_pixels;
   uint32_t new_config_height = variable_config_map_[config].y_pixels;
   uint32_t new_config_fps = variable_config_map_[config].fps;
@@ -3778,23 +3779,44 @@ HWC2::Error HWCDisplay::SetFBForExtendedResolution(hwc2_config_t config,
 
   SetActiveConfigIndex(config);
 
-  if (new_config_fps == hwc_active_config_fps) {
-    return HWC2::Error::None;
-  }
-
   // Change in fps, so change the mode on panel also.
   hwc2_config_t real_active_config = 0;
   display_intf_->GetActiveConfig(&real_active_config);
-  uint32_t real_active_config_width = variable_config_map_[real_active_config].x_pixels;
-  uint32_t real_active_config_height = variable_config_map_[real_active_config].y_pixels;
+  uint32_t real_config_width = variable_config_map_[real_active_config].x_pixels;
+  uint32_t real_config_height = variable_config_map_[real_active_config].y_pixels;
+
+  // if panel support multiple modes and currently second panel resolution is active.
+  // Now if current virtual config with higher width than current real config width, then
+  // select the parent real config of the virtual config. (DS will not do downscale)
+  bool fps_change = false;
+  if (!IsVirtualConfig(config)) {
+    *real_config = config;
+    need_mode_switch_ = true;
+    return HWC2::Error::None;
+  } else if (variable_config_map_[config].x_pixels > real_config_width) {
+    need_mode_switch_ = true;
+    auto parent_index = variable_config_map_[config].parent_config_index;
+    auto parent_fps = variable_config_map_[parent_index].fps;
+    if (parent_fps == new_config_fps) {
+      *real_config = parent_index;
+      return HWC2::Error::None;
+    }
+    real_config_width = variable_config_map_[parent_index].x_pixels;
+    real_config_height = variable_config_map_[parent_index].y_pixels;
+    fps_change = true;
+  }
+
+  if ((new_config_fps == hwc_active_config_fps) && !fps_change) {
+    return HWC2::Error::None;
+  }
 
   // Find the mode with new fps which has same resolution as current mode set on panel.
   for (auto &config : variable_config_map_) {
-    if ((config.second.x_pixels == real_active_config_width) &&
-        (config.second.y_pixels == real_active_config_height) &&
+    if ((config.second.x_pixels == real_config_width) &&
+        (config.second.y_pixels == real_config_height) &&
         (config.second.fps == new_config_fps)) {
-      *real_config_for_fps_switch = config.first;
-      virtual_config_fps_switch_ = true;
+      *real_config = config.first;
+      need_mode_switch_ = true;
       break;
     }
   }
