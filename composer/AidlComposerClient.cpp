@@ -64,12 +64,12 @@ void BufferCacheEntry::clear() {
   }
 }
 
-bool AidlComposerClient::init(SDMDisplayCapsIntf *caps,
-                              SDMDisplaySettingsIntf *settings,
-                              SDMDisplayLifeCycleIntf *lifecycle,
-                              SDMDisplayDrawCycleIntf *drawcycle,
-                              SDMDisplayLayerBuilderIntf *layers,
-                              SDMDisplaySideBandIntf *sideband) {
+bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
+                              std::shared_ptr<SDMDisplaySettingsIntf> settings,
+                              std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
+                              std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+                              std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
+                              std::shared_ptr<SDMDisplaySideBandIntf> sideband) {
   if (!caps || !settings || !lifecycle || !drawcycle || !layers) {
     ALOGE("AidlComposerClient::%s: interfaces not ready", __FUNCTION__);
     return false;

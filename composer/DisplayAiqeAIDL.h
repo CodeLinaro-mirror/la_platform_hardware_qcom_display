@@ -36,8 +36,8 @@ class DisplayAiqeAIDL : public BnDisplayAiqe {
   ndk::ScopedAStatus setABCMode(int32_t disp_id, const std::string &mode_name) override;
 
  private:
-  sdm::SDMDisplayAiqeIntf *aiqe_intf_ = nullptr;
-  sdm::SDMDisplaySideBandIntf *sideband_ = nullptr;
+  std::shared_ptr<sdm::SDMDisplayAiqeIntf> aiqe_intf_;
+  std::shared_ptr<sdm::SDMDisplaySideBandIntf> sideband_;
   int ssrc_enable_ = 0;
   int abc_enable_ = 0;
 };

@@ -22,8 +22,8 @@ public:
  void OnHdmiHotplug(bool connected);
 
 private:
-  SDMDisplaySideBandIntf *sideband_ = nullptr;
-  qService::QService *qservice_ = nullptr;
+ std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
+ qService::QService *qservice_ = nullptr;
 };
 
 }
