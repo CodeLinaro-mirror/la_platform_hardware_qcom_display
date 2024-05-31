@@ -193,6 +193,7 @@ class HWDeviceDRM : public HWInterface {
   void GetHWDisplayPortAndMode();
   bool EnableHotPlugDetection(int enable);
   void UpdateMixerAttributes();
+  void UpdateCustomMixerAttributes();
   void SetSolidfillStages();
   void AddSolidfillStage(const HWSolidfillStage &sf, uint32_t plane_alpha);
   void ClearSolidfillStages();
@@ -279,6 +280,7 @@ class HWDeviceDRM : public HWInterface {
   int64_t release_fence_ = -1;
   int64_t retire_fence_ = -1;
   HWMixerAttributes mixer_attributes_ = {};
+  HWMixerAttributes custom_mixer_attributes_ = {};
   std::vector<sde_drm::DRMSolidfillStage> solid_fills_ {};
   bool secure_display_active_ = false;
   uint64_t debug_dump_count_ = 0;
