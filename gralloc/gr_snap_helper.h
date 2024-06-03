@@ -263,6 +263,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   static GrallocSnapHelper *s_instance;
   GrallocSnapDebugger debugger_impl_{};
+  bool enable_logs_ = false;
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
@@ -1265,6 +1266,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)(DebugCallbackIntf *) = nullptr;
   std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   GrallocSnapDebugger debugger_impl_{};
+  bool enable_logs_ = false;
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
