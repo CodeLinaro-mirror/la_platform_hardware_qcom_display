@@ -32,7 +32,6 @@ cc_library_shared {
         "libbinder_ndk",
         "libgralloc.qti",
         "libutilscallstack",
-        "libdisplaydebug",
         "android.hardware.graphics.allocator-V2-ndk",
     ],
     cflags: [
@@ -46,8 +45,8 @@ cc_library_shared {
         "gr_utils.cpp",
         "gr_adreno_info.cpp",
         "gr_camera_info.cpp",
-        "gr_debugger.cpp",
         "gr_snap_helper.cpp",
+        "gr_snap_debugger.cpp",
     ],
 }
 
@@ -80,7 +79,6 @@ cc_library_shared {
        "libbinder_ndk",
        "libgralloc.qti",
        "libutilscallstack",
-       "libdisplaydebug",
        "android.hardware.graphics.allocator-V2-ndk",
        "libvndksupport",
     ],
