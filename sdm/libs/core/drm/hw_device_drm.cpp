@@ -2204,8 +2204,9 @@ void HWDeviceDRM::UpdateCustomMixerAttributes() {
     }
   }
 
-  DLOGI("Custom Mixer WxH %dx%d-%d for %s", mixer_attributes_.width, mixer_attributes_.height,
-        mixer_attributes_.split_type, device_name_);
+  DLOGI("Custom Mixer WxH %dx%d-%d for %s", custom_mixer_attributes_.width,
+        custom_mixer_attributes_.height, custom_mixer_attributes_.split_type,
+        device_name_);
 }
 
 void HWDeviceDRM::UpdateMixerAttributes() {
