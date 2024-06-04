@@ -312,7 +312,7 @@ Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandl
 Error QtiMapper5Legacy::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 60> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 53> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
