@@ -613,6 +613,13 @@ DisplayError HWDeviceDRM::Init() {
     return kErrorDeviceRemoved;
   }
 
+  use_custom_intf_format_ = use_custom_intf_format_ &&
+                            connector_info_.type == DRM_MODE_CONNECTOR_DisplayPort;
+
+  if (use_custom_intf_format_) {
+    DLOGI("Enabled custom interface format support for DP interface.");
+  }
+
   hw_info_intf_->GetHWResourceInfo(&hw_resource_);
 
   InitializeConfigs();
@@ -626,13 +633,6 @@ DisplayError HWDeviceDRM::Init() {
 
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr(new HWColorManagerDrm());
   hw_color_mgr_ = std::move(hw_color_mgr);
-
-  use_custom_intf_format_ = use_custom_intf_format_ &&
-                            connector_info_.type == DRM_MODE_CONNECTOR_DisplayPort;
-
-  if (use_custom_intf_format_) {
-    DLOGI("Enabled custom interface format support for DP interface.");
-  }
 
   return kErrorNone;
 }
@@ -1192,7 +1192,15 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, int *release_fe
 }
 
 void HWDeviceDRM::SetQOSData(const HWQosData &qos_data) {
-  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_CLK, token_.crtc_id, qos_data.clock_hz);
+  uint32_t core_clock = qos_data.clock_hz;
+  if (use_custom_intf_format_) {
+    float multiplier = static_cast<float>(custom_mixer_attributes_.split_left) /
+                       static_cast<float>(mixer_attributes_.split_left);
+    core_clock *= multiplier;
+    DLOGI_IF(kTagDriverConfig, "Custom core clock value: %d", core_clock);
+  }
+
+  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_CLK, token_.crtc_id, core_clock);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_AB, token_.crtc_id, qos_data.core_ab_bps);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_CORE_IB, token_.crtc_id, qos_data.core_ib_bps);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_LLCC_AB, token_.crtc_id, qos_data.llcc_ab_bps);
@@ -2229,7 +2237,12 @@ void HWDeviceDRM::UpdateMixerAttributes() {
 
   DLOGI("Mixer WxH %dx%d-%d for %s", mixer_attributes_.width, mixer_attributes_.height,
         mixer_attributes_.split_type, device_name_);
-  UpdateCustomMixerAttributes();
+
+  custom_mixer_attributes_ = mixer_attributes_;
+  if (use_custom_intf_format_) {
+    UpdateCustomMixerAttributes();
+  }
+
   update_mode_ = true;
 }
 
