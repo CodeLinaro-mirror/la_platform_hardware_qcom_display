@@ -900,6 +900,37 @@ ScopedAStatus DisplayConfigAIDL::configureCacV2PerEye(int32_t disp_id,
   return ScopedAStatus::ok();
 }
 
+ScopedAStatus DisplayConfigAIDL::configureCacV2ExtPerEye(int32_t disp_id,
+                                                         const CacV2ConfigExt &leftConfig,
+                                                         const CacV2ConfigExt &rightConfig,
+                                                         bool enable) {
+  if (disp_id < 0 || disp_id >= sdm::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  // TODO(user): add support for CAC configuration per eye
+  sdm::CacConfig cac_config = {};
+  cac_config.k0r = leftConfig.redCenterPhaseStep;
+  cac_config.k1r = leftConfig.redSecondOrderPhaseStep;
+  cac_config.k0b = leftConfig.blueCenterPhaseStep;
+  cac_config.k1b = leftConfig.blueSecondOrderPhaseStep;
+  cac_config.pixel_pitch = leftConfig.pixelPitch;
+  cac_config.normalization = leftConfig.normalization;
+  cac_config.mid_le_y_offset = leftConfig.verticalCenter;
+  cac_config.mid_le_x_offset = leftConfig.horizontalCenter;
+  cac_config.mid_re_y_offset = rightConfig.verticalCenter;
+  cac_config.mid_re_x_offset = rightConfig.horizontalCenter;
+
+  auto ret = settings_->PerformCacConfig(disp_id, cac_config, enable);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Failed to configure CAC = %d", __FUNCTION__, enable);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+
 void DisplayConfigAIDL::NotifyQsyncChange(uint64_t display_id, bool qsync_enabled,
                                           uint32_t refresh_rate, uint32_t qsync_refresh_rate) {
   // AIDL callback

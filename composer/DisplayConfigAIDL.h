@@ -212,9 +212,8 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   ScopedAStatus configureCacV2PerEye(int32_t disp_id, const CacV2Config &in_leftConfig,
                                      const CacV2Config &in_rightConfig, bool in_enable) override;
   ScopedAStatus configureCacV2ExtPerEye(int32_t disp_id, const CacV2ConfigExt &in_leftConfig,
-                                        const CacV2ConfigExt &in_rightConfig, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
+                                        const CacV2ConfigExt &in_rightConfig,
+                                        bool in_enable) override;
   ScopedAStatus allowIdleFallback() { return ScopedAStatus::ok(); }
   ScopedAStatus setContentFps(const std::string &in_name, int32_t in_fps) override;
 
