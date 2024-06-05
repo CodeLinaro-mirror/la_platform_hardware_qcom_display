@@ -127,4 +127,28 @@ auto GetStandardMetadata(AIMapper *_Nonnull mapper_, buffer_handle_t _Nonnull bu
   }
   return Value::decode(bytestream.data(), size_required);
 }
+
+template <aidl::android::hardware::graphics::common::StandardMetadataType T>
+AIMapper_Error SetStandardMetadata(AIMapper *_Nonnull mapper_, buffer_handle_t _Nonnull buf_hnd,
+                                   const typename StandardMetadata<T>::value_type &value) {
+  using Value = typename StandardMetadata<T>::value;
+  std::vector<uint8_t> bytestream;
+
+  auto size_required = Value::encode(value, nullptr, 0);
+  if (size_required < 0) {
+    ALOGW_IF(-AIMAPPER_ERROR_UNSUPPORTED != size_required,
+             "%s: Unexpected error %d during size calculation for setMetadata (%d) call",
+             __FUNCTION__, -size_required, static_cast<int64_t>(T));
+    return static_cast<AIMapper_Error>(-size_required);
+  }
+  bytestream.resize(size_required);
+  size_required = Value::encode(value, bytestream.data(), bytestream.size());
+  if (size_required < 0 || (size_t)size_required > bytestream.size()) {
+    ALOGW("setMetadata (%d) failed, calculated size %d with buffer size %zd",
+          static_cast<int64_t>(T), size_required, bytestream.size());
+    return static_cast<AIMapper_Error>(-size_required);
+  }
+  return STABLEMAPPER(mapper_).setStandardMetadata(buf_hnd, static_cast<int64_t>(T),
+                                                   bytestream.data(), size_required);
+}
 }
