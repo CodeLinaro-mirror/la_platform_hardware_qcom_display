@@ -41,6 +41,13 @@ DisplayError ResourceDefault::CreateResourceDefault(const HWResourceInfo &hw_res
                                                     ResourceInterface **resource_intf) {
   DisplayError error = kErrorNone;
 
+  if (!resource_intf) {
+    DLOGE("The input parameter: resource_intf is NULL!");
+    return kErrorParameters;
+  }
+
+  *resource_intf = NULL;
+
   ResourceDefault *resource_default = new ResourceDefault(hw_resource_info);
   if (!resource_default) {
     return kErrorNone;
@@ -49,9 +56,9 @@ DisplayError ResourceDefault::CreateResourceDefault(const HWResourceInfo &hw_res
   error = resource_default->Init();
   if (error != kErrorNone) {
     delete resource_default;
+  } else {
+    *resource_intf = resource_default;
   }
-
-  *resource_intf = resource_default;
 
   return kErrorNone;
 }
