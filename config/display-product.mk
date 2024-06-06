@@ -85,6 +85,12 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_idle_time_video=1 \
     vendor.display.disable_idle_time_hdr=1
 
+# Disable decorator support for LAW
+ifeq ($(TARGET_SUPPORTS_WEAR_ANDROID),true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_get_screen_decorator_support=1
+endif
+
 # Enable offline rotator for Bengal, Monaco, Khaje.
 ifneq ($(filter bengal monaco khaje, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
