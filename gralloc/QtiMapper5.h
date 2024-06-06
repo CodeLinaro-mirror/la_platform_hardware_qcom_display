@@ -205,6 +205,8 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(StandardMetadataType::CTA861_3),
        sizeof(std::optional<GrallocCta861_3>)},
       {static_cast<uint64_t>(QTI_HEAP_NAME), sizeof(std::string)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
+       sizeof(((ColorMetaData *)(0))->dynamicMetaDataPayload)}
   };
 };
 

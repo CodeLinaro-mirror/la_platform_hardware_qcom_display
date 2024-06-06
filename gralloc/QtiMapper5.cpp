@@ -312,7 +312,7 @@ Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandl
 Error QtiMapper5Legacy::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 53> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 54> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -374,6 +374,8 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
       describeQTI(QTI_EARLYNOTIFY_LINECOUNT,
                   "Early notify line count - used by video", true, true),
       describeQTI(QTI_HEAP_NAME, "Heap name", true, false),
+      describeQTI(static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
+                  "Color metadata - Dynamic metadata", true, true),
   };
   *outDescriptionList = sSupportedMetadaTypes.data();
   *outNumberOfDescriptions = sSupportedMetadaTypes.size();
