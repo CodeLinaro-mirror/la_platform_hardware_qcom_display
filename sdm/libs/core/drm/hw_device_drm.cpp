@@ -792,13 +792,7 @@ void HWDeviceDRM::InitializeConfigs() {
 
   display_attributes_.resize(connector_info_.modes.size());
 
-  uint32_t width = connector_info_.modes[current_mode_index_].mode.hdisplay;
-  uint32_t height = connector_info_.modes[current_mode_index_].mode.vdisplay;
   for (uint32_t i = 0; i < connector_info_.modes.size(); i++) {
-    auto &mode = connector_info_.modes[i].mode;
-    if (mode.hdisplay != width || mode.vdisplay != height) {
-      resolution_switch_enabled_ = true;
-    }
     PopulateDisplayAttributes(i);
   }
   SetDisplaySwitchMode(current_mode_index_);
@@ -2449,10 +2443,6 @@ DisplayError HWDeviceDRM::UnsetScaleLutConfig() {
 }
 
 DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
-  if (IsResolutionSwitchEnabled()) {
-    return kErrorNotSupported;
-  }
-
   if (!dest_scaler_blocks_used_) {
     return kErrorNotSupported;
   }
