@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __QTIMAPPEREXTENSIONS_H__
@@ -34,6 +38,7 @@
 #include <hidl/Status.h>
 #include <vendor/qti/hardware/display/mapperextensions/1.3/IQtiMapperExtensions.h>
 
+#include "gr_snap_helper.h"
 #include "gr_buf_mgr.h"
 namespace vendor {
 namespace qti {
@@ -55,6 +60,7 @@ using ::android::hardware::graphics::common::V1_2::PixelFormat;
 using ::android::hidl::base::V1_0::DebugInfo;
 using ::android::hidl::base::V1_0::IBase;
 using gralloc::BufferManager;
+using gralloc::GrallocSnapHelperLegacy;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::Error;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::PlaneLayout;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::YCbCrLayout;
@@ -100,6 +106,7 @@ class QtiMapperExtensions : public IQtiMapperExtensions {
 
  private:
   BufferManager *buf_mgr_ = nullptr;
+  gralloc::GrallocSnapHelperLegacy *snap_helper_ = nullptr;
   bool enable_logs_ = false;
 };
 

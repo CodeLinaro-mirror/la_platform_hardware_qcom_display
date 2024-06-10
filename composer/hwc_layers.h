@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -44,7 +44,7 @@
 #include "hwc_common.h"
 
 using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
-using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
+using APixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace sdm {
 

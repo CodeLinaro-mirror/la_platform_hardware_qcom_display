@@ -25,12 +25,16 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -63,6 +67,8 @@ QtiMapper::QtiMapper() {
   buf_mgr_ = BufferManager::GetInstance();
   enable_logs = property_get_bool(ENABLE_LOGS_PROP, 0);
   ALOGD_IF(enable_logs, "Created QtiMapper instance");
+  snap_helper_ = gralloc::GrallocSnapHelperLegacy::GetInstance();
+  ALOGW("QtiMapper4 is deprecated, please use QtiMapper5!");
 }
 
 bool QtiMapper::ValidDescriptor(const BufferDescriptorInfo_4_0 &bd) {
@@ -78,8 +84,9 @@ bool QtiMapper::ValidDescriptor(const BufferDescriptorInfo_4_0 &bd) {
 
 Error QtiMapper::CreateDescriptor(const BufferDescriptorInfo_4_0 &descriptor_info,
                                   IMapperBufferDescriptor *descriptor) {
-  ALOGD_IF(enable_logs, "BufferDescriptorInfo: name %s wxh: %dx%d usage: 0x%" PRIu64
-                        " format: %d layer_count: %d",
+  ALOGD_IF(enable_logs,
+           "BufferDescriptorInfo: name %s wxh: %dx%d usage: 0x%" PRIu64
+           " format: %d layer_count: %d",
            descriptor_info.name.c_str(), descriptor_info.width, descriptor_info.height,
            descriptor_info.usage, static_cast<uint32_t>(descriptor_info.format),
            descriptor_info.layerCount);
@@ -115,7 +122,6 @@ Return<void> QtiMapper::importBuffer(const hidl_handle &raw_handle, importBuffer
     hidl_cb(Error::BAD_BUFFER, nullptr);
     return Void();
   }
-
   native_handle_t *buffer_handle = native_handle_clone(raw_handle.getNativeHandle());
   if (!buffer_handle) {
     ALOGE("%s: Unable to clone handle", __FUNCTION__);
@@ -123,18 +129,31 @@ Return<void> QtiMapper::importBuffer(const hidl_handle &raw_handle, importBuffer
     return Void();
   }
 
-  auto error =
-      static_cast<IMapper_4_0_Error>(buf_mgr_->RetainBuffer(QTI_HANDLE_CONST(buffer_handle)));
-  if (error != Error::NONE) {
-    ALOGE("%s: Unable to retain handle: %p", __FUNCTION__, buffer_handle);
-    native_handle_close(buffer_handle);
-    native_handle_delete(buffer_handle);
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    int snap_ret = snap_helper_->Import(buffer_handle);
+    if (snap_ret) {
+      ALOGE("%s: Unable to retain handle: %p", __FUNCTION__, buffer_handle);
+      native_handle_close(buffer_handle);
+      native_handle_delete(buffer_handle);
 
-    hidl_cb(error, nullptr);
-    return Void();
+      hidl_cb(static_cast<Error>(snap_ret), nullptr);
+      return Void();
+    }
+  } else {
+    auto error =
+        static_cast<IMapper_4_0_Error>(buf_mgr_->RetainBuffer(QTI_HANDLE_CONST(buffer_handle)));
+    if (error != Error::NONE) {
+      ALOGE("%s: Unable to retain handle: %p", __FUNCTION__, buffer_handle);
+      native_handle_close(buffer_handle);
+      native_handle_delete(buffer_handle);
+
+      hidl_cb(error, nullptr);
+      return Void();
+    }
+    ALOGD_IF(enable_logs, "Imported handle: %p id: %" PRIu64, buffer_handle,
+             QTI_HANDLE_CONST(buffer_handle)->id);
   }
-  ALOGD_IF(enable_logs, "Imported handle: %p id: %" PRIu64, buffer_handle,
-           QTI_HANDLE_CONST(buffer_handle)->id);
+
   hidl_cb(Error::NONE, buffer_handle);
   return Void();
 }
@@ -142,6 +161,15 @@ Return<void> QtiMapper::importBuffer(const hidl_handle &raw_handle, importBuffer
 Return<Error> QtiMapper::freeBuffer(void *buffer) {
   if (!buffer) {
     return Error::BAD_BUFFER;
+  }
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    int ret_val = snap_helper_->Free(static_cast<native_handle_t *>(buffer));
+    if (ret_val != 0) {
+      // TODO: return more detailed error - snap to mapper error map?
+      return Error::BAD_BUFFER;
+    } else {
+      return Error::NONE;
+    }
   }
   return static_cast<IMapper_4_0_Error>(buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buffer)));
 }
@@ -199,23 +227,56 @@ Error QtiMapper::LockBuffer(void *buffer, uint64_t usage, const hidl_handle &acq
 
 Return<void> QtiMapper::lock(void *buffer, uint64_t cpu_usage, const IMapper::Rect &access_region,
                              const hidl_handle &acquire_fence, lock_cb hidl_cb) {
-  auto err = LockBuffer(buffer, cpu_usage, acquire_fence, access_region);
-  if (err != Error::NONE) {
-    hidl_cb(err, nullptr);
-    return Void();
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    int fence_fd;
+    if (!GetFenceFd(acquire_fence, &fence_fd)) {
+      ALOGE("Failed to get fence FD");
+      hidl_cb(Error::BAD_VALUE, nullptr);
+      return Void();
+    }
+    uint64_t snap_base = 0;
+    CropRectangle_t gr_access_region = {.left = access_region.left,
+                                        .top = access_region.top,
+                                        .right = access_region.width,
+                                        .bottom = access_region.height};
+    int ret_val = snap_helper_->Lock(static_cast<native_handle_t *>(buffer), cpu_usage,
+                                     gr_access_region, fence_fd, &snap_base);
+    if (ret_val != 0) {
+      ALOGE("Snap failed to lock buffer");
+      hidl_cb(static_cast<Error>(ret_val), nullptr);
+    } else {
+      ALOGD_IF(enable_logs, "QtiMapper::lock address %lu", snap_base);
+      hidl_cb(Error::NONE, reinterpret_cast<void *>(snap_base));
+    }
+  } else {
+    auto err = LockBuffer(buffer, cpu_usage, acquire_fence, access_region);
+    if (err != Error::NONE) {
+      hidl_cb(err, nullptr);
+      return Void();
+    }
+
+    auto hnd = QTI_HANDLE_CONST(buffer);
+    auto *out_data = reinterpret_cast<void *>(hnd->base);
+
+    hidl_cb(err, out_data);
   }
 
-  auto hnd = QTI_HANDLE_CONST(buffer);
-  auto *out_data = reinterpret_cast<void *>(hnd->base);
-
-  hidl_cb(err, out_data);
   return Void();
 }
 
 Return<void> QtiMapper::unlock(void *buffer, unlock_cb hidl_cb) {
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->UnlockBuffer(QTI_HANDLE_CONST(buffer)));
+    if (snap_helper_->IsSnapAllocEnabled()) {
+      int ret_val = snap_helper_->Unlock(static_cast<native_handle_t *>(buffer), nullptr);
+      if (ret_val != 0) {
+        ALOGE("Snap failed to unlock buffer");
+      } else {
+        err = Error::NONE;
+      }
+    } else {
+      err = static_cast<IMapper_4_0_Error>(buf_mgr_->UnlockBuffer(QTI_HANDLE_CONST(buffer)));
+    }
   }
   // We don't have a release fence
   hidl_cb(err, hidl_handle(nullptr));
@@ -226,24 +287,51 @@ Return<Error> QtiMapper::validateBufferSize(void *buffer,
                                             const BufferDescriptorInfo_4_0 &descriptor_info,
                                             uint32_t /*stride*/) {
   auto err = Error::BAD_BUFFER;
-  auto hnd = static_cast<private_handle_t *>(buffer);
-  if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
-    if (static_cast<IMapper_4_0_Error>(buf_mgr_->IsBufferImported(hnd)) != Error::NONE) {
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    if (!snap_helper_->IsBufferImported(static_cast<native_handle_t *>(buffer))) {
+      ALOGE("Buffer is not imported");
       return Error::BAD_BUFFER;
     }
     auto info = gralloc::BufferInfo(descriptor_info.width, descriptor_info.height,
                                     static_cast<uint32_t>(descriptor_info.format),
                                     static_cast<uint64_t>(descriptor_info.usage));
     info.layer_count = descriptor_info.layerCount;
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->ValidateBufferSize(hnd, info));
+    if (!snap_helper_->ValidateBufferSize(static_cast<native_handle_t *>(buffer), info)) {
+      return Error::NONE;
+    }
+  } else {
+    auto hnd = static_cast<private_handle_t *>(buffer);
+    if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
+      if (static_cast<IMapper_4_0_Error>(buf_mgr_->IsBufferImported(hnd)) != Error::NONE) {
+        return Error::BAD_BUFFER;
+      }
+      auto info = gralloc::BufferInfo(descriptor_info.width, descriptor_info.height,
+                                      static_cast<uint32_t>(descriptor_info.format),
+                                      static_cast<uint64_t>(descriptor_info.usage));
+      info.layer_count = descriptor_info.layerCount;
+      err = static_cast<IMapper_4_0_Error>(buf_mgr_->ValidateBufferSize(hnd, info));
+    }
   }
   return err;
 }
 
 Return<void> QtiMapper::getTransportSize(void *buffer, getTransportSize_cb hidl_cb) {
   auto err = Error::BAD_BUFFER;
-  auto hnd = static_cast<private_handle_t *>(buffer);
   uint32_t num_fds = 0, num_ints = 0;
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    native_handle_t *native_hnd = static_cast<native_handle_t *>(buffer);
+    if (snap_helper_->IsBufferImported(native_hnd)) {
+      num_fds = native_hnd->numFds;
+      num_ints = native_hnd->numInts;
+      err = Error::NONE;
+      hidl_cb(err, num_fds, num_ints);
+      return Void();
+    }
+    hidl_cb(err, num_fds, num_ints);
+    return Void();
+  }
+
+  auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     if (static_cast<IMapper_4_0_Error>(buf_mgr_->IsBufferImported(hnd)) != Error::NONE) {
       hidl_cb(err, num_fds, num_ints);
@@ -263,26 +351,43 @@ Return<void> QtiMapper::getTransportSize(void *buffer, getTransportSize_cb hidl_
 Return<void> QtiMapper::get(void *buffer, const MetadataType &metadataType, get_cb hidl_cb) {
   auto err = Error::BAD_BUFFER;
   hidl_vec<uint8_t> metadata;
+
   if (buffer != nullptr) {
     if (metadataType.name != GRALLOC4_STANDARD_METADATA_TYPE &&
         metadataType.name != qtigralloc::VENDOR_QTI) {
       hidl_cb(Error::UNSUPPORTED, metadata);
       return Void();
     }
-    auto hnd = static_cast<private_handle_t *>(buffer);
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->GetMetadata(hnd, metadataType.value, &metadata));
+    if (snap_helper_->IsSnapAllocEnabled()) {
+      err = static_cast<IMapper_4_0_Error>(snap_helper_->GetMetadata(
+          static_cast<native_handle_t *>(buffer), metadataType.value, &metadata, true, false));
+    } else {
+      auto hnd = static_cast<private_handle_t *>(buffer);
+      err =
+          static_cast<IMapper_4_0_Error>(buf_mgr_->GetMetadata(hnd, metadataType.value, &metadata));
+    }
   }
+
   hidl_cb(err, metadata);
   return Void();
 }
 
 Return<Error> QtiMapper::set(void *buffer, const MetadataType &metadataType,
                              const hidl_vec<uint8_t> &metadata) {
+  ALOGD_IF(enable_logs, "%s - metadata type %lu", __FUNCTION__, metadataType.value);
+
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
-    auto hnd = static_cast<private_handle_t *>(buffer);
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->SetMetadata(hnd, metadataType.value, metadata));
+    if (snap_helper_->IsSnapAllocEnabled()) {
+      err = static_cast<IMapper_4_0_Error>(snap_helper_->SetMetadata(
+          static_cast<native_handle_t *>(buffer), metadataType.value, metadata));
+    } else {
+      auto hnd = static_cast<private_handle_t *>(buffer);
+      err =
+          static_cast<IMapper_4_0_Error>(buf_mgr_->SetMetadata(hnd, metadataType.value, metadata));
+    }
   }
+  ALOGD_IF(enable_logs, "set status %d", err);
   return err;
 }
 
@@ -291,86 +396,103 @@ Return<void> QtiMapper::getFromBufferDescriptorInfo(const BufferDescriptorInfo &
                                                     getFromBufferDescriptorInfo_cb hidl_cb) {
   hidl_vec<uint8_t> out;
   auto err = Error::UNSUPPORTED;
-  switch (metadataType.value) {
-    case static_cast<int64_t>(StandardMetadataType::NAME):
-      err = static_cast<IMapper_4_0_Error>(android::gralloc4::encodeName(description.name, &out));
-      break;
-    case static_cast<int64_t>(StandardMetadataType::WIDTH):
-      err = static_cast<IMapper_4_0_Error>(android::gralloc4::encodeWidth(description.width, &out));
-      break;
-    case static_cast<int64_t>(StandardMetadataType::HEIGHT):
-      err =
-          static_cast<IMapper_4_0_Error>(android::gralloc4::encodeHeight(description.height, &out));
-      break;
-    case static_cast<int64_t>(StandardMetadataType::ALLOCATION_SIZE): {
-      uint32_t aligned_width = 0, aligned_height = 0, buffer_size = 0;
-      gralloc::BufferInfo info(
-          static_cast<int>(description.width), static_cast<int>(description.height),
-          static_cast<int>(description.format), static_cast<uint64_t>(description.usage));
-      if (gralloc::GetBufferSizeAndDimensions(info, &buffer_size, &aligned_width,
-                                              &aligned_height) == 0) {
-        err = static_cast<IMapper_4_0_Error>(
-            android::gralloc4::encodeAllocationSize(buffer_size, &out));
-      }
-      break;
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    gralloc::BufferDescriptor buf_desc;
+    buf_desc.SetName(static_cast<std::string>(description.name));
+    buf_desc.SetColorFormat(static_cast<int>(description.format));
+    buf_desc.SetDimensions(description.width, description.height);
+    buf_desc.SetLayerCount(description.layerCount);
+    buf_desc.SetReservedSize(description.reservedSize);
+    buf_desc.SetUsage(description.usage);
+    if (!snap_helper_->GetFromBufferDescriptor(buf_desc, metadataType.value, &out, true)) {
+      err = Error::NONE;
+    } else {
+      err = Error::UNSUPPORTED;
     }
-    case static_cast<int64_t>(StandardMetadataType::LAYER_COUNT):
-      err = static_cast<IMapper_4_0_Error>(
-          android::gralloc4::encodeLayerCount(description.layerCount, &out));
-      break;
-    case static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_REQUESTED):
-      err = static_cast<IMapper_4_0_Error>(
-          android::gralloc4::encodePixelFormatRequested(description.format, &out));
-      break;
-    case static_cast<int64_t>(StandardMetadataType::USAGE):
-      err = static_cast<IMapper_4_0_Error>(android::gralloc4::encodeUsage(description.usage, &out));
-      break;
-    case static_cast<int64_t>(StandardMetadataType::COMPRESSION): {
-      int format =
-          gralloc::GetImplDefinedFormat(description.usage, static_cast<int>(description.format));
-      if (gralloc::IsUBwcEnabled(format, description.usage)) {
+  } else {
+    switch (metadataType.value) {
+      case static_cast<int64_t>(StandardMetadataType::NAME):
+        err = static_cast<IMapper_4_0_Error>(android::gralloc4::encodeName(description.name, &out));
+        break;
+      case static_cast<int64_t>(StandardMetadataType::WIDTH):
+        err =
+            static_cast<IMapper_4_0_Error>(android::gralloc4::encodeWidth(description.width, &out));
+        break;
+      case static_cast<int64_t>(StandardMetadataType::HEIGHT):
         err = static_cast<IMapper_4_0_Error>(
-            android::gralloc4::encodeCompression(qtigralloc::Compression_QtiUBWC, &out));
-      } else {
-        err = static_cast<IMapper_4_0_Error>(
-            android::gralloc4::encodeCompression(android::gralloc4::Compression_None, &out));
+            android::gralloc4::encodeHeight(description.height, &out));
+        break;
+      case static_cast<int64_t>(StandardMetadataType::ALLOCATION_SIZE): {
+        uint32_t aligned_width = 0, aligned_height = 0, buffer_size = 0;
+        gralloc::BufferInfo info(
+            static_cast<int>(description.width), static_cast<int>(description.height),
+            static_cast<int>(description.format), static_cast<uint64_t>(description.usage));
+        if (gralloc::GetBufferSizeAndDimensions(info, &buffer_size, &aligned_width,
+                                                &aligned_height) == 0) {
+          err = static_cast<IMapper_4_0_Error>(
+              android::gralloc4::encodeAllocationSize(buffer_size, &out));
+        }
+        break;
       }
-      break;
+      case static_cast<int64_t>(StandardMetadataType::LAYER_COUNT):
+        err = static_cast<IMapper_4_0_Error>(
+            android::gralloc4::encodeLayerCount(description.layerCount, &out));
+        break;
+      case static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_REQUESTED):
+        err = static_cast<IMapper_4_0_Error>(
+            android::gralloc4::encodePixelFormatRequested(description.format, &out));
+        break;
+      case static_cast<int64_t>(StandardMetadataType::USAGE):
+        err =
+            static_cast<IMapper_4_0_Error>(android::gralloc4::encodeUsage(description.usage, &out));
+        break;
+      case static_cast<int64_t>(StandardMetadataType::COMPRESSION): {
+        int format =
+            gralloc::GetImplDefinedFormat(description.usage, static_cast<int>(description.format));
+        if (gralloc::IsUBwcEnabled(format, description.usage)) {
+          err = static_cast<IMapper_4_0_Error>(
+              android::gralloc4::encodeCompression(qtigralloc::Compression_QtiUBWC, &out));
+        } else {
+          err = static_cast<IMapper_4_0_Error>(
+              android::gralloc4::encodeCompression(android::gralloc4::Compression_None, &out));
+        }
+        break;
+      }
+      case static_cast<int64_t>(StandardMetadataType::PROTECTED_CONTENT): {
+        uint64_t protected_content = 0;
+        if (description.usage & GRALLOC_USAGE_PROTECTED &&
+            !(description.usage & GRALLOC_USAGE_SW_READ_MASK) &&
+            !(description.usage & GRALLOC_USAGE_SW_WRITE_MASK)) {
+          protected_content = 1;
+        }
+        err = static_cast<IMapper_4_0_Error>(
+            android::gralloc4::encodeProtectedContent(protected_content, &out));
+        break;
+      }
+      case static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_FOURCC):
+      case static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_MODIFIER): {
+        int format =
+            gralloc::GetImplDefinedFormat(description.usage, static_cast<int>(description.format));
+        uint32_t drm_format = 0;
+        uint64_t drm_format_modifier = 0;
+        if (gralloc::IsUBwcEnabled(format, description.usage)) {
+          gralloc::GetDRMFormat(format, qtigralloc::PRIV_FLAGS_UBWC_ALIGNED, &drm_format,
+                                &drm_format_modifier);
+        } else {
+          gralloc::GetDRMFormat(format, 0, &drm_format, &drm_format_modifier);
+        }
+        if (metadataType.value == static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_FOURCC)) {
+          err = static_cast<IMapper_4_0_Error>(
+              android::gralloc4::encodePixelFormatFourCC(drm_format, &out));
+        } else {
+          err = static_cast<IMapper_4_0_Error>(
+              android::gralloc4::encodePixelFormatModifier(drm_format_modifier, &out));
+        }
+        break;
+      }
+      default:
+        break;
     }
-    case static_cast<int64_t>(StandardMetadataType::PROTECTED_CONTENT): {
-      uint64_t protected_content = 0;
-      if (description.usage & GRALLOC_USAGE_PROTECTED &&
-          !(description.usage & GRALLOC_USAGE_SW_READ_MASK) &&
-          !(description.usage & GRALLOC_USAGE_SW_WRITE_MASK)) {
-        protected_content = 1;
-      }
-      err = static_cast<IMapper_4_0_Error>(
-          android::gralloc4::encodeProtectedContent(protected_content, &out));
-      break;
-    }
-    case static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_FOURCC):
-    case static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_MODIFIER): {
-      int format =
-          gralloc::GetImplDefinedFormat(description.usage, static_cast<int>(description.format));
-      uint32_t drm_format = 0;
-      uint64_t drm_format_modifier = 0;
-      if (gralloc::IsUBwcEnabled(format, description.usage)) {
-        gralloc::GetDRMFormat(format, qtigralloc::PRIV_FLAGS_UBWC_ALIGNED, &drm_format,
-                              &drm_format_modifier);
-      } else {
-        gralloc::GetDRMFormat(format, 0, &drm_format, &drm_format_modifier);
-      }
-      if (metadataType.value == static_cast<int64_t>(StandardMetadataType::PIXEL_FORMAT_FOURCC)) {
-        err = static_cast<IMapper_4_0_Error>(
-            android::gralloc4::encodePixelFormatFourCC(drm_format, &out));
-      } else {
-        err = static_cast<IMapper_4_0_Error>(
-            android::gralloc4::encodePixelFormatModifier(drm_format_modifier, &out));
-      }
-      break;
-    }
-    default:
-      break;
   }
 
   hidl_cb(err, out);
@@ -379,7 +501,13 @@ Return<void> QtiMapper::getFromBufferDescriptorInfo(const BufferDescriptorInfo &
 Return<void> QtiMapper::flushLockedBuffer(void *buffer, flushLockedBuffer_cb hidl_cb) {
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->FlushBuffer(QTI_HANDLE_CONST(buffer)));
+    if (snap_helper_->IsSnapAllocEnabled()) {
+      if (!snap_helper_->FlushLockedBuffer(static_cast<native_handle_t *>(buffer))) {
+        err = Error::NONE;
+      }
+    } else {
+      err = static_cast<IMapper_4_0_Error>(buf_mgr_->FlushBuffer(QTI_HANDLE_CONST(buffer)));
+    }
   }
   // We don't have a release fence
   hidl_cb(err, hidl_handle(nullptr));
@@ -389,21 +517,32 @@ Return<void> QtiMapper::flushLockedBuffer(void *buffer, flushLockedBuffer_cb hid
 Return<Error> QtiMapper::rereadLockedBuffer(void *buffer) {
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
-    err = static_cast<IMapper_4_0_Error>(buf_mgr_->RereadBuffer(QTI_HANDLE_CONST(buffer)));
+    if (snap_helper_->IsSnapAllocEnabled()) {
+      if (!snap_helper_->RereadLockedBuffer(static_cast<native_handle_t *>(buffer))) {
+        err = Error::NONE;
+      }
+    } else {
+      err = static_cast<IMapper_4_0_Error>(buf_mgr_->RereadBuffer(QTI_HANDLE_CONST(buffer)));
+    }
   }
   return err;
 }
 
 Return<void> QtiMapper::getReservedRegion(void *buffer, getReservedRegion_cb hidl_cb) {
-  auto hnd = static_cast<private_handle_t *>(buffer);
   void *reserved_region = nullptr;
+  auto err = Error::BAD_BUFFER;
   uint64_t reserved_size = 0;
-  if (static_cast<IMapper_4_0_Error>(buf_mgr_->IsBufferImported(hnd)) != Error::NONE) {
-    hidl_cb(Error::BAD_BUFFER, reserved_region, reserved_size);
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    err = static_cast<IMapper_4_0_Error>(snap_helper_->GetReservedRegion(
+        static_cast<native_handle_t *>(buffer), &reserved_region, &reserved_size));
+  } else {
+    auto hnd = static_cast<private_handle_t *>(buffer);
+    if (static_cast<IMapper_4_0_Error>(buf_mgr_->IsBufferImported(hnd)) != Error::NONE) {
+      hidl_cb(Error::BAD_BUFFER, reserved_region, reserved_size);
+    }
+    err = static_cast<IMapper_4_0_Error>(
+        buf_mgr_->GetReservedRegion(hnd, &reserved_region, &reserved_size));
   }
-  auto err = static_cast<IMapper_4_0_Error>(
-      buf_mgr_->GetReservedRegion(hnd, &reserved_region, &reserved_size));
-
   hidl_cb(err, reserved_region, reserved_size);
   return Void();
 }
@@ -425,6 +564,23 @@ Error QtiMapper::DumpBufferMetadata(const private_handle_t *buffer, BufferDump *
 }
 Return<void> QtiMapper::dumpBuffer(void *buffer, dumpBuffer_cb hidl_cb) {
   BufferDump buffer_dump;
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    buffer_dump.metadataDump.resize(metadata_type_descriptions_.size());
+    for (int i = 0; i < static_cast<int>(metadata_type_descriptions_.size()); i++) {
+      auto type = metadata_type_descriptions_[i].metadataType;
+      hidl_vec<uint8_t> metadata;
+      if (snap_helper_->GetMetadata(static_cast<native_handle_t *>(buffer), type.value, &metadata,
+                                    true, false)) {
+        // If buffer is deleted during metadata dump, return BAD_BUFFER
+        hidl_cb(Error::BAD_BUFFER, buffer_dump);
+        return Void();
+      }
+      MetadataDump metadata_dump = {type, metadata};
+      buffer_dump.metadataDump[i] = metadata_dump;
+    }
+    hidl_cb(Error::NONE, buffer_dump);
+    return Void();
+  }
   auto hnd = QTI_HANDLE_CONST(buffer);
   if (buffer != nullptr) {
     if (DumpBufferMetadata(hnd, &buffer_dump) == Error::NONE) {
@@ -437,6 +593,11 @@ Return<void> QtiMapper::dumpBuffer(void *buffer, dumpBuffer_cb hidl_cb) {
 }
 Return<void> QtiMapper::dumpBuffers(dumpBuffers_cb hidl_cb) {
   hidl_vec<BufferDump> buffers_dump;
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    ALOGD_IF(enable_logs, "dumpBuffers not implemented for Snapalloc");
+    hidl_cb(Error::UNSUPPORTED, buffers_dump);
+    return Void();
+  }
   std::vector<const private_handle_t *> handle_list;
   if (static_cast<IMapper_4_0_Error>(buf_mgr_->GetAllHandles(&handle_list)) != Error::NONE) {
     hidl_cb(Error::NO_RESOURCES, buffers_dump);
@@ -475,11 +636,22 @@ Return<void> QtiMapper::isSupported(const BufferDescriptorInfo_4_0 &descriptor_i
   }
 
   buffer_handle_t buffer;
-  err = static_cast<IMapper_4_0_Error>(buf_mgr_->AllocateBuffer(desc, &buffer, 0, true));
-  if (err != Error::NONE) {
-    hidl_cb(err, false);
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    bool supported;
+    int snap_ret = snap_helper_->IsSupported(desc, &supported);
+    if (supported) {
+      hidl_cb(Error::NONE, true);
+    } else {
+      ALOGE("Descriptor is not supported format %d usage %lu", desc.GetFormat(), desc.GetUsage());
+      hidl_cb(Error::NONE, false);
+    }
   } else {
-    hidl_cb(err, true);
+    err = static_cast<IMapper_4_0_Error>(buf_mgr_->AllocateBuffer(desc, &buffer, 0, true));
+    if (err != Error::NONE) {
+      hidl_cb(err, false);
+    } else {
+      hidl_cb(err, true);
+    }
   }
 
   return Void();
