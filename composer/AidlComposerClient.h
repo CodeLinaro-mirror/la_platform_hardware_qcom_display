@@ -167,12 +167,12 @@ class AidlComposerClient : public BnComposerClient,
  public:
   AidlComposerClient(){};
   virtual ~AidlComposerClient();
-  bool init(SDMDisplayCapsIntf *caps,
-            SDMDisplaySettingsIntf *settings,
-            SDMDisplayLifeCycleIntf *lifecycle,
-            SDMDisplayDrawCycleIntf *drawcycle,
-            SDMDisplayLayerBuilderIntf *layers,
-            SDMDisplaySideBandIntf *sideband);
+  bool init(std::shared_ptr<SDMDisplayCapsIntf> caps,
+            std::shared_ptr<SDMDisplaySettingsIntf> settings,
+            std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
+            std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+            std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
+            std::shared_ptr<SDMDisplaySideBandIntf> sideband);
 
   // SDM compositor callback overrides
   void OnHotplug(uint64_t in_display, bool in_connected) override;
@@ -427,12 +427,12 @@ class AidlComposerClient : public BnComposerClient,
     }
   };
 
-  SDMDisplayCapsIntf *caps_ = nullptr;
-  SDMDisplaySettingsIntf *settings_ = nullptr;
-  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
-  SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
-  SDMDisplayLayerBuilderIntf *layer_builder_ = nullptr;
-  SDMDisplaySideBandIntf *sideband_ = nullptr;
+  std::shared_ptr<SDMDisplayCapsIntf> caps_;
+  std::shared_ptr<SDMDisplaySettingsIntf> settings_;
+  std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayLayerBuilderIntf> layer_builder_;
+  std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
 
   QServiceBackend *qservice_ = nullptr;
 

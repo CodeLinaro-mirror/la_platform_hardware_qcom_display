@@ -1972,7 +1972,7 @@ SnapError GrallocSnapHelper::ColorMetadataHelper(SnapHandle *hnd, uint32_t aidl_
       color_metadata.contentLightLevel.maxContentLightLevel =
           static_cast<uint32_t>(snap_content_light_level.maxContentLightLevel);
       color_metadata.contentLightLevel.minPicAverageLightLevel =
-          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel * 10000.0f);
+          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel);
     }
 
     SnapDynamicMetadata snap_dynamic_metadata;
@@ -4853,6 +4853,12 @@ SnapError GrallocSnapHelperLegacy::VendorMetadataStatusHelper(
         int snap_type = metadata_type_map[legacy_type];
         vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] =
             vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+      } else if (deprecated_metadata_type_map.find(legacy_type) !=
+            deprecated_metadata_type_map.end()){
+        for (auto snap_type : deprecated_metadata_type_map[legacy_type]) {
+          vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] |=
+            vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+        }
       }
     }
 
@@ -5963,7 +5969,7 @@ SnapError GrallocSnapHelperLegacy::ColorMetadataHelper(SnapHandle *hnd, bool hid
       color_metadata.contentLightLevel.maxContentLightLevel =
           static_cast<uint32_t>(snap_content_light_level.maxContentLightLevel);
       color_metadata.contentLightLevel.minPicAverageLightLevel =
-          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel * 10000.0f);
+          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel);
     }
 
     SnapDynamicMetadata snap_dynamic_metadata;

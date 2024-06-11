@@ -71,12 +71,12 @@ class AidlComposer : public BnComposer {
   bool mClientAlive GUARDED_BY(mClientMutex) = false;
   std::condition_variable mClientDestroyedCondition;
 
-  SDMDisplayCapsIntf *caps_ = nullptr;
-  SDMDisplaySettingsIntf *settings_ = nullptr;
-  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
-  SDMDisplayDrawCycleIntf *drawcycle_ = nullptr;
-  SDMDisplayLayerBuilderIntf *layers_ = nullptr;
-  SDMDisplaySideBandIntf *sideband_ = nullptr;
+  std::shared_ptr<SDMDisplayCapsIntf> caps_;
+  std::shared_ptr<SDMDisplaySettingsIntf> settings_;
+  std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayLayerBuilderIntf> layers_;
+  std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
 
   HWCSocketHandler socket_handler_;
   HWCBufferAllocator buffer_allocator_{};

@@ -49,7 +49,7 @@ class QtiComposer3Client : public BnQtiComposer3Client {
 
  private:
   std::weak_ptr<AidlComposerClient> composer_client_;
-  SDMDisplayLifeCycleIntf *lifecycle_ = nullptr;
+  std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
 };
 
 }  // namespace composer3
