@@ -19,7 +19,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -188,7 +188,7 @@ int HWCSession::Init() {
   // Start QService and connect to it.
   qService::QService::init();
   android::sp<qService::IQService> iqservice = android::interface_cast<qService::IQService>(
-      android::defaultServiceManager()->getService(android::String16(qservice_name)));
+      android::defaultServiceManager()->checkService(android::String16(qservice_name)));
   if (iqservice.get()) {
     iqservice->connect(android::sp<qClient::IQClient>(this));
     qservice_ = reinterpret_cast<qService::QService *>(iqservice.get());
@@ -214,6 +214,11 @@ int HWCSession::Init() {
     disable_virtual_display_ = (value == 1);
   }
   DLOGI("DISABLE_VIRTUAL_DISPLAY: %d", disable_virtual_display_);
+
+  value = 0;
+  Debug::Get()->GetProperty(DISABLE_GET_SCREEN_DECORATOR_SUPPORT, &value);
+  disable_get_screen_decorator_support_ = (value == 1);
+  DLOGI("disable_get_screen_decorator_support: %d", disable_get_screen_decorator_support_);
 
   status = InitSupportedDisplaySlots();
   if (status) {
@@ -427,13 +432,14 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   if (Debug::Get()->GetProperty(DISABLE_SKIP_VALIDATE_PROP, &value) == kErrorNone) {
     disable_skip_validate = (value == 1);
   }
-  uint32_t count = 1 + (disable_skip_validate ? 0 : 1);
+  uint32_t count = 2 + (disable_skip_validate ? 0 : 1);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
     outCapabilities[0] = INT32(Capability::SKIP_CLIENT_COLOR_TRANSFORM);
     if (!disable_skip_validate) {
-      outCapabilities[1] = INT32(Capability::SKIP_VALIDATE);
+      outCapabilities[1] = INT32(Capability::INVALID);
     }
+    outCapabilities[2] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
   }
   *outCount = count;
 }
@@ -671,6 +677,13 @@ HWC3::Error HWCSession::GetDisplayConfigs(Display display, uint32_t *out_num_con
   return CallDisplayFunction(display, &HWCDisplay::GetDisplayConfigs, out_num_configs,
                              out_configs);
 }
+
+#ifdef ENABLE_COMPOSER3_V3
+HWC3::Error HWCSession::GetDisplayConfigurations(Display display,
+                                                 std::vector<DisplayConfiguration> *out_configs) {
+  return CallDisplayFunction(display, &HWCDisplay::GetDisplayConfigurations, out_configs);
+}
+#endif
 
 HWC3::Error HWCSession::GetDisplayName(Display display, uint32_t *out_size, char *out_name) {
   return CallDisplayFunction(display, &HWCDisplay::GetDisplayName, out_size, out_name);
@@ -995,6 +1008,13 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
     return HWC3::Error::BadDisplay;
   }
 
+  // ON_SUSPEND (wearables mode) isn't supported by hardware.
+  // VTS groups both suspend modes for  testing purposes
+  // Return as un-supported to handle VTS failure.
+  if (int_mode == INT32(PowerMode::ON_SUSPEND)) {
+     return HWC3::Error::Unsupported;
+  }
+
   //  validate device and also avoid undefined behavior in cast to PowerMode
   if (int_mode < INT32(PowerMode::OFF) || int_mode > INT32(PowerMode::ON_SUSPEND)) {
     return HWC3::Error::BadParameter;
@@ -1047,7 +1067,6 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
     // Reset the pending refresh bit
     pending_refresh_.reset(UINT32(display));
   }
-
   return HWC3::Error::None;
 }
 
@@ -3336,6 +3355,9 @@ HWC3::Error HWCSession::GetOverlaySupport(OverlayProperties *supported_props) {
 
 HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
                                                     AlphaInterpretation *alpha) {
+  if (disable_get_screen_decorator_support_) {
+    return HWC3::Error::Unsupported;
+  }
   return CallDisplayFunction(display, &HWCDisplay::getDisplayDecorationSupport, format, alpha);
 }
 

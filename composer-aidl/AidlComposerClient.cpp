@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -276,6 +276,22 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
   auto error = hwc_session_->GetDisplayAttribute(in_display, in_config, in_attribute, aidl_return);
   return TO_BINDER_STATUS(INT32(error));
 }
+
+#ifdef ENABLE_COMPOSER3_V3
+ScopedAStatus AidlComposerClient::getDisplayConfigurations(
+    int64_t in_display, int32_t maxFrameIntervalNs,
+    std::vector<DisplayConfiguration> *out_configs) {
+  auto error = hwc_session_->GetDisplayConfigurations(in_display, out_configs);
+  return TO_BINDER_STATUS(INT32(error));
+}
+
+ScopedAStatus AidlComposerClient::notifyExpectedPresent(
+    int64_t displayId, const ClockMonotonicTimestamp &expectedPresentTime,
+    int32_t frameIntervalNs) {
+  Error error = Error::Unsupported;
+  return TO_BINDER_STATUS(INT32(error));
+}
+#endif
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
@@ -1291,7 +1307,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerPerFrameMetadataBlobs(
 
 void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
     int64_t display, int64_t layer, const LayerBrightness &brightness) {
-  //writeError(__FUNCTION__, Error::Unsupported);
+  if (std::isnan(brightness.brightness) || brightness.brightness < 0.0f || brightness.brightness > 1.0f) {
+    writeError(__FUNCTION__, Error::BadParameter);
+  }
 }
 
 void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(

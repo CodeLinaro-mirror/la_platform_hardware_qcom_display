@@ -112,14 +112,16 @@ int DRMMaster::Init(uint32_t card) {
   if (card == 0) {
     dev_fd_ = drmOpen("msm_drm", nullptr);
   } else {
+    char path_tmp[CARD_PATH_SIZE];
     drmVersionPtr ver;
     int fd;
     bool first_match = false;
     int i;
 
+    /* TODO: Revisit this loop for more than two DPUs*/
     for (i = 0; i < 16; i++) {
-      snprintf(path_, sizeof(path_), "/dev/dri/card%d", i);
-      fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+      snprintf(path_tmp, sizeof(path_tmp), "/dev/dri/card%d", i);
+      fd = open(path_tmp, O_RDWR | O_CLOEXEC, 0);
       if (fd < 0) {
         continue;
       }
@@ -135,12 +137,18 @@ int DRMMaster::Init(uint32_t card) {
           } else {
             dev_fd_ = fd;
             card_ = card;
+            snprintf(path_, sizeof(path_), "%s", path_tmp);
           }
            /* Revisit the exit logic for more than 2 DPUs*/
           if (first_match)
+	  {
+            close(fd);
             continue;
+          }
           else
+          {
             break;
+          }
         }
       }
 
