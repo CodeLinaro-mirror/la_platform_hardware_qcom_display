@@ -435,19 +435,21 @@ int HWCSession::Open(const hw_module_t *module, const char *name, hw_device_t **
   }
 
   if (!strcmp(name, HWC_HARDWARE_COMPOSER)) {
-    HWCSession *hwc_session = new HWCSession(module);
+    auto hwc_session = android::sp<HWCSession>::make(module);
     if (!hwc_session) {
       return -ENOMEM;
     }
 
     int status = hwc_session->Init();
     if (status != 0) {
-      delete hwc_session;
-      hwc_session = NULL;
       return status;
     }
 
-    hwc2_device_t *composer_device = hwc_session;
+    // increase reference count before convert SP to raw pointer
+    hwc_session->incStrong(hwc_session.get());
+    // convert hwc_session to raw pointer
+    hwc2_device_t *composer_device = hwc_session.get();
+
     *device = reinterpret_cast<hw_device_t *>(composer_device);
   }
 
@@ -463,6 +465,8 @@ int HWCSession::Close(hw_device_t *device) {
   HWCSession *hwc_session = static_cast<HWCSession *>(composer_device);
 
   hwc_session->Deinit();
+  // decrease the reference count for the raw pointer
+  hwc_session->decStrong(hwc_session);
 
   return 0;
 }
