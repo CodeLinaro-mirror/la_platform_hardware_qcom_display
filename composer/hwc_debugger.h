@@ -30,13 +30,15 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __HWC_DEBUGGER_H__
 #define __HWC_DEBUGGER_H__
-
+#ifdef ATRACE_TAG
+#undef ATRACE_TAG
+#endif
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 
 #include <core/sdm_types.h>

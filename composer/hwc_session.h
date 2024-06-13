@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -70,11 +70,11 @@ using ::android::hardware::hidl_string;
 using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
-namespace composer_V3 = aidl::android::hardware::graphics::composer3;
-using HwcDisplayCapability = composer_V3::DisplayCapability;
-using HwcDisplayConnectionType = composer_V3::DisplayConnectionType;
-using DisplayConfiguration = composer_V3::DisplayConfiguration;
-using HwcClientTargetProperty = composer_V3::ClientTargetProperty;
+namespace composer3 = aidl::android::hardware::graphics::composer3;
+using DisplayConfiguration = composer3::DisplayConfiguration;
+using HwcDisplayCapability = composer3::DisplayCapability;
+using HwcDisplayConnectionType = composer3::DisplayConnectionType;
+using HwcClientTargetProperty = composer3::ClientTargetProperty;
 using ::aidl::vendor::qti::hardware::display::config::Attributes;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
@@ -88,7 +88,7 @@ class DisplayConfigAIDL;
 
 namespace sdm {
 
-using composer_V3::IComposerClient;
+using composer3::IComposerClient;
 
 int32_t GetDataspaceFromColorMode(ColorMode mode);
 
@@ -224,7 +224,7 @@ class HWCSession : public HWCUEvent,
   HWC3::Error SetColorModeWithRenderIntent(Display display, int32_t /*ColorMode*/ int_mode,
                                            int32_t /*RenderIntent*/ int_render_intent);
   HWC3::Error SetColorTransform(Display display, const std::vector<float> &matrix);
-  HWC3::Error getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
+  HWC3::Error getDisplayDecorationSupport(Display display, APixelFormat *format,
                                           AlphaInterpretation *alpha);
   HWC3::Error GetReadbackBufferAttributes(Display display, int32_t *format, int32_t *dataspace);
   HWC3::Error SetReadbackBuffer(Display display, const native_handle_t *buffer,
@@ -352,6 +352,7 @@ class HWCSession : public HWCUEvent,
                               uint32_t *out_num_requests, bool *needs_commit);
   HWC3::Error TryDrawMethod(Display display, DrawMethod drawMethod);
   HWC3::Error SetExpectedPresentTime(Display display, uint64_t expectedPresentTime);
+  HWC3::Error GetOverlaySupport(OverlayProperties *supported_props);
 
   static Locker locker_[HWCCallbacks::kNumDisplays];
   static Locker power_state_[HWCCallbacks::kNumDisplays];

@@ -848,7 +848,7 @@ HWC3::Error HWCSession::GetReleaseFences(Display display, uint32_t *out_num_elem
                              out_fences);
 }
 
-HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
+HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, APixelFormat *format,
                                                     AlphaInterpretation *alpha) {
   if (disable_get_screen_decorator_support_) {
     return HWC3::Error::Unsupported;
@@ -4675,6 +4675,37 @@ HWC3::Error HWCSession::SetExpectedPresentTime(Display display, uint64_t expecte
   }
 
   hwc_display_[display]->SetExpectedPresentTime(expectedPresentTime);
+
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCSession::GetOverlaySupport(OverlayProperties *supported_props) {
+  // All individually supported properties by hardware
+  static std::vector<APixelFormat> pixel_formats{
+      APixelFormat::RGBA_8888,    APixelFormat::RGBX_8888,    APixelFormat::RGB_888,
+      APixelFormat::RGB_565,      APixelFormat::BGRA_8888,    APixelFormat::YV12,
+      APixelFormat::YCRCB_420_SP, APixelFormat::RGBA_1010102, APixelFormat::RGBA_FP16};
+  static std::vector<Dataspace> dataspace_standards{
+      Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
+      Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
+  static std::vector<Dataspace> dataspace_transfers{
+      Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2, Dataspace::TRANSFER_SMPTE_170M,
+      Dataspace::TRANSFER_LINEAR};
+  static std::vector<Dataspace> dataspace_ranges{Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
+                                                 Dataspace::RANGE_EXTENDED};
+  static bool mixed_colorspaces_support = true;
+
+  OverlayProperties::SupportedBufferCombinations supported_combination;
+
+  // Combination 1 - All support pixel formats work for all supported colorspaces
+  // Since all pixel formats work for all colorspaces only 1 entry is required
+  supported_combination.pixelFormats = std::move(pixel_formats);
+  supported_combination.standards = std::move(dataspace_standards);
+  supported_combination.transfers = std::move(dataspace_transfers);
+  supported_combination.ranges = std::move(dataspace_ranges);
+
+  supported_props->combinations.emplace_back(supported_combination);
+  supported_props->supportMixedColorSpaces = mixed_colorspaces_support;
 
   return HWC3::Error::None;
 }

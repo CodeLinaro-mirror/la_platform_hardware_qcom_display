@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -29,6 +29,11 @@
 #include "AidlComposerHandleImporter.h"
 #include <cutils/properties.h>
 #include "display_properties.h"
+#include "QtiMapper5.h"
+#include "gr_snap_helper.h"
+#include "mapper_utils.h"
+
+using mapper::GetMapperInstance;
 
 namespace aidl {
 namespace vendor {
@@ -36,8 +41,6 @@ namespace qti {
 namespace hardware {
 namespace display {
 namespace composer3 {
-
-using android::hardware::graphics::mapper::V4_0::Error;
 
 ComposerHandleImporter::ComposerHandleImporter() : mInitialized(false) {}
 
@@ -47,9 +50,9 @@ void ComposerHandleImporter::initialize() {
     return;
   }
 
-  mMapper = IMapper::getService();
+  mMapper = GetMapperInstance();
   if (mMapper == nullptr) {
-    ALOGE("%s: cannnot acccess graphics mapper HAL!", __FUNCTION__);
+    ALOGE("%s: cannnot access QtiMapper5!", __FUNCTION__);
     return;
   }
 
@@ -62,7 +65,7 @@ void ComposerHandleImporter::initialize() {
 }
 
 void ComposerHandleImporter::cleanup() {
-  mMapper.clear();
+  mMapper = nullptr;
   mInitialized = false;
 }
 
@@ -126,21 +129,12 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
     return false;
   }
 
-  Error error;
   buffer_handle_t importedHandle;
 
-  auto ret = mMapper->importBuffer(hidl_handle(handle),
-                                   [&](const auto &tmpError, const auto &tmpBufferHandle) {
-                                     error = tmpError;
-                                     importedHandle = static_cast<buffer_handle_t>(tmpBufferHandle);
-                                   });
+  auto ret = STABLEMAPPER(mMapper).importBuffer(handle, &importedHandle);
 
-  if (!ret.isOk()) {
-    ALOGE("%s: mapper importBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-    return false;
-  }
-
-  if (error != Error::NONE) {
+  if (ret != AIMAPPER_ERROR_NONE) {
+    ALOGE("%s: mapper importBuffer failed: %d", __FUNCTION__, ret);
     return false;
   }
 
@@ -175,9 +169,9 @@ void ComposerHandleImporter::freeBuffer(buffer_handle_t handle) {
     }
   }
 
-  auto ret = mMapper->freeBuffer(const_cast<native_handle_t *>(handle));
-  if (!ret.isOk()) {
-    ALOGE("%s: mapper freeBuffer failed: %s", __FUNCTION__, ret.description().c_str());
+  auto ret = STABLEMAPPER(mMapper).freeBuffer(handle);
+  if (ret != AIMAPPER_ERROR_NONE) {
+    ALOGE("%s: mapper freeBuffer failed: %d", __FUNCTION__, ret);
   }
 }
 

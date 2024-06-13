@@ -208,6 +208,8 @@
 #define USE_DMA_BUF_HEAPS_PROP               GRALLOC_PROP("use_dma_buf_heaps")
 #define USE_SYSTEM_HEAP_FOR_SENSORS_PROP     GRALLOC_PROP("use_system_heap_for_sensors")
 #define HW_SUPPORTS_UBWCP                    GRALLOC_PROP("hw_supports_ubwcp")
+#define ENABLE_SNAPALLOC_PROP                GRALLOC_PROP("enable_snapalloc")
+#define ENABLE_ALLOCATION_DATA_DUMPING       GRALLOC_PROP("enable_allocation_data_dumping")
 
 // Add all vendor.gralloc.properties above
 
