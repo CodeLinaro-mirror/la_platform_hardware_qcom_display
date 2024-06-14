@@ -221,10 +221,39 @@ cc_library_shared {
     ],
 }
 
+soong_config_module_type {
+    name: "qtimapperext_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "qtidisplay",
+    bool_variables: [
+        "mapper_ext",
+    ],
+    properties: [
+         "srcs",
+         "header_libs",
+    ],
+}
+
+qtimapperext_cc_defaults {
+    name: "mapperext_defaults",
+    soong_config_variables: {
+        mapper_ext: {
+            srcs: ["QtiMapperExtensions2.cpp"],
+            header_libs: [
+                "libiqtimapperext_stablec",
+                "libiqtimapperext_providerutils",
+            ],
+        },
+    },
+}
+
 //mapper5
 cc_library_shared {
     name: "mapper.qti",
-    defaults: ["qtidisplay_common_defaults"],
+    defaults: [
+        "qtidisplay_common_defaults",
+        "mapperext_defaults",
+    ],
     sanitize: {
         integer_overflow: true,
     },

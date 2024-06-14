@@ -164,7 +164,7 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            gralloc4 displayconfig_enabled \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
-                           ubwcp_headers hwasan \
+                           ubwcp_headers hwasan mapper_ext \
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -181,6 +181,12 @@ SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
 SOONG_CONFIG_qtidisplay_composer_version := v3
+SOONG_CONFIG_qtidisplay_mapper_ext := true
+
+ifeq ($(PLATFORM_VERSION), 14)
+    SOONG_CONFIG_qtidisplay_mapper_ext := false
+endif
+
 ifeq ($(PLATFORM_VERSION), 15)
     SOONG_CONFIG_qtidisplay_composer_version := v3_3
 endif

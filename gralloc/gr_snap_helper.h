@@ -226,6 +226,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
+  int ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
+                       buffer_handle_t *out_buffer_handle);
 
  private:
   GrallocSnapHelper();
