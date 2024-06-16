@@ -1,0 +1,40 @@
+cc_library_headers {
+	name: "libhwfenceclient_headers",
+	vendor_available: true,
+	export_include_dirs: ["."],
+}
+cc_library_shared {
+    name: "libhwfenceclient",
+
+    sanitize: {
+        integer_overflow: true,
+    },
+
+    vendor: true,
+
+    header_libs: [
+        "libhwfenceclient_headers",
+        "qti_kernel_headers",
+        "common_interface_headers",
+        "qti_synx_kernel_headers",
+        "qti_display_kernel_headers",
+        "vendor_common_inc",
+        "device_kernel_headers",
+    ],
+
+    srcs: [
+        "hwfence_client.cpp",
+    ],
+
+    shared_libs: [
+          "libdisplaydebug",
+          "libsync",
+          "libos",
+    ],
+
+    cflags: [
+        "-DLOG_TAG=\"libhwfenceclient\"",
+        "-Wno-sign-conversion",
+    ],
+}
+

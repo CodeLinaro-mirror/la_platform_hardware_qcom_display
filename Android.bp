@@ -307,4 +307,5 @@ subdirs = [
     "sdm/libs/core",
     "qmaa",
     "oem_services",
+    "hwfence_client",
 ]
