@@ -863,6 +863,7 @@ struct DRMConnectorInfo {
   uint32_t max_panel_backlight;
   bool dpu_ctl_op_sync = false;
   bool has_disp_in_other_core = false;
+  uint32_t components_per_pixel = 3;
   DMSType dms_type = DMSType::DMS_VID_DISABLED;
 };
 

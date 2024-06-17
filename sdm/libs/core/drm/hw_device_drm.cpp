@@ -376,6 +376,12 @@ HWDeviceDRM::Registry::Registry(BufferAllocator *buffer_allocator) :
   }
 }
 
+void HWDeviceDRM::Registry::Init(Handle master, uint32_t core_id, uint32_t components_per_pixel) {
+  master_ = master;
+  core_id_ = core_id;
+  components_per_pixel_ = components_per_pixel;
+}
+
 void HWDeviceDRM::Registry::Register(HWLayersInfo *hw_layers_info) {
   uint32_t hw_layer_count = UINT32(hw_layers_info->hw_layers.size());
 
@@ -417,10 +423,17 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, std::vector<uin
   buf_info.aligned_height = layout.height = buffer.height;
   buf_info.format = buffer.format;
   buf_info.usage = buffer.usage;
+  buf_info.aligned_width = (buf_info.aligned_width * 3) / components_per_pixel_;
+
   buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset, &layout.num_planes);
   for (int color = 0; color < fb_id->size(); color++) {
     GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier,
                  static_cast<HWCacColorComponent>(color));
+    if (components_per_pixel_ == 4) {
+      // If panel needs alpha component, We need to fake the RGBA8888 format as RGB888
+      // So LM wont drop the alpha component
+      layout.drm_format = DRM_FORMAT_BGR888;
+    }
     ret = master->CreateFbId(layout, fb_id_data);
     if (ret < 0) {
       DLOGE("CreateFbId failed. width %d, height %d, format: %s, stride %u, cac_color %d error %d",
@@ -599,10 +612,7 @@ DisplayError HWDeviceDRM::Init() {
     drm_mgr_intf_->UnregisterDisplay(&token_);
     return kErrorNotSupported;
   }
-
-  registry_.Init(drm_master);
   display_id_ = static_cast<int32_t>(token_.conn_id);
-  registry_.core_id_ = core_id_;
 
   ret = drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
   if (ret) {
@@ -636,6 +646,7 @@ DisplayError HWDeviceDRM::Init() {
   PopulateHWPanelInfo();
   UpdateMixerAttributes();
 
+  registry_.Init(drm_master, core_id_, hw_panel_info_.components_per_pixel);
   // TODO(user): In future, remove has_qseed3 member, add version and pass version to constructor
   if (hw_resource_.has_qseed3) {
     hw_scale_ = new HWScaleDRM(HWScaleDRM::Version::V2);
@@ -781,13 +792,7 @@ void HWDeviceDRM::InitializeConfigs() {
 
   display_attributes_.resize(connector_info_.modes.size());
 
-  uint32_t width = connector_info_.modes[current_mode_index_].mode.hdisplay;
-  uint32_t height = connector_info_.modes[current_mode_index_].mode.vdisplay;
   for (uint32_t i = 0; i < connector_info_.modes.size(); i++) {
-    auto &mode = connector_info_.modes[i].mode;
-    if (mode.hdisplay != width || mode.vdisplay != height) {
-      resolution_switch_enabled_ = true;
-    }
     PopulateDisplayAttributes(i);
   }
   SetDisplaySwitchMode(current_mode_index_);
@@ -986,6 +991,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.primaries.blue[1] = connector_info_.panel_hdr_prop.display_primaries[7];
   hw_panel_info_.dyn_bitclk_support = connector_info_.dyn_bitclk_support;
   hw_panel_info_.dpu_ctl_op_sync = connector_info_.dpu_ctl_op_sync;
+  hw_panel_info_.components_per_pixel = connector_info_.components_per_pixel;
 
   // no supprt for 90 rotation only flips or 180 supported
   hw_panel_info_.panel_orientation.rotation = 0;
@@ -2437,10 +2443,6 @@ DisplayError HWDeviceDRM::UnsetScaleLutConfig() {
 }
 
 DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
-  if (IsResolutionSwitchEnabled()) {
-    return kErrorNotSupported;
-  }
-
   if (!dest_scaler_blocks_used_) {
     return kErrorNotSupported;
   }

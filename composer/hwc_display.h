@@ -668,7 +668,7 @@ class HWCDisplay : public DisplayEventHandler {
   DisplayError GetHWCActiveConfig(bool get_real_config, hwc2_config_t *config_index);
   bool IsVirtualConfig(hwc2_config_t config);
   HWC2::Error SetFBForExtendedResolution(hwc2_config_t config,
-                                         hwc2_config_t *real_config_for_fps_switch);
+                                         hwc2_config_t *real_config);
   void GetParentConfigInfo(DisplayConfigVariableInfo *config_info);
 
   qService::QService *qservice_ = NULL;
@@ -686,7 +686,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool draw_method_set_ = false;
   bool validate_done_ = false;
   bool client_target_3_1_set_ = false;
-  bool virtual_config_fps_switch_ = false;
+  bool need_mode_switch_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

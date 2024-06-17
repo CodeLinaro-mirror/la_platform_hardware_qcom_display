@@ -241,7 +241,6 @@ class HWDeviceDRM : public HWInterface {
                    int64_t *release_fence_fd, int64_t *retire_fence_fd);
   void SetSecureConfig(const LayerBuffer &input_buffer, sde_drm::DRMSecureMode *fb_secure_mode,
                        sde_drm::DRMSecurityLevel *security_level);
-  bool IsResolutionSwitchEnabled() const { return resolution_switch_enabled_; }
   void SetTopology(sde_drm::DRMTopology drm_topology, HWTopology *hw_topology);
   void SetMultiRectMode(const uint32_t flags, sde_drm::DRMMultiRectMode *target);
   void SetSsppTonemapFeatures(HWPipeInfo *pipe_info);
@@ -272,7 +271,7 @@ class HWDeviceDRM : public HWInterface {
    public:
     explicit Registry(BufferAllocator *buffer_allocator);
     // Init master
-    void Init(Handle master) {master_ = master;}
+    void Init(Handle master, uint32_t core_id, uint32_t components_per_pixel);
     // Called on each Validate and Commit to map the handle_id to fb_id of each layer buffer.
     void Register(HWLayersInfo *hw_layers_info);
     // Called on display disconnect to clear output buffer map and remove fb_ids.
@@ -287,7 +286,6 @@ class HWDeviceDRM : public HWInterface {
     std::vector<uint32_t> GetFbId(Layer *layer, uint64_t handle_id);
     // Find fb_id for given handle_id in output buffer map.
     uint32_t GetOutputFbId(uint64_t handle_id);
-    uint32_t core_id_;
 
    private:
     bool disable_fbid_cache_ = false;
@@ -295,6 +293,8 @@ class HWDeviceDRM : public HWInterface {
     BufferAllocator *buffer_allocator_ = {};
     uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
     Handle master_ = nullptr;
+    uint32_t components_per_pixel_ = 0;
+    uint32_t core_id_ = 0;
   };
 
  protected:
@@ -363,7 +363,6 @@ class HWDeviceDRM : public HWInterface {
   void GetMaxPanelResolution(uint32_t *max_width, uint32_t *max_height);
 
   std::string interface_str_ = "DSI";
-  bool resolution_switch_enabled_ = false;
   bool autorefresh_ = false;
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr_ = {};
   bool seamless_mode_switch_ = false;
