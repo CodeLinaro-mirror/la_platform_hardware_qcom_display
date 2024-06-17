@@ -609,6 +609,7 @@ static void InitializePrivateHandle(private_handle_t *hnd, int fd, int meta_fd, 
   hnd->version = static_cast<int>(sizeof(native_handle));
   hnd->numInts = private_handle_t::NumInts();
   hnd->numFds = private_handle_t::kNumFds;
+  hnd->ubwcp_format = false;
 }
 
 Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_handle_t *handle,
