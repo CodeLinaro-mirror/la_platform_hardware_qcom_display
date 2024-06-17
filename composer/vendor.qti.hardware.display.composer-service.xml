@@ -52,7 +52,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
     </hal>
     <hal format="aidl">
         <name>vendor.qti.hardware.display.config</name>
-         <version>7</version>
+         <version>12</version>
         <fqname>IDisplayConfig/default</fqname>
     </hal>
     <hal format="aidl">
