@@ -25,6 +25,11 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*
 */
 
 #include <errno.h>
@@ -32,6 +37,7 @@
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/fence.h>
+#include <cassert>
 
 #include "hwc_debugger.h"
 #include "hwc_buffer_sync_handler.h"
