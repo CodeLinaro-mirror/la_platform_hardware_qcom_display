@@ -2601,7 +2601,7 @@ int GrallocSnapHelper::ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &sna
       primaries = GrallocDataspace::STANDARD_DCI_P3;
       break;
     default:
-      ALOGW("%s: Failed to convert primaries %d", __FUNCTION__, snap_dataspace.colorPrimaries);
+      ALOGV("%s: Failed to convert primaries %d", __FUNCTION__, snap_dataspace.colorPrimaries);
       return SnapError::BAD_VALUE;
   }
 
@@ -2628,7 +2628,7 @@ int GrallocSnapHelper::ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &sna
       transfer = GrallocDataspace::TRANSFER_ST2084;
       break;
     default:
-      ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
+      ALOGV("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
       return SnapError::BAD_VALUE;
   }
 
@@ -2643,7 +2643,7 @@ int GrallocSnapHelper::ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &sna
       range = GrallocDataspace::RANGE_EXTENDED;
       break;
     default:
-      ALOGW("%s: Failed to convert range %d", __FUNCTION__, snap_dataspace.range);
+      ALOGV("%s: Failed to convert range %d", __FUNCTION__, snap_dataspace.range);
       return SnapError::BAD_VALUE;
   }
 
@@ -2766,7 +2766,7 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
       dataspace.colorPrimaries = QtiColorPrimaries_DCIP3;
       break;
     default:
-      ALOGW("%s: Failed to convert primaries %d", __FUNCTION__, primaries);
+      ALOGV("%s: Failed to convert primaries %d", __FUNCTION__, primaries);
       return SnapError::BAD_VALUE;
   }
 
@@ -2793,7 +2793,7 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
       dataspace.transfer = QtiTransfer_SMPTE_ST2084;
       break;
     default:
-      ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
+      ALOGV("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
       return SnapError::BAD_VALUE;
   }
 
@@ -2808,7 +2808,7 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
       dataspace.range = QtiRange_Extended;
       break;
     default:
-      ALOGW("%s: Failed to convert range %d", __FUNCTION__, range);
+      ALOGV("%s: Failed to convert range %d", __FUNCTION__, range);
       return SnapError::BAD_VALUE;
   }
   snap_dataspace->colorPrimaries = dataspace.colorPrimaries;
@@ -6674,7 +6674,7 @@ int GrallocSnapHelperLegacy::ConvertSnapDataspaceToGrallocDataspace(
       primaries = GrallocDataspace::STANDARD_DCI_P3;
       break;
     default:
-      ALOGW("%s: Failed to convert primaries %d", __FUNCTION__, snap_dataspace.colorPrimaries);
+      ALOGV("%s: Failed to convert primaries %d", __FUNCTION__, snap_dataspace.colorPrimaries);
       return SnapError::BAD_VALUE;
   }
 
@@ -6701,7 +6701,7 @@ int GrallocSnapHelperLegacy::ConvertSnapDataspaceToGrallocDataspace(
       transfer = GrallocDataspace::TRANSFER_ST2084;
       break;
     default:
-      ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
+      ALOGV("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
       return SnapError::BAD_VALUE;
   }
 
@@ -6716,7 +6716,7 @@ int GrallocSnapHelperLegacy::ConvertSnapDataspaceToGrallocDataspace(
       range = GrallocDataspace::RANGE_EXTENDED;
       break;
     default:
-      ALOGW("%s: Failed to convert range %d", __FUNCTION__, snap_dataspace.range);
+      ALOGV("%s: Failed to convert range %d", __FUNCTION__, snap_dataspace.range);
       return SnapError::BAD_VALUE;
   }
 
@@ -6839,7 +6839,7 @@ int GrallocSnapHelperLegacy::ConvertGrallocDataspaceToSnapDataspace(GrallocDatas
       dataspace.colorPrimaries = QtiColorPrimaries_DCIP3;
       break;
     default:
-      ALOGW("%s: Failed to convert primaries %d", __FUNCTION__, primaries);
+      ALOGV("%s: Failed to convert primaries %d", __FUNCTION__, primaries);
       return SnapError::BAD_VALUE;
   }
 
@@ -6866,7 +6866,7 @@ int GrallocSnapHelperLegacy::ConvertGrallocDataspaceToSnapDataspace(GrallocDatas
       dataspace.transfer = QtiTransfer_SMPTE_ST2084;
       break;
     default:
-      ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
+      ALOGV("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
       return SnapError::BAD_VALUE;
   }
 
@@ -6881,7 +6881,7 @@ int GrallocSnapHelperLegacy::ConvertGrallocDataspaceToSnapDataspace(GrallocDatas
       dataspace.range = QtiRange_Extended;
       break;
     default:
-      ALOGW("%s: Failed to convert range %d", __FUNCTION__, range);
+      ALOGV("%s: Failed to convert range %d", __FUNCTION__, range);
       return SnapError::BAD_VALUE;
   }
   snap_dataspace->colorPrimaries = dataspace.colorPrimaries;
