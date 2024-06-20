@@ -97,7 +97,7 @@ void DRMMaster::SetHandle(int fd) {
 
 int DRMMaster::Init() {
   if (dev_fd_ >=0 && client_set_) {
-    DRM_LOGE("drmOpen already done by client dev_fd_:%d", dev_fd_);
+    DRM_LOGI("drmOpen already done by client dev_fd_:%d", dev_fd_);
     return 0;
   }
 
