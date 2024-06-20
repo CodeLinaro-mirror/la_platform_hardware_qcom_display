@@ -164,7 +164,7 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            gralloc4 displayconfig_enabled \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
-                           ubwcp_headers \
+                           ubwcp_headers hy11 hy22 hy33 \
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -176,6 +176,9 @@ SOONG_CONFIG_qtidisplay_default := true
 SOONG_CONFIG_qtidisplay_var1 := false
 SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
+SOONG_CONFIG_qtidisplay_hy11 := false
+SOONG_CONFIG_qtidisplay_hy22 := false
+SOONG_CONFIG_qtidisplay_hy33 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
@@ -218,10 +221,15 @@ else
         SOONG_CONFIG_qtidisplay_var1 := true
         SOONG_CONFIG_qtidisplay_var2 := true
         SOONG_CONFIG_qtidisplay_var3 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
+        SOONG_CONFIG_qtidisplay_hy33 := true
     endif
     ifneq ($(BUILD_DISPLAY_TECHPACK_SOURCE_VARIANT), true)
         SOONG_CONFIG_qtidisplay_var1 := true
         SOONG_CONFIG_qtidisplay_var2 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
     endif
 
     ifeq ($(PROFILE_COVERAGE_DATA), true)
@@ -229,10 +237,12 @@ else
     endif
     ifeq (,$(wildcard $(QCPATH)/display-noship))
         SOONG_CONFIG_qtidisplay_var1 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
     endif
 
     ifeq (,$(wildcard $(QCPATH)/display))
         SOONG_CONFIG_qtidisplay_var2 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
     endif
 endif
 
