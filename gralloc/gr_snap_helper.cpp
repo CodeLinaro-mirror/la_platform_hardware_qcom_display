@@ -1972,7 +1972,7 @@ SnapError GrallocSnapHelper::ColorMetadataHelper(SnapHandle *hnd, uint32_t aidl_
       color_metadata.contentLightLevel.maxContentLightLevel =
           static_cast<uint32_t>(snap_content_light_level.maxContentLightLevel);
       color_metadata.contentLightLevel.minPicAverageLightLevel =
-          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel * 10000.0f);
+          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel);
     }
 
     SnapDynamicMetadata snap_dynamic_metadata;
@@ -4853,6 +4853,12 @@ SnapError GrallocSnapHelperLegacy::VendorMetadataStatusHelper(
         int snap_type = metadata_type_map[legacy_type];
         vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] =
             vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+      } else if (deprecated_metadata_type_map.find(legacy_type) !=
+            deprecated_metadata_type_map.end()){
+        for (auto snap_type : deprecated_metadata_type_map[legacy_type]) {
+          vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] |=
+            vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+        }
       }
     }
 
@@ -5071,32 +5077,32 @@ SnapError GrallocSnapHelperLegacy::BufferPermissionHelper(SnapHandle *hnd, bool 
                                                           int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
-    SnapBufferPermission snap_buf_perm = {};
+    SnapBufferPermission snap_buf_perm[BUFFERCLIENT_MAX] = {};
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BUFFER_PERMISSION, &snap_buf_perm);
     error = CheckMetadataSet(SnapMetadataType::BUFFER_PERMISSION, error, check_metadata_set);
-    BufferPermission gr_buf_perm = {};
-    std::memcpy(&gr_buf_perm, &snap_buf_perm, sizeof(snap_buf_perm));
+    BufferPermission gr_buf_perm[BUFFERCLIENT_MAX] = {};
     if (hidl_bytestream) {
-      if (qtigralloc::encodeBufferPermission(&gr_buf_perm,
+      std::memcpy(&gr_buf_perm, &snap_buf_perm, sizeof(snap_buf_perm));
+      if (qtigralloc::encodeBufferPermission(gr_buf_perm,
                                              static_cast<hidl_vec<uint8_t> *>(gralloc_out_get)) !=
           GrallocError::NONE) {
         return SnapError::BAD_VALUE;
       }
     } else {
-      *static_cast<BufferPermission *>(gralloc_out_get) = gr_buf_perm;
+      std::memcpy(gralloc_out_get, &snap_buf_perm, sizeof(snap_buf_perm));
     }
   } else if (gralloc_in_set != nullptr) {
-    SnapBufferPermission snap_buf_perm = {};
-    BufferPermission gr_buf_perm = {};
+    SnapBufferPermission snap_buf_perm[BUFFERCLIENT_MAX] = {};
+    BufferPermission gr_buf_perm[BUFFERCLIENT_MAX] = {};
     if (hidl_bytestream) {
       if (qtigralloc::decodeBufferPermission(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
-                                             &gr_buf_perm) != GrallocError::NONE) {
+                                             gr_buf_perm) != GrallocError::NONE) {
         return SnapError::UNSUPPORTED;
       }
+      std::memcpy(snap_buf_perm, gr_buf_perm, sizeof(gr_buf_perm));
     } else {
-      gr_buf_perm = *static_cast<BufferPermission *>(gralloc_in_set);
+      std::memcpy(snap_buf_perm, gralloc_in_set, sizeof(SnapBufferPermission));
     }
-    std::memcpy(&snap_buf_perm, &gr_buf_perm, sizeof(gr_buf_perm));
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::BUFFER_PERMISSION, &snap_buf_perm);
   }
   return error;
@@ -5963,7 +5969,7 @@ SnapError GrallocSnapHelperLegacy::ColorMetadataHelper(SnapHandle *hnd, bool hid
       color_metadata.contentLightLevel.maxContentLightLevel =
           static_cast<uint32_t>(snap_content_light_level.maxContentLightLevel);
       color_metadata.contentLightLevel.minPicAverageLightLevel =
-          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel * 10000.0f);
+          static_cast<uint32_t>(snap_content_light_level.maxFrameAverageLightLevel);
     }
 
     SnapDynamicMetadata snap_dynamic_metadata;

@@ -29,6 +29,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <log/log.h>
 #include <cutils/properties.h>
 #include <dlfcn.h>
@@ -235,6 +242,8 @@ ADRENOPIXELFORMAT AdrenoMemInfo::GetGpuPixelFormat(int hal_format) {
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
       return ADRENO_PIXELFORMAT_NV12_EXT;
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC:
+      return ADRENO_PIXELFORMAT_NV12_4R;
     case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
       return ADRENO_PIXELFORMAT_TP10;
     case HAL_PIXEL_FORMAT_YCbCr_420_P010:

@@ -51,15 +51,7 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
   ALOGI("Created AidlComposer");
 }
 
-AidlComposer::~AidlComposer() {
-  auto sdm_factory = sdm::GetSDMInterfaceFactory();
-  sdm_factory->DestroyCapsIntf();
-  sdm_factory->DestroySettingsIntf();
-  sdm_factory->DestroyLifeCycleIntf();
-  sdm_factory->DestroyDrawCycleIntf();
-  sdm_factory->DestroySideBandIntf();
-  sdm_factory->DestroyLayerBuilderIntf();
-}
+AidlComposer::~AidlComposer() {}
 
 ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_return) {
   std::unique_lock<std::mutex> lock(mClientMutex);

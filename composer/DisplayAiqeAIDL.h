@@ -31,10 +31,15 @@ class DisplayAiqeAIDL : public BnDisplayAiqe {
   ndk::ScopedAStatus setSsrcMode(int32_t in_disp_id, const std::string &in_mode_name) override;
   ndk::ScopedAStatus enableCopr(int32_t disp_id, bool enable) override;
   ndk::ScopedAStatus getCoprStats(int32_t disp_id, std::vector<int32_t> *_aidl_return) override;
+  ndk::ScopedAStatus setABCState(int32_t disp_id, int32_t enable) override;
+  ndk::ScopedAStatus setABCReconfig(int32_t disp_id) override;
+  ndk::ScopedAStatus setABCMode(int32_t disp_id, const std::string &mode_name) override;
 
  private:
-  sdm::SDMDisplayAiqeIntf *aiqe_intf_ = nullptr;
-  sdm::SDMDisplaySideBandIntf *sideband_ = nullptr;
+  std::shared_ptr<sdm::SDMDisplayAiqeIntf> aiqe_intf_;
+  std::shared_ptr<sdm::SDMDisplaySideBandIntf> sideband_;
+  int ssrc_enable_ = 0;
+  int abc_enable_ = 0;
 };
 
 }  // End of namespace aiqe

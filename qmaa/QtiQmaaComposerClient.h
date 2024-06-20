@@ -79,6 +79,8 @@ using ::android::hardware::graphics::composer::V2_1::Error;
 using ::android::hardware::graphics::composer::V2_4::IComposerClient;
 using std::string;
 
+#define HWC_DISPLAY_PRIMARY 0
+
 class BufferCacheEntry {
  public:
   BufferCacheEntry();

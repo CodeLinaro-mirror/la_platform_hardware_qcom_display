@@ -67,12 +67,11 @@ case "$target" in
     "niobe")
     #SOC ID for niobe is 629
     case "$soc_hwid" in
-        629)
+        629|652)
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
         setprop vendor.display.enable_rotator_ui 1
-        setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.thermal.version 1
         setprop vendor.display.enable_rc_support 0
         setprop vendor.display.target.version 4
@@ -82,6 +81,8 @@ case "$target" in
         setprop vendor.display.idle_time 0  #disable idle fallback
         setprop vendor.display.idle_time_inactive 0  #disable idle fallback
         setprop vendor.display.use_smooth_motion 0  #disable smooth motion
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.gralloc.hw_supports_ubwcp 0
         ;;
     esac
     ;;
