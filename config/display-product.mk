@@ -164,7 +164,8 @@ PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=1
 SOONG_CONFIG_NAMESPACES += qtidisplay
 
 # Soong Keys
-SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 kernel_5_4 kernel_5_15
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 \
+	kernel_5_4 kernel_5_15 low_or_normal_ram
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -178,6 +179,12 @@ SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_kernel_5_4 := false
 SOONG_CONFIG_qtidisplay_kernel_5_15 := false
+
+ifeq ($(TARGET_HAS_LOW_RAM),true)
+    SOONG_CONFIG_qtidisplay_low_or_normal_ram := low
+else
+    SOONG_CONFIG_qtidisplay_low_or_normal_ram := normal
+endif
 
 ifeq ($(call is-vendor-board-platform,QCOM),true)
     SOONG_CONFIG_qtidisplay_displayconfig_enabled := true
