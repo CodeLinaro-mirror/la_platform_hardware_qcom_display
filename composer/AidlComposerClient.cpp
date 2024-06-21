@@ -154,19 +154,15 @@ AidlComposerClient::~AidlComposerClient() {
 
 ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buffer_slot_count,
                                               int64_t *aidl_return) {
-  sdm::LayerId layer = 0;
-  auto error = layer_builder_->CreateLayer(in_display, &layer);
-  drawcycle_->LayerStackUpdated(in_display);
   auto ret = Error::None;
+  DisplayData *disp_data_ptr = nullptr;
 
-  if (error == sdm::kErrorNone) {
-    *aidl_return = static_cast<int64_t>(layer);
+  if (aidl_return && in_display >= 0 && in_buffer_slot_count >= 0) {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
     auto dpy = mDisplayData.find(in_display);
     // The display entry may have already been removed by onHotplug.
     if (dpy != mDisplayData.end()) {
-      auto ly = dpy->second.Layers.emplace(layer, LayerBuffers()).first;
-      ly->second.Buffers.resize(in_buffer_slot_count);
+      disp_data_ptr = &dpy->second;
     } else {
       ret = Error::BadDisplay;
       // Note: We do not destroy the layer on this error as the hotplug
@@ -174,7 +170,22 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
       // ensure all layers for the display are destroyed.
     }
   } else {
-    ret = Error::BadLayer;
+    ret = Error::BadParameter;
+  }
+
+  if (disp_data_ptr) {
+    sdm::LayerId layer = 0;
+    auto error = layer_builder_->CreateLayer(in_display, &layer);
+    if (error == sdm::kErrorNone) {
+      *aidl_return = static_cast<int64_t>(layer);
+      drawcycle_->LayerStackUpdated(in_display);
+
+      std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+      auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
+      ly->second.Buffers.resize(in_buffer_slot_count);
+    } else {
+      ret = Error::BadLayer;
+    }
   }
   return TO_BINDER_STATUS(INT32(ret));
 }
@@ -809,7 +820,11 @@ ScopedAStatus AidlComposerClient::setActiveConfigWithConstraints(
   auto error =
       settings_->SetActiveConfigWithConstraints(in_display, in_config, &constraints, &timeline);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    auto ret_err = Error::BadConfig;
+    if (error == sdm::kSeamlessNotAllowed) {
+      ret_err = Error::SeamlessNotAllowed;
+    }
+    return TO_BINDER_STATUS(INT32(ret_err));
   }
 
   aidl_return->newVsyncAppliedTimeNanos = timeline.newVsyncAppliedTimeNanos;
@@ -1588,7 +1603,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
     int64_t display, int64_t layer, const LayerBrightness &brightness) {
   auto err = mClient.layer_builder_->SetLayerBrightness(display, layer, brightness.brightness);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, Error::BadParameter);
   }
 }
 
