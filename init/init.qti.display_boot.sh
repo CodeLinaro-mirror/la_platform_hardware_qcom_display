@@ -106,6 +106,7 @@ case "$target" in
         setprop vendor.gralloc.use_uncached_heap 1
         setprop vendor.display.allow_tonemap_native 1
         setprop vendor.gralloc.allow_camera_preview_write 1
+        setprop vendor.display.perf.version 2
         ;;
     esac
     ;;
@@ -133,6 +134,7 @@ case "$target" in
         setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.display.enable_qsync_idle 1
         setprop vendor.display.disable_get_screen_decorator_support 1
+        setprop vendor.display.perf.version 3
         ;;
     esac
     ;;
