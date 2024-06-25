@@ -56,6 +56,7 @@
 
 #define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
+#define HWC_UEVENT_DRM_MSM_HYP_EXT_HOTPLUG "sde_kms_hyp@ae00000/drm/card0"
 
 namespace sdm {
 
@@ -2240,7 +2241,8 @@ void HWCSession::UEventHandler(const char *uevent_data, int length) {
   // uevent handling will be done once when SurfaceFlinger connects, at RegisterCallback(). Since
   // HandlePluggableDisplays() reads the latest connection states of all displays, no uevent is
   // lost.
-  if (client_connected_ && strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG)) {
+  if (client_connected_ && ((strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG)) ||
+      (strcasestr(uevent_data, HWC_UEVENT_DRM_MSM_HYP_EXT_HOTPLUG)))) {
     // MST hotplug will not carry connection status/test pattern etc.
     // Pluggable display handler will check all connection status' and take action accordingly.
     const char *str_status = GetTokenValue(uevent_data, length, "status=");
