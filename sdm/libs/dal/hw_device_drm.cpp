@@ -607,6 +607,10 @@ DisplayError HWDeviceDRM::Init() {
   std::unique_ptr<HWColorManagerDrm> hw_color_mgr(new HWColorManagerDrm());
   hw_color_mgr_ = std::move(hw_color_mgr);
 
+  int value = 0;
+  Debug::GetProperty(ENABLE_BRIGHTNESS_DRM_PROP, &value);
+  enable_brightness_drm_prop_ = (value == 1);
+
   return kErrorNone;
 }
 
@@ -1201,6 +1205,12 @@ DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, SyncPoints *sync_po
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::ON);
   drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
+  if (enable_brightness_drm_prop_ && cached_brightness_level_ != -1) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_BRIGHTNESS, token_.conn_id,
+                              cached_brightness_level_);
+    current_brightness_ = cached_brightness_level_;
+    cached_brightness_level_ = -1;
+  }
 
   int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
   if (ret) {
@@ -1242,6 +1252,12 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
   drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
   if (!IsSeamlessTransition()) {
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &current_mode);
+  }
+  if (enable_brightness_drm_prop_ && cached_brightness_level_ != -1) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_BRIGHTNESS, token_.conn_id,
+                              cached_brightness_level_);
+    current_brightness_ = cached_brightness_level_;
+    cached_brightness_level_ = -1;
   }
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
@@ -1293,6 +1309,12 @@ DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, SyncPoints *sync_point
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::DOZE);
   drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_fd);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
+  if (enable_brightness_drm_prop_ && cached_brightness_level_ != -1) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_BRIGHTNESS, token_.conn_id,
+                              cached_brightness_level_);
+    current_brightness_ = cached_brightness_level_;
+    cached_brightness_level_ = -1;
+  }
 
   int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
   if (ret) {
@@ -1326,6 +1348,12 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, SyncPoints *syn
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, token_.conn_id, token_.crtc_id);
     drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &current_mode);
+  }
+  if (enable_brightness_drm_prop_ && cached_brightness_level_ != -1) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_BRIGHTNESS, token_.conn_id,
+                              cached_brightness_level_);
+    current_brightness_ = cached_brightness_level_;
+    cached_brightness_level_ = -1;
   }
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id,
@@ -1437,6 +1465,13 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     // Used in 1 cases:
     // 1. Since driver doesnt clear the SSPP luts during the adb shell stop/start, clear once
     drm_atomic_intf_->Perform(sde_drm::DRMOps::PLANES_RESET_LUT, token_.crtc_id);
+  }
+
+  if (enable_brightness_drm_prop_ && cached_brightness_level_ != -1) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_BRIGHTNESS, token_.conn_id,
+                              cached_brightness_level_);
+    current_brightness_ = cached_brightness_level_;
+    cached_brightness_level_ = -1;
   }
 
   for (uint32_t i = 0; i < hw_layer_count; i++) {
