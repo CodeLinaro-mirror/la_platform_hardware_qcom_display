@@ -109,7 +109,6 @@ cc_fuzz {
     name: "displayconfig.aidl_fuzzer",
     defaults: [
         "composer-service_defaults",
-        "service_fuzzer_defaults",
         "composer3_defaults",
     ],
 
@@ -123,28 +122,14 @@ cc_fuzz {
         "libcutils_headers",
     ],
 
-    target: {
-        android: {
-            shared_libs: [
-                "libbinder_ndk",
-                "libbinder",
-                "libutils",
-                "libjsoncpp",
-            ],
-        },
-
-        host: {
-            shared_libs: [
-                "libbinder_ndk",
-                "libbinder",
-                "libutils",
-            ],
-        },
-
-        darwin: {
-            enabled: false,
-        },
-    },
+    shared_libs: [
+        "libbinder_ndk",
+        "libbinder",
+        "libutils",
+        "libjsoncpp",
+        "libbase",
+        "libcutils",
+    ],
 
     srcs: [
         "AidlComposerClient.cpp",
