@@ -386,12 +386,13 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs,
     std::vector<DisplayConfiguration> *out_configs) {
   std::map<uint32_t, sdm::DisplayConfigVariableInfo> info;
+
+  bool enable_vrr = settings_->SetupVRRConfig(in_display) == sdm::kErrorNone;
   auto error = settings_->GetAllDisplayAttributes(in_display, &info);
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
-  bool enable_vrr = settings_->SetupVRRConfig(in_display) == sdm::kErrorNone;
   out_configs->clear();
   out_configs->reserve(info.size());
 
