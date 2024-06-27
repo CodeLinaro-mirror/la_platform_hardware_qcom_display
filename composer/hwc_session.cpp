@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -457,7 +457,7 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   uint32_t count = 1 + (disable_skip_validate ? 0 : 1);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
-    outCapabilities[0] = INT32(Capability::SKIP_CLIENT_COLOR_TRANSFORM);
+    outCapabilities[0] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
     if (!disable_skip_validate) {
       outCapabilities[1] = INT32(Capability::SKIP_VALIDATE);
     }
