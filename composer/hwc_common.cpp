@@ -17,7 +17,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -94,11 +94,13 @@ std::string to_string(Composition composition) {
 
 SnapHandle *ConvertToSnapHandle(const NativeHandle &handle) {
   SnapHandle *snap_handle = snap_handle_create(handle.fds.size(), handle.ints.size());
-  for (size_t i = 0; i < handle.fds.size(); ++i) {
-    snap_handle->buffer_data[i] = fcntl(handle.fds[i].get(), F_DUPFD_CLOEXEC, 0);
-  }
-  for (size_t i = 0; i < handle.ints.size(); ++i) {
-    snap_handle->buffer_data[i + handle.fds.size()] = handle.ints[i];
+  if (snap_handle) {
+    for (size_t i = 0; i < handle.fds.size(); ++i) {
+      snap_handle->buffer_data[i] = fcntl(handle.fds[i].get(), F_DUPFD_CLOEXEC, 0);
+    }
+    for (size_t i = 0; i < handle.ints.size(); ++i) {
+      snap_handle->buffer_data[i + handle.fds.size()] = handle.ints[i];
+    }
   }
   return snap_handle;
 }
