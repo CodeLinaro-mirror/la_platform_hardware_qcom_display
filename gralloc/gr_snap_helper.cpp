@@ -15,7 +15,6 @@
 #include <cutils/properties.h>
 #include <utils/debug.h>
 #include "gr_utils.h"
-#include <utils/CallStack.h>
 #include "android/binder_auto_utils.h"
 #include "gralloctypes/Gralloc4.h"
 #include <aidl/android/hardware/graphics/allocator/AllocationResult.h>
@@ -636,7 +635,12 @@ SnapError GrallocSnapHelper::DataspaceHelper(SnapHandle *hnd, uint32_t aidl_size
       if (!decoded_result.has_value()) {
         return SnapError::UNSUPPORTED;
       }
-      ConvertGrallocDataspaceToSnapDataspace(*decoded_result, &dataspace);
+      int err = ConvertGrallocDataspaceToSnapDataspace(*decoded_result, &dataspace);
+      if (err != SnapError::NONE && static_cast<int>(*decoded_result) != 0) {
+        ALOGW("%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__,
+              *decoded_result);
+        return SnapError::UNSUPPORTED;
+      }
       snap_dataspace = static_cast<SnapDataspace *>(&dataspace);
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::DATASPACE, snap_dataspace);
@@ -1891,8 +1895,7 @@ int GrallocSnapHelper::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
       auto error =
           ((this->*metadata_helper_func)(hnd, aidl_size, in, nullptr, nullptr, false, nullptr));
       if (error == SnapError::BAD_VALUE || error == SnapError::UNSUPPORTED) {
-        ALOGE("Trying to set metadata that cant be set - gralloc metadata type %d",
-              snap_metadata_type);
+        ALOGW("Unable to set metadata - metadata type %d", snap_metadata_type);
       }
       return error;
     } else {
@@ -2731,7 +2734,6 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
   uint32_t primaries = (uint32_t)gr_dataspace & (uint32_t)GrallocDataspace::STANDARD_MASK;
   uint32_t transfer = (uint32_t)gr_dataspace & (uint32_t)GrallocDataspace::TRANSFER_MASK;
   uint32_t range = (uint32_t)gr_dataspace & (uint32_t)GrallocDataspace::RANGE_MASK;
-
   switch (primaries) {
     case (uint32_t)GrallocDataspace::STANDARD_BT709:
       dataspace.colorPrimaries = QtiColorPrimaries_BT709_5;
@@ -3585,19 +3587,14 @@ SnapError GrallocSnapHelperLegacy::DataspaceHelper(SnapHandle *hnd, bool hidl_by
                                                    bool check_metadata_set,
                                                    int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
+  int conversion_err = SnapError::NONE;
   if (gralloc_out_get != nullptr) {
     SnapDataspace snap_dataspace = {};
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::DATASPACE, &snap_dataspace);
     error = CheckMetadataSet(SnapMetadataType::DATASPACE, error, check_metadata_set);
     GrallocDataspace gr_dataspace = {};
     ConvertSnapDataspaceToGrallocDataspace(snap_dataspace, &gr_dataspace);
-    if (aidl_size) {
-      *mapper_return = Mapper5Encode<StandardMetadataType::DATASPACE>(gr_dataspace, gralloc_out_get,
-                                                                      *mapper_return);
-      if (*mapper_return < 0) {
-        return SnapError::BAD_VALUE;
-      }
-    } else if (hidl_bytestream) {
+    if (hidl_bytestream) {
       if (android::gralloc4::encodeDataspace(gr_dataspace,
                                              static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
         return SnapError::BAD_VALUE;
@@ -3607,23 +3604,21 @@ SnapError GrallocSnapHelperLegacy::DataspaceHelper(SnapHandle *hnd, bool hidl_by
     }
   } else if (gralloc_in_set != nullptr) {
     SnapDataspace snap_dataspace = {};
-    if (aidl_size) {
-      auto decoded_result =
-          Mapper5Decode<StandardMetadataType::DATASPACE>(gralloc_in_set, aidl_size);
-      if (!decoded_result.has_value()) {
-        return SnapError::UNSUPPORTED;
-      }
-      ConvertGrallocDataspaceToSnapDataspace(*decoded_result, &snap_dataspace);
-    } else if (hidl_bytestream) {
-      GrallocDataspace gr_dataspace = {};
+    GrallocDataspace gr_dataspace = {};
+    if (hidl_bytestream) {
       if (android::gralloc4::decodeDataspace(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
                                              &gr_dataspace)) {
         return SnapError::UNSUPPORTED;
       }
-      ConvertGrallocDataspaceToSnapDataspace(gr_dataspace, &snap_dataspace);
+      conversion_err = ConvertGrallocDataspaceToSnapDataspace(gr_dataspace, &snap_dataspace);
     } else {
-      ConvertGrallocDataspaceToSnapDataspace(*static_cast<GrallocDataspace *>(gralloc_in_set),
-                                             &snap_dataspace);
+      gr_dataspace = *static_cast<GrallocDataspace *>(gralloc_in_set);
+      conversion_err = ConvertGrallocDataspaceToSnapDataspace(
+          *static_cast<GrallocDataspace *>(gralloc_in_set), &snap_dataspace);
+    }
+    if (conversion_err != SnapError::NONE) {
+      ALOGW("%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__, gr_dataspace);
+      return SnapError::UNSUPPORTED;
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::DATASPACE, &snap_dataspace);
   }
@@ -5834,8 +5829,8 @@ int GrallocSnapHelperLegacy::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
       auto error =
           ((this->*metadata_helper_func)(hnd, true, 0, &in, nullptr, nullptr, false, nullptr));
       if (error == SnapError::BAD_VALUE || error == SnapError::UNSUPPORTED) {
-        ALOGE("Trying to set metadata that cant be set - gralloc metadata type %d - error %d",
-              snap_metadata_type, static_cast<int>(error));
+        ALOGW("Unable to set metadata - metadata type %d error %d", snap_metadata_type,
+              static_cast<int>(error));
       }
       return error;
     } else {
@@ -5887,8 +5882,7 @@ int GrallocSnapHelperLegacy::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
       auto error = ((this->*metadata_helper_func)(hnd, false, aidl_size, in, nullptr, nullptr,
                                                   false, nullptr));
       if (error == SnapError::BAD_VALUE || error == SnapError::UNSUPPORTED) {
-        ALOGE("Trying to set metadata that cant be set - gralloc metadata type %d",
-              snap_metadata_type);
+        ALOGW("Unable to set metadata - metadata type %d error %d", snap_metadata_type, error);
       }
       return error;
     } else {
