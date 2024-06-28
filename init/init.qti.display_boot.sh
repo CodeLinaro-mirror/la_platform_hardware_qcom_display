@@ -231,6 +231,9 @@ case "$target" in
         setprop vendor.display.supports_background_blur 0
 	setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
+        if [ "$soc_hwid" -eq 633 ] || [ "$soc_hwid" -eq 634 ]; then
+            setprop vendor.display.enable_latch_media_content 1
+        fi
         ;;
         568|602|653|654)
         # Set property for Ravelin
@@ -258,6 +261,9 @@ case "$target" in
         setprop vendor.display.supports_background_blur 0
 	setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
+        if [ "$soc_hwid" -eq 653 ] || [ "$soc_hwid" -eq 654 ]; then
+            setprop vendor.display.enable_latch_media_content 1
+        fi
         ;;
 	esac
 esac
