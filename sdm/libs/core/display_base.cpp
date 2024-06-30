@@ -24,7 +24,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -3305,9 +3305,12 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
        (static_cast<uint32_t>(disp_layer_stack_.stack_info.gpu_target_index) == sdm_layer_index)) {
         hw_layer.input_buffer.flags.secure = sdm_layer->input_buffer.flags.secure;
         hw_layer.input_buffer.format = sdm_layer->input_buffer.format;
-        hw_layer.input_buffer.width = sdm_layer->input_buffer.width;
+        hw_layer.input_buffer.width =
+            (sdm_layer->input_buffer.width * client_ctx_.hw_panel_info.components_per_pixel) / 3;
         hw_layer.input_buffer.height = sdm_layer->input_buffer.height;
-        hw_layer.input_buffer.unaligned_width = sdm_layer->input_buffer.unaligned_width;
+        hw_layer.input_buffer.unaligned_width = (sdm_layer->input_buffer.unaligned_width *
+                                                 client_ctx_.hw_panel_info.components_per_pixel) /
+                                                3;
         hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
       }
     }
