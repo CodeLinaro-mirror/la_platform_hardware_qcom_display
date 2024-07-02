@@ -127,7 +127,7 @@ int main(int, char **) {
       ALOGW("DisplayAiqe AIDL's binder is null");
     }
 
-    status = AServiceManager_registerLazyService(displayAiqe->asBinder().get(), instance3.c_str());
+    status = AServiceManager_addService(displayAiqe->asBinder().get(), instance3.c_str());
     if (status != STATUS_OK) {
       ALOGW("Failed to register DisplayAiqe AIDL as a service (status:%d)", status);
     } else {
