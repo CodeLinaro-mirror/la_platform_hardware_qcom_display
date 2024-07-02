@@ -164,7 +164,7 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            gralloc4 displayconfig_enabled \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
-                           ubwcp_headers \
+                           ubwcp_headers hwasan \
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -176,6 +176,7 @@ SOONG_CONFIG_qtidisplay_default := true
 SOONG_CONFIG_qtidisplay_var1 := false
 SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
+SOONG_CONFIG_qtidisplay_hwasan := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
@@ -226,6 +227,12 @@ else
     ifeq ($(PROFILE_COVERAGE_DATA), true)
         SOONG_CONFIG_qtidisplay_llvmcov := true
     endif
+
+    ifneq ($(filter hwaddress,$(SANITIZE_TARGET)),)
+        SOONG_CONFIG_qtidisplay_hwasan := true
+        $(warning "using SOONG_CONFIG_qtidisplay_hwasan")
+    endif
+
     ifeq (,$(wildcard $(QCPATH)/display-noship))
         SOONG_CONFIG_qtidisplay_var1 := true
     endif
