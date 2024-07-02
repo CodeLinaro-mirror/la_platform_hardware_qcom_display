@@ -179,10 +179,9 @@ SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
-SOONG_CONFIG_qtidisplay_composer_version := v2
-ifeq ($(TARGET_USES_COMPOSER3),true)
-    SOONG_CONFIG_qtidisplay_composer_version := v3
-    $(warning "Using composer3")
+SOONG_CONFIG_qtidisplay_composer_version := v3
+ifeq ($(PLATFORM_VERSION), 15)
+    SOONG_CONFIG_qtidisplay_composer_version := v3_3
 endif
 
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
