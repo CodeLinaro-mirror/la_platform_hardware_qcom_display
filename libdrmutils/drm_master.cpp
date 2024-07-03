@@ -56,6 +56,7 @@
 #include "drm_master.h"
 
 #define __CLASS__ "DRMMaster"
+#define MAX_CARDS 16
 
 using std::mutex;
 using std::lock_guard;
@@ -112,38 +113,27 @@ int DRMMaster::Init(uint32_t card) {
   if (card == 0) {
     dev_fd_ = drmOpen("msm_drm", nullptr);
   } else {
-    char path_tmp[CARD_PATH_SIZE];
     drmVersionPtr ver;
     int fd;
-    bool first_match = false;
-    int i;
+    int card_cnt = 0;
 
-    /* TODO: Revisit this loop for more than two DPUs*/
-    for (i = 0; i < 16; i++) {
-      snprintf(path_tmp, sizeof(path_tmp), "/dev/dri/card%d", i);
-      fd = open(path_tmp, O_RDWR | O_CLOEXEC, 0);
-      if (fd < 0) {
+    for (int itr = 0; itr < MAX_CARDS; itr++) {
+      snprintf(path_, sizeof(path_), "/dev/dri/card%d", itr);
+      fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+      if (fd < 0)
         continue;
-      }
 
       ver = drmGetVersion(fd);
       if (ver) {
         bool match = !strcmp(ver->name, "msm_drm");
         drmFreeVersion(ver);
         if (match) {
-          if (!first_match) {
-            first_match = true;
-            close(fd);
-          } else {
+          if (card == card_cnt) {
             dev_fd_ = fd;
             card_ = card;
-            snprintf(path_, sizeof(path_), "%s", path_tmp);
-          }
-           /* Revisit the exit logic for more than 2 DPUs*/
-          if (first_match)
-            continue;
-          else
             break;
+          }
+          card_cnt++;
         }
       }
 
