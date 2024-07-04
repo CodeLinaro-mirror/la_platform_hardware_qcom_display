@@ -42,9 +42,11 @@
 #include "DisplayConfigAIDL.h"
 #include "AidlComposer.h"
 #include "QtiComposer3Client.h"
+#ifdef COMPOSER3_V3
 #include "DisplayAiqeAIDL.h"
 
 using aidl::vendor::qti::hardware::display::aiqe::DisplayAiqeAIDL;
+#endif
 using aidl::vendor::qti::hardware::display::composer3::AidlComposer;
 using aidl::vendor::qti::hardware::display::composer3::QtiComposer3Client;
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
@@ -119,6 +121,7 @@ int main(int, char **) {
     ALOGI("Successfully registered DisplayConfig AIDL as a service");
   }
 
+#ifdef COMPOSER3_V3
   std::shared_ptr<DisplayAiqeAIDL> displayAiqe = ndk::SharedRefBase::make<DisplayAiqeAIDL>();
   if (displayAiqe->isSupported()) {
     ALOGI("Registering DisplayAiqe AIDL as a service");
@@ -134,6 +137,7 @@ int main(int, char **) {
       ALOGI("Successfully registered DisplayAiqe AIDL as a service");
     }
   }
+#endif
 
   ps->setThreadPoolMaxThreadCount(4);
   ps->startThreadPool();

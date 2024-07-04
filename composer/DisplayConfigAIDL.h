@@ -99,7 +99,9 @@ using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 namespace composer3 = aidl::android::hardware::graphics::composer3;
+#ifdef COMPOSER3_V3
 using DisplayConfiguration = composer3::DisplayConfiguration;
+#endif
 using HwcDisplayCapability = composer3::DisplayCapability;
 using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
