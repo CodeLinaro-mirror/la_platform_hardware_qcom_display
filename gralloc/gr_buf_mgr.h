@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GR_BUF_MGR_H__
 #define __GR_BUF_MGR_H__
 
@@ -63,6 +69,10 @@ class BufferManager {
  private:
   BufferManager();
   Error MapBuffer(private_handle_t const *hnd);
+
+#ifdef MULTI_VIEW_SUPPORT
+  Error AllocateBuffer(AllocData *ad, AllocData *m_data, uint64_t usage, int format);
+#endif  // MULTI_VIEW_SUPPORT
 
   // Imports the ion fds into the current process. Returns an error for invalid handles
   Error ImportHandleLocked(private_handle_t *hnd);

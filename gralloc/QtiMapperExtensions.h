@@ -27,12 +27,22 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __QTIMAPPEREXTENSIONS_H__
 #define __QTIMAPPEREXTENSIONS_H__
 
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
+#ifndef MULTI_VIEW_SUPPORT
 #include <vendor/qti/hardware/display/mapperextensions/1.2/IQtiMapperExtensions.h>
+#else
+#include <vendor/qti/hardware/display/mapperextensions/1.4/IQtiMapperExtensions.h>
+#endif  // MULTI_VIEW_SUPPORT
 
 #include "gr_buf_mgr.h"
 namespace vendor {
@@ -58,8 +68,13 @@ using gralloc::BufferManager;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::Error;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::PlaneLayout;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::YCbCrLayout;
-using ::vendor::qti::hardware::display::mapperextensions::V1_2::IQtiMapperExtensions;
 using IMapperExtensions_1_0_Error = ::vendor::qti::hardware::display::mapperextensions::V1_0::Error;
+#ifndef MULTI_VIEW_SUPPORT
+using ::vendor::qti::hardware::display::mapperextensions::V1_2::IQtiMapperExtensions;
+#else
+using ::vendor::qti::hardware::display::mapperextensions::V1_4::IQtiMapperExtensions;
+using MetadataType = ::android::hardware::graphics::mapper::V4_0::IMapper::MetadataType;
+#endif  // MULTI_VIEW_SUPPORT
 
 class QtiMapperExtensions : public IQtiMapperExtensions {
  public:
@@ -95,7 +110,13 @@ class QtiMapperExtensions : public IQtiMapperExtensions {
   Return<Error> copyMetaData(void *src, void *dst) override;
   Return<Error> setMetadataBlob(const hidl_vec<uint8_t> &src, void *dst) override;
   Return<void> getMetadataBlob(void *src, getMetadataBlob_cb _hidl_cb) override;
-
+#ifdef MULTI_VIEW_SUPPORT
+  Return<Error> getMetaDataValue(void *src, const MetadataType &type, void *in) override;
+  Return<Error> getMultiViewInfo(void *bufferHandle, void* views) override;
+  Return<Error> getBaseView(void *bufferHandle, void* view) override;
+  Return<void> importViewBuffer(void *bufferHandle, uint32_t view,
+                                importViewBuffer_cb _hidl_cb) override;
+#endif  // MULTI_VIEW_SUPPORT
  private:
   BufferManager *buf_mgr_ = nullptr;
 };
