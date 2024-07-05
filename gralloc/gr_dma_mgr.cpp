@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #define DEBUG 0
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #include <sys/ioctl.h>
@@ -107,7 +113,9 @@ int DmaManager::FreeBuffer(void *base, unsigned int size, unsigned int offset, i
     err = UnmapBuffer(base, size, offset);
   }
 
+#ifndef MULTI_VIEW_SUPPORT
   close(fd);
+#endif  // MULTI_VIEW_SUPPORT
   return err;
 }
 

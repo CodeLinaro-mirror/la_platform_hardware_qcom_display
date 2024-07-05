@@ -11,6 +11,7 @@ soong_config_module_type {
         "var3",
         "platform_version_12",
         "platform_version_13",
+        "multi_view",
     ],
     properties: [
         "cflags",
@@ -108,6 +109,15 @@ qtidisplay_cc_defaults {
             },
         },
     },
+}
+
+qtidisplay_cc_defaults {
+    name: "qtidisplay_multiview_defaults",
+    soong_config_variables: {
+        multi_view: {
+            cflags: ["-DMULTI_VIEW_SUPPORT"],
+        },
+    }
 }
 
 qtidisplay_cc_defaults {

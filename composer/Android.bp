@@ -3,7 +3,10 @@ composer_srcs = ["*.cpp"]
 cc_binary {
 
     name: "vendor.qti.hardware.display.composer-service",
-    defaults: ["qtidisplay_defaults"],
+    defaults: [
+        "qtidisplay_defaults",
+        "qtidisplay_multiview_defaults",
+    ],
     sanitize: {
         integer_overflow: true,
     },

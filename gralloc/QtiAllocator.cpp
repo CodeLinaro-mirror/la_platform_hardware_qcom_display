@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #define DEBUG 0
 #include "QtiAllocator.h"
 
@@ -95,7 +101,13 @@ Return<void> QtiAllocator::allocate(const hidl_vec<uint8_t> &descriptor, uint32_
   uint32_t stride = 0;
   hidl_vec<hidl_handle> hidl_buffers;
   if (err == Error::NONE && buffers.size() > 0) {
+#ifndef MULTI_VIEW_SUPPORT
     stride = static_cast<uint32_t>(PRIV_HANDLE_CONST(buffers[0].getNativeHandle())->width);
+#else
+    stride = static_cast<uint32_t>(
+        const_cast<private_handle_t *>(PRIV_HANDLE_CONST(buffers[0].getNativeHandle()))->width());
+#endif  // MULTI_VIEW_SUPPORT
+
     hidl_buffers.setToExternal(buffers.data(), buffers.size());
   }
   hidl_cb(static_cast<IMapper_4_0_Error>(err), stride, hidl_buffers);

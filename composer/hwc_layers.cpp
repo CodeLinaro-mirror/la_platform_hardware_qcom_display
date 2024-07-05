@@ -328,6 +328,7 @@ HWCLayer::~HWCLayer() {
   }
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> acquire_fence) {
   if (!buffer) {
     if (client_requested_ == HWC2::Composition::Device ||
@@ -401,6 +402,82 @@ HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
   layer_buffer->usage = handle->usage;
   return HWC2::Error::None;
 }
+#else
+HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> acquire_fence) {
+  if (!buffer) {
+    if (client_requested_ == HWC2::Composition::Device ||
+        client_requested_ == HWC2::Composition::Cursor) {
+      DLOGW("Invalid buffer handle: %p on layer: %d client requested comp type %d", buffer,
+            UINT32(id_), client_requested_);
+      return HWC2::Error::BadParameter;
+    } else {
+      return HWC2::Error::None;
+    }
+  }
+
+  const private_handle_t *pvt_handle = reinterpret_cast<const private_handle_t *>(buffer);
+  private_handle_t *handle = const_cast<private_handle_t *>(pvt_handle);
+
+  if (handle->fd() < 0) {
+    return HWC2::Error::BadParameter;
+  }
+
+  LayerBuffer *layer_buffer = &layer_->input_buffer;
+  int aligned_width, aligned_height;
+  buffer_allocator_->GetAdjustedWidthAndHeight(handle, &aligned_width, &aligned_height);
+
+  LayerBufferFormat format = GetSDMFormat(handle->format(), handle->flags());
+  if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
+      (UINT32(aligned_height) != layer_buffer->height)) {
+    // Layer buffer geometry has changed.
+    geometry_changes_ |= kBufferGeometry;
+  }
+
+  layer_buffer->format = format;
+  layer_buffer->width = UINT32(aligned_width);
+  layer_buffer->height = UINT32(aligned_height);
+  layer_buffer->unaligned_width = UINT32(handle->unaligned_width());
+  layer_buffer->unaligned_height = UINT32(handle->unaligned_height());
+
+  layer_buffer->flags.video = (handle->buffer_type() == BUFFER_TYPE_VIDEO) ? true : false;
+  if (SetMetaData(handle, layer_) != kErrorNone) {
+    return HWC2::Error::BadLayer;
+  }
+
+  // TZ Protected Buffer - L1
+  int32_t flags = handle->flags();
+  secure_ = (flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER);
+  bool secure_camera = secure_ && (flags & qtigralloc::PRIV_FLAGS_CAMERA_WRITE);
+  bool secure_display = (flags & qtigralloc::PRIV_FLAGS_SECURE_DISPLAY);
+  if (secure_ != layer_buffer->flags.secure || secure_camera != layer_buffer->flags.secure_camera ||
+      secure_display != layer_buffer->flags.secure_display) {
+    // Secure attribute of layer buffer has changed.
+    layer_->update_mask.set(kSecurity);
+  }
+
+  layer_buffer->flags.secure = secure_;
+  layer_buffer->flags.secure_camera = secure_camera;
+  layer_buffer->flags.secure_display = secure_display;
+
+  layer_buffer->acquire_fence = acquire_fence;
+
+  int buffer_fd = buffer_fd_;
+  buffer_fd_ = ::dup(handle->fd());
+  if (buffer_fd >= 0) {
+    ::close(buffer_fd);
+  }
+
+  layer_buffer->planes[0].fd = buffer_fd_;
+  layer_buffer->planes[0].offset = 0;
+  layer_buffer->planes[0].stride = UINT32(handle->width());
+  layer_buffer->size = handle->size();
+  buffer_flipped_ = reinterpret_cast<uint64_t>(handle) != layer_buffer->buffer_id;
+  layer_buffer->buffer_id = reinterpret_cast<uint64_t>(handle);
+  layer_buffer->handle_id = handle->id();
+  layer_buffer->usage = handle->usage();
+  return HWC2::Error::None;
+}
+#endif
 
 HWC2::Error HWCLayer::SetLayerSurfaceDamage(hwc_region_t damage) {
   surface_updated_ = true;

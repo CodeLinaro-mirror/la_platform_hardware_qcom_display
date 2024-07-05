@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "EGLImageWrapper.h"
 #include <cutils/native_handle.h>
 #include <gralloc_priv.h>
@@ -110,6 +116,7 @@ void EGLImageWrapper::Deinit()
 
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 //-----------------------------------------------------------------------------
 static EGLImageBuffer* L_wrap(const private_handle_t *src)
 //-----------------------------------------------------------------------------
@@ -173,3 +180,70 @@ EGLImageBuffer *EGLImageWrapper::wrap(const void *pvt_handle)
 
   return eglImage;
 }
+#else
+//-----------------------------------------------------------------------------
+static EGLImageBuffer* L_wrap(const private_handle_t *src)
+//-----------------------------------------------------------------------------
+{
+  EGLImageBuffer* result = 0;
+  private_handle_t* handle = const_cast<private_handle_t *>(src);
+
+  uint32_t unaligned_width = handle->unaligned_width();
+  uint32_t unaligned_height = handle->unaligned_height();
+  uint32_t stride = handle->width();
+  native_handle_t *native_handle = handle;
+
+  BufferDim_t custom_dim;
+  if(!getMetaData(handle, GET_BUFFER_GEOMETRY, &custom_dim)) {
+    unaligned_width = custom_dim.sliceWidth;
+    unaligned_height = custom_dim.sliceHeight;
+    uint32_t aligned_height = 0;
+    gralloc::BufferInfo info(unaligned_width, unaligned_height, handle->format(), handle->usage());
+    gralloc::GetAlignedWidthAndHeight(info, &stride, &aligned_height);
+  }
+
+  int flags = android::GraphicBuffer::USAGE_HW_TEXTURE |
+              android::GraphicBuffer::USAGE_SW_READ_NEVER |
+              android::GraphicBuffer::USAGE_SW_WRITE_NEVER;
+
+  if (handle->flags() & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
+    flags |= android::GraphicBuffer::USAGE_PROTECTED;
+  }
+
+  android::sp<android::GraphicBuffer> graphicBuffer =
+    new android::GraphicBuffer(unaligned_width, unaligned_height, handle->format(),
+                               1,  // Layer count
+                               flags, stride /*handle->stride*/,
+                               native_handle, false);
+
+  result = new EGLImageBuffer(graphicBuffer);
+
+  return result;
+}
+
+//-----------------------------------------------------------------------------
+EGLImageBuffer *EGLImageWrapper::wrap(const void *pvt_handle)
+//-----------------------------------------------------------------------------
+{
+  const private_handle_t *src = static_cast<const private_handle_t *>(pvt_handle);
+
+  string buffStr = get_ion_buff_str(const_cast<private_handle_t *>(src)->fd());
+  EGLImageBuffer* eglImage = nullptr;
+  if (!buffStr.empty()) {
+    auto it = buffStrbuffIntMap.find(buffStr);
+    if (it != buffStrbuffIntMap.end()) {
+      eglImage = eglImageBufferCache->get(it->second);
+    } else {
+        eglImage = L_wrap(src);
+        buffStrbuffIntMap.insert(pair<string, int>(buffStr, buffInt));
+        eglImageBufferCache->put(buffInt, eglImage);
+        buffInt++;
+    }
+  } else {
+    ALOGE("Could not provide an eglImage for fd = %d, EGLImageWrapper = %p",
+          const_cast<private_handle_t *>(src)->fd(), this);
+  }
+
+  return eglImage;
+}
+#endif  // MULTI_VIEW_SUPPORT

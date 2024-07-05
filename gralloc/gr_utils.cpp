@@ -732,6 +732,7 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
   plane_info[1].size = static_cast<uint32_t>(c_size);
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]) {
   int err = 0;
   uint32_t width = UINT(hnd->width);
@@ -805,6 +806,83 @@ int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]) 
   }
   return err;
 }
+
+#else
+int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]) {
+  private_handle_t *handle = const_cast<private_handle_t *>(hnd);
+  int err = 0;
+  uint32_t width = UINT(handle->width());
+  uint32_t height = UINT(handle->height());
+  int format = handle->format();
+  uint64_t usage = handle->usage();
+  int32_t interlaced = 0;
+  int plane_count = 0;
+  int unaligned_width = INT(handle->unaligned_width());
+  int unaligned_height = INT(handle->unaligned_height());
+  BufferInfo info(unaligned_width, unaligned_height, format, usage);
+
+  memset(ycbcr->reserved, 0, sizeof(ycbcr->reserved));
+
+  // Check if UBWC buffer has been rendered in linear format.
+  int linear_format = 0;
+  if (getMetaData(const_cast<private_handle_t *>(hnd), GET_LINEAR_FORMAT, &linear_format) == 0) {
+    format = INT(linear_format);
+  }
+
+  // Check metadata if the geometry has been updated.
+  BufferDim_t buffer_dim;
+  if (getMetaData(const_cast<private_handle_t *>(hnd), GET_BUFFER_GEOMETRY, &buffer_dim) == 0) {
+    BufferInfo info(buffer_dim.sliceWidth, buffer_dim.sliceHeight, format, usage);
+    err = GetAlignedWidthAndHeight(info, &width, &height);
+    if (err) {
+      return err;
+    }
+  }
+
+  // Check metadata for interlaced content.
+  int interlace_flag = 0;
+  if (getMetaData(const_cast<private_handle_t *>(hnd), GET_PP_PARAM_INTERLACED, &interlace_flag) ==
+      0) {
+    if (interlace_flag) {
+      interlaced = LAYOUT_INTERLACED_FLAG;
+    }
+  }
+
+  PlaneLayoutInfo plane_info[8] = {};
+  // Get the chroma offsets from the handle width/height. We take advantage
+  // of the fact the width _is_ the stride
+  err = GetYUVPlaneInfo(info, format, width, height, interlaced, &plane_count, plane_info);
+  if (err == 0) {
+    if (interlaced && (format == HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC ||
+        IsUbwcFlexFormat(format))) {
+      CopyPlaneLayoutInfotoAndroidYcbcr(handle->base(), plane_count, &plane_info[0], &ycbcr[0]);
+      unsigned int uv_stride = 0, uv_height = 0, uv_size = 0;
+      unsigned int alignment = 4096;
+      uint64_t field_base;
+      height = (height + 1) >> 1;
+#ifndef QMAA
+      uv_stride = MMM_COLOR_FMT_UV_STRIDE(MMM_COLOR_FMT_NV12_UBWC, INT(width));
+      uv_height = MMM_COLOR_FMT_UV_SCANLINES(MMM_COLOR_FMT_NV12_UBWC, INT(height));
+#endif
+      uv_size = ALIGN((uv_stride * uv_height), alignment);
+      field_base = handle->base() + plane_info[1].offset + uv_size;
+      memset(ycbcr[1].reserved, 0, sizeof(ycbcr[1].reserved));
+      CopyPlaneLayoutInfotoAndroidYcbcr(field_base, plane_count, &plane_info[4], &ycbcr[1]);
+    } else {
+      CopyPlaneLayoutInfotoAndroidYcbcr(handle->base(), plane_count, plane_info, ycbcr);
+      switch (format) {
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+        case HAL_PIXEL_FORMAT_YCrCb_422_SP:
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
+        case HAL_PIXEL_FORMAT_NV21_ZSL:
+          std::swap(ycbcr->cb, ycbcr->cr);
+      }
+    }
+  }
+  return err;
+}
+#endif  // MULTI_VIEW_SUPPORT
 
 int GetRawPlaneInfo(int32_t format, int32_t width, int32_t height, PlaneLayoutInfo *plane_info) {
   int32_t step = 0;
@@ -1114,6 +1192,7 @@ unsigned int GetRgbMetaSize(int format, uint32_t width, uint32_t height, uint64_
   return meta_size;
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 int GetRgbDataAddress(private_handle_t *hnd, void **rgb_data) {
   int err = 0;
 
@@ -1160,6 +1239,55 @@ int GetCustomDimensions(private_handle_t *hnd, int *stride, int *height) {
   }
   return 0;
 }
+
+#else
+int GetRgbDataAddress(private_handle_t *hnd, void **rgb_data) {
+  int err = 0;
+
+  // This api is for RGB* formats
+  if (!IsUncompressedRGBFormat(hnd->format())) {
+    return -EINVAL;
+  }
+
+  // linear buffer, nothing to do further
+  if (!(hnd->flags() & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED)) {
+    *rgb_data = reinterpret_cast<void *>(hnd->base());
+    return err;
+  }
+  unsigned int meta_size = GetRgbMetaSize(hnd->format(), hnd->width(), hnd->height(), hnd->usage());
+
+  *rgb_data = reinterpret_cast<void *>(hnd->base() + meta_size);
+
+  return err;
+}
+
+int GetCustomDimensions(private_handle_t *hnd, int *stride, int *height) {
+  BufferDim_t buffer_dim;
+  int interlaced = 0;
+  *stride = hnd->width();
+  *height = hnd->height();
+  if (getMetaData(hnd, GET_BUFFER_GEOMETRY, &buffer_dim) == 0) {
+    *stride = buffer_dim.sliceWidth;
+    *height = buffer_dim.sliceHeight;
+  } else if (getMetaData(hnd, GET_PP_PARAM_INTERLACED, &interlaced) == 0) {
+    if (interlaced && IsUBwcFormat(hnd->format())) {
+      unsigned int alignedw = 0, alignedh = 0;
+      // Get re-aligned height for single ubwc interlaced field and
+      // multiply by 2 to get frame height.
+      BufferInfo info(hnd->width(), ((hnd->height() + 1) >> 1), hnd->format());
+      int err = GetAlignedWidthAndHeight(info, &alignedw, &alignedh);
+      if (err) {
+        *stride = 0;
+        *height = 0;
+        return err;
+      }
+      *stride = static_cast<int>(alignedw);
+      *height = static_cast<int>(alignedh * 2);
+    }
+  }
+  return 0;
+}
+#endif  // MULTI_VIEW_SUPPORT
 
 void GetColorSpaceFromMetadata(private_handle_t *hnd, int *color_space) {
   ColorMetaData color_metadata;
@@ -1414,6 +1542,7 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   return 0;
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4], uint32_t offset[4],
                     uint32_t *num_planes) {
   if (!hnd || !stride || !offset || !num_planes) {
@@ -1483,6 +1612,78 @@ int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4], uint32_t offset[4
 
   return 0;
 }
+
+#else
+int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4], uint32_t offset[4],
+                    uint32_t *num_planes) {
+  if (!hnd || !stride || !offset || !num_planes) {
+    return -EINVAL;
+  }
+
+  struct android_ycbcr yuvPlaneInfo[2] = {};
+  *num_planes = 1;
+
+  if (IsUncompressedRGBFormat(hnd->format())) {
+    uint32_t bpp = GetBppForUncompressedRGB(hnd->format());
+    stride[0] = static_cast<uint32_t>(hnd->width() * bpp);
+    return 0;
+  }
+
+  (*num_planes)++;
+  int ret = GetYUVPlaneInfo(hnd, yuvPlaneInfo);
+  if (ret < 0) {
+    ALOGE("%s failed", __FUNCTION__);
+    return ret;
+  }
+
+  // We are only returning buffer layout for progressive or single field formats.
+  struct android_ycbcr yuvInfo = yuvPlaneInfo[0];
+  stride[0] = static_cast<uint32_t>(yuvInfo.ystride);
+  offset[0] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(yuvInfo.y) - hnd->base());
+  stride[1] = static_cast<uint32_t>(yuvInfo.cstride);
+  switch (hnd->format()) {
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP:
+    case HAL_PIXEL_FORMAT_YCbCr_422_SP:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
+    case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
+    case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
+    case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
+    case HAL_PIXEL_FORMAT_NV12_HEIF:
+    case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX:
+    case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_2_BATCH:
+    case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_4_BATCH:
+    case HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH:
+      offset[1] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(yuvInfo.cb) - hnd->base());
+      break;
+    case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+    case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
+    case HAL_PIXEL_FORMAT_YCrCb_422_SP:
+      offset[1] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(yuvInfo.cr) - hnd->base());
+      break;
+    case HAL_PIXEL_FORMAT_YV12:
+      offset[1] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(yuvInfo.cr) - hnd->base());
+      stride[2] = static_cast<uint32_t>(yuvInfo.cstride);
+      offset[2] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(yuvInfo.cb) - hnd->base());
+      (*num_planes)++;
+      break;
+    case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+      *num_planes = 1;
+      break;
+    default:
+      ALOGW("%s: Unsupported format", __FUNCTION__);
+      ret = -EINVAL;
+  }
+
+  if (hnd->flags() & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) {
+    std::fill(offset, offset + 4, 0);
+  }
+
+  return 0;
+}
+#endif  // MULTI_VIEW_SUPPORT
 
 int GetGpuResourceSizeAndDimensions(const BufferInfo &info, unsigned int *size,
                                     unsigned int *alignedw, unsigned int *alignedh,
