@@ -183,7 +183,7 @@ HWC3::Error HWCDisplayVirtual::Present(int32_t *out_retire_fence) {
       const native_handle_t *output_handle =
           reinterpret_cast<const native_handle_t *>(output_buffer_->buffer_id);
       void *base_ptr = NULL;
-      int error = buffer_allocator_->MapBuffer(output_handle, -1, base_ptr);
+      int error = buffer_allocator_->MapBuffer(output_handle, -1, &base_ptr);
       if (error != 0) {
         DLOGE("Failed to map output buffer, error = %d", error);
         return HWC3::Error::BadParameter;

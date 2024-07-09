@@ -319,7 +319,7 @@ void HWCToneMapper::DumpToneMapOutput(ToneMapSession *session, int *acquire_fd) 
   }
 
   void *base_ptr = NULL;
-  error = buffer_allocator_->MapBuffer(target_buffer, *acquire_fd, base_ptr);
+  error = buffer_allocator_->MapBuffer(target_buffer, *acquire_fd, &base_ptr);
   if (error != 0) {
     DLOGE("MapBuffer failed, base addr = %p", base_ptr);
     return;

@@ -74,7 +74,7 @@ class HWCBufferAllocator : public BufferAllocator {
   DisplayError GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4],
                                uint32_t offset[4], uint32_t *num_planes);
   int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
-  DisplayError MapBuffer(const native_handle_t *handle, int acquire_fence, void *base_ptr);
+  DisplayError MapBuffer(const native_handle_t *handle, int acquire_fence, void **base_ptr);
   DisplayError UnmapBuffer(const native_handle_t *handle, int *release_fence);
   DisplayError GetHeight(void *buf, uint32_t &height);
   DisplayError GetWidth(void *buf, uint32_t &width);
