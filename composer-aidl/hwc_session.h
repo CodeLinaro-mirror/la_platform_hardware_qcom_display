@@ -281,6 +281,8 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   void Refresh(Display display);
   HWC3::Error GetVsyncPeriod(Display disp, uint32_t *vsync_period);
 
+  HWC3::Error SetExpectedPresentTime(Display display, uint64_t expectedPresentTime);
+
   static Locker locker_[HWCCallbacks::kNumDisplays];
   static Locker power_state_[HWCCallbacks::kNumDisplays];
   static Locker display_config_locker_;

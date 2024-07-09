@@ -3361,4 +3361,15 @@ HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, PixelFormat
   return CallDisplayFunction(display, &HWCDisplay::getDisplayDecorationSupport, format, alpha);
 }
 
+HWC3::Error HWCSession::SetExpectedPresentTime(Display display, uint64_t expectedPresentTime) {
+  Locker::ScopeLock lock_d(locker_[display]);
+  if (!hwc_display_[display]) {
+    return HWC3::Error::BadDisplay;
+  }
+
+  hwc_display_[display]->SetExpectedPresentTime(expectedPresentTime);
+
+  return HWC3::Error::None;
+}
+
 }  // namespace sdm

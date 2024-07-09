@@ -392,7 +392,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC3::Error SetActiveConfigWithConstraints(Config config,
       const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
       VsyncPeriodChangeTimeline *out_timeline);
-
+  virtual void SetExpectedPresentTime(uint64_t time) { expected_present_time_ = time; }
  protected:
   static uint32_t throttling_refresh_rate_;
   // Maximum number of layers supported by display manager.
@@ -527,6 +527,7 @@ class HWCDisplay : public DisplayEventHandler {
   int release_fence_ = -1;
   Config pending_config_index_ = 0;
   int async_power_mode_ = 0;
+  uint64_t expected_present_time_ = 0;  // Expected Present time for current frame
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

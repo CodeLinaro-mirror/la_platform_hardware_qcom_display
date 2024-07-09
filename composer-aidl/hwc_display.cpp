@@ -813,6 +813,8 @@ void HWCDisplay::BuildLayerStack() {
   SetClientTargetDataSpace(client_target_dataspace);
   layer_stack_.layers.push_back(sdm_client_target);
 
+  layer_stack_.expected_present_time = expected_present_time_;
+
   // fall back frame composition to GPU when client target is 10bit
   // TODO(user): clarify the behaviour from Client(SF) and SDM Extn -
   // when handling 10bit FBT, as it would affect blending
