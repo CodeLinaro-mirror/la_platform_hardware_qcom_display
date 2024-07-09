@@ -637,11 +637,17 @@ DisplayError HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_
 }
 
 DisplayError HWCBufferAllocator::MapBuffer(const native_handle_t *handle, int acquire_fence,
-                                  void *base_ptr) {
+                                  void **base_ptr) {
   auto err = GetGrallocInstance();
   if (err != kErrorNone) {
     return err;
   }
+
+  if (base_ptr == NULL) {
+      DLOGE("base ptr is NULL");
+      return kErrorParameters;
+  }
+
   NATIVE_HANDLE_DECLARE_STORAGE(acquire_fence_storage, 1, 0);
   hidl_handle acquire_fence_handle;
   if (acquire_fence >= 0) {
@@ -655,16 +661,17 @@ DisplayError HWCBufferAllocator::MapBuffer(const native_handle_t *handle, int ac
   }
 
   auto hnd = const_cast<native_handle_t *>(handle);
-  base_ptr = NULL;
+  *base_ptr = NULL;
   const IMapper::Rect access_region = {.left = 0, .top = 0, .width = 0, .height = 0};
   mapper_->lock(reinterpret_cast<void *>(hnd), (uint64_t)BufferUsage::CPU_READ_OFTEN, access_region,
                 acquire_fence_handle, [&](const auto &_error, const auto &_buffer) {
                   if (_error == Error::NONE) {
-                    base_ptr = _buffer;
+                    *base_ptr = _buffer;
                   }
                 });
 
-  if (!base_ptr) {
+  if (!*base_ptr) {
+    DLOGE("buffer is NULL");
     return kErrorUndefined;
   }
 

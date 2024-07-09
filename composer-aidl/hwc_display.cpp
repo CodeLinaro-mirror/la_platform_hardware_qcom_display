@@ -1769,7 +1769,7 @@ void HWCDisplay::DumpInputBuffers() {
     }
 
     void *base_ptr = NULL;
-    int error = buffer_allocator_->MapBuffer(handle, -1, base_ptr);
+    int error = buffer_allocator_->MapBuffer(handle, -1, &base_ptr);
     if (error != kErrorNone) {
       DLOGE("Failed to map buffer, error = %d", error);
       continue;
