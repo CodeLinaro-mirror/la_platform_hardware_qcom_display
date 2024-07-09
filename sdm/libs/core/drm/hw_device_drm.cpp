@@ -1576,6 +1576,25 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
   SetupAtomic(hw_layers, false /* validate */);
 
+  HWLayersInfo &hw_layer_info = hw_layers->info;
+  if (hw_layer_info.expected_present_time > 0) {
+    uint64_t vsync_period = display_attributes_[current_mode_index_].vsync_period_ns;
+    uint64_t expected_present_time = hw_layer_info.expected_present_time > 0 ?
+                                     hw_layer_info.expected_present_time - vsync_period : 0;
+
+    uint64_t future_timestamp = expected_present_time;
+    struct timespec t = {0, 0};
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    uint64_t current_time = (UINT64(t.tv_sec) * 1000000000LL + UINT64(t.tv_nsec));
+
+    if (current_time < future_timestamp) {
+      uint64_t sleep_period = future_timestamp - current_time;
+      DLOGI_IF(kTagDriverConfig, "current_time: %llu, future_timestamp: %llu, sleep_period: %llu,"
+              "vsync_period: %llu", current_time, future_timestamp, sleep_period, vsync_period);
+      usleep(UINT32(sleep_period / 1000));
+    }
+  }
+
   int ret = drm_atomic_intf_->Commit(synchronous_commit_, false /* retain_planes*/);
   int release_fence = INT(release_fence_);
   int retire_fence = INT(retire_fence_);
@@ -1593,7 +1612,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DLOGD_IF(kTagDriverConfig, "RELEASE fence created: fd:%d", release_fence);
   DLOGD_IF(kTagDriverConfig, "RETIRE fence created: fd:%d", retire_fence);
 
-  HWLayersInfo &hw_layer_info = hw_layers->info;
   LayerStack *stack = hw_layer_info.stack;
   stack->retire_fence_fd = retire_fence;
 
