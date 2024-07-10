@@ -40,11 +40,16 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 
-#include <android/hardware/graphics/allocator/4.0/IAllocator.h>
+#include <aidl/android/hardware/graphics/allocator/AllocationError.h>
+#include <aidl/android/hardware/graphics/allocator/AllocationResult.h>
+#include <aidl/android/hardware/graphics/allocator/IAllocator.h>
+#include <android/binder_manager.h>
+#include <aidlcommonsupport/NativeHandle.h>
 #include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
 
-using android::hardware::graphics::allocator::V4_0::IAllocator;
+using aidl::android::hardware::graphics::allocator::AllocationResult;
+using aidl::android::hardware::graphics::allocator::IAllocator;
 using android::hardware::graphics::mapper::V4_0::IMapper;
 using vendor::qti::hardware::display::mapperextensions::V1_0::IQtiMapperExtensions;
 
@@ -87,7 +92,7 @@ class HWCBufferAllocator : public BufferAllocator {
  private:
   DisplayError GetGrallocInstance();
   android::sp<IMapper> mapper_;
-  android::sp<IAllocator> allocator_;
+  std::shared_ptr<IAllocator> allocator_;
   android::sp<IQtiMapperExtensions> mapper_ext_;
 };
 
