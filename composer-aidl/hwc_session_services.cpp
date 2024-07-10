@@ -40,6 +40,7 @@
 #include <string>
 #include <errno.h>
 #include <math.h>
+#include <QtiGralloc.h>
 
 #include "hwc_buffer_sync_handler.h"
 #include "hwc_session.h"

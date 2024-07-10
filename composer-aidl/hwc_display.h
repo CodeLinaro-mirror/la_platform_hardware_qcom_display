@@ -31,7 +31,6 @@
 #include <core/core_interface.h>
 #include <hardware/hwcomposer.h>
 #include <private/color_params.h>
-#include <qdMetaData.h>
 #include <sys/stat.h>
 #include <map>
 #include <queue>
