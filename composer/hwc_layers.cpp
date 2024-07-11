@@ -389,7 +389,7 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
     gralloc::GetMetaDataValue(hnd, (int64_t)StandardMetadataType::PIXEL_FORMAT_REQUESTED, &fmt);
     gralloc::GetMetaDataValue(hnd, (int64_t)qtigralloc::MetadataType_PrivateFlags.value, &flag);
   } else {
-    buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::PIXEL_FORMAT_REQUESTED, &fmt,
+    buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &fmt,
                                         sizeof(fmt));
     buffer_allocator_->GetPrivateFlags(hnd, flag);
   }
