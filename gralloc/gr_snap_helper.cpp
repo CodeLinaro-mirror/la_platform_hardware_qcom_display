@@ -30,8 +30,8 @@ using std::mutex;
 
 namespace gralloc {
 
-static std::unordered_map<native_handle_t *, SnapHandle *> handles_map_;
-static std::mutex map_lock_;
+[[clang::no_destroy]] static std::unordered_map<native_handle_t *, SnapHandle *> handles_map_;
+[[clang::no_destroy]] static std::mutex map_lock_;
 GrallocSnapHelper *GrallocSnapHelper::s_instance = nullptr;
 
 static NativeHandle AIDLNativeHandleFromSnapHandle(SnapHandle *snap_buffer_handle,
