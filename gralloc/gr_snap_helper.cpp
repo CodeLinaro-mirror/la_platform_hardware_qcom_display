@@ -500,13 +500,10 @@ int GrallocSnapHelper::IsSupported(gralloc::BufferDescriptor gr_desc, bool *is_s
   if (err) {
     return err;
   }
-  auto status = snapallocator_->IsSupported(snap_desc, is_supported);
-  if (status != SnapError::NONE) {
-    ALOGE("%s: Failed to check if descriptor is supported via SnapAlloc. Error code: %d",
-          __FUNCTION__, status);
-  }
 
-  return status;
+  snapallocator_->IsSupported(snap_desc, is_supported);
+
+  return SnapError::NONE;
 }
 
 template <aidl::android::hardware::graphics::common::StandardMetadataType T>
