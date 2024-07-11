@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -40,6 +40,8 @@
 #include <QtiGralloc.h>
 
 #define __CLASS__ "HWCDisplayVirtualGPU"
+#include "gr_snap_helper.h"
+#include "mapper_utils.h"
 
 namespace sdm {
 
@@ -132,7 +134,9 @@ HWC3::Error HWCDisplayVirtualGPU::SetOutputBuffer(buffer_handle_t buf,
   output_buffer_.unaligned_height = height_;
 
   // Update active dimensions.
-  if (qtigralloc::getMetadataState(hnd, android::gralloc4::MetadataType_Crop.value)) {
+  bool is_crop_set = false;
+  mapper::GetMetadataState(static_cast<buffer_handle_t>(hnd), SnapMetadataType::CROP, &is_crop_set);
+  if (is_crop_set) {
     int32_t slice_width = 0, slice_height = 0;
     if (!buffer_allocator_->GetBufferGeometry(hnd, slice_width, slice_height)) {
       output_buffer_.unaligned_width = slice_width;
