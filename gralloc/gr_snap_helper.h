@@ -729,8 +729,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_TRUSTED_VM, SnapUsage::QTI_PRIVATE_TRUSTED_VM},
       {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R, SnapUsage::QTI_ALLOC_UBWC_4R},
-      {SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
-      {SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
@@ -1489,8 +1489,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_TRUSTED_VM, SnapUsage::QTI_PRIVATE_TRUSTED_VM},
       {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R, SnapUsage::QTI_ALLOC_UBWC_4R},
-      {SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
-      {SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
