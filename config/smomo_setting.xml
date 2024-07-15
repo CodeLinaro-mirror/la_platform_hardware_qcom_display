@@ -47,6 +47,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <LayerApp name="game">
         <AppLayer name="SurfaceView[com.sample.game/com.sample.game.GameActivity](BLAST)#0" type="game" strategy="mode" mode="1" variation="0.6" samples="8" enable="true"/>
       </LayerApp>
+
+      <!-- Disable CTS layer in smomo default config -->
+      <LayerApp name="app">
+        <AppLayer name="SurfaceView[android.graphics.cts/android.graphics.cts.FrameRateOverrideCtsActivity](BLAST)" type="app" enable="false"/>
+      </LayerApp>
     </LayerWhiteList>
   </SmoMoWhiteList>
 </SmomoSetting>

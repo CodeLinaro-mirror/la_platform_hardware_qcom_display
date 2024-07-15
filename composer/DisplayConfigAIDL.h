@@ -277,7 +277,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 
   sdm::QServiceBackend *qservice_ = nullptr;
 
-  std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
+  std::mutex cwb_callbacks_lock_;
+  std::unordered_map<void *, std::tuple<int32_t, std::shared_ptr<IDisplayConfigCallback>>>
+      cwb_callbacks_;
 
   // sdmclient callbacks
   std::unordered_map<uint64_t, GLColorConvert *> color_convert_map_;
