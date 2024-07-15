@@ -48,55 +48,33 @@ std::atomic<LayerId> HWCLayer::next_id_(1);
 
 DisplayError SetCSC(const native_handle_t *handle, ColorMetaData *color_metadata) {
   int32_t error = 0;
-  bool metadata_set = false;
   //TODO: Investigate performance hit of moving to fetching smaller color metadata structs
   auto mapper = GetMapperInstance();
   if (!mapper) {
     return kErrorResources;
   }
-  auto mapper_err =
-      GetMetadataState(static_cast<buffer_handle_t>(handle),
-                       static_cast<SnapMetadataType>(QTI_COLOR_METADATA), &metadata_set);
-  if (metadata_set) {
-    error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
-                                             VENDOR_QTI_METADATA(QTI_COLOR_METADATA),
-                                             color_metadata, sizeof(*color_metadata));
-  }
-  if (error >= 0) {
-    int csc = HAL_CSC_ITU_R_601;
-    mapper_err = GetMetadataState(static_cast<buffer_handle_t>(handle),
-                                  static_cast<SnapMetadataType>(QTI_COLORSPACE), &metadata_set);
-    if (metadata_set) {
-      error =
-          STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
-                                           VENDOR_QTI_METADATA(QTI_COLORSPACE), &csc, sizeof(csc));
-    }
-    if (error >= 0) {
-      if (csc == HAL_CSC_ITU_R_601_FR || csc == HAL_CSC_ITU_R_709_FR ||
-          csc == HAL_CSC_ITU_R_2020_FR) {
-        color_metadata->range = Range_Full;
-      }
-      color_metadata->transfer = Transfer_sRGB;
 
-      switch (csc) {
-        case HAL_CSC_ITU_R_601:
-        case HAL_CSC_ITU_R_601_FR:
-          // video and display driver uses 601_525
-          color_metadata->colorPrimaries = ColorPrimaries_BT601_6_525;
-          break;
-        case HAL_CSC_ITU_R_709:
-        case HAL_CSC_ITU_R_709_FR:
-          color_metadata->colorPrimaries = ColorPrimaries_BT709_5;
-          break;
-        case HAL_CSC_ITU_R_2020:
-        case HAL_CSC_ITU_R_2020_FR:
-          color_metadata->colorPrimaries = ColorPrimaries_BT2020;
-          break;
-        default:
-          DLOGE("Unsupported CSC: %d", csc);
-          return kErrorNotSupported;
-      }
+  error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
+                                           VENDOR_QTI_METADATA(QTI_COLOR_METADATA),
+                                           color_metadata, sizeof(*color_metadata));
+
+  if (error >= 0) {
+    SnapDataspace snap_dataspace;
+    int csc = HAL_CSC_ITU_R_601;
+    error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
+                                             VENDOR_QTI_METADATA(SnapMetadataType::DATASPACE),
+                                             &snap_dataspace, sizeof(snap_dataspace));
+
+    if (error >= 0) {
+      if (!snap_dataspace.colorPrimaries || snap_dataspace.colorPrimaries > QtiColorPrimaries_Max) {
+        color_metadata->colorPrimaries = static_cast<ColorPrimaries>(QtiColorPrimaries_BT601_6_525);
+        color_metadata->range = static_cast<ColorRange>(QtiRange_Full);
+    } else {
+        color_metadata->colorPrimaries = static_cast<ColorPrimaries>(snap_dataspace.colorPrimaries);
+        color_metadata->range = static_cast<ColorRange>(snap_dataspace.range);
     }
+    color_metadata->transfer = static_cast<GammaTransfer>(QtiTransfer_sRGB);
+   }
   }
 
   return kErrorNone;
