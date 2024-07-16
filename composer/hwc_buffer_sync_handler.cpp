@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -110,6 +110,28 @@ void HWCBufferSyncHandler::GetSyncInfo(int fd, std::ostringstream *os) {
     *os << ", obj_name: " << fence_info[i].obj_name;
     *os << ", ts: " << fence_info[i].timestamp_ns;
   }
+}
+
+uint64_t HWCBufferSyncHandler::GetSignalTime(int fd) {
+  struct sync_file_info *file_info = sync_file_info(fd);
+  if (!file_info) {
+    DLOGW("Null file_info, fd: %d!", fd);
+    return 0;
+  }
+
+  struct sync_fence_info *fence_info = sync_get_fence_info(file_info);
+  if (!fence_info) {
+    DLOGW("Null fence_info, fd: %d!", fd);
+    return 0;
+  }
+
+  for (size_t i = 0; i < file_info->num_fences; i++) {
+    if (fence_info[i].status == 1) {
+      return fence_info[i].timestamp_ns;
+    }
+  }
+
+  return 0;
 }
 
 }  // namespace sdm
