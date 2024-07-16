@@ -78,6 +78,7 @@
 #include "gr_adreno_info.h"
 #include "gr_camera_info.h"
 #include "gr_utils.h"
+#include "gr_snap_helper.h"
 
 #define ASTC_BLOCK_SIZE 16
 #define DEBUG 0
@@ -2084,7 +2085,7 @@ bool CanAllocateZSLForSecureCamera() {
     return can_allocate;
   }
   char property[PROPERTY_VALUE_MAX];
-  property_get("vendor.gralloc.secure_preview_buffer_format", property, "0");
+  property_get(SECURE_PREVIEW_BUFFER_FORMAT_PROP, property, "0");
   if (!(strncmp(property, "420_sp", PROPERTY_VALUE_MAX))) {
     can_allocate = false;
   }
@@ -2095,7 +2096,15 @@ bool CanAllocateZSLForSecureCamera() {
 }
 
 Error GetMetaDataValue(void *buffer, int64_t type, void *in) {
-  return GetMetaDataInternal(buffer, type, in, nullptr);
+  GrallocSnapHelper *snap_helper = GrallocSnapHelper::GetInstance();
+  if (snap_helper->IsSnapAllocEnabled()) {
+    if (!snap_helper->GetMetadata(static_cast<native_handle_t *>(buffer), type, in, false)) {
+      return Error::NONE;
+    }
+    return Error::UNSUPPORTED;
+  } else {
+    return GetMetaDataInternal(buffer, type, in, nullptr);
+  }
 }
 
 Error ColorMetadataToDataspace(ColorMetaData color_metadata, Dataspace *dataspace) {
@@ -2948,6 +2957,7 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_422_SP):
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS):
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_NV12_ENCODEABLE):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC):
       comp.sizeInBits = 8;
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
           comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
@@ -3007,6 +3017,19 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
         comp.sizeInBits = 10;
       } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
         comp.offsetInBits = 22;
+        comp.sizeInBits = 10;
+      } else {
+        return Error::BAD_VALUE;
+      }
+      break;
+
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC):
+      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
+        comp.offsetInBits = 0;
+        comp.sizeInBits = 10;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 10;
         comp.sizeInBits = 10;
       } else {
         return Error::BAD_VALUE;

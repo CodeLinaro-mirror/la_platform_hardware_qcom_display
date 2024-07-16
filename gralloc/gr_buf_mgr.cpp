@@ -53,7 +53,6 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#define DEBUG 0
 
 #include "gr_buf_mgr.h"
 
@@ -73,6 +72,8 @@
 #include "gr_buf_descriptor.h"
 #include "gr_utils.h"
 #include "qd_utils.h"
+
+static bool enable_logs = false;
 
 namespace gralloc {
 
@@ -708,7 +709,7 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
       }
       break;
     default:
-      ALOGI_IF(DEBUG, "Offset and size in bits unknown for format %d", format);
+      ALOGI_IF(enable_logs, "Offset and size in bits unknown for format %d", format);
       return Error::UNSUPPORTED;
   }
   return Error::NONE;
@@ -841,6 +842,7 @@ int BufferManager::GetCustomDimensions(private_handle_t *hnd, int *stride, int *
 BufferManager::BufferManager() : next_id_(0) {
   handles_map_.clear();
   allocator_ = new Allocator();
+  enable_logs = property_get_bool(ENABLE_LOGS_PROP, 0);
 }
 
 BufferManager *BufferManager::GetInstance() {
@@ -861,7 +863,7 @@ void BufferManager::SetGrallocDebugProperties(gralloc::GrallocProperties props) 
 
 Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
   auto hnd = buf->handle;
-  ALOGD_IF(DEBUG, "FreeBuffer handle:%p", hnd);
+  ALOGD_IF(enable_logs, "FreeBuffer handle:%p", hnd);
 
   if (private_handle_t::validate(hnd) != 0) {
     ALOGE("FreeBuffer: Invalid handle: %p", hnd);
@@ -928,7 +930,7 @@ Error BufferManager::ImportHandleLocked(private_handle_t *hnd) {
     ALOGE("ImportHandleLocked: Invalid handle: %p", hnd);
     return Error::BAD_BUFFER;
   }
-  ALOGD_IF(DEBUG, "Importing handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "Importing handle:%p id: %" PRIu64, hnd, hnd->id);
   int ion_handle = allocator_->ImportBuffer(hnd->fd);
   if (ion_handle < 0) {
     ALOGE("Failed to import ion buffer: hnd: %p, fd:%d, id:%" PRIu64, hnd, hnd->fd, hnd->id);
@@ -974,7 +976,7 @@ std::shared_ptr<BufferManager::Buffer> BufferManager::GetBufferFromHandleLocked(
 
 Error BufferManager::MapBuffer(private_handle_t const *handle) {
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
-  ALOGD_IF(DEBUG, "Map buffer handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "Map buffer handle:%p id: %" PRIu64, hnd, hnd->id);
 
   hnd->base = 0;
   if (allocator_->MapBuffer(reinterpret_cast<void **>(&hnd->base), hnd->size, hnd->offset,
@@ -994,7 +996,7 @@ Error BufferManager::IsBufferImported(const private_handle_t *hnd) {
 }
 
 Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
-  ALOGD_IF(DEBUG, "Retain buffer handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "Retain buffer handle:%p id: %" PRIu64, hnd, hnd->id);
   auto err = Error::NONE;
   std::lock_guard<std::mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
@@ -1008,7 +1010,7 @@ Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
 }
 
 Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
-  ALOGD_IF(DEBUG, "Release buffer handle:%p", hnd);
+  ALOGD_IF(enable_logs, "Release buffer handle:%p", hnd);
   std::lock_guard<std::mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf == nullptr) {
@@ -1030,7 +1032,7 @@ Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
 Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
   std::lock_guard<std::mutex> lock(buffer_lock_);
   auto err = Error::NONE;
-  ALOGD_IF(DEBUG, "LockBuffer buffer handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "LockBuffer buffer handle:%p id: %" PRIu64, hnd, hnd->id);
 
   // If buffer is not meant for CPU return err
   if (!CpuCanAccess(usage)) {
@@ -1066,6 +1068,8 @@ Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
     handle->flags |= qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
   }
 
+  buf->lock_count++;
+
   return err;
 }
 
@@ -1075,7 +1079,8 @@ Error BufferManager::FlushBuffer(const private_handle_t *handle) {
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   auto buf = GetBufferFromHandleLocked(hnd);
-  if (buf == nullptr) {
+  if (buf == nullptr || buf->lock_count <= 0) {
+    ALOGW("%s: A bad or an unlocked buffer.", __FUNCTION__);
     return Error::BAD_BUFFER;
   }
 
@@ -1093,7 +1098,7 @@ Error BufferManager::RereadBuffer(const private_handle_t *handle) {
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   auto buf = GetBufferFromHandleLocked(hnd);
-  if (buf == nullptr) {
+  if (buf == nullptr || buf->lock_count <= 0) {
     return Error::BAD_BUFFER;
   }
 
@@ -1111,23 +1116,28 @@ Error BufferManager::UnlockBuffer(const private_handle_t *handle) {
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   auto buf = GetBufferFromHandleLocked(hnd);
-  if (buf == nullptr) {
+  if (buf == nullptr || buf->lock_count <= 0) {
     ALOGW("%s: A bad or an already unlocked buffer.", __FUNCTION__);
     return Error::BAD_BUFFER;
   }
 
-  if (hnd->flags & qtigralloc::PRIV_FLAGS_NEEDS_FLUSH) {
-    if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
-                                buf->ion_handle_main, CACHE_CLEAN, hnd->fd) != 0) {
-      status = Error::BAD_BUFFER;
-    }
-    hnd->flags &= ~qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
-  } else {
-    if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
-                                buf->ion_handle_main, CACHE_READ_DONE, hnd->fd) != 0) {
-      status = Error::BAD_BUFFER;
+  // Avoid unlocking early for nested lock case
+  if (buf->lock_count == 1) {
+    if (hnd->flags & qtigralloc::PRIV_FLAGS_NEEDS_FLUSH) {
+      if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
+                                  buf->ion_handle_main, CACHE_CLEAN, hnd->fd) != 0) {
+        status = Error::BAD_BUFFER;
+      }
+      hnd->flags &= ~qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
+    } else {
+      if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
+                                  buf->ion_handle_main, CACHE_READ_DONE, hnd->fd) != 0) {
+        status = Error::BAD_BUFFER;
+      }
     }
   }
+
+  buf->lock_count = (status == Error::NONE) ? buf->lock_count - 1 : buf->lock_count;
 
   return status;
 }
@@ -1245,8 +1255,8 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   *handle = hnd;
 
   RegisterHandleLocked(hnd, data.ion_handle, e_data.ion_handle);
-  ALOGD_IF(DEBUG, "Allocated buffer handle: %p id: %" PRIu64, hnd, hnd->id);
-  if (DEBUG) {
+  ALOGD_IF(enable_logs, "Allocated buffer handle: %p id: %" PRIu64, hnd, hnd->id);
+  if (enable_logs) {
     private_handle_t::Dump(hnd);
   }
   return Error::NONE;
@@ -1693,10 +1703,10 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
         uint64_t yOffset = (reinterpret_cast<uint64_t>(layout[0].y) - handle->base);
         uint64_t crOffset = (reinterpret_cast<uint64_t>(layout[0].cr) - handle->base);
         uint64_t cbOffset = (reinterpret_cast<uint64_t>(layout[0].cb) - handle->base);
-        ALOGD_IF(DEBUG, " layout: y: %" PRIu64 " , cr: %" PRIu64 " , cb: %" PRIu64
-              " , yStride: %d, cStride: %d, chromaStep: %d ",
-              yOffset, crOffset, cbOffset, layout[0].yStride, layout[0].cStride,
-              layout[0].chromaStep);
+        ALOGD_IF(enable_logs, " layout: y: %" PRIu64 " , cr: %" PRIu64 " , cb: %" PRIu64
+                 " , yStride: %d, cStride: %d, chromaStep: %d ",
+                 yOffset, crOffset, cbOffset, layout[0].yStride, layout[0].cStride,
+                 layout[0].chromaStep);
 
         qtigralloc::encodeYUVPlaneInfoMetadata(layout, out);
         break;

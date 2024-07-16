@@ -177,6 +177,8 @@
 #define SECURE_PREVIEW_BUFFER_FORMAT_PROP    GRALLOC_PROP("secure_preview_buffer_format")
 #define SECURE_PREVIEW_ONLY_PROP             GRALLOC_PROP("secure_preview_only")
 #define USE_DMA_BUF_HEAPS_PROP               GRALLOC_PROP("use_dma_buf_heaps")
+#define ENABLE_SNAPALLOC_PROP                GRALLOC_PROP("enable_snapalloc")
+#define USE_SYSTEM_HEAP_FOR_SENSORS_PROP     GRALLOC_PROP("use_system_heap_for_sensors")
 
 // Add all vendor.gralloc.properties above
 

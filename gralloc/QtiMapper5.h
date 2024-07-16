@@ -51,10 +51,9 @@
 #include <string>
 
 #include "gr_buf_mgr.h"
+#include "gr_snap_helper.h"
 #include "mapper_utils.h"
 #include "color_extensions.h"
-
-#define QTI_UBWC_STATS_ARRAY_SIZE 2
 
 namespace stablec {
 namespace vendor {
@@ -68,20 +67,18 @@ using namespace ::android::hardware::graphics::mapper;
 using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 using ::android::base::unique_fd;
 using Error = AIMapper_Error;
-using GrallocPixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
+
 using gralloc::BufferManager;
-using GrallocExtendableType = aidl::android::hardware::graphics::common::ExtendableType;
-using GrallocDataspace = aidl::android::hardware::graphics::common::Dataspace;
 using mapper::isStandardMetadata;
 using mapper::isVendorMetadata;
 using mapper::STANDARD_METADATA_NAME;
 using mapper::VENDOR_QTI_METADATA_NAME;
-using GrallocSmpte2086 = aidl::android::hardware::graphics::common::Smpte2086;
-using GrallocCta861_3 = aidl::android::hardware::graphics::common::Cta861_3;
 
 #define REQUIRE_DRIVER()                                       \
-  ALOGE("Failed to %s. Driver is uninitialized.", __func__); \
-  return AIMAPPER_ERROR_NO_RESOURCES;                        \
+  if (!snap_helper_ || !snap_alloc_enable_) {                  \
+    ALOGE("Failed to %s. Driver is uninitialized.", __func__); \
+    return AIMAPPER_ERROR_NO_RESOURCES;                        \
+  }
 
 #define VALIDATE_BUFFER_HANDLE(bufferHandle)                \
   if (!(bufferHandle)) {                                    \
@@ -94,6 +91,134 @@ constexpr unsigned int METADATA_BUFFERSIZE_INITIAL = 10000;
 #define VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle) \
   REQUIRE_DRIVER()                                      \
   VALIDATE_BUFFER_HANDLE(bufferHandle)
+
+class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
+ public:
+  QtiMapper5();
+  ~QtiMapper5() override = default;
+  Error importBuffer(const native_handle_t *_Nonnull handle,
+                     buffer_handle_t _Nullable *_Nonnull outBufferHandle) override;
+  Error freeBuffer(buffer_handle_t _Nonnull buffer) override;
+  Error getTransportSize(buffer_handle_t _Nonnull buffer, uint32_t *_Nonnull outNumFds,
+                         uint32_t *_Nonnull outNumInts) override;
+  Error lock(buffer_handle_t _Nonnull buffer, uint64_t cpuUsage, ARect accessRegion,
+             int acquireFence, void *_Nullable *_Nonnull outData) override;
+  Error unlock(buffer_handle_t _Nonnull buffer, int *_Nonnull releaseFence) override;
+  Error flushLockedBuffer(buffer_handle_t _Nonnull buffer) override;
+  Error rereadLockedBuffer(buffer_handle_t _Nonnull buffer) override;
+  int32_t getMetadata(buffer_handle_t _Nonnull buffer, AIMapper_MetadataType metadataType,
+                      void *_Nonnull outData, size_t outDataSize) override;
+  int32_t getStandardMetadata(buffer_handle_t _Nonnull buffer, int64_t standardMetadataType,
+                              void *_Nonnull outData, size_t outDataSize) override;
+  Error setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_MetadataType metadataType,
+                    const void *_Nonnull metadata, size_t metadataSize) override;
+  Error setStandardMetadata(buffer_handle_t _Nonnull buffer, int64_t standardMetadataType,
+                            const void *_Nonnull metadata, size_t metadataSize) override;
+  Error listSupportedMetadataTypes(
+      const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
+      size_t *_Nonnull outNumberOfDescriptions) override;
+  Error dumpBuffer(buffer_handle_t _Nonnull bufferHandle,
+                   AIMapper_DumpBufferCallback _Nonnull dumpBufferCallback,
+                   void *_Null_unspecified context) override;
+  Error dumpAllBuffers(AIMapper_BeginDumpBufferCallback _Nonnull beginDumpBufferCallback,
+                       AIMapper_DumpBufferCallback _Nonnull dumpBufferCallback,
+                       void *_Null_unspecified context) override;
+  Error getReservedRegion(buffer_handle_t _Nonnull buffer,
+                          void *_Nullable *_Nonnull outReservedRegion,
+                          uint64_t *_Nonnull outReservedSize) override;
+
+ private:
+  void WaitFenceFd(int fence_fd);
+  Error DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
+                           AIMapper_DumpBufferCallback _Nonnull dumpBufferCallback,
+                           void *_Null_unspecified context);
+  int32_t GetMetadataPrivate(buffer_handle_t _Nonnull bufferHandle, int64_t metadataType,
+                             void *_Nonnull outData, size_t outDataSize, bool isStandard);
+  Error SetMetadataPrivate(buffer_handle_t _Nonnull bufferHandle, int64_t metadataType,
+                           const void *_Nonnull metadata, size_t metadataSize, bool isStandard);
+  size_t GetExpectedSize(uint64_t metadata_type);
+
+  gralloc::GrallocSnapHelper *_Nullable snap_helper_ = nullptr;
+  bool snap_alloc_enable_ = false;
+
+  std::unordered_map<uint64_t, size_t> type_to_size_{
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_ID), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::NAME), sizeof(std::string)},
+      {static_cast<uint64_t>(SnapMetadataType::WIDTH), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::HEIGHT), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::LAYER_COUNT), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_REQUESTED), sizeof(GrallocPixelFormat)},
+      {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_FOURCC), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::DRM_PIXEL_FORMAT_MODIFIER), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::USAGE), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::ALLOCATION_SIZE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::PROTECTED_CONTENT), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::COMPRESSION), sizeof(GrallocExtendableType)},
+      {static_cast<uint64_t>(SnapMetadataType::INTERLACED), sizeof(GrallocExtendableType)},
+      {static_cast<uint64_t>(SnapMetadataType::CHROMA_SITING), sizeof(GrallocExtendableType)},
+      {static_cast<uint64_t>(SnapMetadataType::PLANE_LAYOUTS), sizeof(SnapBufferLayout)},
+      {static_cast<uint64_t>(SnapMetadataType::CROP), sizeof(Rect)},
+      {static_cast<uint64_t>(SnapMetadataType::DATASPACE), sizeof(GrallocDataspace)},
+      {static_cast<uint64_t>(SnapMetadataType::BLEND_MODE), sizeof(BlendMode)},
+      {static_cast<uint64_t>(SnapMetadataType::VT_TIMESTAMP), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::PP_PARAM_INTERLACED), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_PERF_MODE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::GRAPHICS_METADATA),
+       sizeof(((GraphicsMetadata *)(0))->data)},
+      {static_cast<uint64_t>(SnapMetadataType::UBWC_CR_STATS_INFO),
+       (sizeof(UBWCStats) * QTI_UBWC_STATS_ARRAY_SIZE)},
+      {static_cast<uint64_t>(SnapMetadataType::REFRESH_RATE), sizeof(float)},
+      {static_cast<uint64_t>(SnapMetadataType::MAP_SECURE_BUFFER), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::LINEAR_FORMAT), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::SINGLE_BUFFER_MODE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::CVP_METADATA), sizeof(CVPMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_HISTOGRAM_STATS),
+       sizeof(VideoHistogramMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::FD), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::ALIGNED_WIDTH_IN_PIXELS), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::STRIDE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::STANDARD_METADATA_STATUS),
+       (sizeof(bool) * METADATA_SET_SIZE)},
+      {static_cast<uint64_t>(SnapMetadataType::VENDOR_METADATA_STATUS),
+       (sizeof(bool) * METADATA_SET_SIZE)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_TYPE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_TS_INFO), sizeof(VideoTimestampInfo)},
+      {static_cast<uint64_t>(SnapMetadataType::CUSTOM_DIMENSIONS_STRIDE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::CUSTOM_DIMENSIONS_HEIGHT), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::RGB_DATA_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_PERMISSION), sizeof(BufferPermission)},
+      {static_cast<uint64_t>(SnapMetadataType::MEM_HANDLE), sizeof(int64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::TIMED_RENDERING), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::CUSTOM_CONTENT_METADATA),
+       sizeof(CustomContentMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_TRANSCODE_STATS),
+       sizeof(VideoTranscodeStatsMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::MASTERING_DISPLAY),
+       sizeof(std::optional<GrallocSmpte2086>)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2086),
+       sizeof(std::optional<GrallocSmpte2086>)},
+      {static_cast<uint64_t>(SnapMetadataType::CONTENT_LIGHT_LEVEL),
+       sizeof(std::optional<GrallocCta861_3>)},
+      {static_cast<uint64_t>(StandardMetadataType::CTA861_3),
+       sizeof(std::optional<GrallocCta861_3>)},
+      {static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA),
+       sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
+       sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
+      {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO), sizeof(ColorRemappingInfo)},
+      {static_cast<uint64_t>(SnapMetadataType::HEAP_NAME), sizeof(std::string)},
+      {static_cast<uint64_t>(SnapMetadataType::IS_UBWC), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::IS_TILE_RENDERED), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::IS_CACHED), sizeof(int32_t)},
+      {static_cast<uint64_t>(QTI_COLOR_METADATA), sizeof(ColorMetaData)},
+      {static_cast<uint64_t>(QTI_PRIVATE_FLAGS), sizeof(int32_t)},
+      {static_cast<uint64_t>(QTI_COLORSPACE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
+      // TODO: Address missing SnapMetadataTypes (no helpers in gr_snap_helper)
+      // {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
+  };
+};
 
 class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
  public:
@@ -143,70 +268,81 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
   BufferManager *_Nullable buf_mgr_ = nullptr;
 
   std::unordered_map<uint64_t, size_t> type_to_size_{
-      {static_cast<uint64_t>(StandardMetadataType::BUFFER_ID), sizeof(uint64_t)},
-      {static_cast<uint64_t>(StandardMetadataType::NAME), sizeof(std::string)},
-      {static_cast<uint64_t>(StandardMetadataType::WIDTH), sizeof(uint64_t)},
-      {static_cast<uint64_t>(StandardMetadataType::HEIGHT), sizeof(uint64_t)},
-      {static_cast<uint64_t>(StandardMetadataType::LAYER_COUNT), sizeof(uint64_t)},
-      {static_cast<uint64_t>(StandardMetadataType::PIXEL_FORMAT_REQUESTED),
-       sizeof(GrallocPixelFormat)},
-      {static_cast<uint64_t>(StandardMetadataType::PIXEL_FORMAT_FOURCC), sizeof(uint32_t)},
-      {static_cast<uint64_t>(StandardMetadataType::PIXEL_FORMAT_MODIFIER), sizeof(uint64_t)},
-      {static_cast<uint64_t>(StandardMetadataType::USAGE), sizeof(uint64_t)},
-      {static_cast<uint64_t>(StandardMetadataType::ALLOCATION_SIZE), sizeof(uint32_t)},
-      {static_cast<uint64_t>(StandardMetadataType::PROTECTED_CONTENT), sizeof(uint64_t)},
-      {static_cast<uint64_t>(StandardMetadataType::COMPRESSION), sizeof(GrallocExtendableType)},
-      {static_cast<uint64_t>(StandardMetadataType::INTERLACED), sizeof(GrallocExtendableType)},
-      {static_cast<uint64_t>(StandardMetadataType::CHROMA_SITING), sizeof(GrallocExtendableType)},
-      {static_cast<uint64_t>(StandardMetadataType::PLANE_LAYOUTS), sizeof(sdm::BufferLayout)},
-      {static_cast<uint64_t>(StandardMetadataType::CROP), sizeof(Rect)},
-      {static_cast<uint64_t>(StandardMetadataType::DATASPACE), sizeof(GrallocDataspace)},
-      {static_cast<uint64_t>(StandardMetadataType::BLEND_MODE), sizeof(BlendMode)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_ID), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::NAME), sizeof(std::string)},
+      {static_cast<uint64_t>(SnapMetadataType::WIDTH), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::HEIGHT), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::LAYER_COUNT), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_REQUESTED), sizeof(GrallocPixelFormat)},
+      {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_FOURCC), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::DRM_PIXEL_FORMAT_MODIFIER), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::USAGE), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::ALLOCATION_SIZE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::PROTECTED_CONTENT), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::COMPRESSION), sizeof(GrallocExtendableType)},
+      {static_cast<uint64_t>(SnapMetadataType::INTERLACED), sizeof(GrallocExtendableType)},
+      {static_cast<uint64_t>(SnapMetadataType::CHROMA_SITING), sizeof(GrallocExtendableType)},
+      {static_cast<uint64_t>(SnapMetadataType::PLANE_LAYOUTS), sizeof(SnapBufferLayout)},
+      {static_cast<uint64_t>(SnapMetadataType::CROP), sizeof(Rect)},
+      {static_cast<uint64_t>(SnapMetadataType::DATASPACE), sizeof(GrallocDataspace)},
+      {static_cast<uint64_t>(SnapMetadataType::BLEND_MODE), sizeof(BlendMode)},
+      {static_cast<uint64_t>(SnapMetadataType::VT_TIMESTAMP), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::PP_PARAM_INTERLACED), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_PERF_MODE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::GRAPHICS_METADATA),
+       sizeof(((GraphicsMetadata *)(0))->data)},
+      {static_cast<uint64_t>(SnapMetadataType::UBWC_CR_STATS_INFO),
+       (sizeof(UBWCStats) * QTI_UBWC_STATS_ARRAY_SIZE)},
+      {static_cast<uint64_t>(SnapMetadataType::REFRESH_RATE), sizeof(float)},
+      {static_cast<uint64_t>(SnapMetadataType::MAP_SECURE_BUFFER), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::LINEAR_FORMAT), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::SINGLE_BUFFER_MODE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::CVP_METADATA), sizeof(CVPMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_HISTOGRAM_STATS),
+       sizeof(VideoHistogramMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::FD), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::ALIGNED_WIDTH_IN_PIXELS), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::STRIDE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::STANDARD_METADATA_STATUS),
+       (sizeof(bool) * METADATA_SET_SIZE)},
+      {static_cast<uint64_t>(SnapMetadataType::VENDOR_METADATA_STATUS),
+       (sizeof(bool) * METADATA_SET_SIZE)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_TYPE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_TS_INFO), sizeof(VideoTimestampInfo)},
+      {static_cast<uint64_t>(SnapMetadataType::CUSTOM_DIMENSIONS_STRIDE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::CUSTOM_DIMENSIONS_HEIGHT), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::RGB_DATA_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_PERMISSION), sizeof(BufferPermission)},
+      {static_cast<uint64_t>(SnapMetadataType::MEM_HANDLE), sizeof(int64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::TIMED_RENDERING), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::CUSTOM_CONTENT_METADATA),
+       sizeof(CustomContentMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::VIDEO_TRANSCODE_STATS),
+       sizeof(VideoTranscodeStatsMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::MASTERING_DISPLAY),
+       sizeof(std::optional<GrallocSmpte2086>)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2086),
+       sizeof(std::optional<GrallocSmpte2086>)},
+      {static_cast<uint64_t>(SnapMetadataType::CONTENT_LIGHT_LEVEL),
+       sizeof(std::optional<GrallocCta861_3>)},
+      {static_cast<uint64_t>(StandardMetadataType::CTA861_3),
+       sizeof(std::optional<GrallocCta861_3>)},
+      {static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA),
+       sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
+       sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
+      {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO), sizeof(ColorRemappingInfo)},
+      {static_cast<uint64_t>(SnapMetadataType::HEAP_NAME), sizeof(std::string)},
+      {static_cast<uint64_t>(SnapMetadataType::IS_UBWC), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::IS_TILE_RENDERED), sizeof(int32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::IS_CACHED), sizeof(int32_t)},
       {static_cast<uint64_t>(QTI_COLOR_METADATA), sizeof(ColorMetaData)},
       {static_cast<uint64_t>(QTI_PRIVATE_FLAGS), sizeof(int32_t)},
       {static_cast<uint64_t>(QTI_COLORSPACE), sizeof(uint32_t)},
       {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
-      {static_cast<uint64_t>(QTI_VT_TIMESTAMP), sizeof(uint64_t)},
-      {static_cast<uint64_t>(QTI_PP_PARAM_INTERLACED), sizeof(int32_t)},
-      {static_cast<uint64_t>(QTI_VIDEO_PERF_MODE), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_GRAPHICS_METADATA),
-       sizeof(((GraphicsMetadata *)(0))->data)},
-      {static_cast<uint64_t>(QTI_UBWC_CR_STATS_INFO),
-       (sizeof(UBWCStats) * QTI_UBWC_STATS_ARRAY_SIZE)},
-      {static_cast<uint64_t>(QTI_REFRESH_RATE), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_MAP_SECURE_BUFFER), sizeof(int32_t)},
-      {static_cast<uint64_t>(QTI_LINEAR_FORMAT), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_SINGLE_BUFFER_MODE), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_CVP_METADATA), sizeof(CVPMetadata)},
-      {static_cast<uint64_t>(QTI_VIDEO_HISTOGRAM_STATS),
-       sizeof(VideoHistogramMetadata)},
-      {static_cast<uint64_t>(QTI_FD), sizeof(int32_t)},
-      {static_cast<uint64_t>(QTI_ALIGNED_WIDTH_IN_PIXELS), sizeof(uint32_t)},
-      {static_cast<uint64_t>(StandardMetadataType::STRIDE), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_ALIGNED_HEIGHT_IN_PIXELS), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_STANDARD_METADATA_STATUS),
-       (sizeof(bool) * METADATA_SET_SIZE)},
-      {static_cast<uint64_t>(QTI_VENDOR_METADATA_STATUS),
-       (sizeof(bool) * METADATA_SET_SIZE)},
-      {static_cast<uint64_t>(QTI_BUFFER_TYPE), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_VIDEO_TS_INFO), sizeof(VideoTimestampInfo)},
-      {static_cast<uint64_t>(QTI_CUSTOM_DIMENSIONS_STRIDE), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_CUSTOM_DIMENSIONS_HEIGHT), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_RGB_DATA_ADDRESS), sizeof(uint64_t)},
-      {static_cast<uint64_t>(QTI_BUFFER_PERMISSION), sizeof(BufferPermission)},
-      {static_cast<uint64_t>(QTI_MEM_HANDLE), sizeof(int64_t)},
-      {static_cast<uint64_t>(QTI_TIMED_RENDERING), sizeof(uint32_t)},
-      {static_cast<uint64_t>(QTI_CUSTOM_CONTENT_METADATA),
-       sizeof(CustomContentMetadata)},
-      {static_cast<uint64_t>(QTI_VIDEO_TRANSCODE_STATS),
-       sizeof(VideoTranscodeStatsMetadata)},
-      {static_cast<uint64_t>(StandardMetadataType::SMPTE2086),
-       sizeof(std::optional<GrallocSmpte2086>)},
-      {static_cast<uint64_t>(StandardMetadataType::CTA861_3),
-       sizeof(std::optional<GrallocCta861_3>)},
-      {static_cast<uint64_t>(QTI_HEAP_NAME), sizeof(std::string)},
-      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
-       sizeof(((ColorMetaData *)(0))->dynamicMetaDataPayload)}
+      // TODO: Address missing SnapMetadataTypes (no helpers in gr_snap_helper)
+      // {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
   };
 };
 
