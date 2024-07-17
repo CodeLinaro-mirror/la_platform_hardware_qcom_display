@@ -261,7 +261,6 @@ DisplayError HWVirtualDRM::SetDisplayAttributes(const HWDisplayAttributes &displ
   }
 
   int mode_index = -1;
-  int ret = 0;
   GetModeIndex(display_attributes, &mode_index);
 
   if (mode_index < 0) {
@@ -271,12 +270,6 @@ DisplayError HWVirtualDRM::SetDisplayAttributes(const HWDisplayAttributes &displ
     }
   }
 
-  // Reload connector info for updated info
-  ret = drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
-  if (ret) {
-    DLOGE("Failed getting info for connector id %u. Error: %d.", token_.conn_id, ret);
-    return kErrorHardware;
-  }
   GetModeIndex(display_attributes, &mode_index);
 
   if (mode_index < 0) {
@@ -303,6 +296,13 @@ DisplayError HWVirtualDRM::GetPPFeaturesVersion(PPFeatureVersion *vers) {
 
 void HWVirtualDRM::GetModeIndex(const HWDisplayAttributes &display_attributes, int *mode_index) {
   *mode_index = -1;
+
+  int ret = drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
+  if (ret) {
+    DLOGE("Failed getting info for connector id %u. Error: %d.", token_.conn_id, ret);
+    return;
+  }
+
   for (uint32_t i = 0; i < connector_info_.modes.size(); i++) {
     if (display_attributes.x_pixels == connector_info_.modes[i].mode.hdisplay &&
         display_attributes.y_pixels == connector_info_.modes[i].mode.vdisplay &&

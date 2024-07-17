@@ -2155,11 +2155,21 @@ DisplayError HWDeviceDRM::Flush(HWLayersInfo *hw_layers_info) {
   // dpps commit feature ops doesn't use the obj id, set it as -1
   drm_atomic_intf_->Perform(DRMOps::DPPS_COMMIT_FEATURE, -1);
 
+  if (cwb_config_.enabled) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
+    DLOGI("Tearing down the CWB topology");
+  }
+
   int ret = NullCommit(sync_commit /* synchronous */, false /* retain_planes*/);
   if (ret) {
     DLOGE("failed with error %d", ret);
     return kErrorHardware;
   }
+
+  if (cwb_config_.enabled) {
+    FlushConcurrentWriteback();
+  }
+
   return kErrorNone;
 }
 
