@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+ /* Changes from Qualcomm Innovation Center are provided under the following license:
+  *
+  * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+  * SPDX-License-Identifier: BSD-3-Clause-Clear
+  */
+
 #include <dlfcn.h>
 #include <log/log.h>
 #include <mutex>
@@ -42,12 +48,13 @@ namespace gralloc {
 CameraInfo *CameraInfo::s_instance = nullptr;
 
 CameraInfo *CameraInfo::GetInstance() {
+#ifndef NOCAMERA_UTILS
   static mutex s_lock;
   lock_guard<mutex> obj(s_lock);
   if (!s_instance) {
     s_instance = new CameraInfo();
   }
-
+#endif
   return s_instance;
 }
 
