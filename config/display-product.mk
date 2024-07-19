@@ -185,6 +185,10 @@ ifeq ($(PLATFORM_VERSION), 15)
     SOONG_CONFIG_qtidisplay_composer_version := v3_3
 endif
 
+ifeq ($(PLATFORM_VERSION), VanillaIceCream)
+    SOONG_CONFIG_qtidisplay_composer_version := v3_3
+endif
+
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
     SOONG_CONFIG_qtidisplay_smmu_proxy := true
     $(warning "Using smmu proxy")

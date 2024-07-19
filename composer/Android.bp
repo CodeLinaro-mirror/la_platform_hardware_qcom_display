@@ -108,6 +108,7 @@ cc_binary {
 cc_fuzz {
     name: "displayconfig.aidl_fuzzer",
     defaults: [
+        "qtidisplay_defaults",
         "composer-service_defaults",
         "composer3_defaults",
     ],
