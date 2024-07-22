@@ -99,7 +99,9 @@ using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 namespace composer3 = aidl::android::hardware::graphics::composer3;
+#ifdef COMPOSER3_V3
 using DisplayConfiguration = composer3::DisplayConfiguration;
+#endif
 using HwcDisplayCapability = composer3::DisplayCapability;
 using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
@@ -275,7 +277,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 
   sdm::QServiceBackend *qservice_ = nullptr;
 
-  std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
+  std::mutex cwb_callbacks_lock_;
+  std::unordered_map<void *, std::tuple<int32_t, std::shared_ptr<IDisplayConfigCallback>>>
+      cwb_callbacks_;
 
   // sdmclient callbacks
   std::unordered_map<uint64_t, GLColorConvert *> color_convert_map_;

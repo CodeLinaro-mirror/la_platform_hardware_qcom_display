@@ -44,7 +44,7 @@ case "$target" in
       618|639)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
-        setprop vendor.display.target.version 4
+        setprop vendor.display.target.version 6
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
@@ -55,7 +55,6 @@ case "$target" in
         setprop vendor.display.enable_latch_media_content 1
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.timed_render_enable 1
-        setprop vendor.display.idle_fallback_on_dspp 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_idle_content_fps_hint 1
