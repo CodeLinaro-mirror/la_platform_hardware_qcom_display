@@ -165,7 +165,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.enable_hwc_vds=false \
     persist.sys.sf.color_mode=7 \
     vendor.display.disable_sdr_dimming=1 \
-    vendor.display.disable_cwb_idle_fallback=1
+    vendor.display.allow_tonemap_native=1
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.sf.color_mode=9 \
