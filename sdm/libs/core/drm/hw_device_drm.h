@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HW_DEVICE_DRM_H__
 #define __HW_DEVICE_DRM_H__
 
@@ -46,8 +53,8 @@
 #define IOCTL_LOGE(ioctl, type) \
   DLOGE("ioctl %s, device = %d errno = %d, desc = %s", #ioctl, type, errno, strerror(errno))
 
-#define UI_FBID_LIMIT 3
-#define VIDEO_FBID_LIMIT 16
+#define UI_FBID_LIMIT 4
+#define VIDEO_FBID_LIMIT 65
 #define OFFLINE_ROTATOR_FBID_LIMIT 2
 
 using sde_drm::DRMPowerMode;
