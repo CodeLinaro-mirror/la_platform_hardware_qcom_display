@@ -1139,6 +1139,13 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
     ExecuteCommand(displayCmd.presentOrValidateDisplay,
                    &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                    displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+#else
+    int32_t frameIntervalNs = -1;
+    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                   displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
+    ExecuteCommand(displayCmd.presentOrValidateDisplay,
+                   &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
+                   displayCmd.expectedPresentTime, frameIntervalNs);
 #endif
 
     ++mCommandIndex;
