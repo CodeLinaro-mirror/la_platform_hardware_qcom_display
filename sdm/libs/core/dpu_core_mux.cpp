@@ -997,8 +997,8 @@ bool DPUCoreMux::AreAllEntriesSame(std::vector<T>& entries) {
   return true;
 }
 
-void DPUCoreMux::GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const {
-  hw_intf_.at(core_ids_[0])->GetDRMDisplayToken(token);
+void DPUCoreMux::GetDRMDisplayToken(uint32_t core_id, sde_drm::DRMDisplayToken *token) const {
+  hw_intf_.at(core_id)->GetDRMDisplayToken(token);
 }
 
 bool DPUCoreMux::IsPrimaryDisplay() const {

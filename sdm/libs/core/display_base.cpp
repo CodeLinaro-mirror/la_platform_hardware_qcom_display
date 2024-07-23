@@ -384,7 +384,8 @@ DisplayError DisplayBase::Deinit() {
       dpu_core_mux_->UnsetScaleLutConfig();
     }
   }
-  HWEventsInterface::Destroy(hw_events_intf_);
+  HWEventsInterface::Destroy(&hw_events_intf_);
+  master_hw_events_intf_ = nullptr;
   dpu_core_mux_->Destroy();
 
   {  // Scope for lock
@@ -1470,11 +1471,14 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   // Register all hw events on first commit for trusted vm only as the hw acquire happens as a
   // part of first validate
   if (first_cycle_) {
-    hw_events_intf_->SetEventState(HWEvent::PANEL_DEAD, true);
-    hw_events_intf_->SetEventState(HWEvent::IDLE_POWER_COLLAPSE, true);
-    hw_events_intf_->SetEventState(HWEvent::HW_RECOVERY, true);
-    hw_events_intf_->SetEventState(HWEvent::HISTOGRAM, true);
-    hw_events_intf_->SetEventState(HWEvent::MMRM, true);
+    // Panel dead event should be registered on all the cores.
+    for (int i = 0; i < hw_events_intf_.size(); i++) {
+      hw_events_intf_[i]->SetEventState(HWEvent::PANEL_DEAD, true);
+    }
+    master_hw_events_intf_->SetEventState(HWEvent::IDLE_POWER_COLLAPSE, true);
+    master_hw_events_intf_->SetEventState(HWEvent::HW_RECOVERY, true);
+    master_hw_events_intf_->SetEventState(HWEvent::HISTOGRAM, true);
+    master_hw_events_intf_->SetEventState(HWEvent::MMRM, true);
   }
 #endif
 
@@ -1497,7 +1501,7 @@ DisplayError DisplayBase::SetUpCommit(LayerStack *layer_stack) {
   if (first_cycle_ && (draw_method_ != kDrawDefault) && (display_type_ != kVirtual) &&
       !client_ctx_.hw_panel_info.is_primary_panel && (display_type_ != kHDMI)) {
     DLOGI("Registering for power events");
-    hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
+    master_hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
   }
 
   // Allow commit as pending doze/pending_power_on is handled as a part of draw cycle
@@ -1938,7 +1942,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
   case kStateOn:
     if (display_type_ == kHDMI && first_cycle_) {
-      hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
+      master_hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, true);
     }
 
     error = dpu_core_mux_->PowerOn(cached_qos_data_, &sync_points);
@@ -2787,7 +2791,7 @@ DisplayError DisplayBase::SetVSyncStateLocked(bool enable) {
         enable && (current_refresh_rate_ < client_ctx_.hw_panel_info.max_fps)) {
         drop_hw_vsync_ = true;
       }
-      error = hw_events_intf_->SetEventState(HWEvent::VSYNC, enable);
+      error = master_hw_events_intf_->SetEventState(HWEvent::VSYNC, enable);
     }
     if (error == kErrorNone) {
       vsync_enable_ = enable;
@@ -3935,7 +3939,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
     }
     *needs_refresh = (client_ctx_.hw_panel_info.mode == kModeCommand);
     DisablePartialUpdateOneFrameInternal();
-    err = hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, true);
+    err = master_hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, true);
     if (err != kErrorNone) {
       return err;
     }
@@ -3972,7 +3976,7 @@ DisplayError DisplayBase::HandleSecureEvent(SecureEvent secure_event, bool *need
       }
     }
     DisablePartialUpdateOneFrameInternal();
-    err = hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, false);
+    err = master_hw_events_intf_->SetEventState(HWEvent::BACKLIGHT_EVENT, false);
     if (err != kErrorNone) {
       return err;
     }
@@ -4098,7 +4102,7 @@ void DisplayBase::WaitForCompletion(SyncPoints *sync_points) {
     }
 
     // Unregister power events.
-    hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, false);
+    master_hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, false);
     return;
   }
 

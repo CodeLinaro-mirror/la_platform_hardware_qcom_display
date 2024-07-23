@@ -246,7 +246,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   bool IdleFallbackLowerFps(bool idle_screen);
 
   const uint32_t kPuTimeOutMs = 1000;
-  std::vector<HWEvent> event_list_;
+  std::map<uint32_t, std::vector<HWEvent>> event_list_;
   bool avr_prop_disabled_ = false;
   bool switch_to_cmd_ = false;
   bool commit_event_enabled_ = false;

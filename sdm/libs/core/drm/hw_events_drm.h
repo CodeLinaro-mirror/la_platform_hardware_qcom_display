@@ -29,7 +29,7 @@
 
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -57,7 +57,7 @@ using std::vector;
 
 class HWEventsDRM : public HWEventsInterface {
  public:
-  virtual DisplayError Init(DisplayId display_id, DisplayType display_type,
+  virtual DisplayError Init(DisplayId display_id, uint32_t core_id, DisplayType display_type,
                             HWEventHandler *event_handler, const vector<HWEvent> &event_list,
                             const DPUCoreMux *hw_intf);
   virtual DisplayError Deinit();
@@ -135,7 +135,7 @@ class HWEventsDRM : public HWEventsInterface {
   uint32_t mmrm_index_ = UINT32_MAX;
   uint32_t power_event_index_ = UINT32_MAX;
   uint32_t vm_release_event_index_ = UINT32_MAX;
-  std::bitset<8> core_id_map_ = 0;
+  uint32_t core_id_ = 0;
   char path_[64];
 };
 
