@@ -17,7 +17,54 @@ soong_config_module_type {
 }
 
 qtidisplay_cc_defaults {
+    name: "qtidisplay_common_defaults",
+    cflags: [
+        "-Wno-missing-field-initializers",
+        "-Wall",
+        "-Werror",
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libutils",
+    ],
+    tidy: true,
+    tidy_checks: [
+        "-*",
+        "cert-*",
+        "-cert-dcl50-cpp",
+        "bugprone-*",
+        "-bugprone-lambda-function-name",
+        "-bugprone-narrowing-conversions",
+        "performance*",
+        "-performance-no-int-to-ptr",
+        "clang-analyzer-security*",
+        "android-*",
+        "-android-cloexec-fopen",
+        "-android-cloexec-dup",
+    ],
+    soong_config_variables: {
+        drmpp: {
+            cflags: ["-DPP_DRM_ENABLE"],
+        },
+        headless: {
+            cflags: ["-DTARGET_HEADLESS", "-DQMAA"],
+        },
+        llvmsa: {
+            cflags: [
+                "--compile-and-analyze",
+                "--analyzer-perf",
+            ],
+        },
+        gralloc4: {
+            cflags: ["-DTARGET_USES_GRALLOC4"],
+        },
+    },
+}
+
+qtidisplay_cc_defaults {
     name: "qtidisplay_defaults",
+    defaults: ["qtidisplay_common_defaults"],
     cflags: [
         "-Wno-missing-field-initializers",
         "-Wall",
@@ -81,11 +128,13 @@ cc_library_headers {
         "libhardware_headers",
         "display_intf_headers",
         "display_debug_headers",
+        "display_core_headers",
     ],
     export_header_lib_headers: [
         "libhardware_headers",
         "display_intf_headers",
         "display_debug_headers",
+        "display_core_headers",
     ],
 }
 
