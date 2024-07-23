@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2017 The Android Open Source Project
@@ -17,25 +17,23 @@
  * limitations under the License.
  */
 
-/*
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
-
 #ifndef __QTIQMAACOMPOSERHANDLEIMPORTER_H__
 #define __QTIQMAACOMPOSERHANDLEIMPORTER_H__
 
-#include <cutils/native_handle.h>
+#include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <utils/Mutex.h>
 
-namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer3 {
+namespace composer {
+namespace V3_0 {
 
+using IMapperV4 = ::android::hardware::graphics::mapper::V4_0::IMapper;
 using ::android::Mutex;
+using ::android::sp;
+using ::android::hardware::hidl_handle;
 
 class ComposerHandleImporter {
  public:
@@ -52,13 +50,14 @@ class ComposerHandleImporter {
  private:
   Mutex mLock;
   bool mInitialized = false;
+  sp<IMapperV4> mMapper_V4;
 };
 
-}  // namespace composer3
+}  // namespace V3_0
+}  // namespace composer
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
-}  // namespace aidl
 
 #endif  // __QTIQMAACOMPOSERHANDLEIMPORTER_H__
