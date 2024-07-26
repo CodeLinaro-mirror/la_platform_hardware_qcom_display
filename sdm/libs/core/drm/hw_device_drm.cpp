@@ -423,7 +423,7 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, std::vector<uin
   buf_info.aligned_height = layout.height = buffer.height;
   buf_info.format = buffer.format;
   buf_info.usage = buffer.usage;
-  buf_info.aligned_width = (buf_info.aligned_width * 3) / components_per_pixel_;
+  buf_info.aligned_width = round(buf_info.aligned_width * 3, components_per_pixel_);
 
   buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset, &layout.num_planes);
   for (int color = 0; color < fb_id->size(); color++) {
@@ -433,6 +433,7 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, std::vector<uin
       // If panel needs alpha component, We need to fake the RGBA8888 format as RGB888
       // So LM wont drop the alpha component
       layout.drm_format = DRM_FORMAT_BGR888;
+      layout.width = layout.stride[0] / 3;
     }
     ret = master->CreateFbId(layout, fb_id_data);
     if (ret < 0) {
