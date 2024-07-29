@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -752,6 +752,11 @@ int HWCSession::DisplayConfigImpl::SetLayerAsMask(uint32_t disp_id, uint64_t lay
 
   auto hwc_layer = hwc_display->GetHWCLayer(layer_id);
   if (hwc_layer == nullptr) {
+    return -EINVAL;
+  }
+  // Mask layer flag for A8 will be set in BuildLayerStack
+  if (!hwc_session_->disable_get_screen_decorator_support_) {
+    DLOGV_IF(kTagDisplay, "Full Screen A8 Decoration mask layer enabled!");
     return -EINVAL;
   }
 
