@@ -462,7 +462,7 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   uint32_t count = 1 + (disable_skip_validate ? 0 : 1);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
-    outCapabilities[0] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
+    outCapabilities[0] = INT32(Capability::SKIP_CLIENT_COLOR_TRANSFORM);
     if (!disable_skip_validate) {
       outCapabilities[1] = INT32(Capability::SKIP_VALIDATE);
     }
