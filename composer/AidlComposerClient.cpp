@@ -83,7 +83,6 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   sideband_ = sideband;
 
   qservice_ = QServiceBackend::GetInstance();
-  qservice_->Init();
 
   mCommandEngine = std::make_unique<CommandEngine>(*this);
   if (mCommandEngine == nullptr) {
