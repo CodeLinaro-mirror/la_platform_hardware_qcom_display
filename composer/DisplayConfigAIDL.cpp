@@ -486,7 +486,7 @@ ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int
 
 ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) {
   auto ret = caps_->GetSupportedDSIClock(disp_id, bit_clks);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: Display: %d is not connected", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -496,7 +496,7 @@ ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector
 
 ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
   auto ret = settings_->GetDSIClk(disp_id, (uint64_t *)bit_clk);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -506,7 +506,7 @@ ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
 
 ScopedAStatus DisplayConfigAIDL::setDSIClk(int disp_id, long bit_clk) {
   auto ret = settings_->SetDSIClk(disp_id, (uint64_t)bit_clk);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -535,7 +535,7 @@ ScopedAStatus DisplayConfigAIDL::setQsyncMode(int disp_id, QsyncMode mode) {
   }
 
   auto ret = settings_->SetQsyncMode(disp_id, qsync_mode);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: failed: %d", __FUNCTION__, ret);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
