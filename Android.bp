@@ -41,6 +41,7 @@ soong_config_module_type {
       "target_aidl_or_hidl",
   ],
   properties: [
+    "defaults",
     "header_libs",
     "cflags",
     "shared_libs",
@@ -54,6 +55,24 @@ soong_config_module_type {
 soong_config_string_variable {
      name: "target_aidl_or_hidl",
      values: ["target_aidl", "target_hidl"],
+}
+
+soong_config_module_type {
+  name: "composer_lib_defaults",
+  module_type: "cc_defaults",
+  config_namespace: "display_config_composer3",
+  variables: [
+      "vndk",
+  ],
+  properties: [
+      "shared_libs",
+      "cflags",
+  ],
+}
+
+soong_config_string_variable {
+     name: "vndk",
+     values: ["version_2", "version_3"],
 }
 
 subdirs = [

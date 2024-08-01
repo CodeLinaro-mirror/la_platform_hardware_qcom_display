@@ -37,7 +37,7 @@ SOONG_CONFIG_NAMESPACES += display_config_idl
 SOONG_CONFIG_display_config_idl += target_aidl_or_hidl
 # Soong Values
 
-ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
 $(warning "Android-U compiling AIDL")
 SOONG_CONFIG_display_config_idl_target_aidl_or_hidl := target_aidl
 else
@@ -45,9 +45,25 @@ $(warning "Non-Android-U compiling HIDL")
 SOONG_CONFIG_display_config_idl_target_aidl_or_hidl := target_hidl
 endif
 
+SOONG_CONFIG_NAMESPACES += display_config_composer3
+# Soong Keys
+SOONG_CONFIG_display_config_composer3 += vndk
+# Soong Values
+ifndef TARGET_ANDROID_BELOW_V15
+$(warning "Android-below-V15 not defined, compiling AIDL composer3 V2")
+SOONG_CONFIG_display_config_composer3_vndk := version_2
+else
+ifeq ($(TARGET_ANDROID_BELOW_V15),true)
+$(warning "Android-U compiling AIDL composer3 V2")
+SOONG_CONFIG_display_config_composer3_vndk := version_2
+else
+$(warning "Android-V compiling AIDL composer V3")
+SOONG_CONFIG_display_config_composer3_vndk := version_3
+endif
+endif #ifndef TARGET_ANDROID_BELOW_V15
 
 ifneq ($(TARGET_IS_HEADLESS),true)
-ifneq ( ,$(filter U UpsideDownCake 14, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.composer-service
 PRODUCT_PROPERTY_OVERRIDES += \

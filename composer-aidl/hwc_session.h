@@ -59,6 +59,9 @@
 namespace composer_V3 = aidl::android::hardware::graphics::composer3;
 using HwcDisplayCapability = composer_V3::DisplayCapability;
 using HwcDisplayConnectionType = composer_V3::DisplayConnectionType;
+#ifdef ENABLE_COMPOSER3_V3
+using DisplayConfiguration = composer_V3::DisplayConfiguration;
+#endif
 
 namespace aidl::vendor::qti::hardware::display::config {
 class DisplayConfigAIDL;
@@ -198,6 +201,10 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   HWC3::Error GetDisplayType(Display display, int32_t *out_type);
   HWC3::Error GetDisplayAttribute(Display display, Config config,
                               HwcAttribute attribute, int32_t *out_value);
+#ifdef ENABLE_COMPOSER3_V3
+  HWC3::Error GetDisplayConfigurations(Display display,
+                                       std::vector<DisplayConfiguration> *out_configs);
+#endif
   HWC3::Error GetActiveConfig(Display display, Config *out_config);
   HWC3::Error GetColorModes(Display display, uint32_t *out_num_modes,
                         int32_t /*ColorMode*/ *int_out_modes);
