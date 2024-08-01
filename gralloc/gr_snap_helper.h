@@ -440,6 +440,13 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::YCbCr_420_SP,
             .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH},
+          // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
+          // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -584,6 +591,13 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::YCbCr_420_SP,
             .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            SnapPixelFormat::NV12_UBWC_FLEX_8_BATCH},
+          // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
+          // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           SnapPixelFormat::YCbCr_420_SP_VENUS},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           SnapPixelFormat::YCBCR_P010},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -609,7 +623,14 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::YCbCr_420_SP,
             .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH},
-  };
+          // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
+          // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
+      };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_ubwc_to_snap_format_;
 
@@ -1187,11 +1208,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)() = nullptr;
   std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
   static GrallocSnapHelperLegacy *s_instance;
-<<<<<<< HEAD
-=======
-  GrallocSnapDebugger debugger_impl_{};
   bool enable_logs_ = false;
->>>>>>> e2dacf9c5 (gralloc: Enable debug logging through property)
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
@@ -1409,6 +1426,13 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_RGBA_5551},
           {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RGBA_4444},
+          // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
+          // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -1432,6 +1456,13 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::YCbCr_420_SP,
             .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH},
+          // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
+          // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_ubwc_to_snap_format_;
