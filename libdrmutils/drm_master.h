@@ -35,6 +35,8 @@
 
 #include "drm_logger.h"
 
+#define CARD_PATH_SIZE 64
+
 namespace drm_utils {
 
 struct DRMBuffer {
@@ -96,7 +98,7 @@ class DRMMaster {
 
   int dev_fd_ = -1;              // Master fd for DRM
   uint32_t card_ = 0;            // Master card index
-  char path_[64];                // Path of master card
+  char path_[CARD_PATH_SIZE];    // Path of master card
   static std::map<uint32_t, DRMMaster*> s_instance;     // Singleton instance
   static std::mutex s_lock;
 };

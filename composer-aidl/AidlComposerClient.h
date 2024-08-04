@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -67,6 +67,9 @@ using aidl::android::hardware::graphics::composer3::DisplayAttribute;
 using aidl::android::hardware::graphics::composer3::DisplayBrightness;
 using aidl::android::hardware::graphics::composer3::DisplayCapability;
 using aidl::android::hardware::graphics::composer3::DisplayCommand;
+#ifdef ENABLE_COMPOSER3_V3
+using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
+#endif
 using aidl::android::hardware::graphics::composer3::DisplayConnectionType;
 using aidl::android::hardware::graphics::composer3::DisplayContentSample;
 using aidl::android::hardware::graphics::composer3::DisplayContentSamplingAttributes;
@@ -145,6 +148,13 @@ class AidlComposerClient : public BnComposerClient {
                                              std::vector<float> *aidl_return) override;
   ScopedAStatus getDisplayAttribute(int64_t in_display, int32_t in_config,
                                     DisplayAttribute in_attribute, int32_t *aidl_return) override;
+#ifdef ENABLE_COMPOSER3_V3
+  ScopedAStatus getDisplayConfigurations(int64_t in_display, int32_t maxFrameIntervalNs,
+                                         std::vector<DisplayConfiguration> *outConfigs) override;
+  ScopedAStatus notifyExpectedPresent(int64_t displayId,
+                                      const ClockMonotonicTimestamp &expectedPresentTime,
+                                      int32_t frameIntervalNs) override;
+#endif
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
                                        std::vector<DisplayCapability> *aidl_return) override;
   ScopedAStatus getDisplayConfigs(int64_t in_display, std::vector<int32_t> *aidl_return) override;
