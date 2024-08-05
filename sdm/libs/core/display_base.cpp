@@ -1562,6 +1562,8 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
     }
   }
 
+  hw_layers_.info.expected_present_time = layer_stack->expected_present_time;
+
   return;
 }
 

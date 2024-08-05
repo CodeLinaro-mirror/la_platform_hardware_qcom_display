@@ -408,6 +408,13 @@ enum struct DRMOps {
    *      uint32_t - Topology control bit-mask
    */
   CONNECTOR_SET_TOPOLOGY_CONTROL,
+
+  /*
+   * Op: Sets Expected Present Time on connector
+   * Arg: uint32_t - Connector ID
+   *      uint64_t - Expected Present Time
+   */
+  CONNECTOR_SET_EPT,
 };
 
 enum struct DRMRotation {
