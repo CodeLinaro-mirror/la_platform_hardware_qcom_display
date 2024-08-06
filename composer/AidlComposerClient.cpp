@@ -724,7 +724,7 @@ ScopedAStatus AidlComposerClient::getReadbackBufferFence(int64_t in_display,
   shared_ptr<Fence> fence = nullptr;
   auto error = settings_->GetReadbackBufferFence(in_display, &fence);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::Unsupported));
   }
 
   *aidl_return = ::ndk::ScopedFileDescriptor(Fence::Dup(fence));
@@ -950,7 +950,7 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
 
   auto err = settings_->SetReadbackBuffer(in_display, (void *)buffer, fence);
   if (err != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
