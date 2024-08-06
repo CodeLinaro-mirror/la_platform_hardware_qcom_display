@@ -25,6 +25,10 @@
  *WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  *OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  *IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *Changes from Qualcomm Innovation Center are provided under the following license:
+ *Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ *SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <sstream>
@@ -112,7 +116,7 @@ int FileFinderOemExtn::FindFileData(const GenericPayload &in, GenericPayload *ou
   DemuraFilePaths *file_paths = nullptr;
 
   status = in.GetPayload(panel_id, &sz);
-  if ((status != 0) || sz != 1) {
+  if ((status != 0) || sz != 1 || panel_id == nullptr) {
     return -EINVAL;
   }
   std::stringstream temp;
@@ -121,7 +125,7 @@ int FileFinderOemExtn::FindFileData(const GenericPayload &in, GenericPayload *ou
   panel_id_hex_str = temp.str();
 
   status = out->GetPayload(file_paths, &sz);
-  if ((status != 0) || sz != 1) {
+  if ((status != 0) || sz != 1 || file_paths == nullptr) {
     return -EINVAL;
   }
 
