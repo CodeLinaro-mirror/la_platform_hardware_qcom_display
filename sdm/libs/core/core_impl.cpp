@@ -504,7 +504,7 @@ DisplayError CoreImpl::ReserveDemuraResources() {
     return kErrorResources;
   }
 
-  std::vector<uint64_t> *panel_ids;
+  std::vector<uint64_t> *panel_ids = nullptr;
   GenericPayload in;
   int ret = in.CreatePayload<std::vector<uint64_t>>(panel_ids);
   if (ret) {
