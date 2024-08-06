@@ -15,7 +15,6 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
         <FpsThresholdMap fps="244" PerfHintThreshold="4"/>
       </Device>
       <Device version="2">
-        <FpsThresholdMap fps="90" PerfHintThreshold="2"/>
         <FpsThresholdMap fps="120" PerfHintThreshold="2"/>
         <FpsThresholdMap fps="144" PerfHintThreshold="2"/>
         <FpsThresholdMap fps="180" PerfHintThreshold="2"/>
