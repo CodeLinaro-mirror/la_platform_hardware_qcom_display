@@ -502,6 +502,14 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_ENCODEABLE},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
