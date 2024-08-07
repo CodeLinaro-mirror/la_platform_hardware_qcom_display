@@ -1426,7 +1426,7 @@ HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
 
   hwc2_config_t real_config = config;
 
-  if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
+  if (IsVirtualConfig(config)) {
     HWC2::Error error = SetFBForExtendedResolution(config, &real_config);
     if (!need_mode_switch_) {
       return error;
@@ -2957,10 +2957,16 @@ HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
     DLOGE("Invalid config: %d", config);
     return HWC2::Error::BadConfig;
   }
+
+  DisplayConfigVariableInfo info = {};
+  GetDisplayAttributesForConfig(INT(config), &info);
+
   hwc2_config_t real_config = config;
-  if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
+  if (IsVirtualConfig(config)) {
     HWC2::Error error = SetFBForExtendedResolution(config, &real_config);
     if (!need_mode_switch_) {
+      fb_width_ = info.x_pixels;
+      fb_height_ = info.y_pixels;
       return error;
     } else {
       config = real_config;
@@ -2986,8 +2992,6 @@ HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
   }
 
   // Cache refresh rate set by client.
-  DisplayConfigVariableInfo info = {};
-  GetDisplayAttributesForConfig(INT(config), &info);
   active_refresh_rate_ = info.fps;
 
   if (vsync_period_change_constraints->seamlessRequired && !AllowSeamless(config)) {
@@ -3176,27 +3180,28 @@ bool HWCDisplay::AllowSeamless(hwc2_config_t config) {
 
 HWC2::Error HWCDisplay::SubmitDisplayConfig(hwc2_config_t config) {
   DTRACE_SCOPED();
-
-  hwc2_config_t current_config = 0;
-  GetActiveConfig(true, &current_config);
-  if (current_config == config) {
+  hwc2_config_t current_real_config = 0;
+  hwc2_config_t current_active_config = GetActiveConfigIndex();
+  GetActiveConfig(true, &current_real_config);
+  // DS disabled case should set the framebuffer resolution.
+  if ((current_real_config == config) && (current_active_config == config)) {
     SetActiveConfigIndex(config);
     return HWC2::Error::None;
   }
 
   DisplayError error = display_intf_->SetActiveConfig(config);
   if (error == kErrorDeferred) {
-    DLOGW("Failed to set new config:%d from current config:%d! Error: %d",
-          config, current_config, error);
+    DLOGW("Failed to set new config:%d from current config:%d! Error: %d", config,
+          current_real_config, error);
     return HWC2::Error::BadConfig;
   } else if (error != kErrorNone) {
-    DLOGE("Failed to set new config:%d from current config:%d! Error: %d",
-          config, current_config, error);
+    DLOGE("Failed to set new config:%d from current config:%d! Error: %d", config,
+          current_real_config, error);
     return HWC2::Error::BadConfig;
   }
 
   SetActiveConfigIndex(config);
-  DLOGI("Active configuration changed from config %d to %d", current_config, config);
+  DLOGI("Active configuration changed from config %d to %d", current_real_config, config);
 
   // Cache refresh rate set by client.
   DisplayConfigVariableInfo info = {};
@@ -3204,10 +3209,13 @@ HWC2::Error HWCDisplay::SubmitDisplayConfig(hwc2_config_t config) {
   active_refresh_rate_ = info.fps;
 
   DisplayConfigVariableInfo current_config_info = {};
-  GetDisplayAttributesForConfig(INT(current_config), &current_config_info);
-  // Set fb config if new resolution differs
-  if (info.x_pixels != current_config_info.x_pixels ||
-      info.y_pixels != current_config_info.y_pixels) {
+  GetDisplayAttributesForConfig(INT(current_active_config), &current_config_info);
+  // Set fb config if new resolution differs and Do not override the framebuffer resolution in
+  // case of DS and panel mode switch happen together. DS will set the Set framebuffer resolution
+  // and set need_mode_switch_ true if panel switch needed
+  if ((info.x_pixels != current_config_info.x_pixels ||
+       info.y_pixels != current_config_info.y_pixels) &&
+      !need_mode_switch_) {
     if (SetFrameBufferResolution(info.x_pixels, info.y_pixels)) {
       return HWC2::Error::BadParameter;
     }
@@ -3789,11 +3797,7 @@ HWC2::Error HWCDisplay::SetFBForExtendedResolution(hwc2_config_t config,
   // Now if current virtual config with higher width than current real config width, then
   // select the parent real config of the virtual config. (DS will not do downscale)
   bool fps_change = false;
-  if (!IsVirtualConfig(config)) {
-    *real_config = config;
-    need_mode_switch_ = true;
-    return HWC2::Error::None;
-  } else if (variable_config_map_[config].x_pixels > real_config_width) {
+  if (variable_config_map_[config].x_pixels > real_config_width) {
     need_mode_switch_ = true;
     auto parent_index = variable_config_map_[config].parent_config_index;
     auto parent_fps = variable_config_map_[parent_index].fps;
