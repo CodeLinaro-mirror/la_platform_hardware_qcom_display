@@ -37,13 +37,11 @@ cc_binary {
         "libhidlbase",
         "libfmq",
         "libhardware_legacy",
-        "android.hardware.graphics.composer3-V3-ndk",
-        "libbinder_ndk",
-        "libui",
-    ],
-
-    static_libs: [
-        "libaidlcommonsupport",
+        "android.hardware.graphics.composer@2.1",
+        "android.hardware.graphics.composer@2.2",
+        "android.hardware.graphics.composer@2.3",
+        "android.hardware.graphics.composer@2.4",
+        "android.hardware.graphics.mapper@4.0",
     ],
     srcs: composer_srcs,
 

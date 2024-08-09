@@ -25,17 +25,20 @@
 #ifndef __QTIQMAACOMPOSERHANDLEIMPORTER_H__
 #define __QTIQMAACOMPOSERHANDLEIMPORTER_H__
 
-#include <cutils/native_handle.h>
+#include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <utils/Mutex.h>
 
-namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer3 {
+namespace composer {
+namespace V3_0 {
 
+using IMapperV4 = ::android::hardware::graphics::mapper::V4_0::IMapper;
 using ::android::Mutex;
+using ::android::sp;
+using ::android::hardware::hidl_handle;
 
 class ComposerHandleImporter {
  public:
@@ -52,13 +55,14 @@ class ComposerHandleImporter {
  private:
   Mutex mLock;
   bool mInitialized = false;
+  sp<IMapperV4> mMapper_V4;
 };
 
-}  // namespace composer3
+}  // namespace V3_0
+}  // namespace composer
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
-}  // namespace aidl
 
 #endif  // __QTIQMAACOMPOSERHANDLEIMPORTER_H__
