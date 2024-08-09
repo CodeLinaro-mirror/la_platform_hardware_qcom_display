@@ -56,6 +56,7 @@
 
 #define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
+#define HWC_UEVENT_DRM_MSM_HYP_EXT_HOTPLUG "sde_kms_hyp@ae00000/drm/card0"
 
 namespace sdm {
 
@@ -945,6 +946,9 @@ HWC3::Error HWCSession::SetLayerColor(Display display, LayerId layer, Color colo
 HWC3::Error HWCSession::SetLayerCompositionType(Display display, LayerId layer,
                                             int32_t int_type) {
   auto type = static_cast<Composition>(int_type);
+  if (disable_get_screen_decorator_support_ && type == Composition::DISPLAY_DECORATION) {
+    return HWC3::Error::Unsupported;
+  }
   return CallLayerFunction(display, layer, &HWCLayer::SetLayerCompositionType, type);
 }
 
@@ -1949,6 +1953,14 @@ android::status_t HWCSession::QdcmCMDDispatch(uint32_t display_id,
         break;
      }
     }
+
+    // Support pluggable displays to dispatch CMD
+    for (auto &map_info : map_info_pluggable_) {
+      if (map_info.client_id == display_id) {
+        is_physical_display = true;
+        break;
+     }
+    }
   }
 
   if (!is_physical_display) {
@@ -2078,6 +2090,22 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
               }
             }
           }
+
+          // Support init/deinit the pluggable displays
+          for (auto &map_info : map_info_pluggable_) {
+            uint32_t id = UINT32(map_info.client_id);
+            if (id < HWCCallbacks::kNumDisplays && hwc_display_[id]) {
+              int result = 0;
+              resp_payload.DestroyPayload();
+              result = hwc_display_[id]->ColorSVCRequestRoute(req_payload,
+                                                              &resp_payload,
+                                                              &pending_action);
+              if (result) {
+                DLOGW("Failed to dispatch action to disp %d ret %d", id, result);
+                ret = result;
+              }
+            }
+          }
           break;
         case kMultiDispGetId:
           ret = resp_payload.CreatePayloadBytes(HWCCallbacks::kNumDisplays, &disp_id);
@@ -2091,6 +2119,14 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
               disp_id[HWC_DISPLAY_PRIMARY] = HWC_DISPLAY_PRIMARY;
             }
             for (auto &map_info : map_info_builtin_) {
+              uint64_t id = map_info.client_id;
+              if (id < HWCCallbacks::kNumDisplays && hwc_display_[id]) {
+                disp_id[id] = (uint8_t)id;
+              }
+            }
+
+            // Support to get the disp_id of pluggable displays
+            for (auto &map_info : map_info_pluggable_) {
               uint64_t id = map_info.client_id;
               if (id < HWCCallbacks::kNumDisplays && hwc_display_[id]) {
                 disp_id[id] = (uint8_t)id;
@@ -2240,7 +2276,8 @@ void HWCSession::UEventHandler(const char *uevent_data, int length) {
   // uevent handling will be done once when SurfaceFlinger connects, at RegisterCallback(). Since
   // HandlePluggableDisplays() reads the latest connection states of all displays, no uevent is
   // lost.
-  if (client_connected_ && strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG)) {
+  if (client_connected_ && ((strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG)) ||
+      (strcasestr(uevent_data, HWC_UEVENT_DRM_MSM_HYP_EXT_HOTPLUG)))) {
     // MST hotplug will not carry connection status/test pattern etc.
     // Pluggable display handler will check all connection status' and take action accordingly.
     const char *str_status = GetTokenValue(uevent_data, length, "status=");
