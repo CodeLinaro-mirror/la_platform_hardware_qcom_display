@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -780,7 +780,7 @@ Error BufferManager::ValidateBufferSize(private_handle_t const *hnd, BufferInfo 
     return Error::BAD_BUFFER;
   }
   auto ion_fd_size = static_cast<unsigned int>(lseek(hnd->fd, 0, SEEK_END));
-  if (size != ion_fd_size) {
+  if (size > ion_fd_size) {
     return Error::BAD_VALUE;
   }
   return Error::NONE;

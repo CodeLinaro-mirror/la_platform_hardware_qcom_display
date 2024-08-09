@@ -16,6 +16,7 @@ cc_library_shared {
         "-Wno-unused-parameter",
         "-DLOG_TAG=\"SDM\"",
         "-D__MIN_ANDROID_VER_T__",
+        "-DPP_DRM_ENABLE",
     ],
     shared_libs: [
         "libdl",
