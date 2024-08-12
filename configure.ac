@@ -44,14 +44,6 @@ AC_ARG_WITH(sanitized-headers,
        [Specify the location of the sanitized Linux headers]),
    [CPPFLAGS="$CPPFLAGS -I$withval"])
 
-AC_ARG_ENABLE([sdmhaldrm],
-     AC_HELP_STRING([--enable-sdmhaldrm],
-        [enable sdmhaldrm, build display-hal-linux with sdmhaldrm]),
-        [enable_sdmhaldrm="${enableval}"],
-        enable_sdmhaldrm=no)
-
-AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
-
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
@@ -78,7 +70,8 @@ AC_CONFIG_FILES([ \
         sdm/libs/dal/Makefile \
         sdm/libs/dal/libsdmdal.pc \
         libqdutils/Makefile \
-        sde-drm/Makefile
+        sde-drm/Makefile \
+        gpu_tonemapper/Makefile
         ])
 AC_SUBST([CFLAGS])
 AC_SUBST([CC])

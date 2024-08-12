@@ -16,7 +16,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <utils/Log.h>
+
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include "EGLImageWrapper.h"
 #include "Tonemapper.h"
@@ -65,7 +100,7 @@ Tonemapper *Tonemapper::build(int type, void *colorMap, int colorMapSize, void *
 //-----------------------------------------------------------------------------
 {
   if (colorMapSize <= 0) {
-      ALOGE("Invalid Color Map size = %d", colorMapSize);
+      fprintf(stderr, "Invalid Color Map size = %d", colorMapSize);
       return NULL;
   }
 
@@ -116,15 +151,15 @@ Tonemapper *Tonemapper::build(int type, void *colorMap, int colorMapSize, void *
 }
 
 //-----------------------------------------------------------------------------
-int Tonemapper::blit(const void *dst, const void *src, int srcFenceFd)
+int Tonemapper::blit(void *dst, void *src, int srcFenceFd, void *userdata, void *userdata2)
 //-----------------------------------------------------------------------------
 {
   // make current
   engine_bind(engineContext);
 
   // create eglimages if required
-  EGLImageBuffer *dst_buffer = eglImageWrapper->wrap(dst);
-  EGLImageBuffer *src_buffer = eglImageWrapper->wrap(src);
+  EGLImageBuffer *dst_buffer = eglImageWrapper->wrap(dst, userdata, userdata2);
+  EGLImageBuffer *src_buffer = eglImageWrapper->wrap(src, userdata, userdata2);
 
   // bind the program
   engine_setProgram(programID);
@@ -149,6 +184,13 @@ int Tonemapper::blit(const void *dst, const void *src, int srcFenceFd)
   engine_set3DInputBuffer(1, tonemapTexture);
   // set non-uniform xform
   engine_set2DInputBuffer(2, lutXformTexture);
+
+  // TODO: Check if needed
+  // set dimensions
+  float dimensions[2] = { 0.0f, 0.0f };
+  dimensions[0] = dst_buffer->getWidth();
+  dimensions[1] = dst_buffer->getHeight();
+  engine_setData2f(5, dimensions);
 
   // perform
   int fenceFD = engine_blit(srcFenceFd);
