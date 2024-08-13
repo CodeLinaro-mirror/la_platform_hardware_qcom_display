@@ -273,6 +273,9 @@ Error QtiMapper5::setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metadata
     return setStandardMetadata(buffer, metadataType.value, metadata, metadataSize);
   } else if (metadataType.name == qtigralloc::VENDOR_QTI) {
     auto expected_size = GetExpectedSize(metadataType.value);
+    if (expected_size == 0) {
+      return AIMAPPER_ERROR_UNSUPPORTED;
+    }
     if (expected_size != metadataSize) {
       ALOGW(
           "Metadata size %d not equal to expected size %d. Returning without setting "
