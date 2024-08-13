@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #ifndef __SDM_COMP_BUFFER_ALLOCATOR_H__
@@ -43,19 +43,16 @@
 #include <aidl/android/hardware/graphics/allocator/IAllocator.h>
 #include <android/binder_manager.h>
 #include <aidlcommonsupport/NativeHandle.h>
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
-#include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
-#include <vendor/qti/hardware/display/mapperextensions/1.3/IQtiMapperExtensions.h>
 #include <QtiGrallocPriv.h>
 #include <core/buffer_allocator.h>
+#include <android/hardware/graphics/mapper/IMapper.h>
+#include <vndksupport/linker.h>
+#include <android/hardware/graphics/mapper/utils/IMapperMetadataTypes.h>
 
 using aidl::android::hardware::graphics::allocator::AllocationResult;
+using aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 using aidl::android::hardware::graphics::allocator::IAllocator;
-using android::hardware::graphics::common::V1_1::BufferUsage;
-using android::hardware::graphics::mapper::V4_0::IMapper;
-using vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
-using IQtiMapperExtensions_v1_3 =
-    vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
+using aidl::android::hardware::graphics::common::ExtendableType;
 
 namespace sdm {
 
@@ -98,19 +95,21 @@ class SDMCompBufferAllocator : public BufferAllocator {
   // callbacks from sdmclient
   bool GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace){return 0;}
   LayerBufferFormat GetSDMFormat(const int32_t &source, const int32_t flags,
-                                         const int64_t compression_type) { return kFormatInvalid;}
+                                 const int64_t compression_type) {
+    return kFormatInvalid;
+  }
   DisplayError ColorMetadataToDataspace(Dataspace ds, uint32_t *int_dataspace) {return kErrorNone;}
   int32_t TranslateFromLegacyDataspace(const int32_t &legacy_ds) {return 0;}
-  int GetMetadataValue(void *buf, vendor_qti_hardware_display_common_MetadataType type, void *dest, size_t dest_size) {return 0;}
-
+  int GetMetadataValue(void *buf, vendor_qti_hardware_display_common_MetadataType type, void *dest,
+                       size_t dest_size);
 
  private:
   int GetGrallocInstance();
   void SetBufferAccessControlInfo(std::bitset<kBufferPermMax> perm, BufferPermission *buf_perm);
-  LayerBufferFormat GetFormatSDM(const int32_t &source, const int flags);
-  android::sp<IMapper> mapper_;
-  std::shared_ptr<IAllocator> allocator_;
-  android::sp<IQtiMapperExtensions_v1_3> mapper_ext_;
+  LayerBufferFormat GetFormatSDM(const int32_t &source, const int flags,
+                                 const int64_t compression_type);
+  std::shared_ptr<IAllocator> allocator_ = nullptr;
+  AIMapper *mapper_ = nullptr;
 };
 
 }  // namespace sdm

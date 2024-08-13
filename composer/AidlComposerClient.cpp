@@ -154,19 +154,15 @@ AidlComposerClient::~AidlComposerClient() {
 
 ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buffer_slot_count,
                                               int64_t *aidl_return) {
-  sdm::LayerId layer = 0;
-  auto error = layer_builder_->CreateLayer(in_display, &layer);
-  drawcycle_->LayerStackUpdated(in_display);
   auto ret = Error::None;
+  DisplayData *disp_data_ptr = nullptr;
 
-  if (error == sdm::kErrorNone) {
-    *aidl_return = static_cast<int64_t>(layer);
+  if (aidl_return && in_display >= 0 && in_buffer_slot_count >= 0) {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
     auto dpy = mDisplayData.find(in_display);
     // The display entry may have already been removed by onHotplug.
     if (dpy != mDisplayData.end()) {
-      auto ly = dpy->second.Layers.emplace(layer, LayerBuffers()).first;
-      ly->second.Buffers.resize(in_buffer_slot_count);
+      disp_data_ptr = &dpy->second;
     } else {
       ret = Error::BadDisplay;
       // Note: We do not destroy the layer on this error as the hotplug
@@ -174,7 +170,22 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
       // ensure all layers for the display are destroyed.
     }
   } else {
-    ret = Error::BadLayer;
+    ret = Error::BadParameter;
+  }
+
+  if (disp_data_ptr) {
+    sdm::LayerId layer = 0;
+    auto error = layer_builder_->CreateLayer(in_display, &layer);
+    if (error == sdm::kErrorNone) {
+      *aidl_return = static_cast<int64_t>(layer);
+      drawcycle_->LayerStackUpdated(in_display);
+
+      std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+      auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
+      ly->second.Buffers.resize(in_buffer_slot_count);
+    } else {
+      ret = Error::BadLayer;
+    }
   }
   return TO_BINDER_STATUS(INT32(ret));
 }
@@ -371,16 +382,18 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
+#ifdef COMPOSER3_V3
 ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs,
     std::vector<DisplayConfiguration> *out_configs) {
   std::map<uint32_t, sdm::DisplayConfigVariableInfo> info;
+
+  bool enable_vrr = settings_->SetupVRRConfig(in_display) == sdm::kErrorNone;
   auto error = settings_->GetAllDisplayAttributes(in_display, &info);
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
-  bool enable_vrr = settings_->SetupVRRConfig(in_display) == sdm::kErrorNone;
   out_configs->clear();
   out_configs->reserve(info.size());
 
@@ -435,6 +448,7 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
   auto error = drawcycle_->NotifyExpectedPresent(in_display, ept, fi_ns);
   return TO_BINDER_STATUS(INT32(error));
 }
+#endif
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
@@ -710,7 +724,7 @@ ScopedAStatus AidlComposerClient::getReadbackBufferFence(int64_t in_display,
   shared_ptr<Fence> fence = nullptr;
   auto error = settings_->GetReadbackBufferFence(in_display, &fence);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::Unsupported));
   }
 
   *aidl_return = ::ndk::ScopedFileDescriptor(Fence::Dup(fence));
@@ -809,7 +823,11 @@ ScopedAStatus AidlComposerClient::setActiveConfigWithConstraints(
   auto error =
       settings_->SetActiveConfigWithConstraints(in_display, in_config, &constraints, &timeline);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    auto ret_err = Error::BadConfig;
+    if (error == sdm::kSeamlessNotAllowed) {
+      ret_err = Error::SeamlessNotAllowed;
+    }
+    return TO_BINDER_STATUS(INT32(ret_err));
   }
 
   aidl_return->newVsyncAppliedTimeNanos = timeline.newVsyncAppliedTimeNanos;
@@ -932,7 +950,7 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
 
   auto err = settings_->SetReadbackBuffer(in_display, (void *)buffer, fence);
   if (err != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -1111,15 +1129,17 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
                    displayCmd.display, *displayCmd.clientTarget);
     ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
                    displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
-    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
-                   displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
     ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
                    displayCmd.display);
     ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
                    displayCmd.display);
+#ifdef COMPOSER3_V3
+    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                   displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
     ExecuteCommand(displayCmd.presentOrValidateDisplay,
                    &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                    displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+#endif
 
     ++mCommandIndex;
 
@@ -1588,7 +1608,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
     int64_t display, int64_t layer, const LayerBrightness &brightness) {
   auto err = mClient.layer_builder_->SetLayerBrightness(display, layer, brightness.brightness);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, Error::BadParameter);
   }
 }
 

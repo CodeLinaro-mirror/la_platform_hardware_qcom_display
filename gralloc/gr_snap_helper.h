@@ -40,6 +40,7 @@
 #include <QtiGrallocMetadata.h>
 #include <QtiMasteringDisplay.h>
 #include <QtiMatrixCoEfficients.h>
+#include <QtiAnamorphicMetadata.h>
 #include <Rect.h>
 #include <UBWCStats.h>
 #include <VideoHistogramMetadata.h>
@@ -118,6 +119,7 @@ using SnapVideoTranscodeStatsMetadata =
 using SnapVideoTimestampInfo = vendor_qti_hardware_display_common_VideoTimestampInfo;
 using SnapVideoHistogramMetadata = vendor_qti_hardware_display_common_VideoHistogramMetadata;
 using SnapCustomContentMetadata = vendor_qti_hardware_display_common_CustomContentMetadata;
+using SnapAnamorphicMetadata = vendor_qti_hardware_display_common_QtiAnamorphicMetadata;
 
 using ::android::hardware::hidl_vec;
 using GrallocError = android::hardware::graphics::mapper::V4_0::Error;
@@ -263,6 +265,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   static GrallocSnapHelper *s_instance;
   GrallocSnapDebugger debugger_impl_{};
+  bool enable_logs_ = false;
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
@@ -284,6 +287,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO},
           {{.format = SnapPixelFormat::YCrCb_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_ENCODEABLE},
            HAL_PIXEL_FORMAT_NV21_ENCODEABLE},
+          // Linear format enum doesn't exist for TP10 in gralloc
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_YCbCr_420_P010},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
@@ -478,6 +484,17 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_RGBA_5551},
           {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RGBA_4444},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX},
+           HAL_PIXEL_FORMAT_NV12_UBWC_FLEX},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH},
+           HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH},
+           HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
+           HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -607,6 +624,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::RGBA_5551},
           {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::RGBA_4444},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::YCbCr_420_SP},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -710,8 +729,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_TRUSTED_VM, SnapUsage::QTI_PRIVATE_TRUSTED_VM},
       {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R, SnapUsage::QTI_ALLOC_UBWC_4R},
-      {SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
-      {SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
@@ -841,6 +860,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::COLOR_REMAPPING_INFO},
       {SnapMetadataType::BASE_ADDRESS, SnapMetadataType::BASE_ADDRESS},
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
+      {SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA,
+       SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA},
   };
 
   std::list<int> unsupported_formats = {
@@ -1092,6 +1113,13 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                         bool check_metadata_set = true,
                                         int32_t *mapper_return = nullptr);
 
+  SnapError CompressionMetadataHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                      void *gralloc_in_set = nullptr,
+                                      void *gralloc_out_get = nullptr,
+                                      SnapDescriptor *buf_des = nullptr,
+                                      bool check_metadata_set = true,
+                                      int32_t *mapper_return = nullptr);
+
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
           {BUFFER_ID, &GrallocSnapHelper::BufferIDHelper},
@@ -1161,6 +1189,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {MATRIX_COEFFICIENTS, &GrallocSnapHelper::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelper::EarlyNotifyLineCountHelper},
           {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelper::BufferDequeueDurationHelper},
+          {ANAMORPHIC_COMPRESSION_METADATA, &GrallocSnapHelper::CompressionMetadataHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -1268,6 +1297,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   static GrallocSnapHelperLegacy *s_instance;
   GrallocSnapDebugger debugger_impl_{};
+  bool enable_logs_ = false;
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
@@ -1459,8 +1489,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_VIDEO_HW, SnapUsage::QTI_PRIVATE_VIDEO_HW},
       {GRALLOC_USAGE_PRIVATE_TRUSTED_VM, SnapUsage::QTI_PRIVATE_TRUSTED_VM},
       {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R, SnapUsage::QTI_ALLOC_UBWC_4R},
-      {SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
-      {SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
+      {GRALLOC_USAGE_PRIVATE_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
@@ -1591,6 +1621,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::COLOR_REMAPPING_INFO},
       {SnapMetadataType::BASE_ADDRESS, SnapMetadataType::BASE_ADDRESS},
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
+      {SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA,
+       SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA},
   };
 
   std::list<int> unsupported_formats = {
@@ -1873,6 +1905,13 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
                                         bool check_metadata_set = true,
                                         int32_t *mapper_return = nullptr);
 
+  SnapError CompressionMetadataHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
+                                      void *gralloc_in_set = nullptr,
+                                      void *gralloc_out_get = nullptr,
+                                      SnapDescriptor *buf_des = nullptr,
+                                      bool check_metadata_set = true,
+                                      int32_t *mapper_return = nullptr);
+
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
           {BUFFER_ID, &GrallocSnapHelperLegacy::BufferIDHelper},
@@ -1942,6 +1981,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {MATRIX_COEFFICIENTS, &GrallocSnapHelperLegacy::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelperLegacy::EarlyNotifyLineCountHelper},
           {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelperLegacy::BufferDequeueDurationHelper},
+          {ANAMORPHIC_COMPRESSION_METADATA, &GrallocSnapHelperLegacy::CompressionMetadataHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>

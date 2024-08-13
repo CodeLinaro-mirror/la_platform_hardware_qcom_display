@@ -1,4 +1,22 @@
-composer_srcs = ["*.cpp"]
+composer_srcs = [
+    "AidlComposerClient.cpp",
+    "AidlComposer.cpp",
+    "AidlComposerHandleImporter.cpp",
+    "DisplayConfigAIDL.cpp",
+    "gl_color_convert.cpp",
+    "gl_color_convert_impl.cpp",
+    "gl_common.cpp",
+    "gl_layer_stitch.cpp",
+    "gl_layer_stitch_impl.cpp",
+    "hwc_buffer_allocator.cpp",
+    "hwc_buffer_sync_handler.cpp",
+    "hwc_common.cpp",
+    "hwc_debugger.cpp",
+    "hwc_socket_handler.cpp",
+    "QServiceBackend.cpp",
+    "QtiComposer3Client.cpp",
+    "service.cpp",
+]
 
 cc_defaults {
     name: "composer-service_defaults",
@@ -36,7 +54,6 @@ cc_defaults {
         "libEGL",
         "libGLESv2",
         "libGLESv3",
-        "android.hardware.graphics.composer3-V3-ndk",
         "android.hardware.graphics.allocator-V2-ndk",
         "libgralloc.qti",
         "libgralloctypes",
@@ -47,7 +64,6 @@ cc_defaults {
         "vendor.qti.hardware.display.config-V12-ndk",
         "vendor.qti.hardware.display.composer3-V1-ndk",
         "vendor.qti.hardware.display.demura-V1-ndk",
-        "vendor.qti.hardware.display.aiqe-V2-ndk",
         "libgrallocutils",
         "libtinyxml2",
         "libmapperutils",
@@ -65,7 +81,8 @@ cc_binary {
     name: "vendor.qti.hardware.display.composer-service",
     defaults: [
         "qtidisplay_defaults",
-        "composer-service_defaults"
+        "composer-service_defaults",
+        "composer3_defaults",
     ],
 
     sanitize: {
@@ -85,15 +102,15 @@ cc_binary {
     srcs: composer_srcs,
 
     init_rc: ["vendor.qti.hardware.display.composer-service.rc"],
-    vintf_fragments: ["vendor.qti.hardware.display.composer-service.xml"],
 }
 
 
 cc_fuzz {
     name: "displayconfig.aidl_fuzzer",
     defaults: [
+        "qtidisplay_defaults",
         "composer-service_defaults",
-        "service_fuzzer_defaults",
+        "composer3_defaults",
     ],
 
     vendor: true,
@@ -106,28 +123,14 @@ cc_fuzz {
         "libcutils_headers",
     ],
 
-    target: {
-        android: {
-            shared_libs: [
-                "libbinder_ndk",
-                "libbinder",
-                "libutils",
-                "libjsoncpp",
-            ],
-        },
-
-        host: {
-            shared_libs: [
-                "libbinder_ndk",
-                "libbinder",
-                "libutils",
-            ],
-        },
-
-        darwin: {
-            enabled: false,
-        },
-    },
+    shared_libs: [
+        "libbinder_ndk",
+        "libbinder",
+        "libutils",
+        "libjsoncpp",
+        "libbase",
+        "libcutils",
+    ],
 
     srcs: [
         "AidlComposerClient.cpp",
@@ -147,11 +150,48 @@ cc_fuzz {
         "QServiceBackend.cpp",
         "QtiComposer3Client.cpp",
     ],
+}
 
-    corpus: ["corpus/*"],
-    fuzz_config: {
-        cc: [
-            "sasikuma@qti.qualcomm.com",
-        ],
+soong_config_module_type {
+    name: "qticomposer3_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "qtidisplay",
+    variables: [
+        "composer_version",
+    ],
+    properties: [
+         "srcs",
+         "cflags",
+         "shared_libs",
+         "vintf_fragments",
+    ],
+}
+
+soong_config_string_variable {
+    name: "composer_version",
+    values: ["v2", "v3", "v3_3", "qmaa"],
+}
+
+qticomposer3_cc_defaults {
+    name: "composer3_defaults",
+    soong_config_variables: {
+        composer_version: {
+            v3_3: {
+                srcs: ["DisplayAiqeAIDL.cpp"],
+                cflags: ["-DCOMPOSER3_V3"],
+                shared_libs: [
+                      "android.hardware.graphics.composer3-V3-ndk",
+                      "vendor.qti.hardware.display.aiqe-V2-ndk",
+                ],
+                vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v3.xml"],
+            },
+            conditions_default: {
+                cflags: ["-DCOMPOSER3_V2"],
+                shared_libs: [
+                     "android.hardware.graphics.composer3-V2-ndk",
+                ],
+                vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v2.xml"],
+            },
+        },
     },
 }

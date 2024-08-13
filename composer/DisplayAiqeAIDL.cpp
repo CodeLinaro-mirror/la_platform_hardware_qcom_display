@@ -1,5 +1,4 @@
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -75,13 +74,32 @@ ScopedAStatus DisplayAiqeAIDL::setSsrcMode(int32_t in_disp_id, const std::string
   }
 }
 
-ndk::ScopedAStatus DisplayAiqeAIDL::enableCopr(int32_t disp_id, bool enable) {
-  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+ScopedAStatus DisplayAiqeAIDL::enableCopr(int32_t in_disp_id, bool en) {
+  if (aiqe_intf_) {
+    int rc = aiqe_intf_->EnableCopr(in_disp_id, en);
+    if (rc) {
+      ALOGE("%s: Unable to %s COPR rc %d", __FUNCTION__, en ? "enable" : "disable", rc);
+      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+  } else {
+    ALOGE("%s: Interface initalized with bad session instance", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+  return ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus DisplayAiqeAIDL::getCoprStats(int32_t disp_id,
-                                                 std::vector<int32_t> *_aidl_return) {
-  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+ScopedAStatus DisplayAiqeAIDL::getCoprStats(int32_t in_disp_id, std::vector<int32_t> *stats) {
+  if (aiqe_intf_) {
+    int rc = aiqe_intf_->GetCoprStats(in_disp_id, stats);
+    if (rc) {
+      ALOGE("%s: Unable to get COPR stats rc = %d", __FUNCTION__, rc);
+      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+  } else {
+    ALOGE("%s: Interface initalized with bad session instance", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+  return ScopedAStatus::ok();
 }
 
 ScopedAStatus DisplayAiqeAIDL::setABCState(int32_t disp_id, int32_t enable) {

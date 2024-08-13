@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2024, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,17 +26,25 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <hidl/LegacySupport.h>
-#include "QtiQmaaComposer.h"
-#include <binder/ProcessState.h>  //May need to hwbinder instead
 
+/*
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+#include <android-base/logging.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
+#include <hidl/LegacySupport.h>
+#include <binder/ProcessState.h>  //May need to hwbinder instead
+#include "QtiQmaaComposer.h"
+
+using aidl::android::hardware::graphics::composer3::IComposer;
+using aidl::vendor::qti::hardware::display::composer3::QtiComposer;
 using android::ProcessState;
 using android::sp;
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
-using android::hardware::graphics::composer::V2_3::IComposer;
-// using vendor::qti::hardware::display::composer::V3_0::IQtiComposer;
-using vendor::qti::hardware::display::composer::V3_0::implementation::QtiComposer;
 
 int main(int, char **) {
   ALOGI("Creating Display HW QMAA Composer HAL");
@@ -59,25 +67,25 @@ int main(int, char **) {
   }
 
   ALOGI("Initializing QtiComposer");
-  sp<IComposer> composer = QtiComposer::initialize();
-  if (composer == nullptr) {
+  std::shared_ptr<QtiComposer> composer = ndk::SharedRefBase::make<QtiComposer>();
+  const std::string instance = std::string() + QtiComposer::descriptor + "/default";
+  if (!composer->asBinder().get()) {
     ALOGE("Initializing QtiComposer...failed!");
     return -EINVAL;
+  }
+
+  ndk::SpAIBinder composerBinder = composer->asBinder();
+  binder_status_t status = AServiceManager_addService(composerBinder.get(), instance.c_str());
+  if (status != STATUS_OK) {
+    ALOGW("Failed to register QtiComposer as a service (status: %d)", status);
   } else {
-    ALOGI("Initializing QtiComposer...done!");
+    ALOGI("Successfully registered AidlComposer as a service");
   }
 
   ALOGI("Configuring RPC threadpool");
   configureRpcThreadpool(4, true /*callerWillJoin*/);
   ALOGI("Configuring RPC threadpool...done!");
-
-  ALOGI("Registering Display HW Composer HAL as a service");
-  if (composer->registerAsService() != android::OK) {
-    ALOGE("Registering Display HW Composer HAL as a service...failed!");
-    return -EINVAL;
-  }
   ALOGI("Registering Display HW Composer HAL as a service...done!");
-
   ALOGI("Joining RPC threadpool...");
   joinRpcThreadpool();
 

@@ -62,8 +62,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.sf.color_mode=9 \
     debug.sf.hw=0 \
     debug.egl.hw=0 \
-    debug.sf.latch_unsignaled=1 \
-    debug.sf.auto_latch_unsignaled=0 \
+    debug.sf.latch_unsignaled=0 \
+    debug.sf.auto_latch_unsignaled=1 \
     debug.mdpcomp.logs=0 \
     vendor.gralloc.disable_ubwc=0 \
     vendor.gralloc.enable_logs=0 \
@@ -164,7 +164,7 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            gralloc4 displayconfig_enabled \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
-                           ubwcp_headers \
+                           ubwcp_headers hwasan \
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -176,13 +176,17 @@ SOONG_CONFIG_qtidisplay_default := true
 SOONG_CONFIG_qtidisplay_var1 := false
 SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
+SOONG_CONFIG_qtidisplay_hwasan := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
-SOONG_CONFIG_qtidisplay_composer_version := v2
-ifeq ($(TARGET_USES_COMPOSER3),true)
-    SOONG_CONFIG_qtidisplay_composer_version := v3
-    $(warning "Using composer3")
+SOONG_CONFIG_qtidisplay_composer_version := v3
+ifeq ($(PLATFORM_VERSION), 15)
+    SOONG_CONFIG_qtidisplay_composer_version := v3_3
+endif
+
+ifeq ($(PLATFORM_VERSION), VanillaIceCream)
+    SOONG_CONFIG_qtidisplay_composer_version := v3_3
 endif
 
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
@@ -227,6 +231,12 @@ else
     ifeq ($(PROFILE_COVERAGE_DATA), true)
         SOONG_CONFIG_qtidisplay_llvmcov := true
     endif
+
+    ifneq ($(filter hwaddress,$(SANITIZE_TARGET)),)
+        SOONG_CONFIG_qtidisplay_hwasan := true
+        $(warning "using SOONG_CONFIG_qtidisplay_hwasan")
+    endif
+
     ifeq (,$(wildcard $(QCPATH)/display-noship))
         SOONG_CONFIG_qtidisplay_var1 := true
     endif

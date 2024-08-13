@@ -31,7 +31,6 @@ cc_library_shared {
         "android.hardware.graphics.mapper@4.0",
         "libbinder_ndk",
         "libgralloc.qti",
-        "libutilscallstack",
         "android.hardware.graphics.allocator-V2-ndk",
     ],
     cflags: [
@@ -220,7 +219,6 @@ cc_library_shared {
         "QtiMapper4.cpp",
         "QtiMapperExtensions.cpp",
     ],
-    vintf_fragments: ["android.hardware.graphics.mapper-impl-qti-display.xml"],
 }
 
 //mapper5

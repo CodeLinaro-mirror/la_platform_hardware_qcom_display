@@ -99,7 +99,9 @@ using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 namespace composer3 = aidl::android::hardware::graphics::composer3;
+#ifdef COMPOSER3_V3
 using DisplayConfiguration = composer3::DisplayConfiguration;
+#endif
 using HwcDisplayCapability = composer3::DisplayCapability;
 using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
@@ -206,20 +208,14 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
     return ScopedAStatus::ok();
   }
   ScopedAStatus getDisplayPortId(int32_t disp_id, int32_t *port_id) override;
-  ScopedAStatus isCacV2Supported(int32_t in_dispId, bool *_aidl_return) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2(int32_t in_dispId, const CacV2Config &in_config, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2PerEye(int32_t in_dispId, const CacV2Config &in_leftConfig,
-                                     const CacV2Config &in_rightConfig, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
-  ScopedAStatus configureCacV2ExtPerEye(int32_t in_dispId, const CacV2ConfigExt &in_leftConfig,
-                                        const CacV2ConfigExt &in_rightConfig, bool in_enable) {
-    return ScopedAStatus::ok();
-  }
+  ScopedAStatus isCacV2Supported(int32_t disp_id, bool *_aidl_return) override;
+  ScopedAStatus configureCacV2(int32_t disp_id, const CacV2Config &in_config,
+                               bool in_enable) override;
+  ScopedAStatus configureCacV2PerEye(int32_t disp_id, const CacV2Config &in_leftConfig,
+                                     const CacV2Config &in_rightConfig, bool in_enable) override;
+  ScopedAStatus configureCacV2ExtPerEye(int32_t disp_id, const CacV2ConfigExt &in_leftConfig,
+                                        const CacV2ConfigExt &in_rightConfig,
+                                        bool in_enable) override;
   ScopedAStatus allowIdleFallback() { return ScopedAStatus::ok(); }
   ScopedAStatus setContentFps(const std::string &in_name, int32_t in_fps) override;
 
@@ -281,7 +277,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 
   sdm::QServiceBackend *qservice_ = nullptr;
 
-  std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
+  std::mutex cwb_callbacks_lock_;
+  std::unordered_map<void *, std::tuple<int32_t, std::shared_ptr<IDisplayConfigCallback>>>
+      cwb_callbacks_;
 
   // sdmclient callbacks
   std::unordered_map<uint64_t, GLColorConvert *> color_convert_map_;

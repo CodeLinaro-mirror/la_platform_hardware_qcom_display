@@ -234,49 +234,45 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   }
   SnapHandle *handle = result.handles[0];
 
-  auto mapper_err = snapmapper_->Retain(*handle);
-
-  if (mapper_err != SnapError::NONE) {
-    DLOGE("Failed to import buffer into HWC: %d", mapper_err);
-    return kErrorMemory;
-  }
-
   uint32_t tmp_width;
 
   if (!buffer_config.access_control.empty()) {
-    mapper_err = snapmapper_->SetMetadata(*handle, SnapMetadataType::BUFFER_PERMISSION, buf_perm);
-    if (mapper_err != SnapError::NONE) {
-      DLOGE("setMetadata failed for SnapMetadataType::BUFFER_PERMISSION %d", mapper_err);
+    status = snapmapper_->SetMetadata(*handle, SnapMetadataType::BUFFER_PERMISSION, buf_perm);
+    if (status != SnapError::NONE) {
+      DLOGE("setMetadata failed for SnapMetadataType::BUFFER_PERMISSION %d", status);
       err = -EINVAL;
       goto cleanup;
     }
-    mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::MEM_HANDLE, &alloc_buffer_info->mem_handle);
+    status = snapmapper_->GetMetadata(*handle, SnapMetadataType::MEM_HANDLE,
+                                      &alloc_buffer_info->mem_handle);
     if (error != SnapError::NONE) {
       err = -EINVAL;
       goto cleanup;
     }
   }
 
-  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::FD, &alloc_buffer_info->fd);
-  if (mapper_err != SnapError::NONE)
+  status = snapmapper_->GetMetadata(*handle, SnapMetadataType::FD, &alloc_buffer_info->fd);
+  if (status != SnapError::NONE)
     goto cleanup;
 
-  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::STRIDE, &tmp_width);
-  if (mapper_err != SnapError::NONE)
+  status = snapmapper_->GetMetadata(*handle, SnapMetadataType::STRIDE, &tmp_width);
+  if (status != SnapError::NONE)
     goto cleanup;
   alloc_buffer_info->stride = tmp_width;
   alloc_buffer_info->aligned_width = tmp_width;
 
-  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::HEIGHT, &alloc_buffer_info->aligned_height);
-  if (mapper_err != SnapError::NONE)
+  status = snapmapper_->GetMetadata(*handle, SnapMetadataType::HEIGHT,
+                                    &alloc_buffer_info->aligned_height);
+  if (status != SnapError::NONE)
     goto cleanup;
 
-  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::ALLOCATION_SIZE, &alloc_buffer_info->size);
-  if (mapper_err != SnapError::NONE)
+  status = snapmapper_->GetMetadata(*handle, SnapMetadataType::ALLOCATION_SIZE,
+                                    &alloc_buffer_info->size);
+  if (status != SnapError::NONE)
     goto cleanup;
 
-  mapper_err = snapmapper_->GetMetadata(*handle, SnapMetadataType::BUFFER_ID, &alloc_buffer_info->id);
-  if (mapper_err != SnapError::NONE)
+  status = snapmapper_->GetMetadata(*handle, SnapMetadataType::BUFFER_ID, &alloc_buffer_info->id);
+  if (status != SnapError::NONE)
     goto cleanup;
 
   int64_t tmp_format, is_ubwc, compression_type;
@@ -916,10 +912,6 @@ int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info, uin
       stride[i] = static_cast<uint32_t>(plane_layout_info[i].stride_bytes);
     }
     DLOGV("%s: Number of plane - %d, custom_format - %d", __FUNCTION__, plane_count, custom_format);
-  }
-
-  if (buf_info.format == kFormatYCrCb420PlanarStride16) {
-    std::swap(offset[1], offset[2]);
   }
 
   if (flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED) {
