@@ -1053,6 +1053,9 @@ DisplayError DisplayBuiltIn::PostCommit(HWLayersInfo *hw_layers_info) {
 
   HandleQsyncPostCommit();
 
+  if (handle_idle_timeout_) {
+    event_handler_->HandleEvent(kIdleTimeout);
+  }
   handle_idle_timeout_ = false;
 
   pending_commit_ = false;

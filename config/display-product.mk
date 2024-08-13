@@ -109,6 +109,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.treat_170m_as_sRGB=1 \
     vendor.display.enable_display_extensions=1
 
+ifeq ($(PLATFORM_VERSION), 15)
+PRODUCT_PROPERTY_OVERRIDES +=  debug.sf.auto_latch_unsignaled=1
+endif
+
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
 PRODUCT_PROPERTY_OVERRIDES += \
