@@ -35,13 +35,15 @@
 #include <vector>
 #include "QtiQmaaComposer.h"
 
+#include "android/binder_auto_utils.h"
+#include <android/binder_ibinder_platform.h>
+
+namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer {
-namespace V3_0 {
-namespace implementation {
+namespace composer3 {
 
 QtiComposerClient *QtiComposerClient::qti_composerclient_instance_ = nullptr;
 
@@ -50,91 +52,84 @@ QtiComposer::QtiComposer() {}
 QtiComposer::~QtiComposer() {}
 
 // Methods from ::android::hardware::graphics::composer::V2_1::IComposer follow.
-Return<void> QtiComposer::getCapabilities(getCapabilities_cb _hidl_cb) {
-  const std::array<IComposer::Capability, 3> all_caps = {{
-      IComposer::Capability::SIDEBAND_STREAM,
-      IComposer::Capability::SKIP_CLIENT_COLOR_TRANSFORM,
-      IComposer::Capability::PRESENT_FENCE_IS_NOT_RELIABLE,
+ScopedAStatus QtiComposer::getCapabilities(std::vector<Capability> *aidl_return) {
+  const std::array<Capability, 2> all_caps = {{
+      Capability::SIDEBAND_STREAM,
+      Capability::PRESENT_FENCE_IS_NOT_RELIABLE,
   }};
 
   uint32_t count = 0;
 
-  std::vector<int32_t> composer_caps(count);
-  composer_caps.resize(count);
-
-  std::unordered_set<hwc2_capability_t> Capabilities;
-  Capabilities.reserve(count);
-  for (auto cap : composer_caps) {
-    Capabilities.insert(static_cast<hwc2_capability_t>(cap));
+  for (auto cap : all_caps) {
+    aidl_return->push_back(cap);
   }
 
-  std::vector<IComposer::Capability> caps;
-  for (auto cap : all_caps) {
-    if (Capabilities.count(static_cast<hwc2_capability_t>(cap)) > 0) {
-      caps.push_back(cap);
+  return ScopedAStatus::ok();
+}
+
+binder_status_t QtiComposer::dump(int fd, const char **args, uint32_t numArgs) {
+  uint32_t len = 0;
+  std::string output = "";
+
+  write(fd, output.c_str(), output.size());
+
+  return STATUS_OK;
+}
+
+ScopedAStatus QtiComposer::createClient(std::shared_ptr<IComposerClient> *aidl_return) {
+  std::unique_lock<std::mutex> lock(mClientMutex);
+  if (!waitForClientDestroyedLocked(lock)) {
+    *aidl_return = nullptr;
+    return TO_BINDER_STATUS(INT32(Error::NoResources));
+  }
+
+  auto composer_client = ndk::SharedRefBase::make<QtiComposerClient>();
+
+  auto clientDestroyed = [this]() { onClientDestroyed(); };
+  composer_client->setOnClientDestroyed(clientDestroyed);
+
+  mClientAlive = true;
+  *aidl_return = composer_client;
+  ALOGI("JJ successfully created composer client");
+
+  return ScopedAStatus::ok();
+}
+
+bool QtiComposer::waitForClientDestroyedLocked(std::unique_lock<std::mutex> &lock) {
+  if (mClientAlive) {
+    using namespace std::chrono_literals;
+
+    // In surface flinger we delete a composer client on one thread and
+    // then create a new client on another thread. Although surface
+    // flinger ensures the calls are made in that sequence (destroy and
+    // then create), sometimes the calls land in the composer service
+    // inverted (create and then destroy). Wait for a brief period to
+    // see if the existing client is destroyed.
+    ALOGI("waiting for previous client to be destroyed");
+    mClientDestroyedCondition.wait_for(lock, 5s, [this]() -> bool { return !mClientAlive; });
+    if (mClientAlive) {
+      ALOGE("previous client was not destroyed");
     }
   }
 
-  hidl_vec<IComposer::Capability> caps_reply;
-  caps_reply.setToExternal(caps.data(), caps.size());
-
-  _hidl_cb(caps_reply);
-  return Void();
+  return !mClientAlive;
 }
 
-Return<void> QtiComposer::dumpDebugInfo(dumpDebugInfo_cb _hidl_cb) {
-  hidl_string buf_reply = "";
-  _hidl_cb(buf_reply);
-  return Void();
+void QtiComposer::onClientDestroyed() {
+  std::lock_guard<std::mutex> lock(mClientMutex);
+  mClientAlive = false;
+  mClientDestroyedCondition.notify_all();
 }
 
-Return<void> QtiComposer::createClient(createClient_cb _hidl_cb) {
-  // TODO(user): Implement combinedly w.r.t createClient_2_3
-  sp<QtiComposerClient> composer_client = QtiComposerClient::CreateQtiComposerClientInstance();
-  if (!composer_client) {
-    _hidl_cb(Error::NO_RESOURCES, nullptr);
-    return Void();
-  }
-
-  _hidl_cb(Error::NONE, composer_client);
-  return Void();
+SpAIBinder QtiComposer::createBinder() {
+  auto binder = BnComposer::createBinder();
+  AIBinder_setInheritRt(binder.get(), true);
+  return binder;
 }
 
-// Methods from ::android::hardware::graphics::composer::V2_3::IComposer follow.
-Return<void> QtiComposer::createClient_2_3(createClient_2_3_cb _hidl_cb) {
-  sp<QtiComposerClient> composer_client = QtiComposerClient::CreateQtiComposerClientInstance();
-  if (!composer_client) {
-    _hidl_cb(Error::NO_RESOURCES, nullptr);
-    return Void();
-  }
-
-  _hidl_cb(Error::NONE, composer_client);
-  return Void();
-}
-
-// Methods from ::android::hardware::graphics::composer::V2_4::IComposer follow.
-Return<void> QtiComposer::createClient_2_4(createClient_2_4_cb _hidl_cb) {
-  sp<QtiComposerClient> composer_client = QtiComposerClient::CreateQtiComposerClientInstance();
-  if (!composer_client) {
-    _hidl_cb(composer_V2_4::Error::NO_RESOURCES, nullptr);
-    return Void();
-  }
-
-  _hidl_cb(composer_V2_4::Error::NONE, composer_client);
-  return Void();
-}
-
-QtiComposer *QtiComposer::initialize() {
-  ALOGI("Creating QtiComposer");
-  return new QtiComposer();
-}
-
-// Methods from ::android::hidl::base::V1_0::IBase follow.
-
-}  // namespace implementation
-}  // namespace V3_0
-}  // namespace composer
+}  // namespace composer3
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
+}  // namespace aidl
