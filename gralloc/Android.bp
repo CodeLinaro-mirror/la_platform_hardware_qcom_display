@@ -2,6 +2,7 @@
 cc_library_shared {
     name: "libgrallocutils",
     defaults: [
+        "qtidisplay_defaults_headless",
         "qtidisplay_common_defaults",
         "qtidisplay_libubwcp_header_defaults"
     ],
@@ -53,7 +54,8 @@ cc_library_shared {
 cc_library_shared {
     name: "libmapperutils",
     defaults: [
-       "qtidisplay_common_defaults",
+        "qtidisplay_defaults_headless",
+        "qtidisplay_common_defaults",
     ],
     vendor: true,
     sanitize: {
