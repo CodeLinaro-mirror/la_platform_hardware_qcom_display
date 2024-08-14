@@ -279,7 +279,10 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   snapmapper_->GetMetadata(*handle, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &tmp_format);
   snapmapper_->GetMetadata(*handle, SnapMetadataType::IS_UBWC, &is_ubwc);
   snapmapper_->GetMetadata(*handle, SnapMetadataType::COMPRESSION, &compression_type);
-  alloc_buffer_info->format = GetSDMFormat(tmp_format, is_ubwc, compression_type);
+
+  int32_t flag;
+  flag = INT32(is_ubwc ? SnapMetadataType::IS_UBWC : 0);
+  alloc_buffer_info->format = GetSDMFormat(tmp_format, flag, compression_type);
 
   buffer_info->private_data = (void *)handle;
   return 0;

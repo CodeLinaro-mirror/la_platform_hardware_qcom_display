@@ -555,7 +555,7 @@ ScopedAStatus DisplayConfigAIDL::isSmartPanelConfig(int disp_id, int config_id, 
 
 ScopedAStatus DisplayConfigAIDL::isRotatorSupportedFormat(int hal_format, bool ubwc,
                                                           bool *supported) {
-  int flag = ubwc ? qtigralloc::PRIV_FLAGS_UBWC_ALIGNED : 0;
+  int flag = ubwc ? IS_UBWC : 0;
   sdm::LayerBufferFormat sdm_format = layer_builder_->GetSDMFormat(hal_format, flag, 0);
 
   *supported = caps_->IsRotatorSupportedFormat(sdm_format);
