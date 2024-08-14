@@ -14,6 +14,7 @@ composer_lib_defaults {
           shared_libs: [
                 "android.hardware.graphics.composer3-V2-ndk",
           ],
+          vintf_fragments: ["vendor.qti.hardware.display.composer-service.xml"],
        },
 
        version_3: {
@@ -25,6 +26,7 @@ composer_lib_defaults {
           shared_libs: [
               "android.hardware.graphics.composer3-V3-ndk",
           ],
+          vintf_fragments: ["vendor.qti.hardware.display.composer-service_v3.xml"],
        },
     }
   },
@@ -139,7 +141,6 @@ display_config_idl_cc_defaults {
           ],
 
           init_rc: ["vendor.qti.hardware.display.composer-service.rc"],
-          vintf_fragments: ["vendor.qti.hardware.display.composer-service.xml"],
        },
     }
   }
