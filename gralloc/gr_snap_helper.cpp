@@ -927,6 +927,36 @@ SnapError GrallocSnapHelper::AllocationSizeHelper(SnapHandle *hnd, uint32_t aidl
   return error;
 }
 
+SnapError GrallocSnapHelper::BaseViewHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                            void *gralloc_in_set, void *gralloc_out_get,
+                                            SnapDescriptor *buf_des, bool check_metadata_set,
+                                            int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_VIEW, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = SnapError::UNSUPPORTED;
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelper::MultiViewHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                             void *gralloc_in_set, void *gralloc_out_get,
+                                             SnapDescriptor *buf_des, bool check_metadata_set,
+                                             int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MULTI_VIEW_INFO, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = SnapError::UNSUPPORTED;
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                     void *gralloc_in_set, void *gralloc_out_get,
                                                     SnapDescriptor *buf_des,

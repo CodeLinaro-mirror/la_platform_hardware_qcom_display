@@ -752,6 +752,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_ALLOC_UBWC_4R, SnapUsage::QTI_ALLOC_UBWC_4R},
       {GRALLOC_USAGE_PRIVATE_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
       {GRALLOC_USAGE_PRIVATE_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
+      {(uint64_t)SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO, SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
@@ -1133,13 +1134,18 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                         SnapDescriptor *buf_des = nullptr,
                                         bool check_metadata_set = true,
                                         int32_t *mapper_return = nullptr);
-
   SnapError CompressionMetadataHelper(SnapHandle *hnd, uint32_t aidl_size,
                                       void *gralloc_in_set = nullptr,
                                       void *gralloc_out_get = nullptr,
                                       SnapDescriptor *buf_des = nullptr,
                                       bool check_metadata_set = true,
                                       int32_t *mapper_return = nullptr);
+  SnapError BaseViewHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                           void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                           bool check_metadata_set = true, int32_t *mapper_return = nullptr);
+  SnapError MultiViewHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                            void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                            bool check_metadata_set = true, int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1211,6 +1217,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelper::EarlyNotifyLineCountHelper},
           {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelper::BufferDequeueDurationHelper},
           {ANAMORPHIC_COMPRESSION_METADATA, &GrallocSnapHelper::CompressionMetadataHelper},
+          {BASE_VIEW, &GrallocSnapHelper::BaseViewHelper},
+          {MULTI_VIEW_INFO, &GrallocSnapHelper::MultiViewHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -1939,7 +1947,6 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
                                         SnapDescriptor *buf_des = nullptr,
                                         bool check_metadata_set = true,
                                         int32_t *mapper_return = nullptr);
-
   SnapError CompressionMetadataHelper(SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size,
                                       void *gralloc_in_set = nullptr,
                                       void *gralloc_out_get = nullptr,
