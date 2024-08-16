@@ -173,6 +173,10 @@
 #define DISABLE_AHARDWAREBUFFER_PROP         GRALLOC_PROP("disable_ahardware_buffer")
 #define USE_SYSTEM_HEAP_FOR_SENSORS          GRALLOC_PROP("use_system_heap_for_sensors")
 #define ENABLE_ALLOCATION_DATA_DUMPING       GRALLOC_PROP("enable_allocation_data_dumping")
+#define DISABLE_AHARDWARE_BUFFER_PROP        GRALLOC_PROP("disable_ahardware_buffer")
+#define SECURE_PREVIEW_BUFFER_FORMAT_PROP    GRALLOC_PROP("secure_preview_buffer_format")
+#define SECURE_PREVIEW_ONLY_PROP             GRALLOC_PROP("secure_preview_only")
+#define USE_DMA_BUF_HEAPS_PROP               GRALLOC_PROP("use_dma_buf_heaps")
 
 // Add all vendor.gralloc.properties above
 

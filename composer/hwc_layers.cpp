@@ -50,25 +50,14 @@ DisplayError SetCSC(const qtigralloc::private_handle_t *pvt_handle, ColorMetaDat
   if (!mapper) {
     return kErrorResources;
   }
-  auto mapper_err =
-      gralloc::GetMetaDataValue(const_cast<private_handle_t *>(pvt_handle),
-                                (int64_t)static_cast<StandardMetadataType>(QTI_COLOR_METADATA),
-                                &metadata_set);
-  if (metadata_set) {
-    error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(pvt_handle),
-                                             VENDOR_QTI_METADATA(QTI_COLOR_METADATA),
-                                             color_metadata, sizeof(*color_metadata));
-  }
+  error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(pvt_handle),
+                                           VENDOR_QTI_METADATA(QTI_COLOR_METADATA),
+                                           color_metadata, sizeof(*color_metadata));
   if (error >= 0) {
     int csc = HAL_CSC_ITU_R_601;
-    mapper_err = gralloc::GetMetaDataValue(const_cast<private_handle_t *>(pvt_handle),
-                                         (int64_t)static_cast<StandardMetadataType>(QTI_COLORSPACE),
-                                         &metadata_set);
-    if (metadata_set) {
-      error =
-          STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(pvt_handle),
-                                           VENDOR_QTI_METADATA(QTI_COLORSPACE), &csc, sizeof(csc));
-    }
+    error =
+        STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(pvt_handle),
+                                         VENDOR_QTI_METADATA(QTI_COLORSPACE), &csc, sizeof(csc));
 
     if (error >= 0) {
       if (csc == HAL_CSC_ITU_R_601_FR || csc == HAL_CSC_ITU_R_2020_FR) {
