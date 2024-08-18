@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -105,9 +105,13 @@ QtiAllocatorAIDL::QtiAllocatorAIDL() {
     // check if the json file exists
     std::string filename_prefix = "/data/vendor/display/gralloc/";
     std::time_t time = std::time({});
+    tm *gm_time = std::gmtime(&time);
+    if (gm_time == nullptr) {
+      ALOGE("Failed to get current time");
+      return;
+    }
     char time_string[std::size("yyyy-mm-dd_hh_mm_ss")];
-    std::strftime(std::data(time_string), std::size(time_string), "%F_%H_%M_%S",
-                  std::gmtime(&time));
+    std::strftime(std::data(time_string), std::size(time_string), "%F_%H_%M_%S", gm_time);
     json_file_name_ += filename_prefix + std::string(time_string) + std::string(".json");
 
     std::ifstream ifile;
