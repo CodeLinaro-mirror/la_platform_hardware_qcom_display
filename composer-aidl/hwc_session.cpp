@@ -110,7 +110,9 @@ void HWCUEvent::UEventThread(HWCUEvent *hwc_uevent) {
   }
 
   while (1) {
-    char uevent_data[PAGE_SIZE] = {};
+    const size_t page_size = getpagesize();
+    char uevent_data[page_size];
+    memset(uevent_data, 0, page_size * sizeof(char));
 
     // keep last 2 zeros to ensure double 0 termination
     int length = uevent_next_event(uevent_data, INT32(sizeof(uevent_data)) - 2);
