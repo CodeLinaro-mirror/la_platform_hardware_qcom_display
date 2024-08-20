@@ -7,6 +7,7 @@
 #define __GR_SNAP_HELPER_H__
 
 #include <functional>
+#include <list>
 
 #include <Address.h>
 #include <BlendMode.h>
@@ -178,7 +179,8 @@ class GrallocSnapHelperIntf {
 
   virtual bool IsBufferImported(native_handle_t *gr_hnd);
   virtual int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  virtual int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  virtual int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size,
+                              int interlaced);
   virtual int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                                 uint64_t *reserved_region_size);
 };
@@ -219,22 +221,22 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
 
   bool IsBufferImported(native_handle_t *gr_hnd);
   int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
 
  private:
   GrallocSnapHelper();
   ~GrallocSnapHelper();
-  int GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
+  SnapError GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
   SnapUsage GetSnapUsage(uint64_t usage, int hal_format);
   int GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage, int *gr_format);
   int GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                         SnapPixelFormat *snap_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
-
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferDescriptor gr_desc);
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferInfo gr_desc);
+  SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
+  SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
 
   int ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &snap_dataspace,
                                              GrallocDataspace *gr_dataspace);
@@ -324,6 +326,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_RAW10},
           {{.format = SnapPixelFormat::RAW12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW12},
+          {{.format = SnapPixelFormat::RAW14, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RAW14},
           {{.format = SnapPixelFormat::RAW16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW16},
           {{.format = SnapPixelFormat::DEPTH_16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -385,7 +389,96 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::BGRX_1010102, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_BGRX_1010102},
           {{.format = SnapPixelFormat::BGR_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_BGR_888}};
+           HAL_PIXEL_FORMAT_BGR_888},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_4x4_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_4x4_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_5x4_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x4_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_5x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_6x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_6x6_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x6_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_8x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_8x6_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x6_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_8x8_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x8_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x6_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x6_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x8_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x8_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x10_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x10_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_12x10_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x10_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_12x12_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x12_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR},
+          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR,
+            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR},
+          {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_4444},
+      };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
       snap_to_flat_format_ = {
@@ -405,6 +498,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::YCrCb_420_SP_ADRENO},
           {{.format = SnapPixelFormat::YCrCb_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_ENCODEABLE},
            SnapPixelFormat::NV21_ENCODEABLE},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::TP10},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::YCBCR_P010},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
@@ -444,6 +539,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::RAW10},
           {{.format = SnapPixelFormat::RAW12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::RAW12},
+          {{.format = SnapPixelFormat::RAW14, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RAW14},
           {{.format = SnapPixelFormat::RAW16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::RAW16},
           {{.format = SnapPixelFormat::DEPTH_16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -505,7 +602,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::BGRX_1010102, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::BGRX_1010102},
           {{.format = SnapPixelFormat::BGR_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           SnapPixelFormat::BGR_888}};
+           SnapPixelFormat::BGR_888},
+          {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RGBA_4444},
+      };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
       snap_to_flat_ubwc_format_ = {
@@ -558,7 +660,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {PLANE_LAYOUT_COMPONENT_TYPE_B, PLANE_COMPONENT_B},
       {PLANE_LAYOUT_COMPONENT_TYPE_A, PLANE_COMPONENT_A},
       {PLANE_LAYOUT_COMPONENT_TYPE_RAW, PLANE_COMPONENT_RAW},
-      {PLANE_LAYOUT_COMPONENT_TYPE_META, PLANE_COMPONENT_META},
+      // META def is QTI defined, should only use the latest definition from SnapAlloc for Mapper5
+      // Path
+      {PLANE_LAYOUT_COMPONENT_TYPE_META, static_cast<int>(PLANE_LAYOUT_COMPONENT_TYPE_META)},
   };
 
   std::unordered_map<SnapPlaneLayoutComponentType, GrallocExtendableType>
@@ -571,7 +675,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {PLANE_LAYOUT_COMPONENT_TYPE_B, android::gralloc4::PlaneLayoutComponentType_B},
           {PLANE_LAYOUT_COMPONENT_TYPE_A, android::gralloc4::PlaneLayoutComponentType_A},
           {PLANE_LAYOUT_COMPONENT_TYPE_RAW, android::gralloc4::PlaneLayoutComponentType_RAW},
-          {PLANE_LAYOUT_COMPONENT_TYPE_META, qtigralloc::PlaneLayoutComponentType_Meta},
+          {PLANE_LAYOUT_COMPONENT_TYPE_META, {"QTI", PLANE_LAYOUT_COMPONENT_TYPE_META}},
       };
 
   std::unordered_map<uint64_t, SnapUsage> gralloc_to_snap_usage_ = {
@@ -734,6 +838,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::COLOR_REMAPPING_INFO},
       {SnapMetadataType::BASE_ADDRESS, SnapMetadataType::BASE_ADDRESS},
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
+  };
+
+  std::list<int> unsupported_formats = {
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
   };
 
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(
@@ -972,6 +1082,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                        SnapDescriptor *buf_des = nullptr,
                                        bool check_metadata_set = true,
                                        int32_t *mapper_return = nullptr);
+  SnapError BufferDequeueDurationHelper(SnapHandle *, uint32_t aidl_size,
+                                        void *gralloc_in_set = nullptr,
+                                        void *gralloc_out_get = nullptr,
+                                        SnapDescriptor *buf_des = nullptr,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1041,6 +1157,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {BASE_ADDRESS, &GrallocSnapHelper::BaseAddressHelper},
           {MATRIX_COEFFICIENTS, &GrallocSnapHelper::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelper::EarlyNotifyLineCountHelper},
+          {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelper::BufferDequeueDurationHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
@@ -1104,22 +1221,22 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
 
   bool IsBufferImported(native_handle_t *gr_hnd);
   int GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height);
-  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size);
+  int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
 
  private:
   GrallocSnapHelperLegacy();
   ~GrallocSnapHelperLegacy();
-  int GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
+  SnapError GetSnapFormat(int hal_format, uint64_t usage, SnapFormatDescriptor *snap_fmt_desc);
   SnapUsage GetSnapUsage(uint64_t usage, int hal_format);
   int GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage, int *gr_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
   int GetGrallocPrivateFlags(SnapUsage snap_usage, int64_t is_ubwc, int64_t is_tile_rendered,
                              int64_t is_cached);
-
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferDescriptor gr_desc);
-  SnapDescriptor GetSnapDescriptor(gralloc::BufferInfo gr_desc);
+  SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
+  SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
+  SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
   SnapMetadataType GetSnapMetadataType(uint64_t gr_metadata_type);
 
   int ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &snap_dataspace,
@@ -1211,6 +1328,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_RAW10},
           {{.format = SnapPixelFormat::RAW12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW12},
+          {{.format = SnapPixelFormat::RAW14, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RAW14},
           {{.format = SnapPixelFormat::RAW16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_RAW16},
           {{.format = SnapPixelFormat::DEPTH_16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -1247,117 +1366,11 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::IMPLEMENTATION_DEFINED,
             .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
            static_cast<int>(PixelFormat::IMPLEMENTATION_DEFINED)},
-          {{.format = SnapPixelFormat::Y8, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           static_cast<int>(PixelFormat::Y8)},
-          {{.format = SnapPixelFormat::Y16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           static_cast<int>(PixelFormat::Y16)},
-          {{.format = SnapPixelFormat::YCrCb_422_SP, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_YCrCb_422_SP},
-          {{.format = SnapPixelFormat::BGRX_8888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_BGRX_8888},
-          {{.format = SnapPixelFormat::YCrCb_422_I, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_YCrCb_422_I},
-          {{.format = SnapPixelFormat::CbYCrY_422_I, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_CbYCrY_422_I},
-          {{.format = SnapPixelFormat::ARGB_2101010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_ARGB_2101010},
-          {{.format = SnapPixelFormat::XRGB_2101010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_XRGB_2101010},
-          {{.format = SnapPixelFormat::ABGR_2101010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_ABGR_2101010},
-          {{.format = SnapPixelFormat::XBGR_2101010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_XBGR_2101010},
-          {{.format = SnapPixelFormat::BGRA_1010102, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_BGRA_1010102},
-          {{.format = SnapPixelFormat::BGRX_1010102, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_BGRX_1010102},
-          {{.format = SnapPixelFormat::BGR_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_BGR_888},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_4x4_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_4x4_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_5x4_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x4_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_5x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_6x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_6x6_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x6_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_8x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_8x6_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x6_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_8x8_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x8_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x6_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x6_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x8_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x8_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_10x10_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x10_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_12x10_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x10_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_RGBA_ASTC_12x12_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x12_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR},
-          {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR,
-            .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR}
-  };
+          {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_4444},
+      };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
 
@@ -1557,6 +1570,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {QTI_CUSTOM_CONTENT_METADATA, SnapMetadataType::CUSTOM_CONTENT_METADATA},
       {QTI_HEAP_NAME, SnapMetadataType::HEAP_NAME},
       {QTI_EARLYNOTIFY_LINECOUNT, SnapMetadataType::EARLYNOTIFY_LINECOUNT},
+      {QTI_BUFFER_DEQUEUE_DURATION, SnapMetadataType::BUFFER_DEQUEUE_DURATION},
       // New enum entries
       {SnapMetadataType::HEAP_NAME, SnapMetadataType::HEAP_NAME},
       {SnapMetadataType::IS_UBWC, SnapMetadataType::IS_UBWC},
@@ -1569,6 +1583,12 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {SnapMetadataType::COLOR_REMAPPING_INFO, SnapMetadataType::COLOR_REMAPPING_INFO},
       {SnapMetadataType::BASE_ADDRESS, SnapMetadataType::BASE_ADDRESS},
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
+  };
+
+  std::list<int> unsupported_formats = {
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
+      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
   };
 
   typedef SnapError (GrallocSnapHelperLegacy::*MetadataHelper)(
@@ -1838,6 +1858,12 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
                                        SnapDescriptor *buf_des = nullptr,
                                        bool check_metadata_set = true,
                                        int32_t *mapper_return = nullptr);
+  SnapError BufferDequeueDurationHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                                        void *gralloc_in_set = nullptr,
+                                        void *gralloc_out_get = nullptr,
+                                        SnapDescriptor *buf_des = nullptr,
+                                        bool check_metadata_set = true,
+                                        int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1907,6 +1933,7 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {BASE_ADDRESS, &GrallocSnapHelperLegacy::BaseAddressHelper},
           {MATRIX_COEFFICIENTS, &GrallocSnapHelperLegacy::MatrixCoefficientsHelper},
           {EARLYNOTIFY_LINECOUNT, &GrallocSnapHelperLegacy::EarlyNotifyLineCountHelper},
+          {BUFFER_DEQUEUE_DURATION, &GrallocSnapHelperLegacy::BufferDequeueDurationHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>

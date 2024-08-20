@@ -186,7 +186,7 @@ void HWCSession::HpdThreadTop() {
   }
 
   while (1) {
-    char uevent_data[PAGE_SIZE] = {};
+    char uevent_data[get_page_size()] = {};
 
     // keep last 2 zeros to ensure double 0 termination
     int length = uevent_next_event(uevent_data, INT32(sizeof(uevent_data)) - 2);
@@ -461,9 +461,15 @@ void HWCSession::InitSupportedDisplaySlots() {
 
   if (kPluggable == hw_disp_info.type) {
     // If primary is a pluggable display, we have already used one pluggable display interface.
-    max_pluggable--;
+    // max_pluggable/builtin can both be initialized to 0 in case of invalid panel node
+    // check to avoid overflow
+    if (max_pluggable) {
+      max_pluggable--;
+    }
   } else {
-    max_builtin--;
+    if (max_builtin) {
+      max_builtin--;
+    }
   }
 
   // Init slots in accordance to h/w capability.

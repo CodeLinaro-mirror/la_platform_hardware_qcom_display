@@ -143,14 +143,18 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
       .left = region.left, .top = region.top, .right = region.right, .bottom = region.bottom};
   int ret_val = snap_helper_->Lock(const_cast<native_handle_t *>(bufferHandle), cpuUsage,
                                    gr_access_region, acquireFenceRawFd, &snap_base);
+
+  if (acquireFenceRawFd > 0) {
+    close(acquireFenceRawFd);
+  }
+
   if (ret_val != 0) {
-    ALOGW("Snap failed to lock buffer");
-    return AIMAPPER_ERROR_BAD_BUFFER;
+    ALOGE("Snap failed to lock buffer");
   } else {
     ALOGD_IF(enable_logs, "QtiMapper5::lock address %lu", snap_base);
     *outData = reinterpret_cast<void *>(snap_base);
-    return AIMAPPER_ERROR_NONE;
   }
+  return static_cast<Error>(ret_val);
 }
 
 Error QtiMapper5::unlock(buffer_handle_t _Nonnull buffer, int *_Nonnull releaseFence) {
@@ -214,7 +218,6 @@ int32_t QtiMapper5::GetMetadataPrivate(buffer_handle_t _Nonnull bufferHandle, in
   if (!snap_helper_ || !snap_alloc_enable_) {
     return -AIMAPPER_ERROR_NO_RESOURCES;
   }
-  // TODO: Update size_required to bytes written in gr_snap_helper
   int32_t size_required = outDataSize;
   auto snap_error =
       snap_helper_->GetMetadata(const_cast<native_handle_t *>(bufferHandle), metadataType, outData,
@@ -253,6 +256,13 @@ int32_t QtiMapper5::getStandardMetadata(buffer_handle_t _Nonnull bufferHandle, i
                                         void *_Nonnull outData, size_t outDataSize) {
   ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld ExpectedSize: %ld",
            __FUNCTION__, bufferHandle, standardType, outDataSize);
+  // For cases where client sends in nullptr intentionally to know bytestream size, set outData to
+  // a valid vector but keep outDataSize to be 0 as a hint to gr_snap_helper so we end up returning
+  // the size without copying
+  std::vector<uint8_t> bytestream(1);
+  if (outData == nullptr) {
+    outData = bytestream.data();
+  }
   return (GetMetadataPrivate(bufferHandle, standardType, outData, outDataSize, true));
 }
 
@@ -298,6 +308,7 @@ Error QtiMapper5::setStandardMetadata(buffer_handle_t _Nonnull bufferHandle,
                                       size_t metadataSize) {
   ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld MetadataSize: %ld",
            __FUNCTION__, bufferHandle, standardTypeRaw, metadataSize);
+  metadataSize = (metadataSize == 0 && metadata == nullptr) ? 1 : metadataSize;
   return (SetMetadataPrivate(bufferHandle, standardTypeRaw, metadata, metadataSize, true));
 }
 
@@ -315,7 +326,7 @@ constexpr AIMapper_MetadataTypeDescription describeQTI(int64_t type, const char 
 Error QtiMapper5::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 61> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 62> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -390,7 +401,10 @@ Error QtiMapper5::listSupportedMetadataTypes(
                   "Early notify line count - used by video", true, true),
       describeQTI(SnapMetadataType::HEAP_NAME, "Heap name", true, false),
       describeQTI(SnapMetadataType::BASE_ADDRESS, "Buffer data base address", true, false),
-      describeQTI(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, "Pixel format post allocation", true, false),
+      describeQTI(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, "Pixel format post allocation", true,
+                  false),
+      describeQTI(SnapMetadataType::BUFFER_DEQUEUE_DURATION, "Last buffer dequeue duration", true,
+                  true),
   };
   *outDescriptionList = sSupportedMetadaTypes.data();
   *outNumberOfDescriptions = sSupportedMetadaTypes.size();
@@ -748,7 +762,7 @@ Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandl
 Error QtiMapper5Legacy::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 61> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 62> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -824,6 +838,8 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
       describeQTI(SnapMetadataType::HEAP_NAME, "Heap name", true, false),
       describeQTI(SnapMetadataType::BASE_ADDRESS, "Buffer data base address", true, false),
       describeQTI(SnapMetadataType::PIXEL_FORMAT_ALLOCATED, "Format Post allocation", true, false),
+      describeQTI(SnapMetadataType::BUFFER_DEQUEUE_DURATION, "Last buffer dequeue duration", true,
+                  true),
   };
   *outDescriptionList = sSupportedMetadaTypes.data();
   *outNumberOfDescriptions = sSupportedMetadaTypes.size();

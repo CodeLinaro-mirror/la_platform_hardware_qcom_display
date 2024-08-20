@@ -111,6 +111,12 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
                               void *_Nonnull outData, size_t outDataSize) override;
   Error setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_MetadataType metadataType,
                     const void *_Nonnull metadata, size_t metadataSize) override;
+  /**
+  *  Sets global values for given standard metadata types
+  *
+  *  For std::optional metadata types, nullopt can be provided as a valid metadata buffer to
+  *  explicitly invalidate the existing metadata value
+  */
   Error setStandardMetadata(buffer_handle_t _Nonnull buffer, int64_t standardMetadataType,
                             const void *_Nonnull metadata, size_t metadataSize) override;
   Error listSupportedMetadataTypes(
@@ -209,6 +215,7 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_ALLOCATED), sizeof(SnapPixelFormat)},
       {static_cast<uint64_t>(SnapMetadataType::EARLYNOTIFY_LINECOUNT), sizeof(int32_t)},
       {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_DEQUEUE_DURATION), sizeof(int64_t)},
       // TODO: Remove the legacy type below once HWC has moved to Snap defs
       {static_cast<uint64_t>(QTI_COLOR_METADATA), sizeof(ColorMetaData)},
   };
@@ -339,6 +346,7 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
       {static_cast<uint64_t>(SnapMetadataType::EARLYNOTIFY_LINECOUNT), sizeof(int32_t)},
       {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::BUFFER_DEQUEUE_DURATION), sizeof(int64_t)},
   };
 };
 

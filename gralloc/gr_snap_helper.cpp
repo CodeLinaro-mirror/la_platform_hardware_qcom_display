@@ -10,6 +10,7 @@
 
 #include <dlfcn.h>
 #include <log/log.h>
+#include <cstdint>
 #include <mutex>
 #include <cutils/properties.h>
 #include <utils/debug.h>
@@ -175,7 +176,11 @@ int GrallocSnapHelper::Allocate(
     return SnapError::BAD_VALUE;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   SnapAllocationResult snap_result;
 
   auto status = snapallocator_->Allocate(snap_desc, buffer_count, &snap_result);
@@ -297,6 +302,11 @@ int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
 
     auto status = snapmapper_->Lock(*hnd, static_cast<SnapUsage>(usage), access_region,
                                     acquire_fence, &ret_addr);
+
+    if (acquire_fence.fence_fd > 0) {
+      close(acquire_fence.fence_fd);
+    }
+
     if (status == SnapError::NONE) {
       *base_addr = ret_addr.addressPointer;
       return SnapError::NONE;
@@ -362,7 +372,11 @@ int GrallocSnapHelper::ValidateBufferSize(native_handle_t *gr_hnd, gralloc::Buff
   }
 
   if (hnd != nullptr) {
-    SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+    SnapDescriptor snap_desc = {};
+    auto err = GetSnapDescriptor(gr_desc, snap_desc);
+    if (err) {
+      return err;
+    }
     auto status = snapmapper_->ValidateBufferSize(*hnd, snap_desc);
     if (status != SnapError::NONE) {
       ALOGE("%s: Failed to validate buffer size via SnapAlloc. Error code: %d", __FUNCTION__,
@@ -481,7 +495,11 @@ int GrallocSnapHelper::IsSupported(gralloc::BufferDescriptor gr_desc, bool *is_s
     return SnapError::UNSUPPORTED;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto status = snapallocator_->IsSupported(snap_desc, is_supported);
   if (status != SnapError::NONE) {
     ALOGE("%s: Failed to check if descriptor is supported via SnapAlloc. Error code: %d",
@@ -1150,6 +1168,20 @@ SnapError GrallocSnapHelper::VTTimestampHelper(SnapHandle *hnd, uint32_t aidl_si
   return error;
 }
 
+SnapError GrallocSnapHelper::BufferDequeueDurationHelper(
+    SnapHandle *hnd, uint32_t aidl_size, void *gralloc_in_set, void *gralloc_out_get,
+    SnapDescriptor *buf_des, bool check_metadata_set, int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    error =
+        snapmapper_->GetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION, gralloc_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error =
+        snapmapper_->SetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION, gralloc_in_set);
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::PPParamInterlacedHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                      void *gralloc_in_set, void *gralloc_out_get,
                                                      SnapDescriptor *buf_des,
@@ -1523,14 +1555,37 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t ai
                                                     bool check_metadata_set,
                                                     int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
+  // Conversion factors for Snap <=> AIDL/AOSP conversion
+  // AIDL equivalent struct uses 1:1 units where as Snap uses 1/50k for primaries and whitepoint,
+  // and 1/10k for minDisplayLuminance
+  constexpr float snap_units[2] = {50000.0f, 10000.0f};
   if (gralloc_out_get != nullptr) {
     SnapMasteringDisplay snap_mastering_display_values = {};
     void *snap_out_get = aidl_size ? &snap_mastering_display_values : gralloc_out_get;
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY, snap_out_get);
     if (aidl_size) {
-      std::optional<GrallocSmpte2086> mastering_display_values = {};
-      memcpy(&mastering_display_values, &snap_mastering_display_values,
-             sizeof(snap_mastering_display_values));
+      std::optional<GrallocSmpte2086> mastering_display_values;
+      GrallocSmpte2086 smpte2086;
+      if (snap_mastering_display_values.colorVolumeSEIEnabled) {
+        smpte2086.primaryRed = {
+            static_cast<float>(snap_mastering_display_values.primaryRed.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.primaryRed.y) / snap_units[0]};
+        smpte2086.primaryGreen = {
+            static_cast<float>(snap_mastering_display_values.primaryGreen.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.primaryGreen.y) / snap_units[0]};
+        smpte2086.primaryBlue = {
+            static_cast<float>(snap_mastering_display_values.primaryBlue.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.primaryBlue.y) / snap_units[0]};
+        smpte2086.whitePoint = {
+            static_cast<float>(snap_mastering_display_values.whitePoint.x) / snap_units[0],
+            static_cast<float>(snap_mastering_display_values.whitePoint.y) / snap_units[0]};
+        smpte2086.maxLuminance =
+            static_cast<float>(snap_mastering_display_values.maxDisplayLuminance);
+        smpte2086.minLuminance =
+            static_cast<float>(snap_mastering_display_values.minDisplayLuminance) / snap_units[1];
+        mastering_display_values = std::move(smpte2086);
+      }
+
       *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2086>(
           mastering_display_values, gralloc_out_get, *mapper_return);
       if (*mapper_return < 0) {
@@ -1550,8 +1605,23 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t ai
       }
       mastering_display_values = *decoded_result;
       if (mastering_display_values != std::nullopt) {
-        memcpy(&snap_converted_mastering_display_values, &mastering_display_values,
-               sizeof(mastering_display_values));
+        snap_converted_mastering_display_values.colorVolumeSEIEnabled = true;
+        snap_converted_mastering_display_values.primaryRed = {
+            static_cast<uint32_t>(mastering_display_values->primaryRed.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->primaryRed.y * snap_units[0])};
+        snap_converted_mastering_display_values.primaryGreen = {
+            static_cast<uint32_t>(mastering_display_values->primaryGreen.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->primaryGreen.y * snap_units[0])};
+        snap_converted_mastering_display_values.primaryBlue = {
+            static_cast<uint32_t>(mastering_display_values->primaryBlue.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->primaryBlue.y * snap_units[0])};
+        snap_converted_mastering_display_values.whitePoint = {
+            static_cast<uint32_t>(mastering_display_values->whitePoint.x * snap_units[0]),
+            static_cast<uint32_t>(mastering_display_values->whitePoint.y * snap_units[0])};
+        snap_converted_mastering_display_values.maxDisplayLuminance =
+            static_cast<uint32_t>(mastering_display_values->maxLuminance);
+        snap_converted_mastering_display_values.minDisplayLuminance =
+            static_cast<uint32_t>(mastering_display_values->minLuminance * snap_units[1]);
       } else {
         snap_converted_mastering_display_values.colorVolumeSEIEnabled = false;
       }
@@ -1559,6 +1629,13 @@ SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t ai
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY,
                                      snap_mastering_display_values);
+  }
+  // Handling for when std::nullopt is passed in with expectation to invalidate the metadata
+  else if (gralloc_in_set == nullptr && aidl_size == 1) {
+    SnapMasteringDisplay snap_mastering_display_values = {};
+    snap_mastering_display_values.colorVolumeSEIEnabled = false;
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY,
+                                     &snap_mastering_display_values);
   }
   return error;
 }
@@ -1575,7 +1652,14 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, uint32_t a
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::CONTENT_LIGHT_LEVEL, snap_out_get);
     if (aidl_size) {
       std::optional<GrallocCta861_3> content_light_level = {};
-      memcpy(&content_light_level, &snap_content_light_level, sizeof(snap_content_light_level));
+      GrallocCta861_3 cta861_3;
+      if (snap_content_light_level.lightLevelSEIEnabled) {
+        cta861_3.maxContentLightLevel =
+            static_cast<float>(snap_content_light_level.maxContentLightLevel);
+        cta861_3.maxFrameAverageLightLevel =
+            static_cast<float>(snap_content_light_level.maxFrameAverageLightLevel);
+        content_light_level = std::move(cta861_3);
+      }
       *mapper_return = Mapper5Encode<StandardMetadataType::CTA861_3>(
           content_light_level, gralloc_out_get, *mapper_return);
       if (*mapper_return < 0) {
@@ -1595,8 +1679,11 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, uint32_t a
       }
       content_light_level = *decoded_result;
       if (content_light_level != std::nullopt) {
-        memcpy(&snap_converted_content_light_level, &content_light_level,
-               sizeof(content_light_level));
+        snap_converted_content_light_level.lightLevelSEIEnabled = true;
+        snap_converted_content_light_level.maxContentLightLevel =
+            static_cast<uint32_t>(content_light_level->maxContentLightLevel);
+        snap_converted_content_light_level.maxFrameAverageLightLevel =
+            static_cast<uint32_t>(content_light_level->maxFrameAverageLightLevel);
       } else {
         snap_converted_content_light_level.lightLevelSEIEnabled = false;
       }
@@ -1604,6 +1691,11 @@ SnapError GrallocSnapHelper::ContentLightLevelHelper(SnapHandle *hnd, uint32_t a
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::CONTENT_LIGHT_LEVEL,
                                      snap_content_light_level);
+  } else if (gralloc_in_set == nullptr && aidl_size == 1) {
+    SnapContentLightLevel snap_content_light_level = {};
+    snap_content_light_level.lightLevelSEIEnabled = false;
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::CONTENT_LIGHT_LEVEL,
+                                     &snap_content_light_level);
   }
   return error;
 }
@@ -1618,14 +1710,16 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
     void *snap_out_get = aidl_size ? &snap_dynamic_metadata : gralloc_out_get;
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::DYNAMIC_METADATA, snap_out_get);
     if (aidl_size) {
-      std::vector<uint8_t> dynamic_metadata_payload = {};
-      dynamic_metadata_payload.resize(sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
-      memcpy(dynamic_metadata_payload.data(), &snap_dynamic_metadata.dynamicMetaDataPayload,
-             sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
-      *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
-          dynamic_metadata_payload, gralloc_out_get, *mapper_return);
-      if (*mapper_return < 0) {
-        return SnapError::BAD_VALUE;
+      if (snap_dynamic_metadata.dynamicMetaDataValid) {
+        std::vector<uint8_t> dynamic_metadata_payload;
+        dynamic_metadata_payload.resize(sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
+        memcpy(dynamic_metadata_payload.data(), &snap_dynamic_metadata.dynamicMetaDataPayload,
+               sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
+        *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
+            dynamic_metadata_payload, gralloc_out_get, *mapper_return);
+        if (*mapper_return < 0) {
+          return SnapError::BAD_VALUE;
+        }
       }
     }
   } else if (gralloc_in_set != nullptr) {
@@ -1643,7 +1737,7 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
         snap_converted_dynamic_metadata.dynamicMetaDataLen =
             static_cast<int>(dynamic_metadata_payload->size());
         memcpy(&snap_converted_dynamic_metadata.dynamicMetaDataPayload,
-               dynamic_metadata_payload->data(), sizeof(dynamic_metadata_payload));
+               dynamic_metadata_payload->data(), dynamic_metadata_payload->size());
         snap_converted_dynamic_metadata.dynamicMetaDataValid = true;
       } else {
         snap_converted_dynamic_metadata.dynamicMetaDataValid = false;
@@ -1652,6 +1746,12 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
     }
     error =
         snapmapper_->SetMetadata(*hnd, SnapMetadataType::DYNAMIC_METADATA, snap_dynamic_metadata);
+  } else if (gralloc_in_set == nullptr && aidl_size == 1) {
+    // Handling for when std::nullopt is passed in with expectation to invalidate the metadata
+    SnapDynamicMetadata snap_dynamic_metadata = {};
+    snap_dynamic_metadata.dynamicMetaDataValid = false;
+    error =
+        snapmapper_->SetMetadata(*hnd, SnapMetadataType::DYNAMIC_METADATA, &snap_dynamic_metadata);
   }
   return error;
 }
@@ -2179,7 +2279,11 @@ int GrallocSnapHelper::GetFromBufferDescriptor(gralloc::BufferDescriptor gr_desc
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto snap_metadata_type = static_cast<SnapMetadataType>(gr_metadata_type);
   if (bufferdescription_conversion_helper_function_map.find(snap_metadata_type) !=
       bufferdescription_conversion_helper_function_map.end()) {
@@ -2197,19 +2301,28 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
     SnapHandle *hnd, SnapDescriptor *buf_des, const SnapBufferLayout snap_buffer_layout,
     std::vector<GrallocPlaneLayout> *gr_plane_layouts) {
   uint64_t width, height;
+  SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
+  bool is_raw = false;
+  bool individually_packed = true;
+
   if (hnd != nullptr) {
     // Get unaligned width
-    std::vector<uint8_t> out_width_bytestream;
     auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::WIDTH, &width);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned width");
       return status;
     }
     //Get unaligned height
-    std::vector<uint8_t> out_height_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::HEIGHT, &height);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned height");
+      return status;
+    }
+    // Get pixel format
+    status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED,
+                                      &snap_pixel_format);
+    if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
+      ALOGE("Unable to get pixel format");
       return status;
     }
   } else if (buf_des != nullptr) {
@@ -2223,14 +2336,34 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
       ALOGE("Unable to get unaligned height");
       return error;
     }
+    snap_pixel_format = buf_des->format;
   }
   auto snap_plane_layout = snap_buffer_layout.planes;
   int plane_count = snap_buffer_layout.plane_count;
   gr_plane_layouts->resize(plane_count);
   int bpp = snap_buffer_layout.bpp;
+
+  // For RAW formats update information to meet IMapper5 VTS / Gralloc4 specs
+  // Sets sampleIncrementInBits to 0 and component sizeInBits to -1 if sampleIncrementInBits is not
+  // divisible by 8. These values aren't valid for formats such as RAW10 and RAW12 which aren't
+  // individually packed due to their size not being in multiples of 8-bits
+  switch (snap_pixel_format) {
+    case SnapPixelFormat::RAW10:
+    case SnapPixelFormat::RAW12:
+    case SnapPixelFormat::RAW14:
+      individually_packed = false;
+    case SnapPixelFormat::RAW8:
+    case SnapPixelFormat::RAW16:
+      is_raw = true;
+      break;
+    default:
+      is_raw = false;
+  }
   for (int i = 0; i < plane_count; i++) {
     (*gr_plane_layouts)[i].sampleIncrementInBits =
-        static_cast<int64_t>(snap_plane_layout[i].sample_increment_bits);
+        is_raw && !individually_packed
+            ? 0
+            : static_cast<int64_t>(snap_plane_layout[i].sample_increment_bits);
     (*gr_plane_layouts)[i].strideInBytes =
         static_cast<int64_t>(snap_plane_layout[i].horizontal_stride_in_bytes);
     (*gr_plane_layouts)[i].totalSizeInBytes =
@@ -2265,7 +2398,8 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
       ConvertSnapToGrallocPlaneComponentType(snap_plane_layout_components[j].type,
                                              &gr_plane_layout_component.type);
       gr_plane_layout_component.offsetInBits = snap_plane_layout_components[j].offset_in_bits;
-      gr_plane_layout_component.sizeInBits = snap_plane_layout_components[j].size_in_bits;
+      gr_plane_layout_component.sizeInBits =
+          (is_raw && !individually_packed) ? -1 : snap_plane_layout_components[j].size_in_bits;
       (*gr_plane_layouts)[i].components.push_back(gr_plane_layout_component);
     }
   }
@@ -2375,16 +2509,25 @@ int GrallocSnapHelper::ConvertSnapPlaneLayoutComponentToGralloc(SnapPlaneLayout 
   return gralloc_component;
 }
 
-int GrallocSnapHelper::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size) {
+int GrallocSnapHelper::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size,
+                                       int interlaced) {
   if (!IsSnapAllocEnabled()) {
     ALOGW("SnapAlloc is disabled");
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   SnapBufferLayout snap_plane_layouts;
   auto status = snapmapper_->GetFromBufferDescriptor(snap_desc, SnapMetadataType::PLANE_LAYOUTS,
                                                      &snap_plane_layouts);
+  if (interlaced) {
+    static SnapKeyValuePair modifier = {.key = "interlaced", .value = static_cast<uint64_t>(1)};
+    snap_desc.additionalOptions.emplace_back(modifier);
+  }
 
   if (status == SnapError::NONE) {
     unsigned int alloc_size;
@@ -2480,6 +2623,9 @@ int GrallocSnapHelper::ConvertSnapDataspaceToGrallocDataspace(SnapDataspace &sna
       break;
     case QtiTransfer_HLG:
       transfer = GrallocDataspace::TRANSFER_HLG;
+      break;
+    case QtiTransfer_SMPTE_ST2084:
+      transfer = GrallocDataspace::TRANSFER_ST2084;
       break;
     default:
       ALOGV("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
@@ -2643,6 +2789,9 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
     case (uint32_t)GrallocDataspace::TRANSFER_HLG:
       dataspace.transfer = QtiTransfer_HLG;
       break;
+    case (uint32_t)GrallocDataspace::TRANSFER_ST2084:
+      dataspace.transfer = QtiTransfer_SMPTE_ST2084;
+      break;
     default:
       ALOGV("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
       return SnapError::BAD_VALUE;
@@ -2669,12 +2818,16 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
 }
 
 // Gralloc <-> Snapalloc conversion helper functions
-int GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
-                                     SnapFormatDescriptor *snap_fmt_desc) {
+SnapError GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
+                                           SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);
+  } else if (std::find(unsupported_formats.begin(), unsupported_formats.end(), hal_format) !=
+             unsupported_formats.end()) {
+    ALOGW("%s:: Unsupported format - %d", __FUNCTION__, hal_format);
+    return SnapError::UNSUPPORTED;
   } else {
     ALOGE("No map for gralloc format to snap format");
     return SnapError::BAD_VALUE;
@@ -2729,14 +2882,32 @@ UBWC_Version GrallocSnapHelper::GetGrallocUBWCVersion(SnapUBWCVersion version) {
   return UBWC_MAX_VERSION;
 }
 
-SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelper::ValidateGrallocUsage(uint64_t gralloc_usage) {
+  // Bits 33-47 must be zero and are reserved for future versions
+  uint64_t future_usage_bit_mask = static_cast<uint64_t>(0xFFFE00000000);
+  if ((gralloc_usage & future_usage_bit_mask) != 0) {
+    return SnapError::BAD_VALUE;
+  }
+  return SnapError::NONE;
+}
+
+SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc,
+                                               SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.GetFormat(), gr_desc.GetUsage(), &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.GetFormat());
+    return err;
+  } else {
     auto name_length = std::min(gr_desc.GetName().size(), static_cast<size_t>(MAX_NAME_LEN - 1));
-    memcpy(&snap_desc.name, gr_desc.GetName().data(), name_length);
+    memcpy(snap_desc.name, gr_desc.GetName().data(), name_length);
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.GetUsage());
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu",
+            gr_desc.GetUsage());
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.GetUsage(), gr_desc.GetFormat());
     snap_desc.width = gr_desc.GetWidth();
     snap_desc.height = gr_desc.GetHeight();
@@ -2753,15 +2924,23 @@ SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr
     ALOGD_IF(DEBUG, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
              gr_desc.GetName().c_str(), snap_desc.name);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
-SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
+                                               SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.format, gr_desc.usage, &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting SnapDescriptor - gr_format %d", gr_desc.format);
+    return err;
+  } else {
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.usage);
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu", gr_desc.usage);
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
     snap_desc.width = gr_desc.width;
     snap_desc.height = gr_desc.height;
@@ -2776,7 +2955,7 @@ SnapDescriptor GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc)
              gr_desc.format, gr_desc.usage, snap_fmt_desc.format, snap_fmt_desc.modifier,
              snap_desc.usage);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
 int GrallocSnapHelper::GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
@@ -2798,13 +2977,13 @@ int GrallocSnapHelper::GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, Snap
 
 int GrallocSnapHelper::GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, SnapUsage usage,
                                          SnapPixelFormat *snap_format) {
-  if ((usage & SnapUsage::QTI_ALLOC_UBWC) &&
-      (snap_to_flat_ubwc_format_.find(snap_fmt_desc) != snap_to_flat_ubwc_format_.end())) {
-    *snap_format = snap_to_flat_ubwc_format_.at(snap_fmt_desc);
-  } else if (snap_to_flat_format_.find(snap_fmt_desc) != snap_to_flat_format_.end()) {
+  if (snap_to_flat_format_.find(snap_fmt_desc) != snap_to_flat_format_.end()) {
     *snap_format = snap_to_flat_format_.at(snap_fmt_desc);
+  } else if ((usage & SnapUsage::QTI_ALLOC_UBWC) &&
+             (snap_to_flat_ubwc_format_.find(snap_fmt_desc) != snap_to_flat_ubwc_format_.end())) {
+    *snap_format = snap_to_flat_ubwc_format_.at(snap_fmt_desc);
   } else {
-    ALOGE("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
+    ALOGW("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
     return SnapError::BAD_VALUE;
   }
 
@@ -2962,7 +3141,11 @@ int GrallocSnapHelperLegacy::Allocate(
     return SnapError::BAD_VALUE;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   SnapAllocationResult snap_result;
 
   auto status = snapallocator_->Allocate(snap_desc, buffer_count, &snap_result);
@@ -3151,7 +3334,11 @@ int GrallocSnapHelperLegacy::ValidateBufferSize(native_handle_t *gr_hnd,
   }
 
   if (hnd != nullptr) {
-    SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+    SnapDescriptor snap_desc = {};
+    auto err = GetSnapDescriptor(gr_desc, snap_desc);
+    if (err) {
+      return err;
+    }
     auto status = snapmapper_->ValidateBufferSize(*hnd, snap_desc);
     if (status != SnapError::NONE) {
       ALOGE("%s: Failed to validate buffer size via SnapAlloc. Error code: %d", __FUNCTION__,
@@ -3270,7 +3457,11 @@ int GrallocSnapHelperLegacy::IsSupported(gralloc::BufferDescriptor gr_desc, bool
     return SnapError::UNSUPPORTED;
   }
 
-  SnapDescriptor snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto status = snapallocator_->IsSupported(snap_desc, is_supported);
   if (status != SnapError::NONE) {
     ALOGE("%s: Failed to check if descriptor is supported via SnapAlloc. Error code: %d",
@@ -4020,7 +4211,7 @@ SnapError GrallocSnapHelperLegacy::PlaneLayoutsHelper(SnapHandle *hnd, bool hidl
       return SnapError::BAD_VALUE;
     }
   } else {
-    *static_cast<SnapBufferLayout *>(gralloc_out_get) = snap_buffer_layout;
+    *static_cast<std::vector<GrallocPlaneLayout> *>(gralloc_out_get) = gr_plane_layouts;
   }
   return error;
 }
@@ -4219,6 +4410,42 @@ SnapError GrallocSnapHelperLegacy::VTTimestampHelper(SnapHandle *hnd, bool hidl_
       vt_timestamp = *static_cast<uint64_t *>(gralloc_in_set);
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::VT_TIMESTAMP, &vt_timestamp);
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelperLegacy::BufferDequeueDurationHelper(
+    SnapHandle *hnd, bool hidl_bytestream, uint32_t aidl_size, void *gralloc_in_set,
+    void *gralloc_out_get, SnapDescriptor *buf_des, bool check_metadata_set,
+    int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    int64_t dequeue_duration = 0;
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION,
+                                     &dequeue_duration);
+    error = CheckMetadataSet(SnapMetadataType::BUFFER_DEQUEUE_DURATION, error, check_metadata_set);
+    if (hidl_bytestream) {
+      if (android::gralloc4::encodeInt64(qtigralloc::MetadataType_BufferDequeueDuration,
+                                         dequeue_duration,
+                                         static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+        return SnapError::BAD_VALUE;
+      }
+    } else {
+      *static_cast<int64_t *>(gralloc_out_get) = static_cast<int64_t>(dequeue_duration);
+    }
+  } else if (gralloc_in_set != nullptr) {
+    int64_t dequeue_duration = 0;
+    if (hidl_bytestream) {
+      if (android::gralloc4::decodeInt64(qtigralloc::MetadataType_BufferDequeueDuration,
+                                         *static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
+                                         &dequeue_duration)) {
+        return SnapError::UNSUPPORTED;
+      }
+    } else {
+      dequeue_duration = *static_cast<int64_t *>(gralloc_in_set);
+    }
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::BUFFER_DEQUEUE_DURATION,
+                                     &dequeue_duration);
   }
   return error;
 }
@@ -4614,17 +4841,29 @@ SnapError GrallocSnapHelperLegacy::VendorMetadataStatusHelper(
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
     bool vendor_metadata_state[METADATA_SET_SIZE];
+    bool vendor_metadata_state_legacy[METADATA_SET_SIZE] = {};
+
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::VENDOR_METADATA_STATUS,
                                      &vendor_metadata_state);
     error = CheckMetadataSet(SnapMetadataType::VENDOR_METADATA_STATUS, error, check_metadata_set);
+
+    for (int type = 0; type < METADATA_SET_SIZE; type++) {
+      int legacy_type = QTI_VT_TIMESTAMP + type;
+      if (metadata_type_map.find(legacy_type) != metadata_type_map.end()) {
+        int snap_type = metadata_type_map[legacy_type];
+        vendor_metadata_state_legacy[GET_VENDOR_METADATA_STATUS_INDEX(legacy_type)] =
+            vendor_metadata_state[GET_VENDOR_METADATA_STATUS_INDEX(snap_type)];
+      }
+    }
+
     if (hidl_bytestream) {
-      if (qtigralloc::encodeMetadataState(vendor_metadata_state,
+      if (qtigralloc::encodeMetadataState(vendor_metadata_state_legacy,
                                           static_cast<hidl_vec<uint8_t> *>(gralloc_out_get)) !=
           GrallocError::NONE) {
         return SnapError::BAD_VALUE;
       }
     } else {
-      std::memcpy(gralloc_out_get, vendor_metadata_state, sizeof(bool) * METADATA_SET_SIZE);
+      std::memcpy(gralloc_out_get, vendor_metadata_state_legacy, sizeof(bool) * METADATA_SET_SIZE);
     }
   } else if (gralloc_in_set != nullptr) {
     if (hidl_bytestream) {
@@ -5179,14 +5418,36 @@ SnapError GrallocSnapHelperLegacy::MasteringDisplayHelper(SnapHandle *hnd, bool 
                                                           bool check_metadata_set,
                                                           int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
+  // Conversion factors for Snap <=> AIDL/AOSP conversion
+  // AIDL equivalent struct uses 1:1 units where as Snap uses 1/50k for primaries and whitepoint,
+  // and 1/10k for minDisplayLuminance
+  constexpr float snap_units[2] = {50000.0f, 10000.0f};
   if (gralloc_out_get != nullptr) {
     SnapMasteringDisplay snap_mastering_display_values = {};
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MASTERING_DISPLAY,
                                      &snap_mastering_display_values);
     error = CheckMetadataSet(SnapMetadataType::MASTERING_DISPLAY, error, check_metadata_set);
     std::optional<GrallocSmpte2086> mastering_display_values = {};
-    memcpy(&mastering_display_values, &snap_mastering_display_values,
-           sizeof(snap_mastering_display_values));
+    GrallocSmpte2086 smpte2086;
+    if (snap_mastering_display_values.colorVolumeSEIEnabled) {
+      smpte2086.primaryRed = {
+          static_cast<float>(snap_mastering_display_values.primaryRed.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.primaryRed.y) / snap_units[0]};
+      smpte2086.primaryGreen = {
+          static_cast<float>(snap_mastering_display_values.primaryGreen.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.primaryGreen.y) / snap_units[0]};
+      smpte2086.primaryBlue = {
+          static_cast<float>(snap_mastering_display_values.primaryBlue.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.primaryBlue.y) / snap_units[0]};
+      smpte2086.whitePoint = {
+          static_cast<float>(snap_mastering_display_values.whitePoint.x) / snap_units[0],
+          static_cast<float>(snap_mastering_display_values.whitePoint.y) / snap_units[0]};
+      smpte2086.maxLuminance =
+          static_cast<float>(snap_mastering_display_values.maxDisplayLuminance);
+      smpte2086.minLuminance =
+          static_cast<float>(snap_mastering_display_values.minDisplayLuminance) / snap_units[1];
+      mastering_display_values = std::move(smpte2086);
+    }
     if (aidl_size) {
       *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2086>(
           mastering_display_values, gralloc_out_get, *mapper_return);
@@ -5220,8 +5481,23 @@ SnapError GrallocSnapHelperLegacy::MasteringDisplayHelper(SnapHandle *hnd, bool 
       mastering_display_values = *static_cast<std::optional<GrallocSmpte2086> *>(gralloc_in_set);
     }
     if (mastering_display_values != std::nullopt) {
-      memcpy(&snap_mastering_display_values, &mastering_display_values,
-             sizeof(mastering_display_values));
+      snap_mastering_display_values.colorVolumeSEIEnabled = true;
+      snap_mastering_display_values.primaryRed = {
+          static_cast<uint32_t>(mastering_display_values->primaryRed.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->primaryRed.y * snap_units[0])};
+      snap_mastering_display_values.primaryGreen = {
+          static_cast<uint32_t>(mastering_display_values->primaryGreen.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->primaryGreen.y * snap_units[0])};
+      snap_mastering_display_values.primaryBlue = {
+          static_cast<uint32_t>(mastering_display_values->primaryBlue.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->primaryBlue.y * snap_units[0])};
+      snap_mastering_display_values.whitePoint = {
+          static_cast<uint32_t>(mastering_display_values->whitePoint.x * snap_units[0]),
+          static_cast<uint32_t>(mastering_display_values->whitePoint.y * snap_units[0])};
+      snap_mastering_display_values.maxDisplayLuminance =
+          static_cast<uint32_t>(mastering_display_values->maxLuminance);
+      snap_mastering_display_values.minDisplayLuminance =
+          static_cast<uint32_t>(mastering_display_values->minLuminance * snap_units[1]);
     } else {
       snap_mastering_display_values.colorVolumeSEIEnabled = false;
     }
@@ -5244,7 +5520,14 @@ SnapError GrallocSnapHelperLegacy::ContentLightLevelHelper(SnapHandle *hnd, bool
                                      &snap_content_light_level);
     error = CheckMetadataSet(SnapMetadataType::CONTENT_LIGHT_LEVEL, error, check_metadata_set);
     std::optional<GrallocCta861_3> content_light_level = {};
-    memcpy(&content_light_level, &snap_content_light_level, sizeof(snap_content_light_level));
+    GrallocCta861_3 cta861_3;
+    if (snap_content_light_level.lightLevelSEIEnabled) {
+      cta861_3.maxContentLightLevel =
+          static_cast<float>(snap_content_light_level.maxContentLightLevel);
+      cta861_3.maxFrameAverageLightLevel =
+          static_cast<float>(snap_content_light_level.maxFrameAverageLightLevel);
+      content_light_level = std::move(cta861_3);
+    }
     if (aidl_size) {
       *mapper_return = Mapper5Encode<StandardMetadataType::CTA861_3>(
           content_light_level, gralloc_out_get, *mapper_return);
@@ -5278,7 +5561,11 @@ SnapError GrallocSnapHelperLegacy::ContentLightLevelHelper(SnapHandle *hnd, bool
       content_light_level = *static_cast<std::optional<GrallocCta861_3> *>(gralloc_in_set);
     }
     if (content_light_level != std::nullopt) {
-      memcpy(&snap_content_light_level, &content_light_level, sizeof(content_light_level));
+      snap_content_light_level.lightLevelSEIEnabled = true;
+      snap_content_light_level.maxContentLightLevel =
+          static_cast<uint32_t>(content_light_level->maxContentLightLevel);
+      snap_content_light_level.maxFrameAverageLightLevel =
+          static_cast<uint32_t>(content_light_level->maxFrameAverageLightLevel);
     } else {
       snap_content_light_level.lightLevelSEIEnabled = false;
     }
@@ -5348,7 +5635,7 @@ SnapError GrallocSnapHelperLegacy::DynamicMetadataHelper(SnapHandle *hnd, bool h
     if (dynamic_metadata_payload != std::nullopt) {
       snap_dynamic_metadata.dynamicMetaDataLen = static_cast<int>(dynamic_metadata_payload->size());
       memcpy(&snap_dynamic_metadata.dynamicMetaDataPayload, dynamic_metadata_payload->data(),
-             sizeof(dynamic_metadata_payload));
+             dynamic_metadata_payload->size());
       snap_dynamic_metadata.dynamicMetaDataValid = true;
     } else {
       snap_dynamic_metadata.dynamicMetaDataValid = false;
@@ -6057,7 +6344,11 @@ int GrallocSnapHelperLegacy::GetFromBufferDescriptor(gralloc::BufferDescriptor g
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
   auto snap_metadata_type = GetSnapMetadataType(gr_metadata_type);
   if (bufferdescription_conversion_helper_function_map.find(snap_metadata_type) !=
       bufferdescription_conversion_helper_function_map.end()) {
@@ -6076,19 +6367,28 @@ int GrallocSnapHelperLegacy::ConvertSnapBufferlayoutToGrallocPlaneLayout(
     SnapHandle *hnd, SnapDescriptor *buf_des, const SnapBufferLayout snap_buffer_layout,
     std::vector<GrallocPlaneLayout> *gr_plane_layouts) {
   uint64_t width, height;
+  SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
+  bool is_raw = false;
+  bool individually_packed = true;
+
   if (hnd != nullptr) {
     // Get unaligned width
-    std::vector<uint8_t> out_width_bytestream;
     auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::WIDTH, &width);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned width");
       return status;
     }
     //Get unaligned height
-    std::vector<uint8_t> out_height_bytestream;
     status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::HEIGHT, &height);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
       ALOGE("Unable to get unaligned height");
+      return status;
+    }
+    // Get pixel format
+    status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED,
+                                      &snap_pixel_format);
+    if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
+      ALOGE("Unable to get pixel format");
       return status;
     }
   } else if (buf_des != nullptr) {
@@ -6102,14 +6402,34 @@ int GrallocSnapHelperLegacy::ConvertSnapBufferlayoutToGrallocPlaneLayout(
       ALOGE("Unable to get unaligned height");
       return error;
     }
+    snap_pixel_format = buf_des->format;
   }
   auto snap_plane_layout = snap_buffer_layout.planes;
   int plane_count = snap_buffer_layout.plane_count;
   gr_plane_layouts->resize(plane_count);
   int bpp = snap_buffer_layout.bpp;
+
+  // For RAW formats update information to meet IMapper5 VTS / Gralloc4 specs
+  // Sets sampleIncrementInBits to 0 and component sizeInBits to -1 if sampleIncrementInBits is not
+  // divisible by 8. These values aren't valid for formats such as RAW10 and RAW12 which aren't
+  // individually packed due to their size not being in multiples of 8-bits
+  switch (snap_pixel_format) {
+    case SnapPixelFormat::RAW10:
+    case SnapPixelFormat::RAW12:
+      individually_packed = false;
+    case SnapPixelFormat::RAW8:
+    case SnapPixelFormat::RAW16:
+      is_raw = true;
+      break;
+    default:
+      is_raw = false;
+  }
+
   for (int i = 0; i < plane_count; i++) {
     (*gr_plane_layouts)[i].sampleIncrementInBits =
-        static_cast<int64_t>(snap_plane_layout[i].sample_increment_bits);
+        is_raw && !individually_packed
+            ? 0
+            : static_cast<int64_t>(snap_plane_layout[i].sample_increment_bits);
     (*gr_plane_layouts)[i].strideInBytes =
         static_cast<int64_t>(snap_plane_layout[i].horizontal_stride_in_bytes);
     (*gr_plane_layouts)[i].totalSizeInBytes =
@@ -6144,7 +6464,8 @@ int GrallocSnapHelperLegacy::ConvertSnapBufferlayoutToGrallocPlaneLayout(
       ConvertSnapToGrallocPlaneComponentType(snap_plane_layout_components[j].type,
                                              &gr_plane_layout_component.type);
       gr_plane_layout_component.offsetInBits = snap_plane_layout_components[j].offset_in_bits;
-      gr_plane_layout_component.sizeInBits = snap_plane_layout_components[j].size_in_bits;
+      gr_plane_layout_component.sizeInBits =
+          (is_raw && !individually_packed) ? -1 : snap_plane_layout_components[j].size_in_bits;
       (*gr_plane_layouts)[i].components.push_back(gr_plane_layout_component);
     }
   }
@@ -6255,14 +6576,22 @@ int GrallocSnapHelperLegacy::ConvertSnapPlaneLayoutComponentToGralloc(SnapPlaneL
   return gralloc_component;
 }
 
-int GrallocSnapHelperLegacy::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out,
-                                             uint32_t *size) {
+int GrallocSnapHelperLegacy::GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size,
+                                             int interlaced) {
   if (!IsSnapAllocEnabled()) {
     ALOGW("SnapAlloc is disabled");
     return SnapError::UNSUPPORTED;
   }
 
-  auto snap_desc = GetSnapDescriptor(gr_desc);
+  SnapDescriptor snap_desc = {};
+  auto err = GetSnapDescriptor(gr_desc, snap_desc);
+  if (err) {
+    return err;
+  }
+  if (interlaced) {
+    static SnapKeyValuePair modifier = {.key = "interlaced", .value = static_cast<uint64_t>(1)};
+    snap_desc.additionalOptions.emplace_back(modifier);
+  }
   SnapBufferLayout snap_plane_layouts;
   auto status = snapmapper_->GetFromBufferDescriptor(snap_desc, SnapMetadataType::PLANE_LAYOUTS,
                                                      &snap_plane_layouts);
@@ -6361,6 +6690,9 @@ int GrallocSnapHelperLegacy::ConvertSnapDataspaceToGrallocDataspace(
       break;
     case QtiTransfer_HLG:
       transfer = GrallocDataspace::TRANSFER_HLG;
+      break;
+    case QtiTransfer_SMPTE_ST2084:
+      transfer = GrallocDataspace::TRANSFER_ST2084;
       break;
     default:
       ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, snap_dataspace.transfer);
@@ -6524,6 +6856,9 @@ int GrallocSnapHelperLegacy::ConvertGrallocDataspaceToSnapDataspace(GrallocDatas
     case (uint32_t)GrallocDataspace::TRANSFER_HLG:
       dataspace.transfer = QtiTransfer_HLG;
       break;
+    case (uint32_t)GrallocDataspace::TRANSFER_ST2084:
+      dataspace.transfer = QtiTransfer_SMPTE_ST2084;
+      break;
     default:
       ALOGW("%s: Failed to convert transfer %d", __FUNCTION__, transfer);
       return SnapError::BAD_VALUE;
@@ -6550,14 +6885,18 @@ int GrallocSnapHelperLegacy::ConvertGrallocDataspaceToSnapDataspace(GrallocDatas
 }
 
 // Gralloc <-> Snapalloc conversion helper functions
-int GrallocSnapHelperLegacy::GetSnapFormat(int hal_format, uint64_t usage,
-                                           SnapFormatDescriptor *snap_fmt_desc) {
+SnapError GrallocSnapHelperLegacy::GetSnapFormat(int hal_format, uint64_t usage,
+                                                 SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);
+  } else if (std::find(unsupported_formats.begin(), unsupported_formats.end(), hal_format) !=
+             unsupported_formats.end()) {
+    ALOGW("%s:: Unsupported format - %d", __FUNCTION__, hal_format);
+    return SnapError::UNSUPPORTED;
   } else {
-    ALOGE("No map for gralloc format to snap format");
+    ALOGE("%s:: No map for gralloc format %d to snap format", __FUNCTION__, hal_format);
     return SnapError::BAD_VALUE;
   }
 
@@ -6610,14 +6949,23 @@ UBWC_Version GrallocSnapHelperLegacy::GetGrallocUBWCVersion(SnapUBWCVersion vers
   return UBWC_MAX_VERSION;
 }
 
-SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc,
+                                                     SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.GetFormat(), gr_desc.GetUsage(), &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.GetFormat());
+    return err;
+  } else {
     auto name_length = std::min(gr_desc.GetName().size(), static_cast<size_t>(MAX_NAME_LEN - 1));
-    memcpy(&snap_desc.name, gr_desc.GetName().data(), name_length);
+    memcpy(snap_desc.name, gr_desc.GetName().data(), name_length);
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.GetUsage());
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu",
+            gr_desc.GetUsage());
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.GetUsage(), gr_desc.GetFormat());
     snap_desc.width = gr_desc.GetWidth();
     snap_desc.height = gr_desc.GetHeight();
@@ -6634,15 +6982,32 @@ SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescrip
     ALOGD_IF(DEBUG, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
              gr_desc.GetName().c_str(), snap_desc.name);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
-SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc) {
-  SnapDescriptor snap_desc;
+SnapError GrallocSnapHelperLegacy::ValidateGrallocUsage(uint64_t gralloc_usage) {
+  // Bits 33-47 must be zero and are reserved for future versions
+  uint64_t future_usage_bit_mask = static_cast<uint64_t>(0xFFFE00000000);
+  if ((gralloc_usage & future_usage_bit_mask) != 0) {
+    return SnapError::BAD_VALUE;
+  }
+  return SnapError::NONE;
+}
+
+SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
+                                                     SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.format, gr_desc.usage, &snap_fmt_desc);
-  if (!err) {
+  if (err) {
+    ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.format);
+    return err;
+  } else {
     snap_desc.format = snap_fmt_desc.format;
+    err = ValidateGrallocUsage(gr_desc.usage);
+    if (err) {
+      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu", gr_desc.usage);
+      return err;
+    }
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
     snap_desc.width = gr_desc.width;
     snap_desc.height = gr_desc.height;
@@ -6657,7 +7022,7 @@ SnapDescriptor GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr
              gr_desc.format, gr_desc.usage, snap_fmt_desc.format, snap_fmt_desc.modifier,
              snap_desc.usage);
   }
-  return snap_desc;
+  return SnapError::NONE;
 }
 
 SnapMetadataType GrallocSnapHelperLegacy::GetSnapMetadataType(uint64_t gr_metadata_type) {

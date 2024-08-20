@@ -381,10 +381,27 @@ int HWCBufferAllocator::GetPrivateFlags(void *buf, int32_t &flags) {
   err |= STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
                                            VENDOR_QTI_METADATA(SnapMetadataType::IS_CACHED),
                                            &is_cached, sizeof(is_cached));
+  uint64_t buffer_usage;
+  err |= STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
+                                           VENDOR_QTI_METADATA(SnapMetadataType::USAGE),
+                                           &buffer_usage, sizeof(buffer_usage));
   if (err >= 0) {
+    // Private flags are being set here until pending changes to use snapalloc in SDM directly
     flags = is_ubwc ? (flags | qtigralloc::PRIV_FLAGS_UBWC_ALIGNED) : flags;
     flags = is_tile_rendered ? (flags | qtigralloc::PRIV_FLAGS_TILE_RENDERED) : flags;
     flags = is_cached ? (flags | qtigralloc::PRIV_FLAGS_CACHED) : flags;
+
+    bool secure = buffer_usage & vendor_qti_hardware_display_common_BufferUsage::PROTECTED;
+    flags = (secure) ? (flags | qtigralloc::PRIV_FLAGS_SECURE_BUFFER) : flags;
+    flags =
+        (secure && (buffer_usage & vendor_qti_hardware_display_common_BufferUsage::CAMERA_OUTPUT))
+            ? (flags | qtigralloc::PRIV_FLAGS_CAMERA_WRITE)
+            : flags;
+    flags =
+        (buffer_usage & vendor_qti_hardware_display_common_BufferUsage::QTI_PRIVATE_SECURE_DISPLAY)
+            ? (flags | qtigralloc::PRIV_FLAGS_SECURE_DISPLAY)
+            : flags;
+
     return kErrorNone;
   }
   return kErrorParameters;
