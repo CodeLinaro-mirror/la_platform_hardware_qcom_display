@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -137,15 +137,28 @@ static EGLImageBuffer *L_wrap(const private_handle_t *src)
     unaligned_width = crop.right;
     unaligned_height = crop.bottom;
     uint32_t aligned_height = 0;
-    gralloc::BufferInfo info(unaligned_width, unaligned_height, src->format, src->usage);
+    uint64_t buffer_usage = 0;
+    if(gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
+                                 (int64_t)StandardMetadataType::USAGE,
+                                 &buffer_usage) != gralloc::Error::NONE) {
+      ALOGE("Failed to get usage");
+    }
+    gralloc::BufferInfo info(unaligned_width, unaligned_height, src->format, buffer_usage);
     gralloc::GetAlignedWidthAndHeight(info, &stride, &aligned_height);
+  }
+
+  uint64_t protected_content;
+  if(gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
+                               (int64_t)StandardMetadataType::PROTECTED_CONTENT,
+                               &protected_content) != gralloc::Error::NONE) {
+     ALOGE("Failed to get protected flag");
   }
 
   int flags = android::GraphicBuffer::USAGE_HW_TEXTURE |
               android::GraphicBuffer::USAGE_SW_READ_NEVER |
               android::GraphicBuffer::USAGE_SW_WRITE_NEVER;
 
-  if (src->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
+  if (protected_content) {
     flags |= android::GraphicBuffer::USAGE_PROTECTED;
   }
 
