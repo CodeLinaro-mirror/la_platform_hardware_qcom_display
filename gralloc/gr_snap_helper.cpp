@@ -927,6 +927,36 @@ SnapError GrallocSnapHelper::AllocationSizeHelper(SnapHandle *hnd, uint32_t aidl
   return error;
 }
 
+SnapError GrallocSnapHelper::BaseViewHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                            void *gralloc_in_set, void *gralloc_out_get,
+                                            SnapDescriptor *buf_des, bool check_metadata_set,
+                                            int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_VIEW, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = SnapError::UNSUPPORTED;
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelper::MultiViewHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                             void *gralloc_in_set, void *gralloc_out_get,
+                                             SnapDescriptor *buf_des, bool check_metadata_set,
+                                             int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MULTI_VIEW_INFO, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = SnapError::UNSUPPORTED;
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                     void *gralloc_in_set, void *gralloc_out_get,
                                                     SnapDescriptor *buf_des,
@@ -1873,7 +1903,8 @@ int GrallocSnapHelper::GetMetadataState(native_handle_t *gr_hnd, SnapMetadataTyp
   if (hnd != nullptr) {
     auto status = snapmapper_->GetMetadataState(*hnd, metadata_type, out);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
-      ALOGE("%s: Failed to get metadata state via SnapAlloc. Error code: %d", __FUNCTION__, status);
+      ALOGW("%s: Failed to get metadata state for metadata type %d via SnapAlloc. Error code: %d",
+            __FUNCTION__, metadata_type, status);
     }
     return status;
   } else {
@@ -2987,7 +3018,8 @@ int GrallocSnapHelper::GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc, Snap
   if (snap_to_gralloc_format_.find(snap_fmt_desc) != snap_to_gralloc_format_.end()) {
     *gr_format = snap_to_gralloc_format_.at(snap_fmt_desc);
   } else {
-    ALOGE("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
+    ALOGE("%s: No map for format: 0x%x, modifier %d", __FUNCTION__, snap_fmt_desc.format,
+          snap_fmt_desc.modifier);
     return SnapError::BAD_VALUE;
   }
 
@@ -5787,7 +5819,7 @@ int GrallocSnapHelperLegacy::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
         return ((this->*metadata_helper_func)(hnd, convert_bytestream, 0, nullptr, out, nullptr,
                                               check_metadata_set, mapper_return));
       } else {
-        ALOGE("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
+        ALOGW("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
       }
     }
@@ -5837,7 +5869,8 @@ int GrallocSnapHelperLegacy::GetMetadataState(native_handle_t *gr_hnd,
   if (hnd != nullptr) {
     auto status = snapmapper_->GetMetadataState(*hnd, metadata_type, out);
     if (status != SnapError::NONE && status != SnapError::METADATA_NOT_SET) {
-      ALOGE("%s: Failed to get metadata state via SnapAlloc. Error code: %d", __FUNCTION__, status);
+      ALOGW("%s: Failed to get metadata state for metadata type %d via SnapAlloc. Error code: %d",
+            __FUNCTION__, metadata_type, status);
     }
     return status;
   } else {
@@ -5874,7 +5907,7 @@ int GrallocSnapHelperLegacy::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
             deprecated_metadata_conversion_helper_function_map_[gr_metadata_type];
         return ((this->*metadata_helper_func)(hnd, true, 0, &in, nullptr, nullptr, false, nullptr));
       } else {
-        ALOGE("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
+        ALOGW("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
       }
     }
@@ -5927,7 +5960,7 @@ int GrallocSnapHelperLegacy::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
         return ((this->*metadata_helper_func)(hnd, false, aidl_size, in, nullptr, nullptr, false,
                                               nullptr));
       } else {
-        ALOGE("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
+        ALOGW("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
       }
     }
