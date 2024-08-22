@@ -243,7 +243,6 @@ int GrallocSnapHelper::Import(native_handle_t *gr_hnd) {
         return SnapError::NONE;
       } else {
         ALOGE("%s: Failed to import via SnapAlloc. Error code: %d", __FUNCTION__, status);
-        snap_handle_delete(handle);
         return status;
       }
     } else {
@@ -3305,7 +3304,6 @@ int GrallocSnapHelperLegacy::Import(native_handle_t *gr_hnd) {
         return SnapError::NONE;
       } else {
         ALOGE("%s: Failed to import via SnapAlloc. Error code: %d", __FUNCTION__, status);
-        snap_handle_delete(handle);
         return status;
       }
     } else {
