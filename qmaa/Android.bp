@@ -5,10 +5,55 @@ soong_namespace {
 }
 composer_srcs = ["*.cpp"]
 
+
+soong_config_module_type {
+    name: "qticomposer3_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "qtidisplay",
+    variables: [
+        "composer_version",
+    ],
+    properties: [
+         "cflags",
+         "shared_libs",
+         "vintf_fragments",
+    ],
+}
+
+soong_config_string_variable {
+    name: "composer_version",
+    values: ["v2", "v3", "v3_3", "qmaa"],
+}
+
+qticomposer3_cc_defaults {
+    name: "composer3_defaults",
+    soong_config_variables: {
+        composer_version: {
+            v3_3: {
+                cflags: ["-DCOMPOSER3_V3"],
+                shared_libs: [
+                      "android.hardware.graphics.composer3-V3-ndk",
+                ],
+                vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v3.xml"],
+            },
+            conditions_default: {
+                cflags: ["-DCOMPOSER3_V2"],
+                shared_libs: [
+                     "android.hardware.graphics.composer3-V2-ndk",
+                ],
+                vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v2.xml"],
+            },
+        },
+    },
+}
+
 cc_binary {
 
     name: "vendor.qti.hardware.display.composer-service",
-    defaults: ["qti_qmaa_display_defaults"],
+    defaults: [
+        "qti_qmaa_display_defaults",
+        "composer3_defaults",
+    ],
     sanitize: {
         integer_overflow: true,
     },
@@ -37,7 +82,6 @@ cc_binary {
         "libhidlbase",
         "libfmq",
         "libhardware_legacy",
-        "android.hardware.graphics.composer3-V3-ndk",
         "libbinder_ndk",
         "libui",
     ],
@@ -48,6 +92,5 @@ cc_binary {
     srcs: composer_srcs,
 
     init_rc: ["vendor.qti.hardware.display.composer-service.rc"],
-    vintf_fragments: ["vendor.qti.hardware.display.composer-service.xml"],
 }
 
