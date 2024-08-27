@@ -59,14 +59,17 @@
 
 #include <QtiGralloc.h>
 #include <QtiGrallocPriv.h>
+#include <QtiGrallocDefs.h>
 #include <gralloctypes/Gralloc4.h>
 #include <sys/mman.h>
 
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
+#include <fstream>
 
 #include "gr_adreno_info.h"
 #include "gr_buf_descriptor.h"
@@ -74,6 +77,7 @@
 #include "gr_utils.h"
 #include "qdMetaData.h"
 #include "qd_utils.h"
+#include "color_extensions.h"
 
 namespace gralloc {
 
@@ -1179,6 +1183,38 @@ Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved
   *reserved_region_size = buf->reserved_size;
 
   return Error::NONE;
+}
+
+Error BufferManager::GetMetadataValue(private_handle_t *handle, int64_t metadatatype_value,
+                                      void *param) {
+  std::lock_guard<std::mutex> lock(buffer_lock_);
+  if (!handle)
+    return Error::BAD_BUFFER;
+  auto buf = GetBufferFromHandleLocked(handle);
+  if (buf == nullptr)
+    return Error::BAD_BUFFER;
+
+  if (!handle->base_metadata) {
+    return Error::BAD_BUFFER;
+  }
+
+  auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata);
+  if (metadatatype_value == QTI_CUSTOM_CONTENT_METADATA) {
+    Error error = Error::NONE;
+    void *custom_content_md_region = buf->custom_content_md_region_ptr;
+    uint64_t custom_content_md_region_size = buf->custom_content_md_size;
+
+      if (buf->custom_content_md_region_ptr == nullptr ||
+          buf->custom_content_md_size != sizeof(CustomContentMetadata)) {
+        error = Error::UNSUPPORTED;
+      } else {
+        memcpy(param, custom_content_md_region, sizeof(CustomContentMetadata));
+      }
+
+    return error;
+  } else {
+    return GetMetaDataValue(handle, metadatatype_value, param);
+  }
 }
 
 Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value,

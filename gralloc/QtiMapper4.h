@@ -41,6 +41,8 @@
 
 #include "QtiMapperExtensions.h"
 #include "gr_buf_mgr.h"
+#include "gr_snap_helper.h"
+
 namespace vendor {
 namespace qti {
 namespace hardware {
@@ -216,6 +218,8 @@ class QtiMapper : public IQtiMapper {
 
  private:
   BufferManager *buf_mgr_ = nullptr;
+  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+
   Error CreateDescriptor(const BufferDescriptorInfo_4_0 &descriptor_info,
                          IMapperBufferDescriptor *descriptor);
   bool ValidDescriptor(const IMapper::BufferDescriptorInfo &bd);

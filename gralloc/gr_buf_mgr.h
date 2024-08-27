@@ -57,6 +57,7 @@ class BufferManager {
   Error RereadBuffer(const private_handle_t *handle);
   Error GetAllHandles(std::vector<const private_handle_t *> *out_handle_list);
   void SetGrallocDebugProperties(gralloc::GrallocProperties props);
+  Error GetMetadataValue(private_handle_t *handle, int64_t metadatatype_value, void *out);
 
  private:
   BufferManager();
@@ -89,6 +90,8 @@ class BufferManager {
     bool DecRef() { return --ref_count == 0; }
     uint64_t reserved_size = 0;
     void *reserved_region_ptr = nullptr;
+    uint64_t custom_content_md_size = 0;
+    void *custom_content_md_region_ptr = nullptr;
   };
 
   Error FreeBuffer(std::shared_ptr<Buffer> buf);

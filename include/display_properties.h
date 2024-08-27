@@ -144,4 +144,9 @@
 #define DISABLE_COLOR_TRANSFORMATION         DISPLAY_PROP("disable_color_transformation")
 // Disable A8 format Screen Decorator support
 #define DISABLE_GET_SCREEN_DECORATOR_SUPPORT DISPLAY_PROP("disable_get_screen_decorator_support")
+
+// Add all vendor.display properties above
+#define ENABLE_LOGS_PROP                     GRALLOC_PROP("enable_logs")
+#define ENABLE_SNAPALLOC_PROP                GRALLOC_PROP("enable_snapalloc")
+#define ENABLE_ALLOCATION_DATA_DUMPING       GRALLOC_PROP("enable_allocation_data_dumping")
 #endif  // __DISPLAY_PROPERTIES_H__

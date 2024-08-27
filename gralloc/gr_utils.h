@@ -219,6 +219,9 @@ bool HasAlphaComponent(int32_t format);
 
 void GetDRMFormat(uint32_t format, uint32_t flags, uint32_t *drm_format,
                   uint64_t *drm_format_modifier);
+Error GetMetaDataByReference(void *buffer, int64_t type, void **out);
+Error GetMetaDataValue(void *buffer, int64_t type, void *in);
+Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out);
 }  // namespace gralloc
 
 #endif  // __GR_UTILS_H__

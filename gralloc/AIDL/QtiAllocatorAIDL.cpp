@@ -10,13 +10,17 @@
 #include <log/log.h>
 #include <aidlcommonsupport/NativeHandle.h>
 #include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
+#include <android/binder_ibinder_platform.h>
 
 #include <vector>
+#include <iostream>
+#include <fstream>
 
 #include "QtiMapper4.h"
 #include "gr_utils.h"
 
 using gralloc::Error;
+using PixelFormat_V1_2 = android::hardware::graphics::common::V1_2::PixelFormat;
 
 namespace aidl {
 namespace android {
@@ -58,11 +62,342 @@ QtiAllocatorAIDL::QtiAllocatorAIDL() {
   GetProperties(&properties);
   buf_mgr_ = BufferManager::GetInstance();
   buf_mgr_->SetGrallocDebugProperties(properties);
+  enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
+  snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+  enable_allocation_data_dumping_ = property_get_bool(ENABLE_ALLOCATION_DATA_DUMPING, 0);
+  if (enable_allocation_data_dumping_) {
+    // check if the json file exists
+    std::string filename_prefix = "/data/vendor/display/gralloc/";
+    std::time_t time = std::time({});
+    char time_string[std::size("yyyy-mm-dd_hh_mm_ss")];
+    std::strftime(std::data(time_string), std::size(time_string), "%F_%H_%M_%S",
+                  std::gmtime(&time));
+    json_file_name_ += filename_prefix + std::string(time_string) + std::string(".json");
+
+    std::ifstream ifile;
+    ifile.open(json_file_name_);
+    if (ifile) {
+      ALOGD_IF(enable_logs_, "Json File exists");
+    } else {
+      // check if directory exists
+      struct stat sb;
+      if (!(stat(filename_prefix.c_str(), &sb) == 0)) {
+        ALOGD_IF(enable_logs_, "Creating a new directory");
+        if (mkdir("/data/vendor/display/gralloc/", 0777) == -1) {
+          ALOGE("Failed to create directory to store the json file");
+          enable_allocation_data_dumping_ = false;
+          return;
+        }
+      }
+      ALOGD_IF(enable_logs_, "Creating a new file");
+      std::fstream json_file;
+      json_file.open(json_file_name_, std::ios::out);
+      json_file << "[]" << std::endl;
+      json_file.close();
+      chmod(json_file_name_.c_str(), 0777);
+    }
+  }
 }
 
-ndk::ScopedAStatus QtiAllocatorAIDL::allocate(const std::vector<uint8_t>& descriptor, int32_t count,
-                                                 AllocationResult* result) {
-  ALOGD_IF(DEBUG, "Allocating buffers count: %d", count);
+int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
+                                         AllocationResult *result, gralloc::BufferDescriptor desc,
+                                         int32_t count) {
+  // Getting the mapper service
+  sp<IMapper_v4> mapper_ = IMapper_v4::getService();
+  if (!mapper_.get()) {
+    ALOGE("Falied to get mapper service");
+    return 0;
+  }
+  ALOGD_IF(enable_logs_, "Mapper service obtained successfully");
+  uint64_t id, size_from_get, usage_from_get, reserved_region_size = 0;
+  uint32_t width_from_get, height_from_get, fd, flags;
+  PixelFormat_V1_2 format_from_get;
+  std::string heap_name;
+  std::vector<AidlPlaneLayout> plane_layouts;
+  Json::Value json_entry;
+  Json::Value planes(Json::arrayValue);
+  std::streamoff filesize;
+  std::string json_string;
+  std::fstream fs;
+
+  native_handle_t *hnd = ::android::makeFromAidl(result->buffers[0]);
+  if (!hnd) {
+    ALOGE("Failed retrieve hnd");
+    return 0;
+  }
+  ALOGD_IF(enable_logs_, "Successfully retrieved the handle");
+
+  ::android::hardware::hidl_handle pass_in_hnd = ::android::hardware::hidl_handle(hnd);
+  native_handle_t *buf_hnd = nullptr;
+
+  Error_v4 tmp_error;
+  mapper_->importBuffer(pass_in_hnd, [&](const auto &_error, const auto &_buffer) {
+    if (_error != Error_v4::NONE) {
+      ALOGE("Failed to import the buffer %d", _error);
+      tmp_error = _error;
+    } else {
+      buf_hnd = static_cast<native_handle_t *>(_buffer);
+    }
+  });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_PixelFormatRequested,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - PixelFormatRequested");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodePixelFormatRequested(_bytestream, &format_from_get);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_BufferId,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - BufferId");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeBufferId(_bytestream, &id);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+  mapper_->get(buf_hnd, qtigralloc::MetadataType_AlignedWidthInPixels,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - AlignedWidthInPixels");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_AlignedWidthInPixels,
+                                                     _bytestream, &width_from_get);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+  mapper_->get(buf_hnd, qtigralloc::MetadataType_AlignedHeightInPixels,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - AlignedHeightInPixels");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_AlignedHeightInPixels,
+                                                     _bytestream, &height_from_get);
+                 }
+               });
+
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_AllocationSize,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - AllocationSize");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeAllocationSize(_bytestream, &size_from_get);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+  mapper_->get(buf_hnd, qtigralloc::MetadataType_FD,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - FD");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_FD, _bytestream, &fd);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+
+  mapper_->get(buf_hnd, qtigralloc::MetadataType_PrivateFlags,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - PrivateFlags");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeUint32(qtigralloc::MetadataType_PrivateFlags,
+                                                     _bytestream, &flags);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+
+  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_Usage,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - Usage");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeUsage(_bytestream, &usage_from_get);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+
+  mapper_->getReservedRegion(buf_hnd, [&](const auto &_error, const auto _ptr, const auto &_size) {
+    if (_error != Error_v4::NONE) {
+      ALOGE("Failed to get Reserved Region");
+    } else {
+      reserved_region_size = _size;
+    }
+  });
+
+  mapper_->get(buf_hnd, ::android::gralloc4::MetadataType_PlaneLayouts,
+               [&](const auto &_error, const auto &_bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - PlaneLayouts");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodePlaneLayouts(_bytestream, &plane_layouts);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+
+#ifdef QTI_HEAP_NAME
+  mapper_->get(buf_hnd, qtigralloc::MetadataType_HeapName,
+               [&](const auto _error, const auto _bytestream) {
+                 if (_error != Error_v4::NONE) {
+                   ALOGE("Failed to get Metadata - Heap Name");
+                   tmp_error = _error;
+                 } else {
+                   ::android::gralloc4::decodeString(qtigralloc::MetadataType_HeapName, _bytestream,
+                                                     &heap_name);
+                 }
+               });
+  if (tmp_error != Error_v4::NONE) {
+    goto end;
+  }
+  json_entry["heapName"] = heap_name.c_str();
+#endif
+
+  json_entry["handleId"] = id;
+  json_entry["width"] = width_from_get;
+  json_entry["height"] = height_from_get;
+  json_entry["requestedWidth"] = desc.GetWidth();
+  json_entry["requestedHeight"] = desc.GetHeight();
+  json_entry["size"] = size_from_get;
+  json_entry["fd"] = fd;
+  json_entry["flags"] = flags;
+  json_entry["usage"] = usage_from_get;
+  json_entry["format"] = static_cast<int32_t>(format_from_get);
+  json_entry["layerCount"] = desc.GetLayerCount();
+  json_entry["reservedSize"] = reserved_region_size;
+  json_entry["name"] = desc.GetName().c_str();
+  json_entry["requestedUsage"] = desc.GetUsage();
+  json_entry["requestedFormat"] = desc.GetFormat();
+  for (auto i = 0; i < plane_layouts.size(); i++) {
+    const auto plane_layout = plane_layouts[i];
+    Json::Value json_plane_layout;
+    json_plane_layout["verticalSubsampling"] = plane_layout.verticalSubsampling;
+    json_plane_layout["offsetInBytes"] = plane_layout.offsetInBytes;
+    json_plane_layout["sampleIncrementInBits"] = plane_layout.sampleIncrementInBits;
+    json_plane_layout["strideInBytes"] = plane_layout.strideInBytes;
+    json_plane_layout["widthInSamples"] = plane_layout.widthInSamples;
+    json_plane_layout["heightInSamples"] = plane_layout.heightInSamples;
+    json_plane_layout["horizontalSubsampling"] = plane_layout.horizontalSubsampling;
+    Json::Value components(Json::arrayValue);
+    for (auto j = 0; j < plane_layout.components.size(); j++) {
+      Json::Value component;
+      const auto &plane_layout_component = plane_layout.components[j];
+      component["component"] = plane_layout_component.type.value;
+      component["sizeInBits"] = plane_layout_component.sizeInBits;
+      component["offsetInBits"] = plane_layout_component.offsetInBits;
+      components.append(component);
+    }
+    json_plane_layout["components"] = components;
+    planes.append(json_plane_layout);
+  }
+  json_entry["planes"] = planes;
+  {
+    // Lock exists only for the json file
+    // append json object to file
+    std::lock_guard<std::mutex> lock(json_dump_lock_);
+    fs.open(json_file_name_, std::ios::in | std::ios::out);
+    fs.seekg(0, std::ios::end);
+    filesize = fs.tellg();
+    fs.seekp(filesize - 2);
+    if (!is_json_first_entry_) {
+      json_string = ",\n";
+    }
+    json_string.append(json_entry.toStyledString());
+    json_string.append("\n]");
+    fs.write(json_string.c_str(), json_string.size());
+    is_json_first_entry_ = false;
+    fs.close();
+  }
+
+end:
+  if (!snap_helper_->IsSnapAllocEnabled()) {
+    buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buf_hnd));
+  } else {
+    auto status = snap_helper_->Free(static_cast<native_handle_t *>(buf_hnd));
+  }
+  native_handle_delete(hnd);
+  hnd = nullptr;
+  return 0;
+}
+
+ndk::ScopedAStatus QtiAllocatorAIDL::AllocateBuffer(gralloc::BufferDescriptor desc, int32_t count,
+                                                    AllocationResult *result) {
+  std::vector<buffer_handle_t> buffers;
+  auto err = Error::UNSUPPORTED;
+
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    auto status = snap_helper_->Allocate(desc, count, result);
+    if (status) {
+      return ToBinderStatus(Error::UNSUPPORTED);
+    }
+  } else {
+    buffers.reserve(count);
+    for (uint32_t i = 0; i < count; i++) {
+      buffer_handle_t buffer;
+      err = buf_mgr_->AllocateBuffer(desc, &buffer);
+      if (err != Error::NONE) {
+        return ToBinderStatus(err);
+      }
+      buffers.emplace_back(buffer);
+    }
+
+    if (buffers.size() > 0) {
+      result->stride = static_cast<uint32_t>(QTI_HANDLE_CONST(buffers[0])->width);
+    }
+
+    result->buffers.resize(count);
+    for (int32_t i = 0; i < count; i++) {
+      auto buffer = buffers[i];
+      result->buffers[i] = ::android::dupToAidl(buffer);
+    }
+  }
+
+  if (enable_allocation_data_dumping_) {
+    dumpAllocationData(buffers, result, desc, count);
+  }
+
+  if (!snap_helper_->IsSnapAllocEnabled()) {
+    for (int32_t i = 0; i < count; i++) {
+      buffer_handle_t buffer = buffers[i];
+      buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buffer));
+    }
+  }
+  return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus QtiAllocatorAIDL::allocate(const std::vector<uint8_t> &descriptor, int32_t count,
+                                              AllocationResult *result) {
+  ALOGD_IF(enable_logs_, "Allocating buffers count: %d", count);
   gralloc::BufferDescriptor desc;
 
   auto err = ::vendor::qti::hardware::display::mapper::V4_0::implementation::QtiMapper::Decode(
@@ -72,30 +407,63 @@ ndk::ScopedAStatus QtiAllocatorAIDL::allocate(const std::vector<uint8_t>& descri
     return ToBinderStatus(err);
   }
 
-  std::vector<buffer_handle_t> buffers;
-  buffers.reserve(count);
+  return AllocateBuffer(desc, count, result);
+}
 
-  for (uint32_t i = 0; i < count; i++) {
-    buffer_handle_t buffer;
-    err = buf_mgr_->AllocateBuffer(desc, &buffer);
-    if (err != Error::NONE) {
-      return ToBinderStatus(err);
-    }
-    buffers.emplace_back(buffer);
+static gralloc::BufferDescriptor convertAidlToGrallocDescriptor(const BufferDescriptorInfo &info) {
+  gralloc::BufferDescriptor desc;
+
+  desc.SetName(std::string(reinterpret_cast<const char *>(info.name.data())));
+  desc.SetDimensions(static_cast<int>(info.width), static_cast<int>(info.height));
+  desc.SetLayerCount(static_cast<uint32_t>(info.layerCount));
+  desc.SetColorFormat(static_cast<int>(info.format));
+  desc.SetUsage(static_cast<uint64_t>(info.usage));
+  desc.SetReservedSize(static_cast<uint64_t>(info.reservedSize));
+
+  return desc;
+}
+
+ndk::ScopedAStatus QtiAllocatorAIDL::allocate2(const BufferDescriptorInfo &in_descriptor,
+                                               int32_t in_count, AllocationResult *_aidl_return) {
+  ALOGD_IF(enable_logs_, "Allocating buffers count: %d", in_count);
+  if (!in_descriptor.additionalOptions.empty()) {
+    return ToBinderStatus(Error::UNSUPPORTED);
   }
 
-  if (buffers.size() > 0) {
-    result->stride = static_cast<uint32_t>(QTI_HANDLE_CONST(buffers[0])->width);
-  }
+  gralloc::BufferDescriptor desc = convertAidlToGrallocDescriptor(in_descriptor);
 
-  result->buffers.resize(count);
-  for (int32_t i = 0; i < count; i++) {
-    auto buffer = buffers[i];
-    result->buffers[i] = ::android::dupToAidl(buffer);
-    buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buffer));
-  }
+  return AllocateBuffer(desc, in_count, _aidl_return);
+}
 
+ndk::ScopedAStatus QtiAllocatorAIDL::getIMapperLibrarySuffix(std::string *_aidl_return) {
+  *_aidl_return = "qti";
   return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus QtiAllocatorAIDL::isSupported(const BufferDescriptorInfo &in_descriptor,
+                                                 bool *_aidl_return) {
+  if (!in_descriptor.additionalOptions.empty()) {
+    *_aidl_return = false;
+    return ndk::ScopedAStatus::ok();
+  }
+
+  gralloc::BufferDescriptor desc = convertAidlToGrallocDescriptor(in_descriptor);
+  buffer_handle_t buffer;
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    snap_helper_->IsSupported(desc, _aidl_return);
+  } else {
+    if (buf_mgr_->AllocateBuffer(desc, &buffer, 0, true) != Error::NONE) {
+      *_aidl_return = false;
+    }
+    *_aidl_return = true;
+  }
+  return ndk::ScopedAStatus::ok();
+}
+
+ndk::SpAIBinder QtiAllocatorAIDL::createBinder() {
+  auto binder = BnAllocator::createBinder();
+  AIBinder_setInheritRt(binder.get(), true);
+  return binder;
 }
 
 }  // namespace impl
