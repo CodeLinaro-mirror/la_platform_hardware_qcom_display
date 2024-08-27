@@ -39,7 +39,7 @@ AC_ARG_WITH(sanitized-headers,
 
 AC_ARG_ENABLE([sdmhaldrm],
      AC_HELP_STRING([--enable-sdmhaldrm],
-        [enable sdmhaldrm, build display-hal-linux with sdmhaldrm]),
+        [enable sdmhaldrm, build qcom-display-hal-linux with sdmhaldrm]),
         [enable_sdmhaldrm="${enableval}"],
         enable_sdmhaldrm=no)
 
@@ -47,7 +47,7 @@ AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
 
 AC_ARG_ENABLE([displayle],
     AC_HELP_STRING([--enable-displayle],
-      [enable enabledisplayle, build display-hal-linux with displayle]),
+      [enable enabledisplayle, build qcom-display-hal-linux with displayle]),
       [CPPFLAGS="$CPPFLAGS -DDISPLAY_LE"])
 
 # Checks for programs.
