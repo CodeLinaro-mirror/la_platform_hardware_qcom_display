@@ -1,3 +1,136 @@
+soong_config_module_type {
+    name: "qtidisplay_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "qtidisplay",
+    bool_variables: [
+        "drmpp",
+        "headless",
+        "llvmsa",
+        "gralloc4",
+        "default",
+        "var3",
+        "llvmcov",
+        "smmu_proxy",
+        "ubwcp_headers",
+    ],
+    properties: [
+        "cflags",
+        "enabled",
+        "srcs",
+        "header_libs",
+        "host_ldlibs",
+        "ldflags",
+        "native_coverage",
+	"vendor",
+    ],
+}
+
+qtidisplay_cc_defaults {
+    name: "qtidisplay_smmu_header_defaults",
+    soong_config_variables: {
+        smmu_proxy: {
+            header_libs: [
+                "smmu_proxy_uapi_header",
+            ]
+        }
+    }
+}
+
+qtidisplay_cc_defaults {
+    name: "qtidisplay_common_defaults",
+    cflags: [
+        "-Wno-missing-field-initializers",
+        "-Wall",
+        "-Werror",
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libutils",
+    ],
+    tidy: true,
+    tidy_checks: [
+        "-*",
+        "cert-*",
+        "-cert-dcl50-cpp",
+        "bugprone-*",
+        "-bugprone-lambda-function-name",
+        "-bugprone-narrowing-conversions",
+        "performance*",
+        "-performance-no-int-to-ptr",
+        "clang-analyzer-security*",
+        "android-*",
+        "-android-cloexec-fopen",
+        "-android-cloexec-dup",
+    ],
+    soong_config_variables: {
+        drmpp: {
+            cflags: ["-DPP_DRM_ENABLE"],
+        },
+        headless: {
+            cflags: ["-DTARGET_HEADLESS", "-DQMAA"],
+        },
+        llvmsa: {
+            cflags: [
+                "--compile-and-analyze",
+                "--analyzer-perf",
+            ],
+        },
+        gralloc4: {
+            cflags: ["-DTARGET_USES_GRALLOC4"],
+        },
+        smmu_proxy: {
+            cflags: ["-DTARGET_USES_SMMU_PROXY"],
+        },
+        ubwcp_headers: {
+            cflags: ["-DTARGET_USES_UBWCP"],
+        },
+        var3 : {
+            enabled: false,
+            conditions_default: {
+                enabled: true,
+            },
+        },
+    },
+}
+
+qtidisplay_cc_defaults {
+    name: "qtidisplay_defaults",
+    defaults: ["qtidisplay_common_defaults"],
+    soong_config_variables: {
+        default: {
+            header_libs: ["display_headers", "qti_kernel_headers"],
+        },
+        headless: {
+            header_libs: ["display_headers"],
+            enabled: false,
+            conditions_default: {
+                enabled: true,
+            },
+        },
+        llvmcov: {
+            cflags: [
+                "-Wl",
+                "-fprofile-instr-generate",
+                "-fcoverage-mapping",
+                "-fprofile-instr-append-file",
+                "-DPROFILE_COVERAGE_DATA",
+            ],
+
+            ldflags: [
+                "-fcoverage-mapping",
+                " -fprofile-instr-generate",
+                "-fuse-ld=lld",
+                "-gline-tables-only",
+                "-fdebug-info-for-profiling",
+            ],
+            vendor: true,
+            host_ldlibs: ["-lgcov"],
+            native_coverage: true,
+        },
+    },
+}
+
 cc_defaults {
     name: "display_defaults",
     cflags: [
