@@ -226,6 +226,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
+  int ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
+                       buffer_handle_t *out_buffer_handle);
 
  private:
   GrallocSnapHelper();
@@ -502,6 +504,14 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_ENCODEABLE},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
+          {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
+           static_cast<int>(PixelFormat::YCBCR_420_888)},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
