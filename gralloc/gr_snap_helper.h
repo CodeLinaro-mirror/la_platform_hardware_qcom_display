@@ -155,7 +155,7 @@ class GrallocSnapHelperIntf {
   virtual int Import(native_handle_t *gr_hnd);
   virtual int Free(native_handle_t *gr_hnd);
   virtual int Lock(native_handle_t *gr_hnd, uint64_t gr_usage, CropRectangle_t gr_access_region,
-                   int fence_fd, uint64_t *base_addr);
+                   int fence_fd, uint64_t* base_addr);
   virtual int Unlock(native_handle_t *gr_hnd, void *fence);
   virtual int ValidateBufferSize(native_handle_t *gr_hnd, gralloc::BufferInfo gr_desc);
   virtual int FlushLockedBuffer(native_handle_t *gr_hnd);
@@ -227,6 +227,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int GetFormatLayout(gralloc::BufferInfo gr_desc, void *out, uint32_t *size, int interlaced);
   int GetReservedRegion(native_handle_t *gr_hnd, void **reserved_region,
                         uint64_t *reserved_region_size);
+  SnapHandle* GetSnapHandle(native_handle_t *gr_hnd);
 
  private:
   GrallocSnapHelper();

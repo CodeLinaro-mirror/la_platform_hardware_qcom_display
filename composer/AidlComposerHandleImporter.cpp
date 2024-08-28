@@ -51,7 +51,7 @@ void ComposerHandleImporter::initialize() {
 
   mMapper = GetMapperInstance();
   if (mMapper == nullptr) {
-    ALOGE("%s: cannnot acccess graphics mapper HAL!", __FUNCTION__);
+    ALOGE("%s: cannnot access QtiMapper5!", __FUNCTION__);
     return;
   }
 

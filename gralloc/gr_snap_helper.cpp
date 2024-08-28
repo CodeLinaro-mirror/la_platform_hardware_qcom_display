@@ -272,7 +272,7 @@ int GrallocSnapHelper::Free(native_handle_t *gr_hnd) {
 }
 
 int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
-                            CropRectangle_t gr_access_region, int fence_fd, uint64_t *base_addr) {
+                            CropRectangle_t gr_access_region, int fence_fd, uint64_t* base_addr) {
   if (gr_hnd == nullptr) {
     ALOGE("Invalid gralloc handle");
     return SnapError::BAD_BUFFER;
@@ -2501,6 +2501,25 @@ bool GrallocSnapHelper::IsBufferImported(native_handle_t *gr_hnd) {
   }
   ALOGE("Gralloc handle %p has not been imported", gr_hnd);
   return false;
+}
+
+SnapHandle* GrallocSnapHelper::GetSnapHandle(native_handle_t *gr_hnd) {
+  if (gr_hnd == nullptr) {
+    ALOGE("Invalid gralloc handle");
+    return nullptr;
+  }
+  if (!IsSnapAllocEnabled()) {
+    ALOGW("SnapAlloc is disabled");
+    return nullptr;
+  }
+
+  std::lock_guard<std::mutex> lock(map_lock_);
+
+  if (handles_map_.find(gr_hnd) != handles_map_.end()) {
+    SnapHandle *hnd = handles_map_.at(gr_hnd);
+    return hnd;
+  }
+  return nullptr;
 }
 
 int GrallocSnapHelper::GetCustomDimensions(native_handle_t *gr_hnd, int *stride, int *height) {

@@ -99,5 +99,6 @@ case "$target" in
     "monaco")
     setprop vendor.gralloc.use_dma_buf_heaps 1
     setprop vendor.gralloc.enable_snapalloc 1
+    setprop vendor.gralloc.disable_ubwc 1
     ;;
 esac

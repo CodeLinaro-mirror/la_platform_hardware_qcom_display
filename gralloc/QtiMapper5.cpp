@@ -147,10 +147,11 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
     ALOGW("Snap failed to lock buffer");
     return AIMAPPER_ERROR_BAD_BUFFER;
   } else {
-    ALOGD_IF(enable_logs, "QtiMapper5::lock address %lu", snap_base);
-    *outData = reinterpret_cast<void *>(snap_base);
+    ALOGD_IF(enable_logs, "QtiMapper5::lock address %lu\n", snap_base);
+    outData = reinterpret_cast<void * _Nullable * _Nonnull>(snap_base);
     return AIMAPPER_ERROR_NONE;
   }
+  return static_cast<Error>(ret_val);
 }
 
 Error QtiMapper5::unlock(buffer_handle_t _Nonnull buffer, int *_Nonnull releaseFence) {
@@ -408,6 +409,13 @@ Error QtiMapper5::DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
   for (int i = 0; i < descriptionCount; i++) {
     const auto it = descriptions[i];
     const auto type = it.metadataType;
+    if (isVendorMetadata(type)) {
+      bufferSize = tempBuffer.size();
+      bufferSize = type_to_size_.find(static_cast<uint64_t>(type.value)) != type_to_size_.end()
+                                      ? type_to_size_.at(type.value)
+                                      : bufferSize;
+      tempBuffer.resize(bufferSize);
+    }
     int32_t size = getMetadata(buffer, type, tempBuffer.data(), tempBuffer.size());
     if (size < 0) {
       ALOGD_IF(enable_logs,
@@ -424,13 +432,7 @@ Error QtiMapper5::DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
     }
 
     if (size >= 0 && size <= tempBuffer.size()) {
-      bufferSize = tempBuffer.size();
-      bufferSize =
-          (isVendorMetadata(it.metadataType) &&
-           type_to_size_.find(static_cast<uint64_t>(it.metadataType.value)) != type_to_size_.end())
-              ? type_to_size_.at(it.metadataType.value)
-              : bufferSize;
-      dumpBufferCallback(context, it.metadataType, tempBuffer.data(), bufferSize);
+      dumpBufferCallback(context, it.metadataType, tempBuffer.data(), tempBuffer.size());
     } else {
       continue;
     }
@@ -454,12 +456,15 @@ Error QtiMapper5::dumpAllBuffers(AIMapper_BeginDumpBufferCallback _Nonnull begin
     return AIMAPPER_ERROR_UNSUPPORTED;
   }
 
+  Error error = AIMAPPER_ERROR_NONE;
   for (auto handle : handle_list) {
     beginDumpBufferCallback(context);
-    DumpBufferMetadata(handle, dumpBufferCallback, context);
+    if (DumpBufferMetadata(handle, dumpBufferCallback, context) != AIMAPPER_ERROR_NONE) {
+      error = AIMAPPER_ERROR_BAD_BUFFER;
+    }
   }
 
-  return AIMAPPER_ERROR_NONE;
+  return error;
 }
 
 Error QtiMapper5::getReservedRegion(buffer_handle_t _Nonnull buffer,

@@ -51,7 +51,8 @@
 #include "hwc_debugger.h"
 #include "hwc_tonemapper.h"
 #include "hwc_session.h"
-
+#include "gr_snap_helper.h"
+#include <ISnapMapper.h>
 #ifdef QTI_BSP
 #include <hardware/display_defs.h>
 #endif
@@ -729,12 +730,12 @@ void HWCDisplay::BuildLayerStack() {
       }
       // TZ Protected Buffer - L1
       // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
-      if (handle->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
+      if (handle->flags & SnapUsage::PROTECTED) {
         layer_stack_.flags.secure_present = true;
         is_secure = true;
       }
       // UBWC PI format
-      if (handle->flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED_PI) {
+      if (handle->flags & SnapUsage::QTI_PRIVATE_ALLOC_UBWC_PI) {
         layer->input_buffer.flags.ubwc_pi = true;
       }
     }
@@ -1823,19 +1824,28 @@ DisplayError HWCDisplay::SetMaxMixerStages(uint32_t max_mixer_stages) {
 
 void HWCDisplay::DumpInputBuffers() {
   char dir_path[PATH_MAX];
-  int  status;
-
+  int status;
+  int dump_metadata = 0;
   if (!dump_frame_count_ || flush_ || !dump_input_layers_) {
     return;
   }
 
-  DLOGI("dump_frame_count %d dump_input_layers %d", dump_frame_count_, dump_input_layers_);
-  snprintf(dir_path, sizeof(dir_path), "%s/frame_dump_disp_id_%02u_%s", HWCDebugHandler::DumpDir(),
-           UINT32(id_), GetDisplayString());
+  DLOGI("dump_frame_count %d dump_input_layers %d", dump_frame_count_,
+        dump_input_layers_);
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
+  std::shared_ptr<ISnapMapper> snapmapper_;
+  const std::string snapalloc_lib_name = "vendor.qti.hardware.display.snapalloc-impl.so";
+  void *snap_impl_lib_ = ::dlopen(snapalloc_lib_name.c_str(), RTLD_NOW);
+  *reinterpret_cast<void **>(&LINK_FETCH_ISnapMapper) =
+      ::dlsym(snap_impl_lib_, "FETCH_ISnapMapper");
+  snapmapper_ = LINK_FETCH_ISnapMapper(nullptr);
+  snprintf(dir_path, sizeof(dir_path), "%s/frame_dump_disp_id_%02u_%s",
+           HWCDebugHandler::DumpDir(), UINT32(id_), GetDisplayString());
 
   status = mkdir(dir_path, 777);
   if ((status != 0) && errno != EEXIST) {
-    DLOGW("Failed to create %s directory errno = %d, desc = %s", dir_path, errno, strerror(errno));
+    DLOGW("Failed to create %s directory errno = %d, desc = %s", dir_path,
+          errno, strerror(errno));
     return;
   }
 
@@ -1845,50 +1855,88 @@ void HWCDisplay::DumpInputBuffers() {
     return;
   }
 
+  bool dump_gpu_target = true; // whether to dump GPU Target layer.
   for (uint32_t i = 0; i < layer_stack_.layers.size(); i++) {
     auto layer = layer_stack_.layers.at(i);
-    const private_handle_t *pvt_handle =
-        reinterpret_cast<const private_handle_t *>(layer->input_buffer.buffer_id);
+    if (!dump_gpu_target) {
+      if (layer->composition == kCompositionGPU) {
+        dump_gpu_target = true; // Dump GPU Target layer only if its not a full
+                                // MDP composition.
+      } else if (layer->composition == kCompositionGPUTarget) {
+        DLOGI("Skipping dumping target layer. dump_gpu_target : %d",
+              dump_gpu_target);
+        break; // Skip dumping GPU Target layer.
+      }
+    }
+
+    native_handle_t *handle =
+         reinterpret_cast<native_handle_t *>(layer->input_buffer.buffer_id);
     Fence::Wait(layer->input_buffer.acquire_fence);
 
-    DLOGI("Dump layer[%d] of %d pvt_handle %p pvt_handle->base %" PRIx64, i,
-          UINT32(layer_stack_.layers.size()), pvt_handle, pvt_handle? pvt_handle->base : 0);
-
-    if (!pvt_handle) {
-      DLOGE("Buffer handle is null");
+    if (!handle) {
+      DLOGW("Buffer handle is detected as null for layer");
       continue;
     }
 
-    if (!pvt_handle->base) {
-      DisplayError error = buffer_allocator_->MapBuffer(pvt_handle, nullptr);
-      if (error != kErrorNone) {
-        DLOGE("Failed to map buffer, error = %d", error);
-        continue;
-      }
+    DLOGI("Dump layer[%d] of %lu handle %p buffer id = %" PRIu64 "\n", i,
+          layer_stack_.layers.size(), handle, layer->input_buffer.buffer_id);
+
+    // start mapbuffer func
+    vendor_qti_hardware_display_common_Address base_ptr;
+    vendor_qti_hardware_display_common_Rect access_region = {0,0,0,0};
+    vendor_qti_hardware_display_common_Fence snap_fence = {0};
+    gralloc::GrallocSnapHelper *snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+    SnapHandle* snap_handle = snap_helper_->GetSnapHandle(handle);
+    auto error = snapmapper_->Lock(*snap_handle, SnapUsage::CPU_READ_OFTEN, access_region,
+                                   snap_fence, &base_ptr);
+    if (error != kErrorNone) {
+      DLOGE("Failed to map buffer, error = %d", error);
+      continue;
     }
 
     char dump_file_name[PATH_MAX];
     size_t result = 0;
 
-    snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_%s_frame%d.raw",
-             dir_path, i, pvt_handle->width, pvt_handle->height,
-             qdutils::GetHALPixelFormatString(pvt_handle->format), dump_frame_index_);
+    uint32_t width = 0, height = 0, alloc_size = 0;
 
-    FILE *fp = fopen(dump_file_name, "w+");
-    if (fp) {
-      result = fwrite(reinterpret_cast<void *>(pvt_handle->base), pvt_handle->size, 1, fp);
-      fclose(fp);
+    snapmapper_->GetMetadata(*snap_handle, SnapMetadataType::STRIDE, &width);
+    snapmapper_->GetMetadata(*snap_handle, SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS, &height);
+    snapmapper_->GetMetadata(*snap_handle, SnapMetadataType::ALLOCATION_SIZE, &alloc_size);
+
+    snprintf(dump_file_name, sizeof(dump_file_name),
+             "%s/input_layer%d_%dx%d_%s_frame%d.raw", dir_path, i, width,
+             height, GetFormatString(layer->input_buffer.format),
+             dump_frame_index_);
+
+    if (base_ptr.addressPointer != 0) {
+      FILE *fp = fopen(dump_file_name, "w+");
+      if (fp) {
+        result = fwrite((void *)(base_ptr.addressPointer), alloc_size, 1, fp);
+        fclose(fp);
+      }
     }
 
-    int release_fence = -1;
-    DisplayError error = buffer_allocator_->UnmapBuffer(pvt_handle, &release_fence);
+    vendor_qti_hardware_display_common_Fence unmap_fence = {-1};
+    error = snapmapper_->Unlock(*snap_handle, &unmap_fence);
     if (error != kErrorNone) {
       DLOGE("Failed to unmap buffer, error = %d", error);
       continue;
     }
 
-    DLOGI("Frame Dump %s: is %s", dump_file_name, result ? "Successful" : "Failed");
+    DLOGI("Frame Dump %s: is %s", dump_file_name,
+          result ? "Successful" : "Failed");
+
+    // TODO: add changes to dump Metadata information
+
+    if (layer->composition == kCompositionGPUTarget) {
+      // Skip dumping the layers that follow
+      // follow GPU Target layer in layers list (i.e. stitch layers, noise
+      // layer, demura layer).
+      break;
+    }
   }
+  dump_frame_count_--;
+  dump_frame_index_++;
 }
 
 void HWCDisplay::DumpOutputBuffer(const BufferInfo &buffer_info, void *base,
