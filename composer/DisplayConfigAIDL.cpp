@@ -788,6 +788,7 @@ ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t 
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
+#ifdef COMPOSER3_V3
 ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t fps) {
   int ret = -1;
 
@@ -800,6 +801,7 @@ ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t 
   return ret == sdm::kErrorNone ? ScopedAStatus::ok()
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
+#endif
 
 ScopedAStatus DisplayConfigAIDL::registerCallback(
     const std::shared_ptr<IDisplayConfigCallback> &callback, int64_t *client_handle) {
@@ -1046,11 +1048,13 @@ void DisplayConfigAIDL::NotifyIdleStatus(bool status) {
 void DisplayConfigAIDL::NotifyContentFps(const std::string &name, int32_t fps) {
   std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
 
+#ifdef COMPOSER3_V3
   for (auto const &[id, callback] : callback_clients_) {
     if (callback) {
       callback->notifyContentFps(name, fps);
     }
   }
+#endif
 }
 
 void DisplayConfigAIDL::OnHdmiHotplug(bool connected) {
