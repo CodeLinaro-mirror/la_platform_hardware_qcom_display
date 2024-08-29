@@ -495,7 +495,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigs(int64_t in_display,
                                                     std::vector<int32_t> *aidl_return) {
   auto error = caps_->GetDisplayConfigs(in_display, aidl_return);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
