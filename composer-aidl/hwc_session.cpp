@@ -110,7 +110,9 @@ void HWCUEvent::UEventThread(HWCUEvent *hwc_uevent) {
   }
 
   while (1) {
-    char uevent_data[PAGE_SIZE] = {};
+    const size_t page_size = getpagesize();
+    char uevent_data[page_size];
+    memset(uevent_data, 0, page_size * sizeof(char));
 
     // keep last 2 zeros to ensure double 0 termination
     int length = uevent_next_event(uevent_data, INT32(sizeof(uevent_data)) - 2);
@@ -433,14 +435,13 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   if (Debug::Get()->GetProperty(DISABLE_SKIP_VALIDATE_PROP, &value) == kErrorNone) {
     disable_skip_validate = (value == 1);
   }
-  uint32_t count = 2 + (disable_skip_validate ? 0 : 1);
+  uint32_t count = 1 + (disable_skip_validate ? 0 : 1);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
     outCapabilities[0] = INT32(Capability::SKIP_CLIENT_COLOR_TRANSFORM);
     if (!disable_skip_validate) {
       outCapabilities[1] = INT32(Capability::INVALID);
     }
-    outCapabilities[2] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
   }
   *outCount = count;
 }
@@ -3396,6 +3397,17 @@ HWC3::Error HWCSession::getDisplayDecorationSupport(Display display, PixelFormat
     return HWC3::Error::Unsupported;
   }
   return CallDisplayFunction(display, &HWCDisplay::getDisplayDecorationSupport, format, alpha);
+}
+
+HWC3::Error HWCSession::SetExpectedPresentTime(Display display, uint64_t expectedPresentTime) {
+  Locker::ScopeLock lock_d(locker_[display]);
+  if (!hwc_display_[display]) {
+    return HWC3::Error::BadDisplay;
+  }
+
+  hwc_display_[display]->SetExpectedPresentTime(expectedPresentTime);
+
+  return HWC3::Error::None;
 }
 
 }  // namespace sdm
