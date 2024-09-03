@@ -49,10 +49,14 @@
 
 #include <algorithm>
 #include <string>
+#include <mutex>
 
 #include "gr_buf_mgr.h"
 #include "gr_snap_helper.h"
 #include "mapper_utils.h"
+
+using std::lock_guard;
+using std::mutex;
 
 namespace stablec {
 namespace vendor {
@@ -145,6 +149,7 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
 
   gralloc::GrallocSnapHelper *_Nullable snap_helper_ = nullptr;
   bool snap_alloc_enable_ = false;
+  static std::mutex handles_heap_lock_;
 
   std::unordered_map<uint64_t, size_t> type_to_size_{
       {static_cast<uint64_t>(SnapMetadataType::BUFFER_ID), sizeof(uint64_t)},
