@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -124,8 +124,8 @@ DisplayError DisplayBase::Init() {
   fb_config_.x_pixels = mixer_attributes_.width;
   fb_config_.y_pixels = mixer_attributes_.height;
 
-  // ColorManager supported for built-in display.
-  if (kBuiltIn == display_type_) {
+  // ColorManager supported for built-in and pluggable displays.
+  if (kBuiltIn == display_type_ || kPluggable == display_type_) {
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_);
 
@@ -1561,6 +1561,8 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
       hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
     }
   }
+
+  hw_layers_.info.expected_present_time = layer_stack->expected_present_time;
 
   return;
 }

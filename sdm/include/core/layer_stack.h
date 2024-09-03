@@ -449,6 +449,8 @@ struct LayerStack {
 
 
   PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
+
+  uint64_t expected_present_time = 0;  //!< Expected Present timestamp for current frame.
 };
 
 }  // namespace sdm
