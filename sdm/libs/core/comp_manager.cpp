@@ -75,7 +75,7 @@ DisplayError CompManager::Init(const std::vector<HWInfoInterface*> &hw_info_intf
     notifier_intf_.push_back(notifier_intf);
 
     HWScaleLutInfo lut_info = {};
-    if (resource_intf->GetScaleLutConfig(&lut_info) == kErrorNone) {
+    if (resource_intf && resource_intf->GetScaleLutConfig(&lut_info) == kErrorNone) {
       hw_info->SetScaleLutConfig(&lut_info);
     }
   }
