@@ -973,7 +973,7 @@ void AidlComposerClient::CommandEngine::executeValidateDisplay(
 
   std::vector<sdm::LayerId> changedLayers;
   std::vector<Composition> compositionTypes;
-  uint32_t displayRequestMask;
+  uint32_t displayRequestMask = 0;
   std::vector<sdm::LayerId> requestedLayers;
   std::vector<int32_t> requestMasks;
   ClientTargetProperty clientTargetProperty;
