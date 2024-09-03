@@ -2607,9 +2607,11 @@ bool HWCDisplay::IsLayerUpdating(HWCLayer *hwc_layer) {
   //   b) layer is front buffer rendering, or
   //   c) valid dirty_regions(android specific hint for updating status), or
   //   d) layer stack geometry has changed (TODO(user): Remove when SDM accepts
-  //      geometry_changed as bit fields).
+  //      geometry_changed as bit fields), or
+  //   e) layer is marked as video.
   return (layer->flags.single_buffer || layer->flags.front_buffer ||
-          hwc_layer->IsSurfaceUpdated() || hwc_layer->GetGeometryChanges());
+          hwc_layer->IsSurfaceUpdated() || hwc_layer->GetGeometryChanges() ||
+          layer->input_buffer.flags.video);
 }
 
 DisplayClass HWCDisplay::GetDisplayClass() {
