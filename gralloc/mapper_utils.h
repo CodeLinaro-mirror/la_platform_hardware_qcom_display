@@ -39,6 +39,9 @@
   { mapper::STANDARD_METADATA_NAME, static_cast<int64_t>(type) }
 #define STABLEMAPPER(mapperptr) mapperptr->v5
 
+// When support for explicit UBWC formats is deprecated in gralloc, remove the macro
+#define SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS 1
+
 using aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 using android::hardware::graphics::mapper::StandardMetadata;
 
