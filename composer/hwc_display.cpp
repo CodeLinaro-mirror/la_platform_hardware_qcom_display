@@ -782,7 +782,6 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
   return HWC2::Error::None;
 }
 
-
 void HWCDisplay::BuildLayerStack() {
   layer_stack_ = LayerStack();
   display_rect_ = LayerRect();
@@ -818,6 +817,8 @@ void HWCDisplay::BuildLayerStack() {
 
     bool is_secure = false;
     bool is_video = false;
+
+#ifndef MULTI_VIEW_SUPPORT
     const private_handle_t *handle =
         reinterpret_cast<const private_handle_t *>(layer->input_buffer.buffer_id);
 
@@ -838,6 +839,28 @@ void HWCDisplay::BuildLayerStack() {
         layer->input_buffer.flags.ubwc_pi = true;
       }
     }
+#else
+    private_handle_t *handle =
+        reinterpret_cast<private_handle_t *>(layer->input_buffer.buffer_id);
+
+    if (handle) {
+      if (handle->buffer_type() == BUFFER_TYPE_VIDEO) {
+        layer_stack_.flags.video_present = true;
+        is_video = true;
+      }
+      // TZ Protected Buffer - L1
+      // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
+      int32_t handle_flags = handle->flags();
+      if (handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
+        layer_stack_.flags.secure_present = true;
+        is_secure = true;
+      }
+      // UBWC PI format
+      if (handle_flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED_PI) {
+        layer->input_buffer.flags.ubwc_pi = true;
+      }
+    }
+#endif  // MULTI_VIEW_SUPPORT
 
     if (layer->input_buffer.flags.secure_display) {
       layer_stack_.flags.secure_present = true;
@@ -1426,7 +1449,7 @@ HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
 
   hwc2_config_t real_config = config;
 
-  if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
+  if (IsVirtualConfig(config)) {
     HWC2::Error error = SetFBForExtendedResolution(config, &real_config);
     if (!need_mode_switch_) {
       return error;
@@ -2957,10 +2980,16 @@ HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
     DLOGE("Invalid config: %d", config);
     return HWC2::Error::BadConfig;
   }
+
+  DisplayConfigVariableInfo info = {};
+  GetDisplayAttributesForConfig(INT(config), &info);
+
   hwc2_config_t real_config = config;
-  if (IsVirtualConfig(config) || IsVirtualConfig(active_config_index_)) {
+  if (IsVirtualConfig(config)) {
     HWC2::Error error = SetFBForExtendedResolution(config, &real_config);
     if (!need_mode_switch_) {
+      fb_width_ = info.x_pixels;
+      fb_height_ = info.y_pixels;
       return error;
     } else {
       config = real_config;
@@ -2986,8 +3015,6 @@ HWC2::Error HWCDisplay::SetActiveConfigWithConstraints(
   }
 
   // Cache refresh rate set by client.
-  DisplayConfigVariableInfo info = {};
-  GetDisplayAttributesForConfig(INT(config), &info);
   active_refresh_rate_ = info.fps;
 
   if (vsync_period_change_constraints->seamlessRequired && !AllowSeamless(config)) {
@@ -3176,27 +3203,28 @@ bool HWCDisplay::AllowSeamless(hwc2_config_t config) {
 
 HWC2::Error HWCDisplay::SubmitDisplayConfig(hwc2_config_t config) {
   DTRACE_SCOPED();
-
-  hwc2_config_t current_config = 0;
-  GetActiveConfig(true, &current_config);
-  if (current_config == config) {
+  hwc2_config_t current_real_config = 0;
+  hwc2_config_t current_active_config = GetActiveConfigIndex();
+  GetActiveConfig(true, &current_real_config);
+  // DS disabled case should set the framebuffer resolution.
+  if ((current_real_config == config) && (current_active_config == config)) {
     SetActiveConfigIndex(config);
     return HWC2::Error::None;
   }
 
   DisplayError error = display_intf_->SetActiveConfig(config);
   if (error == kErrorDeferred) {
-    DLOGW("Failed to set new config:%d from current config:%d! Error: %d",
-          config, current_config, error);
+    DLOGW("Failed to set new config:%d from current config:%d! Error: %d", config,
+          current_real_config, error);
     return HWC2::Error::BadConfig;
   } else if (error != kErrorNone) {
-    DLOGE("Failed to set new config:%d from current config:%d! Error: %d",
-          config, current_config, error);
+    DLOGE("Failed to set new config:%d from current config:%d! Error: %d", config,
+          current_real_config, error);
     return HWC2::Error::BadConfig;
   }
 
   SetActiveConfigIndex(config);
-  DLOGI("Active configuration changed from config %d to %d", current_config, config);
+  DLOGI("Active configuration changed from config %d to %d", current_real_config, config);
 
   // Cache refresh rate set by client.
   DisplayConfigVariableInfo info = {};
@@ -3204,10 +3232,13 @@ HWC2::Error HWCDisplay::SubmitDisplayConfig(hwc2_config_t config) {
   active_refresh_rate_ = info.fps;
 
   DisplayConfigVariableInfo current_config_info = {};
-  GetDisplayAttributesForConfig(INT(current_config), &current_config_info);
-  // Set fb config if new resolution differs
-  if (info.x_pixels != current_config_info.x_pixels ||
-      info.y_pixels != current_config_info.y_pixels) {
+  GetDisplayAttributesForConfig(INT(current_active_config), &current_config_info);
+  // Set fb config if new resolution differs and Do not override the framebuffer resolution in
+  // case of DS and panel mode switch happen together. DS will set the Set framebuffer resolution
+  // and set need_mode_switch_ true if panel switch needed
+  if ((info.x_pixels != current_config_info.x_pixels ||
+       info.y_pixels != current_config_info.y_pixels) &&
+      !need_mode_switch_) {
     if (SetFrameBufferResolution(info.x_pixels, info.y_pixels)) {
       return HWC2::Error::BadParameter;
     }
@@ -3483,6 +3514,7 @@ void HWCDisplay::ResetCwbState() {
   cwb_state_ = {};
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 HWC2::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
                                           shared_ptr<Fence> acquire_fence,
                                           CwbConfig cwb_config, CWBClient client) {
@@ -3579,6 +3611,105 @@ HWC2::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
 
   return HWC2::Error::None;
 }
+#else
+HWC2::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
+                                          shared_ptr<Fence> acquire_fence,
+                                          CwbConfig cwb_config, CWBClient client) {
+  if (current_power_mode_ == HWC2::PowerMode::Off) {
+    DLOGW("CWB requested on Powered-Off display.");
+    return HWC2::Error::BadDisplay;
+  }
+
+  std::lock_guard<std::mutex> lock(cwb_state_lock_);
+  if (cwb_state_.cwb_disp_id != -1 && cwb_state_.cwb_disp_id != id_) {
+    // cwb is already Active on a display other than on which it is requested.
+    DLOGE("CWB is already in use with display = %d", cwb_state_.cwb_disp_id);
+    return HWC2::Error::NoResources;
+  }
+
+  if (cwb_state_.cwb_client != kCWBClientNone && cwb_state_.cwb_client != client) {
+    // cwb is already Active for a client other than the one who is requesting.
+    DLOGE("CWB is already in use with client = %d", cwb_state_.cwb_client);
+    return HWC2::Error::NoResources;
+  }
+
+  if ((cwb_state_.cwb_status == CWBStatus::kCWBTeardown) ||
+      (Fence::GetStatus(cwb_state_.teardown_frame_retire_fence) != Fence::Status::kSignaled)) {
+    DLOGW("CWB teardown is currently undergoing on display = %d", cwb_state_.cwb_disp_id);
+    return HWC2::Error::Unsupported;
+  }
+
+  if (secure_event_ != kSecureEventMax) {
+    DLOGE("CWB is not supported as TUI transition is in progress");
+    return HWC2::Error::Unsupported;
+  }
+
+  const private_handle_t *pvt_handle = reinterpret_cast<const private_handle_t *>(buffer);
+  private_handle_t *handle = const_cast<private_handle_t *>(pvt_handle);
+
+  if (!handle) {
+    DLOGE("Bad parameter: handle is null");
+    return HWC2::Error::BadParameter;
+  }
+
+  if (handle->fd() < 0) {
+    DLOGE("Bad parameter: fd is null");
+    return HWC2::Error::BadParameter;
+  }
+
+  // Configure the output buffer as Readback buffer
+  output_buffer_.width = UINT32(handle->width());
+  output_buffer_.height = UINT32(handle->height());
+  output_buffer_.unaligned_width = UINT32(handle->unaligned_width());
+  output_buffer_.unaligned_height = UINT32(handle->unaligned_height());
+  output_buffer_.format = HWCLayer::GetSDMFormat(handle->format(), handle->flags());
+  output_buffer_.planes[0].fd = handle->fd();
+  output_buffer_.planes[0].stride = UINT32(handle->width());
+  output_buffer_.acquire_fence = acquire_fence;
+  output_buffer_.handle_id = handle->id();
+
+  if (output_buffer_.format == kFormatInvalid) {
+    DLOGW("Format %d is not supported by SDM", handle->format());
+    return HWC2::Error::BadParameter;
+  } else if (!display_intf_->IsWriteBackSupportedFormat(output_buffer_.format)) {
+    DLOGW("WB doesn't support color format : %s .", GetFormatString(output_buffer_.format));
+    return HWC2::Error::BadParameter;
+  }
+
+  readback_buffer_queued_ = true;
+  readback_configured_ = false;
+  cwb_state_.cwb_client = client;
+  cwb_state_.cwb_disp_id = id_;
+  cwb_config_ = cwb_config;
+  LayerRect &roi = cwb_config_.cwb_roi;
+  LayerRect &full_rect = cwb_config_.cwb_full_rect;
+  CwbTapPoint &tap_point = cwb_config_.tap_point;
+
+  DisplayError error = kErrorNone;
+  uint32_t buffer_width = 0, buffer_height = 0;
+  error = display_intf_->GetCwbBufferResolution(&cwb_config_, &buffer_width,
+                                                &buffer_height);
+  if (error) {
+    DLOGE("Configuring CWB Buffer allocation failed.");
+    if (error == kErrorParameters) {
+      return HWC2::Error::BadParameter;
+    } else {
+      return HWC2::Error::Unsupported;
+    }
+  }
+
+  DLOGV_IF(kTagClient, "CWB config from client: tap_point %d, CWB ROI Rect(%f %f %f %f), "
+           "PU_as_CWB_ROI %d, Cwb full rect : (%f %f %f %f)", tap_point,
+           roi.left, roi.top, roi.right, roi.bottom, cwb_config_.pu_as_cwb_roi,
+           full_rect.left, full_rect.top, full_rect.right, full_rect.bottom);
+
+  DLOGV_IF(kTagClient, "Successfully configured the output buffer: readback_buffer_queued_ %d, "
+           "readback_configured_ %d, cwb_client %d",
+           readback_buffer_queued_, readback_configured_, cwb_state_.cwb_client);
+
+  return HWC2::Error::None;
+}
+#endif
 
 HWC2::Error HWCDisplay::GetReadbackBufferFence(shared_ptr<Fence> *release_fence) {
   auto status = HWC2::Error::None;
@@ -3789,11 +3920,7 @@ HWC2::Error HWCDisplay::SetFBForExtendedResolution(hwc2_config_t config,
   // Now if current virtual config with higher width than current real config width, then
   // select the parent real config of the virtual config. (DS will not do downscale)
   bool fps_change = false;
-  if (!IsVirtualConfig(config)) {
-    *real_config = config;
-    need_mode_switch_ = true;
-    return HWC2::Error::None;
-  } else if (variable_config_map_[config].x_pixels > real_config_width) {
+  if (variable_config_map_[config].x_pixels > real_config_width) {
     need_mode_switch_ = true;
     auto parent_index = variable_config_map_[config].parent_config_index;
     auto parent_fps = variable_config_map_[parent_index].fps;

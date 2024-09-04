@@ -28,40 +28,10 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <QtiGralloc.h>
 
@@ -429,12 +399,21 @@ void HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, 
   });
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 void HWCBufferAllocator::GetAdjustedWidthAndHeight(const private_handle_t *handle, int *width,
                                                  int *height) {
   *width = handle->width;
   *height = handle->height;
   gralloc::GetCustomDimensions(const_cast<private_handle_t *>(handle), width, height);
 }
+#else
+void HWCBufferAllocator::GetAdjustedWidthAndHeight(const private_handle_t *handle, int *width,
+                                                 int *height) {
+  *width = const_cast<private_handle_t *>(handle)->width();
+  *height = const_cast<private_handle_t *>(handle)->height();
+  gralloc::GetCustomDimensions(const_cast<private_handle_t *>(handle), width, height);
+}
+#endif
 
 void HWCBufferAllocator::GetAlignedWidthAndHeight(int width, int height, int format,
                                                   uint32_t alloc_type, int *aligned_width,
@@ -662,6 +641,7 @@ int HWCBufferAllocator::GetAllocatedBufferInfo(
   return 0;
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
                                                  uint32_t stride[4], uint32_t offset[4],
                                                  uint32_t *num_planes) {
@@ -686,6 +666,34 @@ int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
 
   return kErrorNone;
 }
+#else
+int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
+                                                 uint32_t stride[4], uint32_t offset[4],
+                                                 uint32_t *num_planes) {
+
+  // TODO(user): Transition APIs to not need a private handle
+  private_handle_t *hnd =
+      private_handle_t::createSingleHandle(-1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  int format = HAL_PIXEL_FORMAT_RGBA_8888;
+  uint64_t flags = 0;
+  SetBufferInfo(buf_info.format, &format, &flags);
+  // Setup only the required stuff, skip rest
+  hnd->format() = format;
+  hnd->width() = INT32(buf_info.aligned_width);
+  hnd->height() = INT32(buf_info.aligned_height);
+  if (flags & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) {
+    hnd->flags() = private_handle_t::PRIV_FLAGS_UBWC_ALIGNED;
+  }
+  hnd->usage() = buf_info.usage;
+  int ret = gralloc::GetBufferLayout(hnd, stride, offset, num_planes);
+
+  free(hnd);
+  if (ret < 0) {
+    DLOGE("GetBufferLayout failed");
+  }
+  return kErrorNone;
+}
+#endif
 
 int HWCBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<Fence> acquire_fence,
                                   void **base_ptr) {

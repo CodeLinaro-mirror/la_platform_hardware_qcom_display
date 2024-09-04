@@ -525,6 +525,10 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, SyncPoints *syn
   }
 
   if (sde_dest_scalar_data_.num_dest_scaler) {
+    for (int i = 0; i < sde_dest_scalar_data_.num_dest_scaler; i++) {
+      // Disable DS during power On for DS cases
+      sde_dest_scalar_data_.ds_cfg[i].flags &= ~SDE_DRM_DESTSCALER_ENABLE;
+    }
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_DEST_SCALER_CONFIG, token_.crtc_id,
                               reinterpret_cast<uint64_t>(&sde_dest_scalar_data_));
     needs_ds_update_ = true;

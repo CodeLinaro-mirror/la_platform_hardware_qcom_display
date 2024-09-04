@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #define DEBUG 0
 #include "QtiMapperExtensions.h"
@@ -34,6 +40,7 @@
 #include <qdMetaData.h>
 #include <sync/sync.h>
 #include "gr_utils.h"
+#include <QtiGralloc.h>
 
 namespace vendor {
 namespace qti {
@@ -89,8 +96,14 @@ Return<void> QtiMapperExtensions::getCustomDimensions(void *buffer,
   int stride = 0;
   int height = 0;
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
+#ifndef MULTI_VIEW_SUPPORT
     stride = hnd->width;
     height = hnd->height;
+#else
+    stride = hnd->width();
+    height = hnd->height();
+#endif  // MULTI_VIEW_SUPPORT
+
     int ret = gralloc::GetCustomDimensions(hnd, &stride, &height);
     if (ret) {
       ALOGW("%s: Error during GetCustomDimensions API call. "
@@ -198,7 +211,11 @@ Return<void> QtiMapperExtensions::getFd(void *buffer, getFd_cb hidl_cb) {
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     fd = hnd->fd;
+#else
+    fd = hnd->fd();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, fd);
   return Void();
@@ -210,7 +227,11 @@ Return<void> QtiMapperExtensions::getWidth(void *buffer, getWidth_cb hidl_cb) {
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     width = hnd->width;
+#else
+    width = hnd->width();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, width);
   return Void();
@@ -222,7 +243,11 @@ Return<void> QtiMapperExtensions::getHeight(void *buffer, getHeight_cb hidl_cb) 
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     height = hnd->height;
+#else
+    height = hnd->height();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, height);
   return Void();
@@ -234,7 +259,12 @@ Return<void> QtiMapperExtensions::getFormat(void *buffer, getFormat_cb hidl_cb) 
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     format = hnd->format;
+#else
+    format = hnd->format();
+#endif  // MULTI_VIEW_SUPPORT
+
   }
   hidl_cb(err, format);
   return Void();
@@ -246,7 +276,11 @@ Return<void> QtiMapperExtensions::getPrivateFlags(void *buffer, getPrivateFlags_
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     flags = hnd->flags;
+#else
+    flags = hnd->flags();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, flags);
   return Void();
@@ -258,7 +292,11 @@ Return<void> QtiMapperExtensions::getUnalignedWidth(void *buffer, getUnalignedWi
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     unaligned_width = hnd->unaligned_width;
+#else
+    unaligned_width = hnd->unaligned_width();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, unaligned_width);
   return Void();
@@ -270,7 +308,11 @@ Return<void> QtiMapperExtensions::getUnalignedHeight(void *buffer, getUnalignedH
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     unaligned_height = hnd->unaligned_height;
+#else
+    unaligned_height = hnd->unaligned_height();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, unaligned_height);
   return Void();
@@ -282,7 +324,11 @@ Return<void> QtiMapperExtensions::getLayerCount(void *buffer, getLayerCount_cb h
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     layer_count = hnd->layer_count;
+#else
+    layer_count = hnd->layer_count();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, layer_count);
   return Void();
@@ -294,7 +340,11 @@ Return<void> QtiMapperExtensions::getId(void *buffer, getId_cb hidl_cb) {
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     id = hnd->id;
+#else
+    id = hnd->id();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, id);
   return Void();
@@ -306,7 +356,11 @@ Return<void> QtiMapperExtensions::getUsageFlags(void *buffer, getUsageFlags_cb h
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     usage = hnd->usage;
+#else
+    usage = hnd->usage();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, usage);
   return Void();
@@ -318,7 +372,11 @@ Return<void> QtiMapperExtensions::getSize(void *buffer, getSize_cb hidl_cb) {
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     size = hnd->size;
+#else
+    size = hnd->size();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, size);
   return Void();
@@ -330,7 +388,11 @@ Return<void> QtiMapperExtensions::getOffset(void *buffer, getOffset_cb hidl_cb) 
   auto hnd = static_cast<private_handle_t *>(buffer);
   if (buffer != nullptr && private_handle_t::validate(hnd) == 0) {
     err = Error::NONE;
+#ifndef MULTI_VIEW_SUPPORT
     offset = hnd->offset;
+#else
+    offset = hnd->offset();
+#endif  // MULTI_VIEW_SUPPORT
   }
   hidl_cb(err, offset);
   return Void();
@@ -437,8 +499,13 @@ Return<Error> QtiMapperExtensions::copyMetaData(void *src, void *dst) {
             Error::NONE &&
         static_cast<IMapperExtensions_1_0_Error>(buf_mgr_->IsBufferImported(dst_hnd)) ==
             Error::NONE) {
+#ifndef MULTI_VIEW_SUPPORT
       MetaData_t *src_data = reinterpret_cast<MetaData_t *>(src_hnd->base_metadata);
       MetaData_t *dst_data = reinterpret_cast<MetaData_t *>(dst_hnd->base_metadata);
+#else
+      MetaData_t *src_data = reinterpret_cast<MetaData_t *>(src_hnd->base_metadata());
+      MetaData_t *dst_data = reinterpret_cast<MetaData_t *>(dst_hnd->base_metadata());
+#endif  // MULTI_VIEW_SUPPORT
       *dst_data = *src_data;
       error = Error::NONE;
     }
@@ -458,7 +525,11 @@ Return<Error> QtiMapperExtensions::setMetadataBlob(const hidl_vec<uint8_t> &src,
     if (static_cast<IMapperExtensions_1_0_Error>(buf_mgr_->IsBufferImported(dst_hnd)) ==
         Error::NONE) {
       const MetaData_t *src_data = reinterpret_cast<const MetaData_t *>(src.data());
+#ifndef MULTI_VIEW_SUPPORT
       MetaData_t *dst_data = reinterpret_cast<MetaData_t *>(dst_hnd->base_metadata);
+#else
+      MetaData_t *dst_data = reinterpret_cast<MetaData_t *>(dst_hnd->base_metadata());
+#endif  // MULTI_VIEW_SUPPORT
       *dst_data = *src_data;
       error = Error::NONE;
     }
@@ -477,7 +548,11 @@ Return<void> QtiMapperExtensions::getMetadataBlob(void *src, getMetadataBlob_cb 
   if (src != nullptr && private_handle_t::validate(src_hnd) == 0) {
     if (static_cast<IMapperExtensions_1_0_Error>(buf_mgr_->IsBufferImported(src_hnd)) ==
         Error::NONE) {
+#ifndef MULTI_VIEW_SUPPORT
       MetaData_t *src_data = reinterpret_cast<MetaData_t *>(src_hnd->base_metadata);
+#else
+      MetaData_t *src_data = reinterpret_cast<MetaData_t *>(src_hnd->base_metadata());
+#endif  // MULTI_VIEW_SUPPORT
       MetaData_t *dst_data = reinterpret_cast<MetaData_t *>(out.data());
       memcpy(dst_data, src_data, sizeof(MetaData_t));
       error = Error::NONE;
@@ -489,6 +564,82 @@ Return<void> QtiMapperExtensions::getMetadataBlob(void *src, getMetadataBlob_cb 
   _hidl_cb(error, out);
   return Void();
 }
+
+#ifdef MULTI_VIEW_SUPPORT
+Return<Error> QtiMapperExtensions::getMetaDataValue(void *src, const MetadataType &type, void *in) {
+  return Error::UNSUPPORTED;
+}
+
+Return<Error> QtiMapperExtensions::getMultiViewInfo(void *bufferHandle, void* views) {
+  auto err = Error::BAD_BUFFER;
+  hidl_vec<uint8_t> metadata;
+
+  if (bufferHandle == nullptr) {
+    return err;
+  }
+
+  auto hnd = static_cast<private_handle_t *>(bufferHandle);
+  err = static_cast<Error>(buf_mgr_->GetMetadata(hnd, QTI_MULTI_VIEW_INFO, &metadata));
+
+  if(err == Error::NONE) {
+    err = static_cast<Error>(android::gralloc4::decodeUint32(
+        qtigralloc::MetadataType_MultiViewInfo, metadata, (uint32_t*)views));
+  }
+  return err;
+}
+
+Return<Error> QtiMapperExtensions::getBaseView(void *bufferHandle, void* view) {
+  auto err = Error::BAD_BUFFER;
+  hidl_vec<uint8_t> metadata;
+
+  if (bufferHandle == nullptr) {
+    return err;
+  }
+
+  auto hnd = static_cast<private_handle_t *>(bufferHandle);
+  err = static_cast<Error>(buf_mgr_->GetMetadata(hnd, QTI_BASE_VIEW, &metadata));
+
+  if(err == Error::NONE) {
+    err = static_cast<Error>(android::gralloc4::decodeUint32(
+        qtigralloc::MetadataType_BaseView, metadata, (uint32_t*)view));
+  }
+  return err;
+}
+
+Return<void> QtiMapperExtensions::importViewBuffer(void *bufferHandle, uint32_t view,
+                                                   importViewBuffer_cb _hidl_cb) {
+  auto error = Error::BAD_BUFFER;
+  if (bufferHandle == nullptr) {
+    _hidl_cb(error, nullptr);
+    return Void();
+  }
+
+  private_handle_t* view_handle =
+      static_cast<private_handle_t *>(bufferHandle)->CreateViewHandle(view);
+  if (!view_handle) {
+    ALOGE("%s: Unable to create view handle", __FUNCTION__);
+    error = Error::NO_RESOURCES;
+    _hidl_cb(error, nullptr);
+    return Void();
+  }
+
+  error = static_cast<Error>(buf_mgr_->RetainBuffer(view_handle));
+  if (error != Error::NONE) {
+    ALOGE("%s: Unable to retain handle: %p", __FUNCTION__, view_handle);
+    native_handle_close(view_handle);
+    native_handle_delete(view_handle);
+
+    _hidl_cb(error, nullptr);
+    return Void();
+  }
+
+  _hidl_cb(error, static_cast<native_handle_t *>(view_handle));
+  ALOGD_IF(DEBUG, "Imported view handle: %p id: %" PRIu64, view_handle,
+           view_handle->id());
+  return Void();
+}
+#endif  // MULTI_VIEW_SUPPORT
+
 }  // namespace implementation
 }  // namespace V1_1
 }  // namespace mapperextensions

@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #define DEBUG 0
 #include "QtiMapper4.h"
@@ -124,8 +130,15 @@ Return<void> QtiMapper::importBuffer(const hidl_handle &raw_handle, importBuffer
     hidl_cb(error, nullptr);
     return Void();
   }
+
+#ifndef MULTI_VIEW_SUPPORT
   ALOGD_IF(DEBUG, "Imported handle: %p id: %" PRIu64, buffer_handle,
            PRIV_HANDLE_CONST(buffer_handle)->id);
+#else
+  ALOGD_IF(DEBUG, "Imported handle: %p id: %" PRIu64, buffer_handle,
+           static_cast<private_handle_t *>(buffer_handle)->id());
+#endif  // MULTI_VIEW_SUPPORT
+
   hidl_cb(Error::NONE, buffer_handle);
   return Void();
 }
@@ -163,6 +176,7 @@ void QtiMapper::WaitFenceFd(int fence_fd) {
   }
 }
 
+#ifndef MULTI_VIEW_SUPPORT
 Error QtiMapper::LockBuffer(void *buffer, uint64_t usage, const hidl_handle &acquire_fence,
                             const IMapper::Rect &access_region) {
   if (!buffer) {
@@ -202,6 +216,48 @@ Return<void> QtiMapper::lock(void *buffer, uint64_t cpu_usage, const IMapper::Re
   hidl_cb(err, out_data);
   return Void();
 }
+
+#else
+Error QtiMapper::LockBuffer(void *buffer, uint64_t usage, const hidl_handle &acquire_fence,
+                            const IMapper::Rect &access_region) {
+  if (!buffer) {
+    return Error::BAD_BUFFER;
+  }
+
+  int fence_fd;
+  if (!GetFenceFd(acquire_fence, &fence_fd)) {
+    return Error::BAD_VALUE;
+  }
+
+  if (fence_fd > 0) {
+    WaitFenceFd(fence_fd);
+  }
+
+  auto hnd = static_cast<private_handle_t *>(buffer);
+
+  if (access_region.top < 0 || access_region.left < 0 || access_region.width < 0 ||
+      access_region.height < 0 || access_region.width > hnd->width() ||
+      access_region.height > hnd->height()) {
+    return Error::BAD_VALUE;
+  }
+  return static_cast<IMapper_4_0_Error>(buf_mgr_->LockBuffer(hnd, usage));
+}
+
+Return<void> QtiMapper::lock(void *buffer, uint64_t cpu_usage, const IMapper::Rect &access_region,
+                             const hidl_handle &acquire_fence, lock_cb hidl_cb) {
+  auto err = LockBuffer(buffer, cpu_usage, acquire_fence, access_region);
+  if (err != Error::NONE) {
+    hidl_cb(err, nullptr);
+    return Void();
+  }
+
+  auto hnd = static_cast<private_handle_t *>(buffer);
+  auto *out_data = reinterpret_cast<void *>(hnd->base());
+
+  hidl_cb(err, out_data);
+  return Void();
+}
+#endif  // MULTI_VIEW_SUPPORT
 
 Return<void> QtiMapper::unlock(void *buffer, unlock_cb hidl_cb) {
   auto err = Error::BAD_BUFFER;
