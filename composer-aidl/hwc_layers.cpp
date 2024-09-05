@@ -18,7 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -28,14 +28,57 @@
 #include <stdint.h>
 #include <utility>
 #include <cmath>
+#include <qdMetaData.h>
+#ifdef ENABLE_MAPPER_V5
+#include "mapper_utils.h"
+#include <android/hardware/graphics/mapper/IMapper.h>
+#endif
 
 #define __CLASS__ "HWCLayer"
+#ifdef ENABLE_MAPPER_V5
+using aidl::android::hardware::graphics::common::StandardMetadataType;
+using mapper::GetMapperInstance;
+using mapper::GetMetadataState;
+using mapper::GetStandardMetadata;
+using SnapDataspace = vendor_qti_hardware_display_common_Dataspace;
+#endif
 
 namespace sdm {
 
 std::atomic<LayerId> HWCLayer::next_id_(1);
 
 DisplayError SetCSC(const native_handle_t *handle, ColorMetaData *color_metadata) {
+#ifdef ENABLE_MAPPER_v5
+  int32_t error = 0;
+  //TODO: Investigate performance hit of moving to fetching smaller color metadata structs
+  auto mapper = GetMapperInstance();
+  if (!mapper) {
+    return kErrorResources;
+  }
+
+  error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
+                                           VENDOR_QTI_METADATA(QTI_COLOR_METADATA),
+                                           color_metadata, sizeof(*color_metadata));
+
+  if (error >= 0) {
+    SnapDataspace snap_dataspace;
+    int csc = HAL_CSC_ITU_R_601;
+    error = STABLEMAPPER(mapper).getMetadata(static_cast<buffer_handle_t>(handle),
+                                             VENDOR_QTI_METADATA(SnapMetadataType::DATASPACE),
+                                             &snap_dataspace, sizeof(snap_dataspace));
+
+    if (error >= 0) {
+      if (!snap_dataspace.colorPrimaries || snap_dataspace.colorPrimaries > QtiColorPrimaries_Max) {
+        color_metadata->colorPrimaries = static_cast<ColorPrimaries>(QtiColorPrimaries_BT601_6_525);
+        color_metadata->range = static_cast<ColorRange>(QtiRange_Full);
+      } else {
+        color_metadata->colorPrimaries = static_cast<ColorPrimaries>(snap_dataspace.colorPrimaries);
+        color_metadata->range = static_cast<ColorRange>(snap_dataspace.range);
+      }
+      color_metadata->transfer = static_cast<GammaTransfer>(QtiTransfer_sRGB);
+    }
+  }
+#else
   ColorMetaData color;
   if (qtigralloc::getMetadataState(const_cast<native_handle_t *>(handle), QTI_COLOR_METADATA)) {
     int err = static_cast<int>(
@@ -48,9 +91,14 @@ DisplayError SetCSC(const native_handle_t *handle, ColorMetaData *color_metadata
       return kErrorNone;
     }
   }
+#endif
 
+#ifdef ENABLE_MAPPER_v5
+  return kErrorNone;
+#else
   DLOGW("Failed to get values for CSC");
   return kErrorNotSupported;
+#endif
 }
 
 // Returns true when color primary is supported
@@ -257,8 +305,17 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   int aligned_width, aligned_height;
   buffer_allocator_->GetCustomWidthAndHeight(handle, &aligned_width, &aligned_height);
 
+#ifdef ENABLE_MAPPER_V5
+  int fmt, flag;
+  buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &fmt,
+                                      sizeof(fmt));
+  buffer_allocator_->GetPrivateFlags((void *)handle, flag);
+  ALOGW("%s: format: %d, flags: %d", __FUNCTION__, fmt, flag);
+  LayerBufferFormat format = GetSDMFormat(fmt, flag);
+#else
   LayerBufferFormat format;
   buffer_allocator_->GetSDMFormat(const_cast<native_handle_t *>(handle), format);
+#endif
   if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
       (UINT32(aligned_height) != layer_buffer->height)) {
     // Layer buffer geometry has changed.
@@ -268,6 +325,28 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   layer_buffer->format = format;
   layer_buffer->width = UINT32(aligned_width);
   layer_buffer->height = UINT32(aligned_height);
+#ifdef ENABLE_MAPPER_V5
+  uint64_t tmp_width, tmp_height;
+  auto err = buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::WIDTH, &tmp_width,
+                                                 sizeof(tmp_width));
+  if (err) {
+    DLOGE("Failed to retrieve unaligned width");
+  } else {
+    layer_buffer->unaligned_width = tmp_width;
+  }
+  err = buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::HEIGHT, &tmp_height,
+                                            sizeof(tmp_height));
+  if (err) {
+    DLOGE("Failed to retrieve unaligned height");
+  } else {
+    layer_buffer->unaligned_height = tmp_height;
+  }
+  uint32_t buffer_type;
+  buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::BUFFER_TYPE, &buffer_type,
+                                      sizeof(buffer_type));
+
+  layer_buffer->flags.video = (buffer_type == BUFFER_TYPE_VIDEO) ? true : false;
+#else
   buffer_allocator_->GetUnalignedWidth(const_cast<native_handle_t *>(handle),
                                        layer_buffer->unaligned_width);
   buffer_allocator_->GetUnalignedHeight(const_cast<native_handle_t *>(handle),
@@ -277,6 +356,7 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   buffer_allocator_->GetBufferType(const_cast<native_handle_t *>(handle), buffer_type);
   layer_buffer->flags.video = (buffer_type == BUFFER_TYPE_VIDEO) ? true : false;
 
+#endif
   if (SetMetaData(handle, layer_) != kErrorNone) {
     return HWC3::Error::BadLayer;
   }
@@ -306,13 +386,42 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   }
   buffer_fd_ = ::dup(fd);
   layer_buffer->planes[0].fd = buffer_fd_;
+#ifdef ENABLE_MAPPER_V5
+  err = buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::STRIDE,
+                                            &layer_buffer->planes[0].stride,
+                                            sizeof(layer_buffer->planes[0].stride));
+  if (err) {
+    DLOGW("Failed to retrieve aligned width");
+  }
+  err = buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::ALLOCATION_SIZE,
+                                            &layer_buffer->size, sizeof(layer_buffer->size));
+  if (err) {
+    DLOGW("Failed to retrieve allocation size");
+  }
+#else
   layer_buffer->planes[0].offset = 0;
   buffer_allocator_->GetWidth(const_cast<native_handle_t *>(handle),
                               layer_buffer->planes[0].stride);
   buffer_allocator_->GetAllocationSize(const_cast<native_handle_t *>(handle), layer_buffer->size);
+#endif
   buffer_flipped_ = reinterpret_cast<uint64_t>(handle) != layer_buffer->buffer_id;
   layer_buffer->buffer_id = reinterpret_cast<uint64_t>(handle);
+
+#ifdef ENABLE_MAPPER_V5
+  int64_t hd_id, hd_usage;
+  err = buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::BUFFER_ID,
+                                            &layer_buffer->handle_id, sizeof(layer_buffer->handle_id));
+  if (err)
+    DLOGW("Failed to retrieve buffer id");
+
+  err = buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::USAGE, &layer_buffer->usage,
+                                            sizeof(layer_buffer->usage));
+  if (err)
+    DLOGW("Failed to retrieve handle usage");
+
+#else
   buffer_allocator_->GetBufferId(const_cast<native_handle_t *>(handle), layer_buffer->handle_id);
+#endif
 
   return HWC3::Error::None;
 }
@@ -868,15 +977,28 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
 
   float fps = 0;
   uint32_t frame_rate = layer->frame_rate;
+#ifdef ENABLE_MAPPER_V5
+  if (!buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::REFRESH_RATE, &fps,
+                                           sizeof(fps))) {
+    frame_rate = (fps != 0) ? RoundToStandardFPS(fps) : layer->frame_rate;
+    has_metadata_refresh_rate_ = true;
+  }
+#else
   if (qtigralloc::getMetadataState(handle, QTI_REFRESH_RATE)) {
     if (static_cast<int>(qtigralloc::get(handle, QTI_REFRESH_RATE, &fps)) == 0) {
       frame_rate = (fps != 0) ? RoundToStandardFPS(fps) : layer->frame_rate;
       has_metadata_refresh_rate_ = true;
     }
   }
+#endif
 
   int32_t interlaced = 0;
+#ifdef ENABLE_MAPPER_V5
+  buffer_allocator_->GetMetadataValue((void *)handle, (SnapMetadataType)PP_PARAM_INTERLACED, &interlaced,
+                                      sizeof(interlaced));
+#else
   qtigralloc::get(handle, QTI_PP_PARAM_INTERLACED, &interlaced);
+#endif
   bool interlace = interlaced ? true : false;
 
   if (interlace != layer_buffer->flags.interlace) {
@@ -885,24 +1007,42 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   }
 
   uint32_t linear_format = 0;
+#ifdef ENABLE_MAPPER_V5
+  if (!buffer_allocator_->GetMetadataValue((void *)handle, (SnapMetadataType)LINEAR_FORMAT, &linear_format,
+                                           sizeof(linear_format))) {
+    layer_buffer->format = GetSDMFormat(INT32(linear_format), 0);
+  }
+#else
   if (qtigralloc::getMetadataState(handle, QTI_LINEAR_FORMAT)) {
     if (static_cast<int>(qtigralloc::get(handle, QTI_LINEAR_FORMAT, &linear_format)) == 0) {
       layer_buffer->format = GetSDMFormat(INT32(linear_format), 0);
     }
   }
+#endif
 
   uint32_t s3d_format = 0;
+#ifdef ENABLE_MAPPER_V5
+  //S3D_FORMAT not supported in SnapMetadataType
+#else
   if (qtigralloc::getMetadataState(handle, QTI_S3D_FORMAT)) {
     if (static_cast<int>(qtigralloc::get(handle, QTI_S3D_FORMAT, &s3d_format)) == 0) {
     layer_buffer->s3d_format = GetS3DFormat(s3d_format);
     }
   }
+#endif
 
+#ifdef ENABLE_MAPPER_V5
+  if ((interlace != layer_buffer->flags.interlace) ||
+      (frame_rate != layer->frame_rate)) {
+#else
   if ((interlace != layer_buffer->flags.interlace) ||
       (frame_rate != layer->frame_rate) || (s3d_format != layer_buffer->s3d_format)) {
+#endif
     // Layer buffer metadata has changed.
     layer->frame_rate = frame_rate;
+#ifndef ENABLE_MAPPER_V5
     layer_buffer->s3d_format = static_cast<LayerBufferS3DFormat>(s3d_format);
+#endif
     layer_buffer->flags.interlace = interlace;
     layer_->update_mask.set(kMetadataUpdate);
   }
@@ -914,15 +1054,28 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
     layer_buffer->ubwc_crstats[i].clear();
   }
 
+#ifdef ENABLE_MAPPER_V5
+  if (!buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::UBWC_CR_STATS_INFO, cr_stats,
+                                           sizeof(cr_stats))) {
+    // Only copy top layer for now as only top field for interlaced is used
+    GetUBWCStatsFromMetaData(&cr_stats[0], &(layer_buffer->ubwc_crstats[0]));
+  }
+#else
   if (qtigralloc::getMetadataState(handle, QTI_UBWC_CR_STATS_INFO)) {
     if (static_cast<int>(qtigralloc::get(handle, QTI_UBWC_CR_STATS_INFO, &cr_stats)) == 0) {
       // Only copy top layer for now as only top field for interlaced is used
       GetUBWCStatsFromMetaData(&cr_stats[0], &(layer_buffer->ubwc_crstats[0]));
     }
   }
+#endif
 
   uint32_t single_buffer = 0;
+#ifdef ENABLE_MAPPER_V5
+  buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::SINGLE_BUFFER_MODE, &single_buffer,
+                                      sizeof(single_buffer));
+#else
   qtigralloc::get(handle, QTI_SINGLE_BUFFER_MODE, &single_buffer);
+#endif
   single_buffer_ = (single_buffer == 1);
 
   // Handle colorMetaData / Dataspace handling now

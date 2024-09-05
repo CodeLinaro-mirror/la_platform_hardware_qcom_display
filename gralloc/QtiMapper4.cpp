@@ -32,9 +32,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -66,6 +66,7 @@ QtiMapper::QtiMapper() {
   buf_mgr_ = BufferManager::GetInstance();
   ALOGD_IF(DEBUG, "Created QtiMapper instance");
   snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+  ALOGW("QtiMapper4 is deprecated, please use QtiMapper5!");
 }
 
 bool QtiMapper::ValidDescriptor(const BufferDescriptorInfo_4_0 &bd) {

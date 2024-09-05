@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -12,7 +12,7 @@
 namespace gralloc {
 GrDebugHandler GrDebugHandler::debug_handler_;
 GrDebugHandler::GrDebugHandler() {
-  DebugHandler::Set(GrDebugHandler::Get());
+  //DebugHandler::Set(GrDebugHandler::Get());
 }
 
 int GrDebugHandler::GetProperty(const char *property_name, int *value) {

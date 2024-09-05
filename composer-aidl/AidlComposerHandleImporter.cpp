@@ -18,7 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
@@ -29,6 +29,11 @@
 #include "AidlComposerHandleImporter.h"
 #include <cutils/properties.h>
 #include "display_properties.h"
+#include "QtiMapper5.h"
+#include "gr_snap_helper.h"
+#include "mapper_utils.h"
+
+using mapper::GetMapperInstance;
 
 namespace aidl {
 namespace vendor {
@@ -37,7 +42,9 @@ namespace hardware {
 namespace display {
 namespace composer3 {
 
+#ifndef ENABLE_MAPPER_V5
 using android::hardware::graphics::mapper::V4_0::Error;
+#endif
 
 ComposerHandleImporter::ComposerHandleImporter() : mInitialized(false) {}
 
@@ -47,9 +54,17 @@ void ComposerHandleImporter::initialize() {
     return;
   }
 
+#ifdef ENABLE_MAPPER_V5
+  mMapper = GetMapperInstance();
+#else
   mMapper = IMapper::getService();
+#endif
   if (mMapper == nullptr) {
+#ifdef ENABLE_MAPPER_V5
+    ALOGE("%s: cannnot access QtiMapper5!", __FUNCTION__);
+#else
     ALOGE("%s: cannnot acccess graphics mapper HAL!", __FUNCTION__);
+#endif
     return;
   }
 
@@ -62,7 +77,11 @@ void ComposerHandleImporter::initialize() {
 }
 
 void ComposerHandleImporter::cleanup() {
-  mMapper.clear();
+#ifndef ENABLE_MAPPER_V5
+  mMapper->clear();
+#else
+  mMapper = nullptr;
+#endif
   mInitialized = false;
 }
 
@@ -111,6 +130,8 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
     return true;
   }
 
+  ALOGI(">>> %s,%d:: handleprofile: buffer_handle_t: numFds=%d, numInts=%d.\n",
+         __func__, __LINE__, handle->numFds, handle->numInts);
   if (!handle->numFds && !handle->numInts) {
     handle = nullptr;
     return true;
@@ -126,9 +147,17 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
     return false;
   }
 
-  Error error;
   buffer_handle_t importedHandle;
 
+#ifdef ENABLE_MAPPER_V5
+  auto ret = STABLEMAPPER(mMapper).importBuffer(handle, &importedHandle);
+
+  if (ret != AIMAPPER_ERROR_NONE) {
+    ALOGE("%s: mapper importBuffer failed: %d", __FUNCTION__, ret);
+    return false;
+  }
+#else
+  Error error;
   auto ret = mMapper->importBuffer(hidl_handle(handle),
                                    [&](const auto &tmpError, const auto &tmpBufferHandle) {
                                      error = tmpError;
@@ -143,6 +172,7 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
   if (error != Error::NONE) {
     return false;
   }
+#endif
 
   handle = importedHandle;
 
@@ -175,10 +205,17 @@ void ComposerHandleImporter::freeBuffer(buffer_handle_t handle) {
     }
   }
 
+#ifdef ENABLE_MAPPER_V5
+  auto ret = STABLEMAPPER(mMapper).freeBuffer(handle);
+  if (ret != AIMAPPER_ERROR_NONE) {
+    ALOGE("%s: mapper freeBuffer failed: %d", __FUNCTION__, ret);
+  }
+#else
   auto ret = mMapper->freeBuffer(const_cast<native_handle_t *>(handle));
   if (!ret.isOk()) {
     ALOGE("%s: mapper freeBuffer failed: %s", __FUNCTION__, ret.description().c_str());
   }
+#endif
 }
 
 }  // namespace composer3

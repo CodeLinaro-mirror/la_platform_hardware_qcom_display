@@ -28,12 +28,13 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+#include <gralloc_priv.h>
 #include <QtiGralloc.h>
 #include <sync/sync.h>
 
@@ -108,7 +109,7 @@ void ToneMapSession::OnTask(const ToneMapTaskCode &task_code,
 }
 
 DisplayError ToneMapSession::AllocateIntermediateBuffers(const Layer *layer) {
-  DisplayError error = kErrorNone;
+  auto error = kErrorNone;
   for (uint8_t i = 0; i < kNumIntermediateBuffers; i++) {
     BufferInfo &buffer_info = buffer_info_[i];
     buffer_info.buffer_config.width = layer->request.width;
@@ -116,7 +117,7 @@ DisplayError ToneMapSession::AllocateIntermediateBuffers(const Layer *layer) {
     buffer_info.buffer_config.format = layer->request.format;
     buffer_info.buffer_config.secure = layer->request.flags.secure;
     buffer_info.buffer_config.gfx_client = true;
-    error = buffer_allocator_->AllocateBuffer(&buffer_info);
+    error = (DisplayError)buffer_allocator_->AllocateBuffer(&buffer_info);
     if (error != kErrorNone) {
       FreeIntermediateBuffers();
       return error;
@@ -302,7 +303,8 @@ void HWCToneMapper::SetFrameDumpConfig(uint32_t count) {
 }
 
 void HWCToneMapper::DumpToneMapOutput(ToneMapSession *session, int *acquire_fd) {
-  DisplayError error = kErrorNone;
+ // DisplayError error = kErrorNone;
+ int error = kErrorNone;
   if (!dump_frame_count_) {
     return;
   }

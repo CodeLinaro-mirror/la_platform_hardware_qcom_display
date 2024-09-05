@@ -28,7 +28,7 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
 *
 * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
@@ -2170,6 +2170,7 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
     case (int64_t)StandardMetadataType::PIXEL_FORMAT_MODIFIER:
     case (int64_t)StandardMetadataType::PROTECTED_CONTENT:
     case (int64_t)StandardMetadataType::ALLOCATION_SIZE:
+    case (int64_t)StandardMetadataType::STRIDE:
     case QTI_FD:
     case QTI_PRIVATE_FLAGS:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
@@ -3006,6 +3007,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
         *out = &handle->flags;
       }
       break;
+    case (int64_t)StandardMetadataType::STRIDE:
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
       if (copy) {
         *(reinterpret_cast<uint32_t *>(in)) = handle->width;

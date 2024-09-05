@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 /*! @file buffer_allocator.h
@@ -37,6 +41,8 @@
 #define __BUFFER_ALLOCATOR_H__
 
 #include <cstddef>
+#include <map>
+#include <bitset>
 #include "layer_buffer.h"
 
 namespace sdm {
@@ -44,6 +50,22 @@ namespace sdm {
 
   @sa BufferInfo::BufferConfig
 */
+
+enum BufferClient {
+  kBufferClientDPU,
+  kBufferClientUnTrustedVM,
+  kBufferClientTrustedVM,
+  kBufferClientMax,
+};
+
+enum BufferPerm {
+  kBufferPermRead = 0,
+  kBufferPermWrite = 1,
+  kBufferPermExecute = 2,
+  kBufferPermMax,
+};
+
+typedef std::map<BufferClient, std::bitset<kBufferPermMax>> BufferAccessControlMap;
 
 struct BufferConfig {
   uint32_t width = 0;                         //!< Specifies buffer width for buffer allocation.
@@ -56,6 +78,10 @@ struct BufferConfig {
   bool secure_camera = false;                 //!< Specifies buffer to be allocated from specific
                                               //!< secure heap and with a specific alignment.
   bool gfx_client = false;                    //!< Specifies whether buffer is used by gfx.
+  bool trusted_ui = false;                    //!< Specifies buffer to be allocated from non-secure
+                                              //!< contiguous memory.
+
+  BufferAccessControlMap access_control;      //!< Specifies the access permission for this buffer
 };
 
 /*! @brief Holds the information about the allocated buffer.
@@ -72,6 +98,10 @@ struct AllocatedBufferInfo {
   LayerBufferFormat format = kFormatInvalid;  // Specifies buffer format for allocated buffer.
   uint32_t size = 0;             //!< Specifies the size of the allocated buffer.
   uint64_t id = 0;               //!< Specifies the Id of the allocated buffer.
+  uint64_t usage = 0;            //!< Specifies usage flags of the allocated buffer.
+  int64_t mem_handle = -1;        //!< Specifies the exported mem handle of an allocated buffer
+                                 //!< to other VMs.mem_handle contains > zero value
+                                 //!< if exported successfully to any VM otherwise -1.
 };
 
 /*! @brief Holds the information about the input/output configuration of an output buffer.
@@ -104,7 +134,11 @@ class BufferAllocator {
 
     @return \link DisplayError \endlink
   */
+#ifndef ENABLE_MAPPER_V5
   virtual DisplayError AllocateBuffer(BufferInfo *buffer_info) = 0;
+#else
+  virtual int AllocateBuffer(BufferInfo *buffer_info) = 0;
+#endif
 
 
   /*! @brief Method to deallocate the ouput buffer.
@@ -139,8 +173,13 @@ class BufferAllocator {
 
     @return \link DisplayError \endlink
   */
+#ifdef ENABLE_MAPPER_V5
+  virtual int GetAllocatedBufferInfo(const BufferConfig &buffer_config,
+                                              AllocatedBufferInfo *allocated_buffer_info) = 0;
+#else
   virtual DisplayError GetAllocatedBufferInfo(const BufferConfig &buffer_config,
                                               AllocatedBufferInfo *allocated_buffer_info) = 0;
+#endif
 
   /*
    * Retuns a buffer's layout in terms of number of planes, stride and offset of each plane

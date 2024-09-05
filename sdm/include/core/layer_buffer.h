@@ -20,6 +20,10 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 /*! @file layer_buffer.h
@@ -35,6 +39,7 @@
 #include <vector>
 
 #include "sdm_types.h"
+#include "color_extensions.h"
 
 namespace sdm {
 
@@ -292,6 +297,7 @@ struct LayerBuffer {
   }
 
   uint64_t handle_id = 0;
+  uint64_t usage = 0;           //!< Opaque Usage flags associated with this layer buffer.
 };
 
 // This enum represents buffer layout types.

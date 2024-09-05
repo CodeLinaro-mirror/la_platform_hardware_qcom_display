@@ -27,6 +27,13 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "qdMetaData.h"
 
 #include <QtiGrallocPriv.h>
@@ -40,7 +47,6 @@
 #include <sys/mman.h>
 
 #include <cinttypes>
-#include "gr_snap_helper.h"
 
 static int colorMetaDataToColorSpace(ColorMetaData in, ColorSpace_t *out) {
   if (in.colorPrimaries == ColorPrimaries_BT601_6_525 ||
@@ -456,20 +462,11 @@ int clearMetaDataVa(MetaData_t *data, DispParamType paramType) {
 
 int getMetaData(private_handle_t *handle, DispFetchParamType paramType,
                                                     void *param) {
-  GrallocSnapHelper *snap_helper = GrallocSnapHelper::GetInstance();
-  if (snap_helper->IsSnapAllocEnabled()) {
-    if (!snap_helper->GetMetadata(static_cast<native_handle_t *>(handle),
-                                  paramType, param, false)) {
-      return Error::NONE;
-    }
-    return Error::UNSUPPORTED;
-  } else {
     int ret = validateAndMap(handle);
     if (ret != 0)
         return ret;
     return getMetaDataVa(reinterpret_cast<MetaData_t *>(handle->base_metadata),
                          paramType, param);
-  }
 }
 
 int getMetaDataVa(MetaData_t *data, DispFetchParamType paramType,

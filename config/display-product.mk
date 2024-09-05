@@ -16,6 +16,7 @@ PRODUCT_PACKAGES += \
     libdisplayconfig \
     libgralloc.qti \
     libdisplayconfig.qti \
+    libdrmutils \
     vendor.display.config@1.0.vendor \
     vendor.display.config@1.1.vendor \
     vendor.display.config@1.2.vendor \
@@ -30,6 +31,8 @@ PRODUCT_PACKAGES += \
     vendor.display.config@2.0.vendor \
     vendor.qti.hardware.display.mapper@3.0 \
     vendor.qti.hardware.display.mapper@4.0.vendor \
+    mapper.qti \
+    libmapperutils \
     modetest \
     vendor.qti.hardware.display.snapalloc-impl
 
@@ -161,7 +164,9 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_ui_3d_tonemap=0 \
     vendor.display.flush_on_layer_set_empty=1 \
     vendor.display.disable_virtual_display=1 \
-    vendor.display.disable_color_transformation=1
+    vendor.display.disable_color_transformation=1 \
+    vendor.gralloc.enable_logs=1 \
+    vendor.gralloc.enable_snapalloc=1
 
 ifeq ($(TARGET_USES_QMAA),true)
 ifeq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),true)

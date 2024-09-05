@@ -18,7 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -27,11 +27,15 @@
 #define __HWC_DISPLAY_H__
 
 #include <QService.h>
+#include <aidl/android/hardware/graphics/common/BufferUsage.h>
 #include <android/hardware/graphics/common/1.2/types.h>
 #include <core/core_interface.h>
 #include <hardware/hwcomposer.h>
 #include <private/color_params.h>
+#include <qdMetaData.h>
 #include <sys/stat.h>
+#include <algorithm>
+#include <bitset>
 #include <map>
 #include <queue>
 #include <set>
@@ -43,10 +47,11 @@
 #include "hwc_buffer_allocator.h"
 #include "hwc_callbacks.h"
 #include "hwc_common.h"
+#include "hwc_display_event_handler.h"
 #include "hwc_layers.h"
 #include "display_null.h"
 #include "hwc_display_event_handler.h"
-
+#include "hwc_buffer_sync_handler.h"
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #include <aidl/android/hardware/graphics/composer3/IComposer.h>

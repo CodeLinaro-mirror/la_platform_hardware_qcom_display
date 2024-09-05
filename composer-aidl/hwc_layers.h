@@ -18,8 +18,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -31,6 +31,7 @@
 
 #include <QtiGralloc.h>
 #include <gralloc_priv.h>
+#include <qdMetaData.h>
 #include <core/layer_stack.h>
 #include <core/layer_buffer.h>
 #include <utils/utils.h>
@@ -46,6 +47,7 @@
 #include "hwc_common.h"
 
 using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
+using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace sdm {
 

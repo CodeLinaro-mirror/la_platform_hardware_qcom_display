@@ -27,10 +27,18 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+ /*
+ *
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __GR_UTILS_H__
 #define __GR_UTILS_H__
 
 #include <android/hardware/graphics/common/1.2/types.h>
+#include <unordered_map>
 #include "gralloc_priv.h"
 #include "qdMetaData.h"
 
@@ -50,6 +58,7 @@
 #define INT(exp) static_cast<int>(exp)
 #define UINT(exp) static_cast<unsigned int>(exp)
 
+using android::hardware::graphics::common::V1_2::PixelFormat;
 using android::hardware::graphics::common::V1_1::BufferUsage;
 
 namespace gralloc {

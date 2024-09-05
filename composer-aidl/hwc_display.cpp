@@ -18,7 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -699,17 +699,27 @@ void HWCDisplay::BuildLayerStack() {
 
     bool is_secure = false;
     const native_handle_t *handle =
-        reinterpret_cast<const native_handle_t *>(layer->input_buffer.buffer_id);
+        reinterpret_cast<native_handle_t *>(layer->input_buffer.buffer_id);
     if (handle) {
       uint32_t buffer_type = 0;
+#ifdef ENABLE_MAPPER_V5
+      buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::BUFFER_TYPE, &buffer_type,
+                                          sizeof(buffer_type));
+#else
       buffer_allocator_->GetBufferType(const_cast<native_handle_t *>(handle), buffer_type);
+#endif
       if (buffer_type == BUFFER_TYPE_VIDEO) {
         layer_stack_.flags.video_present = true;
       }
       // TZ Protected Buffer - L1
       // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
       int32_t handle_flags;
+#ifdef ENABLE_MAPPER_V5
+      buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::USAGE, &handle_flags,
+                                          sizeof(handle_flags));
+#else
       buffer_allocator_->GetPrivateFlags((void *)handle, handle_flags);
+#endif
       if (handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
         layer_stack_.flags.secure_present = true;
         is_secure = true;
@@ -1901,7 +1911,7 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   int aligned_width;
   int aligned_height;
   uint32_t usage = GRALLOC_USAGE_HW_FB;
-  int format = HAL_PIXEL_FORMAT_RGBA_8888;
+  int format = static_cast<int>(PixelFormat_V3::RGBA_8888);
   int ubwc_disabled = 0;
   int flags = 0;
 
@@ -1909,8 +1919,8 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   // buffers allocated through gralloc , including framebuffer targets.
   HWCDebugHandler::Get()->GetProperty(DISABLE_UBWC_PROP, &ubwc_disabled);
   if (!ubwc_disabled) {
-    usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
-    flags |= qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
+    usage |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC;
+    flags |= vendor_qti_hardware_display_common_MetadataType::IS_UBWC;
   }
 
   buffer_allocator_->GetAlignedWidthAndHeight(INT(x_pixels), INT(y_pixels), format, usage,

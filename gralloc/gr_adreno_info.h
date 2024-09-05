@@ -28,8 +28,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -66,7 +66,9 @@ typedef enum {
   ADRENO_PIXELFORMAT_R8G8B8A8_SRGB = 29,
   ADRENO_PIXELFORMAT_D32_FLOAT = 40,
   ADRENO_PIXELFORMAT_D24_UNORM_S8_UINT = 45,
+  ADRENO_PIXELFORMAT_R8G8_UNORM = 49,
   ADRENO_PIXELFORMAT_D16_UNORM = 55,
+  ADRENO_PIXELFORMAT_R8_UNORM = 61,
   ADRENO_PIXELFORMAT_B5G6R5 = 85,
   ADRENO_PIXELFORMAT_B5G5R5A1 = 86,
   ADRENO_PIXELFORMAT_B8G8R8A8_UNORM = 87,
