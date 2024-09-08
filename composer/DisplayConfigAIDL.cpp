@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -63,7 +63,11 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
   lifecycle_->RegisterSideBandCallback(this, true);
-  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
+  drawcycle_ =
+#ifdef COMPOSER3_V3
+      reinterpret_pointer_cast<SDMDisplayDrawCycleIntfV>
+#endif
+      (sdm_factory->CreateDrawCycleIntf());
   sideband_ = sdm_factory->CreateSideBandIntf();
   layer_builder_ = sdm_factory->CreateLayerBuilderIntf();
 }

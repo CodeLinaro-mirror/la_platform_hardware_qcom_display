@@ -67,7 +67,7 @@ void BufferCacheEntry::clear() {
 bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
                               std::shared_ptr<SDMDisplaySettingsIntf> settings,
                               std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-                              std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+                              std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
                               std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
                               std::shared_ptr<SDMDisplaySideBandIntf> sideband) {
   if (!caps || !settings || !lifecycle || !drawcycle || !layers) {
@@ -1244,8 +1244,13 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
   auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
                           &clientTarget);
   if (err == Error::None) {
-    auto error = mClient.drawcycle_->SetClientTarget(display, clientTarget, fence,
-                                                     INT32(command.dataspace), region, 0);
+    auto error = mClient.drawcycle_->SetClientTarget(
+        display, clientTarget, fence, INT32(command.dataspace), region, 0 /* version */
+#ifdef COMPOSER3_V3
+        ,
+        FLOAT(command.hdrSdrRatio)
+#endif
+    );
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
     if (error == sdm::kErrorNone) {
@@ -1812,7 +1817,12 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t displ
                           &clientTarget);
   if (err == Error::None) {
     auto error = mClient.drawcycle_->SetClientTarget(
-        display, clientTarget, fence, INT32(command.dataspace), region, 3 /* version*/);
+        display, clientTarget, fence, INT32(command.dataspace), region, 3 /* version */
+#ifdef COMPOSER3_V3
+        ,
+        FLOAT(command.hdrSdrRatio)
+#endif
+    );
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
     if (error == sdm::kErrorNone) {
