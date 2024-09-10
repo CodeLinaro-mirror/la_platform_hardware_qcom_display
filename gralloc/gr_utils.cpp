@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -365,6 +365,7 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
   int height = info.height;
   uint64_t usage = info.usage;
   uint32_t alignment = 16;
+  unsigned int mmm_color_format;
 
   if (!IsGPUFlagSupported(usage)) {
     ALOGE("Unsupported GPU usage flags present 0x%" PRIx64, usage);
@@ -430,8 +431,6 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
         size = ALIGN((alignedw * alignedh) + (alignedw * alignedh) / 2 + 1, SIZE_4K);
         break;
       case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-        size = ALIGN((alignedw * alignedh * 2) + (alignedw * alignedh) + 1, SIZE_4K);
-        break;
 #ifndef QMAA
       case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
         size = MMM_COLOR_FMT_BUFFER_SIZE(MMM_COLOR_FMT_P010,
@@ -458,7 +457,9 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
         break;
       case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
       case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-        size = MMM_COLOR_FMT_BUFFER_SIZE(MMM_COLOR_FMT_NV12, width, height);
+        mmm_color_format = (usage & GRALLOC_USAGE_PRIVATE_HEIF) ? MMM_COLOR_FMT_NV12_512 :
+                                                                  MMM_COLOR_FMT_NV12;
+        size = MMM_COLOR_FMT_BUFFER_SIZE(mmm_color_format, width, height);
         break;
       case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
       case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
@@ -610,6 +611,7 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
   unsigned int y_stride = 0, y_height = 0, y_size = 0;
   unsigned int c_stride = 0, c_height = 0, c_size = 0;
   uint64_t yOffset, cOffset;
+  unsigned int mmm_color_format;
 
   y_stride = c_stride = UINT(width) * bpp;
   y_height = INT(height);
@@ -640,7 +642,9 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
       break;
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-      c_height = MMM_COLOR_FMT_UV_SCANLINES(MMM_COLOR_FMT_NV12, height);
+      mmm_color_format = (info.usage & GRALLOC_USAGE_PRIVATE_HEIF) ? MMM_COLOR_FMT_NV12_512 :
+                                                                     MMM_COLOR_FMT_NV12;
+      c_height = MMM_COLOR_FMT_UV_SCANLINES(mmm_color_format, height);
       c_size = c_stride * c_height;
       break;
     case HAL_PIXEL_FORMAT_NV12_HEIF:
@@ -664,10 +668,6 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
     case HAL_PIXEL_FORMAT_Y8:
       c_size = c_stride = 0;
       c_height = 0;
-      break;
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-      c_size = (width * height) + 1;
-      c_height = height;
       break;
     default:
       break;
@@ -1114,6 +1114,7 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   int height = info.height;
   int format = info.format;
   uint64_t usage = info.usage;
+  unsigned int mmm_color_format;
   if (width < 1 || height < 1) {
     *alignedw = 0;
     *alignedh = 0;
@@ -1229,9 +1230,9 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
     case HAL_PIXEL_FORMAT_YCrCb_422_SP:
     case HAL_PIXEL_FORMAT_YCbCr_422_I:
     case HAL_PIXEL_FORMAT_YCrCb_422_I:
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
       aligned_w = ALIGN(width, 16);
       break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
 #ifndef QMAA
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
       aligned_w = INT(MMM_COLOR_FMT_Y_STRIDE(MMM_COLOR_FMT_P010, width) / 2);
@@ -1248,8 +1249,10 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
       break;
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-      aligned_w = INT(MMM_COLOR_FMT_Y_STRIDE(MMM_COLOR_FMT_NV12, width));
-      aligned_h = INT(MMM_COLOR_FMT_Y_SCANLINES(MMM_COLOR_FMT_NV12, height));
+      mmm_color_format = (usage & GRALLOC_USAGE_PRIVATE_HEIF) ? MMM_COLOR_FMT_NV12_512 :
+                                                                MMM_COLOR_FMT_NV12;
+      aligned_w = INT(MMM_COLOR_FMT_Y_STRIDE(mmm_color_format, width));
+      aligned_h = INT(MMM_COLOR_FMT_Y_SCANLINES(mmm_color_format, height));
       break;
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
@@ -1638,16 +1641,6 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       }
       break;
 
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-      *plane_count = 2;
-      GetYuvSPPlaneInfo(info, format, width, height, 2, plane_info);
-      GetYuvSubSamplingFactor(format, &h_subsampling, &v_subsampling);
-      plane_info[0].h_subsampling = 0;
-      plane_info[0].v_subsampling = 0;
-      plane_info[1].h_subsampling = h_subsampling;
-      plane_info[1].v_subsampling = v_subsampling;
-      break;
-
     case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
       *plane_count = 4;
       GetYuvUbwcSPPlaneInfo(width, height, MMM_COLOR_FMT_NV12_BPP10_UBWC, plane_info);
@@ -1678,6 +1671,7 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       plane_info[2].step = plane_info[3].step = 0;
       break;
 
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
       *plane_count = 2;
       y_stride = MMM_COLOR_FMT_Y_STRIDE(MMM_COLOR_FMT_P010, width);
@@ -1696,7 +1690,7 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       plane_info[0].stride_bytes = static_cast<int32_t>(y_stride);
       plane_info[0].scanlines = static_cast<int32_t>(y_height);
       plane_info[0].size = static_cast<uint32_t>(y_size);
-      plane_info[0].step = 1;
+      plane_info[0].step = 2;
       plane_info[0].h_subsampling = 0;
       plane_info[0].v_subsampling = 0;
 

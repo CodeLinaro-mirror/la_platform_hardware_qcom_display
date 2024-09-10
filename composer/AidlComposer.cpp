@@ -17,13 +17,15 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include "AidlComposer.h"
 #include "android/binder_auto_utils.h"
 #include <android/binder_ibinder_platform.h>
+
+#define MAX_PIPE_CAPACITY 4096*16 // 16 pages of size 4K
 
 namespace aidl {
 namespace vendor {
@@ -81,7 +83,7 @@ binder_status_t AidlComposer::dump(int fd, const char ** /*args*/, uint32_t /*nu
   hwc_session_->Dump(&len, output.data());
 
   output[len] = '\0';
-  write(fd, output.c_str(), output.size());
+  write(fd, output.c_str(), std::min(len, (uint32_t) MAX_PIPE_CAPACITY));
 
   return STATUS_OK;
 }

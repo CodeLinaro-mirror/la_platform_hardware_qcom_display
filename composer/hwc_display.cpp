@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1197,6 +1197,15 @@ HWC3::Error HWCDisplay::GetPerFrameMetadataKeys(uint32_t *out_num_keys,
       out_keys[i] = static_cast<PerFrameMetadataKey>(i);
     }
   }
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCDisplay::getDisplayDecorationSupport(PixelFormat_V3 *format,
+                                                    AlphaInterpretation *alpha) {
+  // ScreenDecoration layers supported even if RC HW is disabled since its coming from framework
+  // and is independent of RC HW support.
+  *format = PixelFormat_V3::R_8;
+  *alpha = AlphaInterpretation::COVERAGE;
   return HWC3::Error::None;
 }
 

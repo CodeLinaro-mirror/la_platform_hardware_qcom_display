@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -238,6 +238,8 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   HWC3::Error SetReadbackBuffer(Display display, const native_handle_t *buffer,
                                 const shared_ptr<Fence> &acquire_fence);
   HWC3::Error GetReadbackBufferFence(Display display, shared_ptr<Fence> *release_fence);
+  HWC3::Error getDisplayDecorationSupport(Display display, PixelFormat_V3 *format,
+                                          AlphaInterpretation *alpha);
   uint32_t GetMaxVirtualDisplayCount();
   HWC3::Error GetDisplayIdentificationData(Display display, uint8_t *outPort,
                                            uint32_t *outDataSize, uint8_t *outData);
@@ -572,6 +574,7 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   void PerformQsyncCallback(Display display);
   bool isSmartPanelConfig(uint32_t disp_id, uint32_t config_id);
   void PerformIdleStatusCallback(Display display);
+  bool IsHWDisplayConnected(Display client_id);
 
   CoreInterface *core_intf_ = nullptr;
   HWCDisplay *hwc_display_[HWCCallbacks::kNumDisplays] = {nullptr};
@@ -624,6 +627,7 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   std::bitset<HWCCallbacks::kNumDisplays> display_ready_;
   bool secure_session_active_ = false;
   bool is_idle_time_up_ = false;
+  bool disable_get_screen_decorator_support_ = false;
 };
 }  // namespace sdm
 

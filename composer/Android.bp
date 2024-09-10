@@ -1,9 +1,40 @@
+soong_config_module_type {
+    name: "qticomposer_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "qtidisplay",
+    variables: [
+        "low_or_normal_ram",
+    ],
+    properties: [
+        "vintf_fragments",
+    ],
+}
+
+soong_config_string_variable {
+    name: "low_or_normal_ram",
+    values: ["low", "normal"],
+}
+
+qticomposer_cc_defaults {
+    name: "qticomposer_defaults",
+    soong_config_variables: {
+        low_or_normal_ram: {
+          low: {
+            vintf_fragments: ["vendor.qti.hardware.display.composer-service-low-ram.xml"],
+          },
+          normal: {
+            vintf_fragments: ["vendor.qti.hardware.display.composer-service.xml"],
+          },
+        },
+    },
+}
+
 composer_srcs = ["*.cpp"]
 
 cc_binary {
 
     name: "vendor.qti.hardware.display.composer-service",
-    defaults: ["qtidisplay_defaults"],
+    defaults: ["qtidisplay_defaults", "qticomposer_defaults"],
     sanitize: {
         integer_overflow: true,
     },
@@ -66,6 +97,4 @@ cc_binary {
     srcs: composer_srcs,
 
     init_rc: ["vendor.qti.hardware.display.composer-service.rc"],
-    vintf_fragments: ["vendor.qti.hardware.display.composer-service.xml"],
-
 }

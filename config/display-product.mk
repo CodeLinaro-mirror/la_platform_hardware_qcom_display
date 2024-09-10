@@ -4,7 +4,6 @@ endif
 
 # Display product definitions
 PRODUCT_PACKAGES += \
-    android.hardware.graphics.mapper@3.0-impl-qti-display \
     android.hardware.graphics.mapper@4.0-impl-qti-display \
     vendor.qti.hardware.display.allocator-service \
     vendor.qti.hardware.display.composer-service \
@@ -19,8 +18,6 @@ PRODUCT_PACKAGES += \
     libgralloc.qti \
     libdisplayconfig.qti \
     libdisplayconfig.vendor \
-    vendor.qti.hardware.display.mapper@2.0.vendor \
-    vendor.qti.hardware.display.mapper@3.0.vendor \
     vendor.qti.hardware.display.mapper@4.0.vendor \
     init.qti.display_boot.sh \
     init.qti.display_boot.rc \
@@ -87,6 +84,12 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_allow_idle_fallback=1 \
     vendor.display.disable_idle_time_video=1 \
     vendor.display.disable_idle_time_hdr=1
+
+# Disable decorator support for LAW
+ifeq ($(TARGET_SUPPORTS_WEAR_ANDROID),true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_get_screen_decorator_support=1
+endif
 
 # Enable offline rotator for Bengal, Monaco, Khaje.
 ifneq ($(filter bengal monaco khaje, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
@@ -164,7 +167,8 @@ PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=1
 SOONG_CONFIG_NAMESPACES += qtidisplay
 
 # Soong Keys
-SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 kernel_5_4 kernel_5_15
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 \
+	kernel_5_4 kernel_5_15 low_or_normal_ram
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -178,6 +182,12 @@ SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_kernel_5_4 := false
 SOONG_CONFIG_qtidisplay_kernel_5_15 := false
+
+ifeq ($(TARGET_HAS_LOW_RAM),true)
+    SOONG_CONFIG_qtidisplay_low_or_normal_ram := low
+else
+    SOONG_CONFIG_qtidisplay_low_or_normal_ram := normal
+endif
 
 ifeq ($(call is-vendor-board-platform,QCOM),true)
     SOONG_CONFIG_qtidisplay_displayconfig_enabled := true

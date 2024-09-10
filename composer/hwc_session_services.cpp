@@ -853,6 +853,11 @@ int HWCSession::DisplayConfigImpl::SetLayerAsMask(uint32_t disp_id, uint64_t lay
   if (hwc_layer == nullptr) {
     return -EINVAL;
   }
+  // Mask layer flag for A8 will be set in BuildLayerStack
+  if (!hwc_session_->disable_get_screen_decorator_support_) {
+    DLOGV_IF(kTagDisplay, "Full Screen A8 Decoration mask layer enabled!");
+    return -EINVAL;
+  }
 
   hwc_layer->SetLayerAsMask();
 

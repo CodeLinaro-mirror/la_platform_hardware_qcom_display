@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -417,6 +417,8 @@ class HWCDisplay : public DisplayEventHandler {
                                          float* out_min_luminance);
   virtual HWC3::Error GetPerFrameMetadataKeys(uint32_t *out_num_keys,
                                               PerFrameMetadataKey *out_keys);
+  virtual HWC3::Error getDisplayDecorationSupport(PixelFormat_V3 *format,
+                                                  AlphaInterpretation *alpha);
   virtual HWC3::Error SetDisplayAnimating(bool animating) {
     animating_ = animating;
     validated_ = false;
