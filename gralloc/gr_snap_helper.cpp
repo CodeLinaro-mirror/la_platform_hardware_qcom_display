@@ -2410,6 +2410,7 @@ int GrallocSnapHelper::ConvertGrallocPlaneLayoutToAndroidYCbCr(
   outYCbCr->ystride = 0;
   outYCbCr->cstride = 0;
   outYCbCr->chroma_step = 0;
+  int next_plane = 0;
   for (const auto &planeLayout : gr_plane_layouts) {
     bool contains_meta = false;
     for (const auto &planeLayoutComponent : planeLayout.components) {
@@ -2446,6 +2447,14 @@ int GrallocSnapHelper::ConvertGrallocPlaneLayoutToAndroidYCbCr(
         }
       }
     }
+    // Interlaced UBWC formats have 8 Planes
+    if (gr_plane_layouts.size() == 8) {
+      // Planes 0-3 fills top field in android_ycbcr & planes 4-7 fills bottom field
+      if (next_plane == 3) {
+        outYCbCr = outYCbCr + 1;
+      }
+    }
+    next_plane++;
   }
   ALOGD_IF(
       enable_logs_,
@@ -4244,7 +4253,6 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
     layout[i].cStride = static_cast<uint32_t>(outYCbCr[i].cstride);
     layout[i].chromaStep = static_cast<uint32_t>(outYCbCr[i].chroma_step);
   }
-
   uint64_t yOffset = (reinterpret_cast<uint64_t>(layout[0].y) - base_addr);
   uint64_t crOffset = (reinterpret_cast<uint64_t>(layout[0].cr) - base_addr);
   uint64_t cbOffset = (reinterpret_cast<uint64_t>(layout[0].cb) - base_addr);
@@ -4252,7 +4260,6 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
            " layout: y: %" PRIu64 " , cr: %" PRIu64 " , cb: %" PRIu64
            " , yStride: %d, cStride: %d, chromaStep: %d ",
            yOffset, crOffset, cbOffset, layout[0].yStride, layout[0].cStride, layout[0].chromaStep);
-
   if (hidl_bytestream) {
     if (qtigralloc::encodeYUVPlaneInfoMetadata(
             layout, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get)) != GrallocError::NONE) {
@@ -6475,6 +6482,7 @@ int GrallocSnapHelperLegacy::ConvertGrallocPlaneLayoutToAndroidYCbCr(
   outYCbCr->ystride = 0;
   outYCbCr->cstride = 0;
   outYCbCr->chroma_step = 0;
+  int next_plane = 0;
   for (const auto &planeLayout : gr_plane_layouts) {
     bool contains_meta = false;
     for (const auto &planeLayoutComponent : planeLayout.components) {
@@ -6511,7 +6519,16 @@ int GrallocSnapHelperLegacy::ConvertGrallocPlaneLayoutToAndroidYCbCr(
         }
       }
     }
+    // Interlaced UBWC formats have 8 Planes
+    if (gr_plane_layouts.size() == 8) {
+      // Planes 0-3 fills top field in android_ycbcr & planes 4-7 fills bottom field
+      if (next_plane == 3) {
+        outYCbCr = outYCbCr + 1;
+      }
+    }
+    next_plane++;
   }
+
   ALOGD_IF(
       enable_logs_,
       "%s: base_addr %d, outYCbCr->y %d, outYCbCr->cb %d, outYCbCr->cr %d, outYCbCr->ystride %d, "
