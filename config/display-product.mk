@@ -168,6 +168,7 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
                            ubwcp_headers hwasan mapper_ext \
+                           hy11 hy22 hy33
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -234,10 +235,15 @@ else
         SOONG_CONFIG_qtidisplay_var1 := true
         SOONG_CONFIG_qtidisplay_var2 := true
         SOONG_CONFIG_qtidisplay_var3 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
+        SOONG_CONFIG_qtidisplay_hy33 := true
     endif
     ifneq ($(BUILD_DISPLAY_TECHPACK_SOURCE_VARIANT), true)
         SOONG_CONFIG_qtidisplay_var1 := true
         SOONG_CONFIG_qtidisplay_var2 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
     endif
 
     ifeq ($(PROFILE_COVERAGE_DATA), true)
@@ -251,10 +257,12 @@ else
 
     ifeq (,$(wildcard $(QCPATH)/display-noship))
         SOONG_CONFIG_qtidisplay_var1 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
     endif
 
     ifeq (,$(wildcard $(QCPATH)/display))
         SOONG_CONFIG_qtidisplay_var2 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
     endif
 endif
 
