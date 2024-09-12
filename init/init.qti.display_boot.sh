@@ -40,7 +40,7 @@ case "$target" in
     "pineapple")
     #SOC ID for Pineapple is 557
     case "$soc_hwid" in
-      557)
+      557|577)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 4

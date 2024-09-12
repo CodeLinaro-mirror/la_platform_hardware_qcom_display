@@ -222,7 +222,7 @@ ifeq ($(call is-vendor-board-platform,QCOM),true)
 endif
 
 
-ifeq ($(filter $(TARGET_BOARD_PLATFORM), kalama niobe), $(TARGET_BOARD_PLATFORM))
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), kalama niobe neo61), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_ubwcp_headers := false
 endif
 

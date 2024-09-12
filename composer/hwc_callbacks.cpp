@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -198,11 +198,17 @@ HWC3::Error HWCCallbacks::PerformHWCCallback() {
     HWCCallbackParams param = callback_queue_.pop();
     switch (param.cmd) {
       case CALLBACK_REFRESH: {
-        (*refresh_)(callback_data_, param.display);
-        pending_refresh_.set(param.display);
+        SCOPE_LOCK(refresh_lock_);
+        if (refresh_) {
+          (*refresh_)(callback_data_, param.display);
+          pending_refresh_.set(param.display);
+        }
       } break;
       case CALLBACK_HOTPLUG: {
-        (*hotplug_)(callback_data_, param.display, param.state);
+        SCOPE_LOCK(hotplug_lock_);
+        if (hotplug_) {
+          (*hotplug_)(callback_data_, param.display, param.state);
+        }
       } break;
       default:
         return HWC3::Error::BadParameter;
