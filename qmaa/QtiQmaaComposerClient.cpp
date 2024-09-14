@@ -241,6 +241,15 @@ ScopedAStatus QtiComposerClient::getDisplayAttribute(int64_t in_display, int32_t
 #ifdef COMPOSER3_V3
 ScopedAStatus QtiComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs, std::vector<DisplayConfiguration> *outConfigs) {
+  uint32_t count = 1;
+  outConfigs->resize(count);
+  DisplayConfiguration &default_config = outConfigs->at(0);
+  default_config.configId = 0;
+  default_config.vsyncPeriod = default_variable_config_.vsync_period_ns;
+  default_config.width = default_variable_config_.x_pixels;
+  default_config.height = default_variable_config_.y_pixels;
+  default_config.dpi->x = default_variable_config_.x_dpi;
+  default_config.dpi->y = default_variable_config_.y_dpi;
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
