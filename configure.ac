@@ -18,6 +18,28 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_SUBST([COMMON_CFLAGS], [-Wall -Werror -Wno-sign-conversion -Wconversion -DDEBUG_CALC_FPS])
 AC_SUBST([AM_CPPFLAGS], [--std=c++11])
 
+PKG_CHECK_MODULES([PROTOBUF], [protobuf])
+AC_SUBST([PROTOBUF_CFLAGS])
+AC_SUBST([PROTOBUF_LIBS])
+AC_SUBST(PROTOBUF_VERSION)
+
+PKG_CHECK_MODULES([GRPC], [grpc])
+AC_SUBST([GRPC_CFLAGS])
+AC_SUBST([GRPC_LIBS])
+AC_SUBST(GRPC_VERSION)
+
+AC_CHECK_PROG([PROTOC], [protoc], [protoc])
+AS_IF([test "x${PROTOC}" == "x"],
+      [AC_MSG_ERROR([ProtoBuf compiler "protoc" not found.])])
+AC_PATH_PROG([PROTOCPATH], [protoc])
+AC_SUBST(PROTOC)
+
+AC_CHECK_PROG([GRPC_CPP_PLUGIN], [grpc_cpp_plugin], [grpc_cpp_plugin])
+AS_IF([test "x${GRPC_CPP_PLUGIN}" == "x"],
+      [AC_MSG_ERROR([grpc plugin "grpc_cpp_plugin" not found.])])
+AC_PATH_PROG([GRPC_CPP_PLUGIN_PATH], [grpc_cpp_plugin])
+AC_SUBST(GRPC_CPP_PLUGIN)
+
 PKG_CHECK_MODULES([LIBDRM], [libdrm])
 AC_SUBST([LIBDRM_CFLAGS])
 AC_SUBST([LIBDRM_LIBS])
@@ -65,6 +87,8 @@ AC_SUBST([CFLAGS])
 AC_SUBST([CC])
 AC_CONFIG_FILES([ \
         Makefile \
+        qdcm-grpc/Makefile \
+        qdcm-grpc/proto/Makefile \
         libdebug/Makefile \
         libdrmutils/Makefile \
         sde-drm/Makefile \
