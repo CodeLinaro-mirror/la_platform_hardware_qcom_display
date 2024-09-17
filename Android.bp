@@ -193,8 +193,48 @@ qtidisplay_cc_defaults {
 }
 
 qtidisplay_cc_defaults {
-    name: "qtidisplay_alloc_defaults",
+    name: "qtidisplay_defaults_headless",
     defaults: ["qtidisplay_common_defaults"],
+    soong_config_variables: {
+        default: {
+            header_libs: ["display_headers", "qti_kernel_headers"],
+        },
+        headless: {
+            header_libs: ["display_headers"],
+            enabled: true,
+            conditions_default: {
+                enabled: true,
+            },
+        },
+        llvmcov: {
+            cflags: [
+                "-Wl",
+                "-fprofile-instr-generate",
+                "-fcoverage-mapping",
+                "-fprofile-instr-append-file",
+                "-DPROFILE_COVERAGE_DATA",
+            ],
+
+            ldflags: [
+                "-fcoverage-mapping",
+                " -fprofile-instr-generate",
+                "-fuse-ld=lld",
+                "-gline-tables-only",
+                "-fdebug-info-for-profiling",
+            ],
+            vendor: true,
+            host_ldlibs: ["-lgcov"],
+            native_coverage: true,
+        },
+    },
+}
+
+qtidisplay_cc_defaults {
+    name: "qtidisplay_alloc_defaults",
+    defaults: [
+        "qtidisplay_common_defaults",
+        "qtidisplay_defaults_headless"
+    ],
     soong_config_variables: {
         llvmcov: {
             cflags: [
