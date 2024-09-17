@@ -238,6 +238,7 @@ ScopedAStatus QtiComposerClient::getDisplayAttribute(int64_t in_display, int32_t
   return TO_BINDER_STATUS(INT32(err));
 }
 
+#ifdef COMPOSER3_V3
 ScopedAStatus QtiComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs, std::vector<DisplayConfiguration> *outConfigs) {
   uint32_t count = 1;
@@ -257,6 +258,7 @@ ScopedAStatus QtiComposerClient::notifyExpectedPresent(
     int32_t frameIntervalNs) {
   return TO_BINDER_STATUS(INT32(Error::None));
 }
+#endif
 
 ScopedAStatus QtiComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
