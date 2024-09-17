@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -48,6 +48,7 @@ class HWCBufferSyncHandler : public BufferSyncHandler {
   virtual int SyncWait(int fd, int timeout);
   virtual int SyncMerge(int fd1, int fd2, int *merged_fd);
   virtual void GetSyncInfo(int fd, std::ostringstream *os);
+  virtual uint64_t GetSignalTime(int fd);
 
  private:
   HWCBufferSyncHandler();
