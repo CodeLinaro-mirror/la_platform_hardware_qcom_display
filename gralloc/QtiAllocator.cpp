@@ -25,9 +25,42 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *
+ *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ *      contributors may be used to endorse or promote products derived
+ *      from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define DEBUG 0
 #include "QtiAllocator.h"
 
 #include <cutils/properties.h>
@@ -43,11 +76,11 @@
 
 static void get_properties(gralloc::GrallocProperties *props) {
   props->use_system_heap_for_sensors =
-      property_get_bool("vendor.gralloc.use_system_heap_for_sensors", 1);
+      property_get_bool(USE_SYSTEM_HEAP_FOR_SENSORS_PROP, 1);
 
-  props->ubwc_disable = property_get_bool("vendor.gralloc.disable_ubwc", 0);
+  props->ubwc_disable = property_get_bool(DISABLE_UBWC_PROP, 0);
 
-  props->ahardware_buffer_disable = property_get_bool("vendor.gralloc.disable_ahardware_buffer", 0);
+  props->ahardware_buffer_disable = property_get_bool(DISABLE_AHARDWARE_BUFFER_PROP, 0);
 }
 
 namespace vendor {
@@ -145,11 +178,12 @@ QtiAllocator::QtiAllocator() {
   get_properties(&properties);
   buf_mgr_ = BufferManager::GetInstance();
   buf_mgr_->SetGrallocDebugProperties(properties);
+  enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
 }
 
 Return<void> QtiAllocator::allocate(const hidl_vec<uint8_t> &descriptor, uint32_t count,
                                     allocate_cb hidl_cb) {
-  ALOGD_IF(DEBUG, "Allocating buffers count: %d", count);
+  ALOGD_IF(enable_logs_, "Allocating buffers count: %d", count);
   gralloc::BufferDescriptor desc;
 
   auto err = ::vendor::qti::hardware::display::mapper::V4_0::implementation::QtiMapper::Decode(
@@ -163,7 +197,7 @@ Return<void> QtiAllocator::allocate(const hidl_vec<uint8_t> &descriptor, uint32_
   buffers.reserve(count);
   for (uint32_t i = 0; i < count; i++) {
     buffer_handle_t buffer;
-    ALOGD_IF(DEBUG, "buffer: %p", &buffer);
+    ALOGD_IF(enable_logs_, "buffer: %p", &buffer);
     err = buf_mgr_->AllocateBuffer(desc, &buffer);
     if (err != Error::NONE) {
       break;

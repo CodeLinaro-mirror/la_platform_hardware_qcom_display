@@ -53,7 +53,6 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#define DEBUG 0
 
 #include "gr_buf_mgr.h"
 
@@ -73,6 +72,8 @@
 #include "gr_buf_descriptor.h"
 #include "gr_utils.h"
 #include "qd_utils.h"
+
+static bool enable_logs = false;
 
 namespace gralloc {
 
@@ -673,15 +674,19 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
       }
       break;
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010):
+    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS):
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
-        comp.offsetInBits = 0;
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
+        comp.offsetInBits = 6;
+        comp.sizeInBits = 10;
+      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 22;
         comp.sizeInBits = 10;
       } else {
         return Error::BAD_VALUE;
       }
       break;
+
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_RAW16):
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_RAW.value) {
         comp.offsetInBits = 0;
@@ -708,7 +713,7 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
       }
       break;
     default:
-      ALOGI_IF(DEBUG, "Offset and size in bits unknown for format %d", format);
+      ALOGI_IF(enable_logs, "Offset and size in bits unknown for format %d", format);
       return Error::UNSUPPORTED;
   }
   return Error::NONE;
@@ -841,6 +846,7 @@ int BufferManager::GetCustomDimensions(private_handle_t *hnd, int *stride, int *
 BufferManager::BufferManager() : next_id_(0) {
   handles_map_.clear();
   allocator_ = new Allocator();
+  enable_logs = property_get_bool(ENABLE_LOGS_PROP, 0);
 }
 
 BufferManager *BufferManager::GetInstance() {
@@ -861,7 +867,7 @@ void BufferManager::SetGrallocDebugProperties(gralloc::GrallocProperties props) 
 
 Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
   auto hnd = buf->handle;
-  ALOGD_IF(DEBUG, "FreeBuffer handle:%p", hnd);
+  ALOGD_IF(enable_logs, "FreeBuffer handle:%p", hnd);
 
   if (private_handle_t::validate(hnd) != 0) {
     ALOGE("FreeBuffer: Invalid handle: %p", hnd);
@@ -928,7 +934,7 @@ Error BufferManager::ImportHandleLocked(private_handle_t *hnd) {
     ALOGE("ImportHandleLocked: Invalid handle: %p", hnd);
     return Error::BAD_BUFFER;
   }
-  ALOGD_IF(DEBUG, "Importing handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "Importing handle:%p id: %" PRIu64, hnd, hnd->id);
   int ion_handle = allocator_->ImportBuffer(hnd->fd);
   if (ion_handle < 0) {
     ALOGE("Failed to import ion buffer: hnd: %p, fd:%d, id:%" PRIu64, hnd, hnd->fd, hnd->id);
@@ -974,7 +980,7 @@ std::shared_ptr<BufferManager::Buffer> BufferManager::GetBufferFromHandleLocked(
 
 Error BufferManager::MapBuffer(private_handle_t const *handle) {
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
-  ALOGD_IF(DEBUG, "Map buffer handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "Map buffer handle:%p id: %" PRIu64, hnd, hnd->id);
 
   hnd->base = 0;
   if (allocator_->MapBuffer(reinterpret_cast<void **>(&hnd->base), hnd->size, hnd->offset,
@@ -994,7 +1000,7 @@ Error BufferManager::IsBufferImported(const private_handle_t *hnd) {
 }
 
 Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
-  ALOGD_IF(DEBUG, "Retain buffer handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "Retain buffer handle:%p id: %" PRIu64, hnd, hnd->id);
   auto err = Error::NONE;
   std::lock_guard<std::mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
@@ -1008,7 +1014,7 @@ Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
 }
 
 Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
-  ALOGD_IF(DEBUG, "Release buffer handle:%p", hnd);
+  ALOGD_IF(enable_logs, "Release buffer handle:%p", hnd);
   std::lock_guard<std::mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf == nullptr) {
@@ -1030,7 +1036,7 @@ Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
 Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
   std::lock_guard<std::mutex> lock(buffer_lock_);
   auto err = Error::NONE;
-  ALOGD_IF(DEBUG, "LockBuffer buffer handle:%p id: %" PRIu64, hnd, hnd->id);
+  ALOGD_IF(enable_logs, "LockBuffer buffer handle:%p id: %" PRIu64, hnd, hnd->id);
 
   // If buffer is not meant for CPU return err
   if (!CpuCanAccess(usage)) {
@@ -1066,6 +1072,8 @@ Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
     handle->flags |= qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
   }
 
+  buf->lock_count++;
+
   return err;
 }
 
@@ -1075,7 +1083,8 @@ Error BufferManager::FlushBuffer(const private_handle_t *handle) {
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   auto buf = GetBufferFromHandleLocked(hnd);
-  if (buf == nullptr) {
+  if (buf == nullptr || buf->lock_count <= 0) {
+    ALOGW("%s: A bad or an unlocked buffer.", __FUNCTION__);
     return Error::BAD_BUFFER;
   }
 
@@ -1093,7 +1102,7 @@ Error BufferManager::RereadBuffer(const private_handle_t *handle) {
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   auto buf = GetBufferFromHandleLocked(hnd);
-  if (buf == nullptr) {
+  if (buf == nullptr || buf->lock_count <= 0) {
     return Error::BAD_BUFFER;
   }
 
@@ -1111,23 +1120,28 @@ Error BufferManager::UnlockBuffer(const private_handle_t *handle) {
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
   auto buf = GetBufferFromHandleLocked(hnd);
-  if (buf == nullptr) {
+  if (buf == nullptr || buf->lock_count <= 0) {
     ALOGW("%s: A bad or an already unlocked buffer.", __FUNCTION__);
     return Error::BAD_BUFFER;
   }
 
-  if (hnd->flags & qtigralloc::PRIV_FLAGS_NEEDS_FLUSH) {
-    if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
-                                buf->ion_handle_main, CACHE_CLEAN, hnd->fd) != 0) {
-      status = Error::BAD_BUFFER;
-    }
-    hnd->flags &= ~qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
-  } else {
-    if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
-                                buf->ion_handle_main, CACHE_READ_DONE, hnd->fd) != 0) {
-      status = Error::BAD_BUFFER;
+  // Avoid unlocking early for nested lock case
+  if (buf->lock_count == 1) {
+    if (hnd->flags & qtigralloc::PRIV_FLAGS_NEEDS_FLUSH) {
+      if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
+                                  buf->ion_handle_main, CACHE_CLEAN, hnd->fd) != 0) {
+        status = Error::BAD_BUFFER;
+      }
+      hnd->flags &= ~qtigralloc::PRIV_FLAGS_NEEDS_FLUSH;
+    } else {
+      if (allocator_->CleanBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset,
+                                  buf->ion_handle_main, CACHE_READ_DONE, hnd->fd) != 0) {
+        status = Error::BAD_BUFFER;
+      }
     }
   }
+
+  buf->lock_count = (status == Error::NONE) ? buf->lock_count - 1 : buf->lock_count;
 
   return status;
 }
@@ -1245,8 +1259,8 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   *handle = hnd;
 
   RegisterHandleLocked(hnd, data.ion_handle, e_data.ion_handle);
-  ALOGD_IF(DEBUG, "Allocated buffer handle: %p id: %" PRIu64, hnd, hnd->id);
-  if (DEBUG) {
+  ALOGD_IF(enable_logs, "Allocated buffer handle: %p id: %" PRIu64, hnd, hnd->id);
+  if (enable_logs) {
     private_handle_t::Dump(hnd);
   }
   return Error::NONE;
@@ -1693,10 +1707,10 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
         uint64_t yOffset = (reinterpret_cast<uint64_t>(layout[0].y) - handle->base);
         uint64_t crOffset = (reinterpret_cast<uint64_t>(layout[0].cr) - handle->base);
         uint64_t cbOffset = (reinterpret_cast<uint64_t>(layout[0].cb) - handle->base);
-        ALOGD_IF(DEBUG, " layout: y: %" PRIu64 " , cr: %" PRIu64 " , cb: %" PRIu64
-              " , yStride: %d, cStride: %d, chromaStep: %d ",
-              yOffset, crOffset, cbOffset, layout[0].yStride, layout[0].cStride,
-              layout[0].chromaStep);
+        ALOGD_IF(enable_logs, " layout: y: %" PRIu64 " , cr: %" PRIu64 " , cb: %" PRIu64
+                 " , yStride: %d, cStride: %d, chromaStep: %d ",
+                 yOffset, crOffset, cbOffset, layout[0].yStride, layout[0].cStride,
+                 layout[0].chromaStep);
 
         qtigralloc::encodeYUVPlaneInfoMetadata(layout, out);
         break;
@@ -1787,7 +1801,9 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
 #endif
     case (int64_t)StandardMetadataType::DATASPACE:
       Dataspace dataspace;
-      android::gralloc4::decodeDataspace(in, &dataspace);
+      if (android::gralloc4::decodeDataspace(in, &dataspace)) {
+        return Error::UNSUPPORTED;
+      }
       dataspaceToColorMetadata(dataspace, &metadata->color);
       break;
     case (int64_t)StandardMetadataType::BLEND_MODE:
@@ -1797,7 +1813,9 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     case (int64_t)StandardMetadataType::SMPTE2086: {
       std::optional<Smpte2086> mastering_display_values;
-      android::gralloc4::decodeSmpte2086(in, &mastering_display_values);
+      if (android::gralloc4::decodeSmpte2086(in, &mastering_display_values)) {
+        return Error::UNSUPPORTED;
+      }
       if (mastering_display_values != std::nullopt) {
         metadata->color.masteringDisplayInfo.colorVolumeSEIEnabled = true;
 
@@ -1836,7 +1854,9 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     }
     case (int64_t)StandardMetadataType::CTA861_3: {
       std::optional<Cta861_3> content_light_level;
-      android::gralloc4::decodeCta861_3(in, &content_light_level);
+      if (android::gralloc4::decodeCta861_3(in, &content_light_level)) {
+        return Error::UNSUPPORTED;
+      }
       if (content_light_level != std::nullopt) {
         metadata->color.contentLightLevel.lightLevelSEIEnabled = true;
         metadata->color.contentLightLevel.maxContentLightLevel =
@@ -1854,7 +1874,9 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     }
     case (int64_t)StandardMetadataType::SMPTE2094_40: {
       std::optional<std::vector<uint8_t>> dynamic_metadata_payload;
-      android::gralloc4::decodeSmpte2094_40(in, &dynamic_metadata_payload);
+      if (android::gralloc4::decodeSmpte2094_40(in, &dynamic_metadata_payload)) {
+        return Error::UNSUPPORTED;
+      }
       if (dynamic_metadata_payload != std::nullopt) {
         if (dynamic_metadata_payload->size() > HDR_DYNAMIC_META_DATA_SZ)
           return Error::BAD_VALUE;
@@ -1875,9 +1897,13 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     }
     case (int64_t)StandardMetadataType::CROP: {
       std::vector<Rect> in_crop;
-      android::gralloc4::decodeCrop(in, &in_crop);
-      if (in_crop.size() != 1)
+      if (android::gralloc4::decodeCrop(in, &in_crop)) {
         return Error::UNSUPPORTED;
+      }
+
+      if (in_crop.size() != 1) {
+        return Error::UNSUPPORTED;
+      }
 
       metadata->crop.left = in_crop[0].left;
       metadata->crop.top = in_crop[0].top;
@@ -1886,49 +1912,75 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     }
     case QTI_VT_TIMESTAMP:
-      android::gralloc4::decodeUint64(qtigralloc::MetadataType_VTTimestamp, in,
-                                      &metadata->vtTimeStamp);
+      if (android::gralloc4::decodeUint64(qtigralloc::MetadataType_VTTimestamp, in,
+                                      &metadata->vtTimeStamp)) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_COLOR_METADATA:
       ColorMetaData color;
-      qtigralloc::decodeColorMetadata(in, &color);
+      if (qtigralloc::decodeColorMetadata(in, &color) != IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
       metadata->color = color;
       break;
     case QTI_PP_PARAM_INTERLACED:
-      android::gralloc4::decodeInt32(qtigralloc::MetadataType_PPParamInterlaced, in,
-                                     &metadata->interlaced);
+      if (android::gralloc4::decodeInt32(qtigralloc::MetadataType_PPParamInterlaced, in,
+                                     &metadata->interlaced)) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_VIDEO_PERF_MODE:
-      android::gralloc4::decodeUint32(qtigralloc::MetadataType_VideoPerfMode, in,
-                                      &metadata->isVideoPerfMode);
+      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_VideoPerfMode, in,
+                                      &metadata->isVideoPerfMode)) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_GRAPHICS_METADATA:
-      qtigralloc::decodeGraphicsMetadata(in, &metadata->graphics_metadata);
+      if (qtigralloc::decodeGraphicsMetadata(in, &metadata->graphics_metadata) !=
+                                       IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_UBWC_CR_STATS_INFO:
-      qtigralloc::decodeUBWCStats(in, &metadata->ubwcCRStats[0]);
+      if (qtigralloc::decodeUBWCStats(in, &metadata->ubwcCRStats[0]) != IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_REFRESH_RATE:
-      android::gralloc4::decodeFloat(qtigralloc::MetadataType_RefreshRate, in,
-                                     &metadata->refreshrate);
+      if (android::gralloc4::decodeFloat(qtigralloc::MetadataType_RefreshRate, in,
+                                     &metadata->refreshrate)) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_MAP_SECURE_BUFFER:
-      android::gralloc4::decodeInt32(qtigralloc::MetadataType_MapSecureBuffer, in,
-                                     &metadata->mapSecureBuffer);
+      if (android::gralloc4::decodeInt32(qtigralloc::MetadataType_MapSecureBuffer, in,
+                                     &metadata->mapSecureBuffer)) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_LINEAR_FORMAT:
-      android::gralloc4::decodeUint32(qtigralloc::MetadataType_LinearFormat, in,
-                                      &metadata->linearFormat);
+      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_LinearFormat, in,
+                                      &metadata->linearFormat)) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_SINGLE_BUFFER_MODE:
-      android::gralloc4::decodeUint32(qtigralloc::MetadataType_SingleBufferMode, in,
-                                      &metadata->isSingleBufferMode);
+      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_SingleBufferMode, in,
+                                      &metadata->isSingleBufferMode)) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_CVP_METADATA:
-      qtigralloc::decodeCVPMetadata(in, &metadata->cvpMetadata);
+      if (qtigralloc::decodeCVPMetadata(in, &metadata->cvpMetadata) != IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_VIDEO_HISTOGRAM_STATS:
-      qtigralloc::decodeVideoHistogramMetadata(in, &metadata->video_histogram_stats);
+      if (qtigralloc::decodeVideoHistogramMetadata(in, &metadata->video_histogram_stats) !=
+                                      IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
       break;
     case QTI_VIDEO_TS_INFO:
       if (qtigralloc::decodeVideoTimestampInfo(in, &metadata->videoTsInfo) !=

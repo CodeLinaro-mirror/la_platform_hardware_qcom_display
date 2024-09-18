@@ -12,6 +12,10 @@ cc_library_shared {
         "qti_kernel_headers",
         "qti_display_kernel_headers",
         "device_kernel_headers",
+        "snapalloc_interface_headers",
+        "common_interface_headers",
+        "libimapper_stablec",
+        "libimapper_providerutils",
     ],
     shared_libs: [
         "libdl",
@@ -22,6 +26,9 @@ cc_library_shared {
         "android.hardware.graphics.mapper@2.1",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.graphics.mapper@4.0",
+        "android.hardware.graphics.allocator-V2-ndk",
+        "libbinder_ndk",
+        "libgralloc.qti",
     ],
     cflags: [
         "-DLOG_TAG=\"qdgralloc\"",
@@ -34,6 +41,50 @@ cc_library_shared {
         "gr_utils.cpp",
         "gr_adreno_info.cpp",
         "gr_camera_info.cpp",
+        "gr_snap_helper.cpp",
+        "gr_snap_debugger.cpp",
+    ],
+}
+
+//libmapperutils
+cc_library_shared {
+    name: "libmapperutils",
+    defaults: [
+       "qtidisplay_common_defaults",
+    ],
+    vendor: true,
+    sanitize: {
+        integer_overflow: true,
+    },
+    header_libs: [
+       "display_headers",
+       "libbase_headers",
+       "snapalloc_interface_headers",
+       "common_interface_headers",
+       "libimapper_stablec",
+       "libimapper_providerutils",
+    ],
+    shared_libs: [
+       "libdl",
+       "libgralloctypes",
+       "libgrallocutils",
+       "libhidlbase",
+       "android.hardware.graphics.common@1.2",
+       "android.hardware.graphics.mapper@4.0",
+       "libbinder_ndk",
+       "libgralloc.qti",
+       "android.hardware.graphics.allocator-V2-ndk",
+       "libvndksupport",
+    ],
+    cflags: [
+        "-DLOG_TAG=\"qdgralloc\"",
+        "-D__QTI_DISPLAY_GRALLOC__",
+        "-Wno-sign-conversion",
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+    ],
+    srcs: [
+        "mapper_utils.cpp",
     ],
 }
 
@@ -165,6 +216,8 @@ cc_library_shared {
         "libbase_headers",
         "libimapper_stablec",
         "libimapper_providerutils",
+        "snapalloc_interface_headers",
+        "common_interface_headers",
     ],
     shared_libs: [
         "libhidlbase",

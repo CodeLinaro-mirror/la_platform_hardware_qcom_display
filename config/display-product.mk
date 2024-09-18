@@ -18,6 +18,7 @@ PRODUCT_PACKAGES += \
     libdisplayconfig \
     libgralloc.qti \
     mapper.qti \
+    libmapperutils \
     libdisplayconfig.qti \
     libdisplayconfig.vendor \
     vendor.qti.hardware.display.mapper@2.0.vendor \
@@ -25,7 +26,8 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.mapper@4.0.vendor \
     init.qti.display_boot.sh \
     init.qti.display_boot.rc \
-    modetest
+    modetest \
+    vendor.qti.hardware.display.snapalloc-impl
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
 #QDCM calibration xml file for 2k panel
@@ -77,6 +79,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.high_fps_late_app_phase_offset_ns=1000000 \
     debug.mdpcomp.logs=0 \
     vendor.gralloc.disable_ubwc=0 \
+    vendor.gralloc.enable_logs=0 \
     vendor.display.disable_scaler=0 \
     vendor.display.disable_excl_rect=0 \
     vendor.display.disable_excl_rect_partial_fb=1 \

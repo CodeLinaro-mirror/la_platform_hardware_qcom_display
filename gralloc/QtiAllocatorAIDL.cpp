@@ -10,6 +10,7 @@
 #include <aidlcommonsupport/NativeHandle.h>
 #include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
 #include <display_properties.h>
+#include <android/binder_ibinder_platform.h>
 
 #include <vector>
 
@@ -21,8 +22,12 @@
 #include "gr_utils.h"
 #include "mapper_utils.h"
 
+#include <dlfcn.h>
+#include <vndksupport/linker.h>
+
 using gralloc::Error;
 using mapper::GetStandardMetadata;
+using mapper::GetVendorMetadata;
 
 namespace aidl {
 namespace android {
@@ -91,6 +96,7 @@ QtiAllocatorAIDL::QtiAllocatorAIDL() {
   buf_mgr_ = BufferManager::GetInstance();
   buf_mgr_->SetGrallocDebugProperties(properties);
   enable_logs_ = property_get_bool("vendor.gralloc.enable_logs", 0);
+  snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
   enable_allocation_data_dumping_ = property_get_bool(ENABLE_ALLOCATION_DATA_DUMPING, 0);
   if (enable_allocation_data_dumping_) {
     // check if the json file exists
@@ -192,8 +198,11 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
 
   // Get aligned height
   {
-    gralloc::GetMetaDataValue(hnd, QTI_ALIGNED_HEIGHT_IN_PIXELS,
-                              static_cast<void *>(&height_from_get));
+     mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS,
+                                    static_cast<void *>(&height_from_get), sizeof(height_from_get));
+     if (mapper_err != AIMAPPER_ERROR_NONE) {
+       goto end;
+     }
   }
 
   // Get allocation size
@@ -207,7 +216,11 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
   }
 
   // Get FD
-  gralloc::GetMetaDataValue(hnd, QTI_FD, static_cast<void *>(&fd));
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::FD, static_cast<void *>(&fd),
+                                 sizeof(fd));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
 
   // Get usage
   {
@@ -220,11 +233,21 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
   }
 
   // Get private flags
-  is_ubwc = gralloc::IsUBwcEnabled(static_cast<int>(format_from_get), usage_from_get);
-
-  is_tile_rendered = gralloc::IsTileRendered(static_cast<int>(format_from_get));
-
-  is_cached = !gralloc::UseUncached(static_cast<int>(format_from_get), usage_from_get);
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::IS_UBWC,
+                                 static_cast<void *>(&is_ubwc), sizeof(is_ubwc));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::IS_TILE_RENDERED,
+                                 static_cast<void *>(&is_tile_rendered), sizeof(is_tile_rendered));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::IS_CACHED,
+                                 static_cast<void *>(&is_cached), sizeof(is_cached));
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    goto end;
+  }
 
   // Get reserved region size
   mapper_err =
@@ -246,7 +269,8 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
 
 #ifdef QTI_HEAP_NAME
   // Get heap name
-  gralloc::GetMetaDataValue(hnd, QTI_HEAP_NAME, static_cast<void *>(&heap_name));
+  mapper_err = GetVendorMetadata(mapper_, buf_hnd, SnapMetadataType::HEAP_NAME,
+                                 static_cast<void *>(&heap_name), sizeof(heap_name));
   if (mapper_err != AIMAPPER_ERROR_NONE) {
     goto end;
   }
@@ -312,7 +336,11 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
   }
 
 end:
-  buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buf_hnd));
+  if (!snap_helper_->IsSnapAllocEnabled()) {
+    buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buf_hnd));
+  } else {
+    auto status = snap_helper_->Free(const_cast<native_handle_t *>(buf_hnd));
+  }
   native_handle_delete(hnd);
   hnd = nullptr;
   return 0;
@@ -361,33 +389,42 @@ ndk::ScopedAStatus QtiAllocatorAIDL::AllocateBuffer(gralloc::BufferDescriptor de
   std::vector<buffer_handle_t> buffers;
   auto err = Error::UNSUPPORTED;
 
-  buffers.reserve(count);
-  for (uint32_t i = 0; i < count; i++) {
-    buffer_handle_t buffer;
-    err = buf_mgr_->AllocateBuffer(desc, &buffer);
-    if (err != Error::NONE) {
-      return ToBinderStatus(err);
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    auto status = snap_helper_->Allocate(desc, count, result);
+    if (status) {
+      return ToBinderStatus(Error::UNSUPPORTED);
     }
-    buffers.emplace_back(buffer);
-  }
+  } else {
+    buffers.reserve(count);
+    for (uint32_t i = 0; i < count; i++) {
+      buffer_handle_t buffer;
+      err = buf_mgr_->AllocateBuffer(desc, &buffer);
+      if (err != Error::NONE) {
+        return ToBinderStatus(err);
+      }
+      buffers.emplace_back(buffer);
+    }
 
-  if (buffers.size() > 0) {
-    result->stride = static_cast<uint32_t>(QTI_HANDLE_CONST(buffers[0])->width);
-  }
+    if (buffers.size() > 0) {
+      result->stride = static_cast<uint32_t>(QTI_HANDLE_CONST(buffers[0])->width);
+    }
 
-  result->buffers.resize(count);
-  for (int32_t i = 0; i < count; i++) {
-    auto buffer = buffers[i];
-    result->buffers[i] = ::android::dupToAidl(buffer);
+    result->buffers.resize(count);
+    for (int32_t i = 0; i < count; i++) {
+      auto buffer = buffers[i];
+      result->buffers[i] = ::android::dupToAidl(buffer);
+    }
   }
 
   if (enable_allocation_data_dumping_) {
      dumpAllocationData(buffers, result, desc, count);
   }
 
-  for (int32_t i = 0; i < count; i++) {
-    buffer_handle_t buffer = buffers[i];
-    buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buffer));
+  if (!snap_helper_->IsSnapAllocEnabled()) {
+    for (int32_t i = 0; i < count; i++) {
+      buffer_handle_t buffer = buffers[i];
+      buf_mgr_->ReleaseBuffer(QTI_HANDLE_CONST(buffer));
+    }
   }
   return ndk::ScopedAStatus::ok();
 }
@@ -428,11 +465,21 @@ ndk::ScopedAStatus QtiAllocatorAIDL::isSupported(const BufferDescriptorInfo &in_
 
   gralloc::BufferDescriptor desc = convertAidlToGrallocDescriptor(in_descriptor);
   buffer_handle_t buffer;
-  if (buf_mgr_->AllocateBuffer(desc, &buffer, 0, true) != Error::NONE) {
-    *_aidl_return = false;
+  if (snap_helper_->IsSnapAllocEnabled()) {
+    snap_helper_->IsSupported(desc, _aidl_return);
+  } else {
+    if (buf_mgr_->AllocateBuffer(desc, &buffer, 0, true) != Error::NONE) {
+      *_aidl_return = false;
+    }
+    *_aidl_return = true;
   }
-  *_aidl_return = true;
   return ndk::ScopedAStatus::ok();
+}
+
+ndk::SpAIBinder QtiAllocatorAIDL::createBinder() {
+  auto binder = BnAllocator::createBinder();
+  AIBinder_setInheritRt(binder.get(), true);
+  return binder;
 }
 
 }  // namespace impl

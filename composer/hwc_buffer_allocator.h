@@ -77,11 +77,21 @@ class HWCBufferAllocator : public BufferAllocator {
   DisplayError MapBuffer(const qtigralloc::private_handle_t *handle,
                          shared_ptr<Fence> acquire_fence);
   DisplayError UnmapBuffer(const qtigralloc::private_handle_t *handle, int *release_fence);
+  int GetPrivateFlags(void *buf, int32_t &flags);
+  int GetMetadataValue(void *buf, SnapMetadataType type, void *dest, size_t dest_size);
+  int GetFd(void *buf, int &fd);
+  int GetWidth(void *buf, uint32_t &width);
+  int GetHeight(void *buf, uint32_t &height);
+  int GetAllocationSize(void *buf, uint32_t &alloc_size);
+  int GetBufferId(void *buf, uint64_t &id);
+  int GetFormat(void *buf, int32_t &format);
+  int GetSDMFormat(void *buf, LayerBufferFormat &sdm_format);
 
  private:
   DisplayError GetGrallocInstance();
   AIMapper *mapper_;
   std::shared_ptr<IAllocator> allocator_;
+  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
 };
 
 }  // namespace sdm

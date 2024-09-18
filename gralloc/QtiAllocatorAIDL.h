@@ -19,6 +19,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "gr_snap_helper.h"
+
 namespace aidl {
 namespace android {
 namespace hardware {
@@ -36,12 +38,13 @@ using ::android::hardware::Void;
 using gralloc::BufferManager;
 
 using AidlPlaneLayout = aidl::android::hardware::graphics::common::PlaneLayout;
+using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 
 class QtiAllocatorAIDL : public BnAllocator {
  public:
   QtiAllocatorAIDL();
 
-  ndk::ScopedAStatus allocate(const std::vector<uint8_t>& descriptor, int32_t count,
+  ndk::ScopedAStatus allocate(const std::vector<uint8_t> &descriptor, int32_t count,
                                  AllocationResult* result) override;
   ndk::ScopedAStatus allocate2(const BufferDescriptorInfo &in_descriptor, int32_t in_count,
                                AllocationResult *_aidl_return) override;
@@ -49,11 +52,15 @@ class QtiAllocatorAIDL : public BnAllocator {
   ndk::ScopedAStatus isSupported(const BufferDescriptorInfo &in_descriptor,
                                  bool *_aidl_return) override;
 
+ protected:
+  ndk::SpAIBinder createBinder() override;
+
  private:
   ndk::ScopedAStatus AllocateBuffer(gralloc::BufferDescriptor desc, int32_t count,
                                     AllocationResult *result);
   BufferManager *buf_mgr_ = nullptr;
-  bool enable_logs_;
+  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+  bool enable_logs_ = false;
   bool enable_allocation_data_dumping_ = false;
   std::string json_file_name_;
   std::mutex json_dump_lock_;
