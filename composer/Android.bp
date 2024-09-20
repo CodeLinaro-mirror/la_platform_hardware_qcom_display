@@ -168,7 +168,7 @@ soong_config_module_type {
 
 soong_config_string_variable {
     name: "composer_version",
-    values: ["v2", "v3", "v3_3", "qmaa"],
+    values: ["v3_2", "v3_3"],
 }
 
 qticomposer3_cc_defaults {

@@ -188,7 +188,7 @@ SOONG_CONFIG_qtidisplay_hy33 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
-SOONG_CONFIG_qtidisplay_composer_version := v3
+SOONG_CONFIG_qtidisplay_composer_version := v3_2
 SOONG_CONFIG_qtidisplay_mapper_ext := true
 
 ifeq ($(PLATFORM_VERSION), 14)
@@ -223,7 +223,6 @@ ifeq ($(TARGET_IS_HEADLESS), true)
     PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/qmaa
     SOONG_CONFIG_qtidisplay_headless := true
     SOONG_CONFIG_qtidisplay_default := false
-    SOONG_CONFIG_qtidisplay_composer_version := qmaa
 else
     #Packages that should not be installed in QMAA are enabled here.
     PRODUCT_PACKAGES += libdrmutils
