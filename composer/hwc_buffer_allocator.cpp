@@ -766,10 +766,12 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
     case kFormatRGBA8888UbwcLossy8To5:
       *target = static_cast<int>(APixelFormat::RGBA_8888);
       *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC_L_8_TO_5;
+      *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
       break;
     case kFormatRGBA8888UbwcLossy2To1:
       *target = static_cast<int>(APixelFormat::RGBA_8888);
       *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC_L_2_TO_1;
+      *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
       break;
     default:
       DLOGW("Unsupported format = 0x%x", format);

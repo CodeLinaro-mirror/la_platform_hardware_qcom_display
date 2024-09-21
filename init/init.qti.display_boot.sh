@@ -60,6 +60,7 @@ case "$target" in
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop debug.sf.enable_vrr_config 1
         ;;
     esac
     ;;
