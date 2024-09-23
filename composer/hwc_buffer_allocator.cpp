@@ -86,7 +86,6 @@ int HWCBufferAllocator::GetGrallocInstance() {
     return kErrorCriticalResource;
   }
 
-  //mapper_ = IMapper::getService(); //TBD BALDEV 
   if (mapper_ == nullptr) {
     mapper_ = GetMapperInstance();
     if (mapper_ == nullptr) {

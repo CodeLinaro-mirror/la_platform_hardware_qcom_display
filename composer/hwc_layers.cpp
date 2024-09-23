@@ -382,13 +382,8 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
   buffer_allocator_->GetPrivateFlags(hnd, flag);
   ALOGW("%s: format: %d, flags: %d", __FUNCTION__, fmt, flag);
   LayerBufferFormat format = GetSDMFormat(fmt, flag);
-#if 0 //TBD BALDEV
-  buffer_allocator_->GetCompressionType(hnd, compression_type);
-  DLOGW_IF(kTagClient, "%s: format: %d, flags: %d, compression_type %d", __FUNCTION__, fmt, flag,
-           compression_type);
-  LayerBufferFormat format = GetSDMFormat(fmt, flag, compression_type);
-#endif
-  if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
+
+if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
       (UINT32(aligned_height) != layer_buffer->height)) {
     // Layer buffer geometry has changed.
     geometry_changes_ |= kBufferGeometry;
