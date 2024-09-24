@@ -27,53 +27,63 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __QTIQMAACOMPOSER_H__
 #define __QTIQMAACOMPOSER_H__
 
 #include <QtiQmaaComposerClient.h>
 
-// TODO(user): recheck on this header inclusion
-#include <hardware/hwcomposer2.h>
+#include <aidl/android/hardware/graphics/composer3/BnComposer.h>
 #include <log/log.h>
+#include <utils/Mutex.h>
+#include <memory>
 
 #include <unordered_set>
 
+namespace aidl {
 namespace vendor {
 namespace qti {
 namespace hardware {
 namespace display {
-namespace composer {
-namespace V3_0 {
-namespace implementation {
+namespace composer3 {
 
-using ::android::hardware::graphics::composer::V2_4::IComposer;
+using ::aidl::android::hardware::graphics::composer3::BnComposer;
+using ::aidl::android::hardware::graphics::composer3::Capability;
+using ndk::ScopedAStatus;
+using ndk::SpAIBinder;
 
-class QtiComposer : public IComposer {
+class QtiComposer : public BnComposer {
  public:
   QtiComposer();
   virtual ~QtiComposer();
-  // Methods from ::android::hardware::graphics::composer::V2_1::IComposer follow.
-  Return<void> getCapabilities(getCapabilities_cb _hidl_cb) override;
-  Return<void> dumpDebugInfo(dumpDebugInfo_cb _hidl_cb) override;
-  Return<void> createClient(createClient_cb _hidl_cb) override;
 
-  // Methods from ::android::hardware::graphics::composer::V2_3::IComposer follow.
-  Return<void> createClient_2_3(createClient_2_3_cb _hidl_cb) override;
+  ScopedAStatus createClient(std::shared_ptr<IComposerClient> *aidl_return) override;
+  ScopedAStatus getCapabilities(std::vector<Capability> *aidl_return) override;
 
-  // Methods from ::android::hardware::graphics::composer::V2_4::IComposer follow.
-  Return<void> createClient_2_4(createClient_2_4_cb _hidl_cb) override;
+  binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
-  // Methods from ::android::hidl::base::V1_0::IBase follow.
+ protected:
+  SpAIBinder createBinder() override;
 
-  static QtiComposer *initialize();
+ private:
+  bool waitForClientDestroyedLocked(std::unique_lock<std::mutex> &lock);
+  void onClientDestroyed();
+
+  std::mutex mClientMutex;
+  bool mClientAlive GUARDED_BY(mClientMutex) = false;
+  std::condition_variable mClientDestroyedCondition;
 };
 
-}  // namespace implementation
-}  // namespace V3_0
-}  // namespace composer
+}  // namespace composer3
 }  // namespace display
 }  // namespace hardware
 }  // namespace qti
 }  // namespace vendor
+}  // namespace aidl
 
 #endif  // __QTIQMAACOMPOSER_H__

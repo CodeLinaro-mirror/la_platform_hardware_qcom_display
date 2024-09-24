@@ -70,6 +70,25 @@ static SnapHandle *SnapHandleFromCNativeHandle(native_handle_t *native_handle,
   return snap_handle;
 }
 
+static native_handle_t *CNativeHandleFromSnapHandle(SnapHandle *snap_handle,
+                                                    bool pass_fd_ownership) {
+  if (!snap_handle)
+    return nullptr;
+
+  native_handle_t *native_handle =
+      native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
+
+  for (size_t i = 0; i < snap_handle->num_fds; i++) {
+    int fd = snap_handle->buffer_data[i];
+    native_handle->data[i] = pass_fd_ownership ? fd : fcntl(fd, F_DUPFD_CLOEXEC, 0);
+  }
+
+  memcpy((native_handle->data + native_handle->numFds),
+         (snap_handle->buffer_data + snap_handle->num_fds), snap_handle->num_ints * sizeof(int));
+
+  return native_handle;
+}
+
 static void *SnapAddressToPointer(SnapAddress &addr) {
   return reinterpret_cast<void *>(addr.addressPointer);
 }
@@ -235,6 +254,43 @@ int GrallocSnapHelper::Import(native_handle_t *gr_hnd) {
 
   // Handle already in map
   return SnapError::NONE;
+}
+
+int GrallocSnapHelper::ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
+                                        buffer_handle_t *out_buffer_handle) {
+  if (meta_handle == nullptr) {
+    ALOGE("Invalid gralloc handle");
+    return SnapError::BAD_BUFFER;
+  }
+  if (!IsSnapAllocEnabled()) {
+    ALOGW("SnapAlloc is disabled");
+    return SnapError::UNSUPPORTED;
+  }
+  std::lock_guard<std::mutex> lock(map_lock_);
+
+  SnapError status = SnapError::BAD_BUFFER;
+  if (handles_map_.find(meta_handle) == handles_map_.end()) {
+    ALOGE("Meta Handle should be imported before importing auxillary view buffer");
+    return SnapError::UNSUPPORTED;
+  } else {
+    SnapHandle *snap_meta_handle = handles_map_.at(meta_handle);
+    SnapHandle *view_handle = nullptr;
+    auto status = snapmapper_->RetainViewBuffer(*snap_meta_handle, view, &view_handle);
+
+    if (status == SnapError::NONE) {
+      native_handle_t *native_handle = CNativeHandleFromSnapHandle(view_handle, false);
+      handles_map_.emplace(std::make_pair(native_handle, view_handle));
+      ALOGD_IF(enable_logs_,
+               "gr_snap_helper ImportViewBuffer - handles_map_.size() %d"
+               "after emplace into map",
+               handles_map_.size());
+      *out_buffer_handle = native_handle;
+      return SnapError::NONE;
+    } else {
+      ALOGE("%s: Failed to import via SnapAlloc. Error code: %d", __FUNCTION__, status);
+      return status;
+    }
+  }
 }
 
 int GrallocSnapHelper::Free(native_handle_t *gr_hnd) {
@@ -500,13 +556,10 @@ int GrallocSnapHelper::IsSupported(gralloc::BufferDescriptor gr_desc, bool *is_s
   if (err) {
     return err;
   }
-  auto status = snapallocator_->IsSupported(snap_desc, is_supported);
-  if (status != SnapError::NONE) {
-    ALOGE("%s: Failed to check if descriptor is supported via SnapAlloc. Error code: %d",
-          __FUNCTION__, status);
-  }
 
-  return status;
+  snapallocator_->IsSupported(snap_desc, is_supported);
+
+  return SnapError::NONE;
 }
 
 template <aidl::android::hardware::graphics::common::StandardMetadataType T>
@@ -923,6 +976,36 @@ SnapError GrallocSnapHelper::AllocationSizeHelper(SnapHandle *hnd, uint32_t aidl
     if (*mapper_return < 0) {
       return SnapError::BAD_VALUE;
     }
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelper::BaseViewHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                            void *gralloc_in_set, void *gralloc_out_get,
+                                            SnapDescriptor *buf_des, bool check_metadata_set,
+                                            int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_VIEW, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = SnapError::UNSUPPORTED;
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelper::MultiViewHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                             void *gralloc_in_set, void *gralloc_out_get,
+                                             SnapDescriptor *buf_des, bool check_metadata_set,
+                                             int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MULTI_VIEW_INFO, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = SnapError::UNSUPPORTED;
   }
   return error;
 }
