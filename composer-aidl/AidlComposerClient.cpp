@@ -973,7 +973,7 @@ void AidlComposerClient::CommandEngine::executeValidateDisplay(
 
   std::vector<sdm::LayerId> changedLayers;
   std::vector<Composition> compositionTypes;
-  uint32_t displayRequestMask;
+  uint32_t displayRequestMask = 0;
   std::vector<sdm::LayerId> requestedLayers;
   std::vector<int32_t> requestMasks;
   ClientTargetProperty clientTargetProperty;
@@ -1314,6 +1314,19 @@ void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
 
 void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(
     int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime) {
+    if (!expectedPresentTime.has_value()) {
+    return;
+  }
+
+  uint64_t expectedPresentTimestamp = 0;
+  if (expectedPresentTime->timestampNanos > 0) {
+    expectedPresentTimestamp = static_cast<uint64_t>(expectedPresentTime->timestampNanos);
+  }
+
+  auto err = mClient.hwc_session_->SetExpectedPresentTime(display, expectedPresentTimestamp);
+  if (err != Error::None) {
+    writeError(__FUNCTION__, err);
+  }
   //writeError(__FUNCTION__, Error::Unsupported);
 }
 

@@ -40,7 +40,7 @@
 #include <sync/sync.h>
 #include <utils/String16.h>
 #include <binder/Parcel.h>
-#include <gralloc_priv.h>
+#include <QtiGralloc.h>
 #include <hardware/hwcomposer.h>
 #include <hardware/hwcomposer_defs.h>
 #include <QService.h>
