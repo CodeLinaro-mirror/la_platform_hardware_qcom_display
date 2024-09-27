@@ -795,6 +795,10 @@ class GrallocSnapHelper {
                            void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
                            SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
                            int32_t *mapper_return = nullptr);
+  SnapError PixelFormatAllocatedHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                         void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                         SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                         int32_t *mapper_return = nullptr);
 
   //std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
   std::unordered_map<uint64_t, MetadataHelper>
@@ -845,10 +849,17 @@ class GrallocSnapHelper {
           {static_cast<uint64_t>(SnapMetadataType::CUSTOM_CONTENT_METADATA), &GrallocSnapHelper::CustomContentMetadataHelper},
           {static_cast<uint64_t>(SnapMetadataType::VIDEO_TRANSCODE_STATS), &GrallocSnapHelper::VideoTranscodeStatsHelper},
           {static_cast<uint64_t>(SnapMetadataType::MASTERING_DISPLAY), &GrallocSnapHelper::MasteringDisplayHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(StandardMetadataType::SMPTE2086), &GrallocSnapHelper::MasteringDisplayHelper},
           {static_cast<uint64_t>(SnapMetadataType::CONTENT_LIGHT_LEVEL), &GrallocSnapHelper::ContentLightLevelHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(StandardMetadataType::CTA861_3), &GrallocSnapHelper::ContentLightLevelHelper},
           {static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA), &GrallocSnapHelper::DynamicMetadataHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(StandardMetadataType::SMPTE2094_40), &GrallocSnapHelper::DynamicMetadataHelper},
           {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO), &GrallocSnapHelper::ColorRemappingInfoHelper},
           {static_cast<uint64_t>(SnapMetadataType::HEAP_NAME), &GrallocSnapHelper::HeapNameHelper},
+          {static_cast<uint64_t>(SnapMetadataType::IS_UBWC), &GrallocSnapHelper::IsUBWCHelper},
+          {static_cast<uint64_t>(SnapMetadataType::IS_TILE_RENDERED), &GrallocSnapHelper::IsTileRenderedHelper},
+          {static_cast<uint64_t>(SnapMetadataType::IS_CACHED), &GrallocSnapHelper::IsCachedHelper},
+          {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_ALLOCATED), &GrallocSnapHelper::PixelFormatAllocatedHelper},
   };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>

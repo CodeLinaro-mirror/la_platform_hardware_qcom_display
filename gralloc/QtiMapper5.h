@@ -224,6 +224,7 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(QTI_YUV_PLANE_INFO), (YCBCR_LAYOUT_ARRAY_SIZE * sizeof(qti_ycbcr))},
       // TODO: Address missing SnapMetadataTypes (no helpers in gr_snap_helper)
       // {static_cast<uint64_t>(SnapMetadataType::BASE_ADDRESS), sizeof(uint64_t)},
+      {static_cast<uint64_t>(SnapMetadataType::PIXEL_FORMAT_ALLOCATED), sizeof(GrallocPixelFormat)},
   };
 };
 
