@@ -99,7 +99,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.predict_hwc_composition_strategy=0 \
     debug.sf.treat_170m_as_sRGB=1 \
     debug.graphics.game_default_frame_rate.disabled=1 \
-    vendor.display.enable_display_extensions=1
+    vendor.display.enable_display_extensions=1 \
+    vendor.gralloc.enable_snapalloc=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
@@ -187,7 +188,7 @@ SOONG_CONFIG_qtidisplay_hy33 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
-SOONG_CONFIG_qtidisplay_composer_version := v3
+SOONG_CONFIG_qtidisplay_composer_version := v3_2
 SOONG_CONFIG_qtidisplay_mapper_ext := true
 
 ifeq ($(PLATFORM_VERSION), 14)
@@ -222,7 +223,6 @@ ifeq ($(TARGET_IS_HEADLESS), true)
     PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/qmaa
     SOONG_CONFIG_qtidisplay_headless := true
     SOONG_CONFIG_qtidisplay_default := false
-    SOONG_CONFIG_qtidisplay_composer_version := qmaa
 else
     #Packages that should not be installed in QMAA are enabled here.
     PRODUCT_PACKAGES += libdrmutils

@@ -1,7 +1,8 @@
 DISPLAY_MODULES_HARDWARE:= vendor.qti.hardware.display.composer-service \
                         android.hardware.graphics.mapper@4.0-impl-qti-display \
                         vendor.qti.hardware.display.mapper@4.0.vendor \
-                        vendor.qti.hardware.display.allocator-service
+                        vendor.qti.hardware.display.allocator-service \
+                        vendor.qti.hardware.display.snapalloc-impl
 
 
 TARGET_IS_HEADLESS := false
@@ -35,6 +36,5 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             vendor.qti.hardware.display.demura-service \
                             modetest \
                             libdisplayconfig.qti \
-                            vendor.qti.hardware.display.snapalloc-impl \
                             libhwfenceclient
 endif

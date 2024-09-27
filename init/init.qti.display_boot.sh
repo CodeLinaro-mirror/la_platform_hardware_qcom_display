@@ -61,6 +61,7 @@ case "$target" in
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop debug.sf.enable_vrr_config 1
+        setprop vendor.display.enable_hal_self_refresh 1
         ;;
     esac
     ;;
