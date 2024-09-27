@@ -494,8 +494,8 @@ SnapError GrallocSnapHelper::CheckMetadataSet(SnapMetadataType type, SnapError s
   if (status) {
     if ((status != SnapError::METADATA_NOT_SET) ||
         (status == SnapError::METADATA_NOT_SET && check_metadata_set)) {
-      ALOGW("%s - Error while getting the metadata type %d from snapmapper", __FUNCTION__,
-            static_cast<int>(type));
+      ALOGW("%s - Error %d while getting the metadata type %d from snapmapper", __FUNCTION__,
+            static_cast<int>(status), static_cast<int>(type));
     } else {
       status = SnapError::NONE;
     }
@@ -1113,11 +1113,17 @@ SnapError GrallocSnapHelper::CompressionHelper(SnapHandle *hnd, bool hidl_bytest
   }
   error = CheckMetadataSet(SnapMetadataType::COMPRESSION, error, check_metadata_set);
   GrallocExtendableType gr_compression = {};
+
   if (snap_compression == vendor_qti_hardware_display_common_Compression::COMPRESSION_NONE) {
     gr_compression = android::gralloc4::Compression_None;
   } else {
-    gr_compression = qtigralloc::Compression_QtiUBWC;
+    if (aidl_size) {
+      gr_compression = {"QTI", snap_compression};
+    } else {
+      gr_compression = qtigralloc::Compression_QtiUBWC;
+    }
   }
+
   if (aidl_size) {
     *mapper_return = Mapper5Encode<StandardMetadataType::COMPRESSION>(
         gr_compression, gralloc_out_get, *mapper_return);
@@ -3213,6 +3219,67 @@ SnapError GrallocSnapHelper::IsCachedHelper(SnapHandle *hnd, bool hidl_bytestrea
 
   *static_cast<int32_t *>(gralloc_out_get) = is_cached;
   return SnapError::NONE;
+}
+
+SnapError GrallocSnapHelper::BaseAddressHelper(SnapHandle *hnd, bool hidl_bytestream,
+                                               uint32_t aidl_size, void *gralloc_in_set,
+                                               void *gralloc_out_get, SnapDescriptor *buf_des,
+                                               bool check_metadata_set, int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    uint64_t base_address = 0;
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_address);
+    error = CheckMetadataSet(SnapMetadataType::BASE_ADDRESS, error, check_metadata_set);
+    // This type is only supported as a vendor metadata type in Gralloc5
+    *static_cast<uint64_t *>(gralloc_out_get) = static_cast<uint64_t>(base_address);
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelper::MatrixCoefficientsHelper(SnapHandle *hnd, bool hidl_bytestream,
+                                                      uint32_t aidl_size, void *gralloc_in_set,
+                                                      void *gralloc_out_get,
+                                                      SnapDescriptor *buf_des,
+                                                      bool check_metadata_set,
+                                                      int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    SnapMatrixCoEfficients snap_matrix_coefficients = {};
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::MATRIX_COEFFICIENTS,
+                                     &snap_matrix_coefficients);
+    error = CheckMetadataSet(SnapMetadataType::MATRIX_COEFFICIENTS, error, check_metadata_set);
+    // This type is only supported as a vendor metadata type in Gralloc5
+    *static_cast<SnapMatrixCoEfficients *>(gralloc_out_get) = snap_matrix_coefficients;
+  } else if (gralloc_in_set != nullptr) {
+    SnapMatrixCoEfficients snap_matrix_coefficients = {};
+    // This type is only supported as a vendor metadata type in Gralloc5
+    snap_matrix_coefficients = *static_cast<SnapMatrixCoEfficients *>(gralloc_in_set);
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::MATRIX_COEFFICIENTS,
+                                     &snap_matrix_coefficients);
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelper::EarlyNotifyLineCountHelper(SnapHandle *hnd, bool hidl_bytestream,
+                                                        uint32_t aidl_size, void *gralloc_in_set,
+                                                        void *gralloc_out_get,
+                                                        SnapDescriptor *buf_des,
+                                                        bool check_metadata_set,
+                                                        int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    int32_t early_notify_line_count = 0;
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::EARLYNOTIFY_LINECOUNT,
+                                     &early_notify_line_count);
+    error = CheckMetadataSet(SnapMetadataType::EARLYNOTIFY_LINECOUNT, error, check_metadata_set);
+    *static_cast<int32_t *>(gralloc_out_get) = static_cast<int32_t>(early_notify_line_count);
+  } else if (gralloc_in_set != nullptr) {
+    int32_t early_notify_line_count = 0;
+    early_notify_line_count = *static_cast<int32_t *>(gralloc_in_set);
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::EARLYNOTIFY_LINECOUNT,
+                                     &early_notify_line_count);
+  }
+  return error;
 }
 
 int GrallocSnapHelper::GetFromBufferDescriptor(gralloc::BufferDescriptor gr_desc,
