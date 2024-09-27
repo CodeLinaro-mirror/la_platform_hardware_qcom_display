@@ -218,7 +218,7 @@ class QtiMapper : public IQtiMapper {
 
  private:
   BufferManager *buf_mgr_ = nullptr;
-  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+  gralloc::GrallocSnapHelperLegacy *snap_helper_ = nullptr;
 
   Error CreateDescriptor(const BufferDescriptorInfo_4_0 &descriptor_info,
                          IMapperBufferDescriptor *descriptor);

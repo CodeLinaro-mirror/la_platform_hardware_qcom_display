@@ -63,8 +63,7 @@ using ::android::hardware::graphics::common::V1_2::PixelFormat;
 using ::android::hidl::base::V1_0::DebugInfo;
 using ::android::hidl::base::V1_0::IBase;
 using gralloc::BufferManager;
-using gralloc::GrallocSnapHelper;
-//using ::vendor::qti::hardware::display::mapperextensions::V1_1::IQtiMapperExtensions;
+using gralloc::GrallocSnapHelperLegacy;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::Error;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::PlaneLayout;
 using ::vendor::qti::hardware::display::mapperextensions::V1_0::YCbCrLayout;
@@ -110,7 +109,7 @@ class QtiMapperExtensions : public IQtiMapperExtensions {
 
  private:
   BufferManager *buf_mgr_ = nullptr;
-  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
+  gralloc::GrallocSnapHelperLegacy *snap_helper_ = nullptr;
   bool enable_logs_ = false;
 };
 

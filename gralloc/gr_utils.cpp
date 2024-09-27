@@ -2199,7 +2199,7 @@ Error GetMetaDataByReference(void *buffer, int64_t type, void **out) {
 }
 
 Error GetMetaDataValue(void *buffer, int64_t type, void *in) {
-  GrallocSnapHelper *snap_helper = GrallocSnapHelper::GetInstance();
+  GrallocSnapHelperLegacy *snap_helper = GrallocSnapHelperLegacy::GetInstance();
   if (snap_helper->IsSnapAllocEnabled()) {
     if (!snap_helper->GetMetadata(static_cast<native_handle_t *>(buffer), type, in, false)) {
       return Error::NONE;

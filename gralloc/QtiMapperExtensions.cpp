@@ -65,7 +65,7 @@ using aidl::android::hardware::graphics::common::StandardMetadataType;
 QtiMapperExtensions::QtiMapperExtensions() {
   buf_mgr_ = BufferManager::GetInstance();
   enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
-  snap_helper_ = GrallocSnapHelper::GetInstance();
+  snap_helper_ = GrallocSnapHelperLegacy::GetInstance();
 }
 
 Return<void> QtiMapperExtensions::getMapSecureBufferFlag(void *buffer,
