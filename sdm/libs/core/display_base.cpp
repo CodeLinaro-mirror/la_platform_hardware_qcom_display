@@ -4197,6 +4197,11 @@ DisplayError DisplayBase::SetHWDetailedEnhancerConfig(void *params) {
           case kDeContentQualHigh:
             de_data.quality_level = kContentQualityHigh;
             break;
+#ifdef DISP_DE_VER_3002
+          case kDeContentQualExtreme:
+            de_data.quality_level = kContentQualityExtreme;
+            break;
+#endif
           case kDeContentQualUnknown:
           default:
             de_data.quality_level = kContentQualityUnknown;
