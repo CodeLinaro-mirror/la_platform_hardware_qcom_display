@@ -419,7 +419,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::BGRX_1010102, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            HAL_PIXEL_FORMAT_BGRX_1010102},
           {{.format = SnapPixelFormat::BGR_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           HAL_PIXEL_FORMAT_BGR_888}};
+           HAL_PIXEL_FORMAT_BGR_888},
+	   {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_4444},
+      };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
       snap_to_flat_format_ = {
@@ -539,7 +544,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::BGRX_1010102, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::BGRX_1010102},
           {{.format = SnapPixelFormat::BGR_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
-           SnapPixelFormat::BGR_888}};
+           SnapPixelFormat::BGR_888},
+	   {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RGBA_4444},
+     };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
       snap_to_flat_ubwc_format_ = {
@@ -1355,6 +1365,10 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR},
           {{.format = SnapPixelFormat::Y16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            static_cast<int>(PixelFormat::Y16)},
+          {{.format = SnapPixelFormat::RGBA_5551, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_5551},
+          {{.format = SnapPixelFormat::RGBA_4444, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGBA_4444},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
