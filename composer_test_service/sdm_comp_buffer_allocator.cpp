@@ -470,6 +470,10 @@ LayerBufferFormat SDMCompBufferAllocator::GetFormatSDM(const int32_t &source, co
       case HAL_PIXEL_FORMAT_RGBA_FP16:
         format = kFormatRGBA16161616FUbwc;
         break;
+      case HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC:
+      case HAL_PIXEL_FORMAT_YCbCr_422_P210:
+        format = kFormatYCbCr422P210Ubwc;
+        break;
       default:
         DLOGW("Unsupported format type for UBWC %s", qdutils::GetHALPixelFormatString(source));
         return kFormatInvalid;
@@ -577,6 +581,12 @@ LayerBufferFormat SDMCompBufferAllocator::GetFormatSDM(const int32_t &source, co
       break;
     case static_cast<int>(APixelFormat::R_8):
       format = kFormatA8;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC:
+      format = kFormatYCbCr422P210Ubwc;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_422_P210:
+      format = kFormatYCbCr422P210;
       break;
     default:
       DLOGW("Unsupported format type = %s", qdutils::GetHALPixelFormatString(source));
@@ -854,6 +864,13 @@ int SDMCompBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target,
       break;
     case kFormatRGBA16161616FUbwc:
       *target = HAL_PIXEL_FORMAT_RGBA_FP16;
+      *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+      break;
+    case kFormatYCbCr422P210:
+      *target = HAL_PIXEL_FORMAT_YCbCr_422_P210;
+      break;
+    case kFormatYCbCr422P210Ubwc:
+      *target = HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC;
       *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
       break;
     default:
