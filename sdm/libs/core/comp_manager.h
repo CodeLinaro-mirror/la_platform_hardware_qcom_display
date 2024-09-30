@@ -42,7 +42,8 @@ namespace sdm {
 
 class CompManager {
  public:
-  DisplayError Init(HWInfoInterface *hw_info_intf, ExtensionInterface *extension_intf,
+  DisplayError Init(const std::vector<HWInfoInterface*> &hw_info_intf,
+                    ExtensionInterface *extension_intf,
                     BufferAllocator *buffer_allocator, BufferSyncHandler *buffer_sync_handler,
                     SocketHandler *socket_handler);
   DisplayError Deinit();
@@ -71,15 +72,14 @@ class CompManager {
   void ProcessIdlePowerCollapse(Handle display_ctx);
   DisplayError SetMaxMixerStages(Handle display_ctx, uint32_t max_mixer_stages);
   void ControlPartialUpdate(Handle display_ctx, bool enable);
-  DisplayError ValidateScaling(const LayerRect &crop, const LayerRect &dst, bool rotate90);
+  DisplayError ValidateScaling(Handle display_ctx, const LayerRect &crop, const LayerRect &dst, bool rotate90);
   DisplayError ValidateAndSetCursorPosition(Handle display_ctx, HWLayers *hw_layers, int x, int y);
   bool SetDisplayState(Handle display_ctx, DisplayState state, int sync_handle);
   DisplayError SetMaxBandwidthMode(HWBwModes mode);
-  DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
   DisplayError SetDetailEnhancerData(Handle display_ctx, const DisplayDetailEnhancerData &de_data);
   DisplayError SetCompositionState(Handle display_ctx, LayerComposition composition_type,
                                    bool enable);
-  DisplayError ControlDpps(bool enable);
+  DisplayError ControlDpps(Handle display_ctx, bool enable);
   DisplayError SetColorModesInfo(Handle display_ctx,
                                  const std::vector<PrimariesTransfer> &colormodes_cs);
   DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
@@ -105,6 +105,8 @@ class CompManager {
     Handle display_resource_ctx = NULL;
     int32_t display_id = -1;
     DisplayType display_type = kBuiltIn;
+    ResourceInterface *resource_intf_ = NULL;
+    DppsControlInterface *dpps_ctrl_intf_ = NULL;
     uint32_t max_strategies = 0;
     uint32_t remaining_strategies = 0;
     bool idle_fallback = false;
@@ -117,7 +119,7 @@ class CompManager {
   };
 
   Locker locker_;
-  ResourceInterface *resource_intf_ = NULL;
+  std::vector<ResourceInterface*> resource_intf_;
   std::set<int32_t> registered_displays_;  // List of registered displays
   std::set<int32_t> configured_displays_;  // List of sucessfully configured displays
   std::set<int32_t> powered_on_displays_;  // List of powered on displays.
@@ -130,8 +132,20 @@ class CompManager {
   uint32_t max_layers_ = kMaxSDELayers;
   uint32_t max_sde_ext_layers_ = 0;
   uint32_t max_sde_builtin_layers_ = 2;
-  DppsControlInterface *dpps_ctrl_intf_ = NULL;
-  NotifierInterface *notifier_intf_ = NULL;
+  std::vector<DppsControlInterface*> dpps_ctrl_intf_;
+  std::vector<NotifierInterface*> notifier_intf_;
+  NotifierInterface *super_notifier_intf_ = NULL;
+
+  class SuperNotifierInterface : public NotifierInterface {
+   public:
+    SuperNotifierInterface(CompManager *comp_manager) : comp_manager_(comp_manager) {}
+    ~SuperNotifierInterface() {}
+    DisplayError PipesStateChanged(void);
+    DisplayError PipesAvailabilityChanged(void);
+    DisplayError PipeHandoffRequested(int32_t id);
+   private:
+    CompManager *comp_manager_ = NULL;
+  };
 };
 
 }  // namespace sdm

@@ -169,6 +169,9 @@ DisplayError HWPeripheralDRM::Commit(HWLayers *hw_layers) {
   SetupConcurrentWriteback(hw_layer_info, false);
   SetIdlePCState();
 
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_EPT, token_.conn_id,
+                            hw_layer_info.expected_present_time);
+
   DisplayError error = HWDeviceDRM::Commit(hw_layers);
   if (error != kErrorNone) {
     return error;

@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -37,6 +37,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <string.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #ifdef __MIN_ANDROID_VER_T__
@@ -55,6 +56,7 @@
 #include "drm_master.h"
 
 #define __CLASS__ "DRMMaster"
+#define MAX_CARDS 16
 
 using std::mutex;
 using std::lock_guard;
@@ -65,35 +67,82 @@ using std::fill;
 
 namespace drm_utils {
 
-DRMMaster *DRMMaster::s_instance = nullptr;
+std::map<uint32_t, DRMMaster*> DRMMaster::s_instance;
 mutex DRMMaster::s_lock;
 
-int DRMMaster::GetInstance(DRMMaster **master) {
+int DRMMaster::GetInstance(DRMMaster **master, uint32_t card) {
   lock_guard<mutex> obj(s_lock);
 
-  if (!s_instance) {
-    s_instance = new DRMMaster();
-    if (s_instance->Init() < 0) {
-      delete s_instance;
-      s_instance = nullptr;
+  auto iter = s_instance.find(card);
+  if (iter == s_instance.end()) {
+    DRMMaster *new_master = new DRMMaster();
+    if (new_master->Init(card) < 0) {
+      delete new_master;
       return -ENODEV;
     }
+    s_instance[card] = new_master;
+    *master = new_master;
+  } else {
+    *master = iter->second;
   }
 
-  *master = s_instance;
   return 0;
 }
 
-void DRMMaster::DestroyInstance() {
+void DRMMaster::DestroyInstance(uint32_t card) {
   lock_guard<mutex> obj(s_lock);
-  delete s_instance;
-  s_instance = nullptr;
+
+  auto iter = s_instance.find(card);
+  if (iter != s_instance.end()) {
+    delete iter->second;
+    s_instance.erase(iter);
+  }
 }
 
-int DRMMaster::Init() {
-  dev_fd_ = drmOpen("msm_drm", nullptr);
+/*
+ * if DRM card leasing is enabled
+ *    card 0 will not be able to open because,all its resources are lease to other cards
+ *    We will open the instance of the card which will have the name as msm_drm
+ *
+ * if DRM card leasing feature not enabled
+ *    card0 and card1 will be opened
+ *
+ * */
+
+int DRMMaster::Init(uint32_t card) {
+  if (card == 0) {
+    dev_fd_ = drmOpen("msm_drm", nullptr);
+  } else {
+    drmVersionPtr ver;
+    int fd;
+    int card_cnt = 0;
+
+    for (int itr = 0; itr < MAX_CARDS; itr++) {
+      snprintf(path_, sizeof(path_), "/dev/dri/card%d", itr);
+      fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+      if (fd < 0)
+        continue;
+
+      ver = drmGetVersion(fd);
+      if (ver) {
+        bool match = !strcmp(ver->name, "msm_drm");
+        drmFreeVersion(ver);
+        if (match) {
+          if (card == card_cnt) {
+            dev_fd_ = fd;
+            card_ = card;
+            break;
+          }
+          card_cnt++;
+        }
+      }
+
+      close(fd);
+    }
+  }
+
   if (dev_fd_ < 0) {
-    DRM_LOGE("drmOpen failed with error %d", dev_fd_);
+    DRM_LOGD("drmOpen failed with error %d for card%d", dev_fd_, card);
     return -ENODEV;
   }
 
@@ -162,6 +211,14 @@ bool DRMMaster::IsRmFbRefCounted() {
   return true;
 #endif
   return false;
+}
+
+void DRMMaster::CreateEventHandle(int *fd) {
+  if (card_ == 0) {
+    *fd = drmOpen("msm_drm", nullptr);
+  } else {
+    *fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+  }
 }
 
 }  // namespace drm_utils

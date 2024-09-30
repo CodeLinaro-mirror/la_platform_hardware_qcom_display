@@ -22,6 +22,13 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <stdio.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -117,19 +124,8 @@ DisplayError DisplayBase::Init() {
   fb_config_.x_pixels = mixer_attributes_.width;
   fb_config_.y_pixels = mixer_attributes_.height;
 
-  if (IsPrimaryDisplay()) {
-    HWScaleLutInfo lut_info = {};
-    error = comp_manager_->GetScaleLutConfig(&lut_info);
-    if (error == kErrorNone) {
-      error = hw_intf_->SetScaleLutConfig(&lut_info);
-      if (error != kErrorNone) {
-        goto CleanupOnError;
-      }
-    }
-  }
-
-  // ColorManager supported for built-in display.
-  if (kBuiltIn == display_type_) {
+  // ColorManager supported for built-in and pluggable displays.
+  if (kBuiltIn == display_type_ || kPluggable == display_type_) {
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_);
 
@@ -193,9 +189,6 @@ DisplayError DisplayBase::Deinit() {
     lock_guard<recursive_mutex> obj(recursive_mutex_);
     ClearColorInfo();
     comp_manager_->UnregisterDisplay(display_comp_ctx_);
-    if (IsPrimaryDisplay()) {
-      hw_intf_->UnsetScaleLutConfig();
-    }
   }
   HWEventsInterface::Destroy(hw_events_intf_);
   HWInterface::Destroy(hw_intf_);
@@ -1013,7 +1006,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     GetValueOfModeAttribute(it_mode->second, kDynamicRangeAttribute, &dynamic_range);
   }
 
-  comp_manager_->ControlDpps(dynamic_range != kHdr);
+  comp_manager_->ControlDpps(display_comp_ctx_, dynamic_range != kHdr);
 
   current_color_mode_ = color_mode;
   PrimariesTransfer blend_space = {};
@@ -1443,7 +1436,7 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
   // Set rotate90 to false since this is taken care of during regular composition.
   bool rotate90 = false;
 
-  DisplayError error = comp_manager_->ValidateScaling(crop, dst, rotate90);
+  DisplayError error = comp_manager_->ValidateScaling(display_comp_ctx_, crop, dst, rotate90);
   if (error != kErrorNone) {
     DLOGE("Unsupported resolution: (%dx%d)", width, height);
     return kErrorParameters;
@@ -1483,14 +1476,10 @@ DisplayError DisplayBase::SetDetailEnhancerData(const DisplayDetailEnhancerData 
   }
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
-  if (GetDriverType() == DriverType::DRM) {
-    if (de_data.enable) {
-      disable_pu_on_dest_scaler_ = true;
-    } else {
-      SetPUonDestScaler();
-    }
+  if (de_data.enable) {
+    disable_pu_on_dest_scaler_ = true;
   } else {
-    DisablePartialUpdateOneFrame();
+    SetPUonDestScaler();
   }
 
   return kErrorNone;
@@ -1572,6 +1561,8 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
       hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
     }
   }
+
+  hw_layers_.info.expected_present_time = layer_stack->expected_present_time;
 
   return;
 }
@@ -1803,9 +1794,6 @@ DisplayError DisplayBase::ValidateDataspace(const ColorMetaData &color_metadata)
 // TODO(user): Temporary changes, to be removed when DRM driver supports
 // Partial update with Destination scaler enabled.
 void DisplayBase::SetPUonDestScaler() {
-  if (GetDriverType() == DriverType::FB) {
-    return;
-  }
   uint32_t mixer_width = mixer_attributes_.width;
   uint32_t mixer_height = mixer_attributes_.height;
   uint32_t display_width = display_attributes_.x_pixels;

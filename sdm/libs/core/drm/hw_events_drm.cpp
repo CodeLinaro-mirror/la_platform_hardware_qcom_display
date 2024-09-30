@@ -70,6 +70,13 @@ namespace sdm {
 using drm_utils::DRMMaster;
 
 DisplayError HWEventsDRM::InitializePollFd() {
+  DRMMaster *master = nullptr;
+  int ret = DRMMaster::GetInstance(&master, card_id_);
+  if (ret < 0) {
+    DLOGE("Failed to acquire DRMMaster instance");
+    return kErrorNotSupported;
+  }
+
   for (uint32_t i = 0; i < event_data_list_.size(); i++) {
     char data[kMaxStringLength]{};
     HWEventData &event_data = event_data_list_[i];
@@ -80,15 +87,9 @@ DisplayError HWEventsDRM::InitializePollFd() {
       case HWEvent::VSYNC: {
         poll_fds_[i].events = POLLIN | POLLPRI | POLLERR;
         if (is_primary_) {
-          DRMMaster *master = nullptr;
-          int ret = DRMMaster::GetInstance(&master);
-          if (ret < 0) {
-            DLOGE("Failed to acquire DRMMaster instance");
-            return kErrorNotSupported;
-          }
           master->GetHandle(&poll_fds_[i].fd);
         } else {
-          poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+          master->CreateEventHandle(&poll_fds_[i].fd);
         }
         vsync_index_ = i;
       } break;
@@ -101,7 +102,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         Sys::pread_(poll_fds_[i].fd, data, kMaxStringLength, 0);
       } break;
       case HWEvent::IDLE_NOTIFY: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        master->CreateEventHandle(&poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -110,7 +111,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         idle_notify_index_ = i;
       } break;
       case HWEvent::IDLE_POWER_COLLAPSE: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        master->CreateEventHandle(&poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -119,7 +120,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         idle_pc_index_ = i;
       } break;
       case HWEvent::PANEL_DEAD: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        master->CreateEventHandle(&poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -128,7 +129,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         panel_dead_index_ = i;
       } break;
       case HWEvent::HW_RECOVERY: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        master->CreateEventHandle(&poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -207,6 +208,7 @@ DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
 
   static_cast<const HWDeviceDRM *>(hw_intf)->GetDRMDisplayToken(&token_);
   is_primary_ = static_cast<const HWDeviceDRM *>(hw_intf)->IsPrimaryDisplay();
+  card_id_ = GET_CARD_ID(display_id);
 
   DLOGI("Setup event handler for display %d-%d, CRTC %d, Connector %d", display_id, display_type,
         token_.crtc_id, token_.conn_id);
@@ -509,6 +511,8 @@ DisplayError HWEventsDRM::RegisterHwRecovery(bool enable) {
 }
 
 void HWEventsDRM::HandleVSync(char *data) {
+  DisplayError ret = kErrorNone;
+  vsync_handler_count_ = 0;  //  reset vsync handler count. lock not needed
   {
     std::lock_guard<std::mutex> lock(vsync_mutex_);
     vsync_registered_ = false;
@@ -524,6 +528,16 @@ void HWEventsDRM::HandleVSync(char *data) {
   int error = drmHandleEvent(poll_fds_[vsync_index_].fd, &event);
   if (error != 0) {
     DLOGE("drmHandleEvent failed: %i", error);
+  }
+
+  if (vsync_handler_count_ > 1) {
+    //  probable thread preemption caused > 1 vsync handling. Re-enable vsync before polling
+    std::lock_guard<std::mutex> lock(vsync_mutex_);
+    vsync_registered_ = false;
+    if (vsync_enabled_) {
+      ret = RegisterVSync();
+      vsync_registered_ = (ret == kErrorNone);
+    }
   }
 }
 
@@ -570,9 +584,11 @@ void HWEventsDRM::HandlePanelDead(char *data) {
 
 void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
+  HWEventsDRM *ev_data = reinterpret_cast<HWEventsDRM *>(data);
+  ev_data->vsync_handler_count_++;
   int64_t timestamp = (int64_t)(tv_sec)*1000000000 + (int64_t)(tv_usec)*1000;
   DTRACE_SCOPED();
-  reinterpret_cast<HWEventsDRM *>(data)->event_handler_->VSync(timestamp);
+  ev_data->event_handler_->VSync(timestamp);
 }
 
 void HWEventsDRM::HandleIdleTimeout(char *data) {

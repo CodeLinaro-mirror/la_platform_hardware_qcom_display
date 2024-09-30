@@ -29,8 +29,38 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the
+ * disclaimer below) provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following
+ * disclaimer in the documentation and/or other materials provided
+ * with the distribution.
+ *
+ * * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
+ * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
+ * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <dlfcn.h>
@@ -127,26 +157,27 @@ static InlineRotationVersion GetInRotVersion(sde_drm::InlineRotationVersion drm_
   }
 }
 
-HWResourceInfo *HWInfoDRM::hw_resource_ = nullptr;
-
 DisplayError HWInfoDRM::Init() {
-  default_mode_ = (DRMLibLoader::GetInstance()->IsLoaded() == false);
+  default_mode_ = (DRMLibLoader::GetInstance(card_id_)->IsLoaded() == false);
   if (!default_mode_) {
     DRMMaster *drm_master = {};
     int dev_fd = -1;
-    DRMMaster::GetInstance(&drm_master);
+    DRMMaster::GetInstance(&drm_master, card_id_);
     if (!drm_master) {
-      DLOGE("Failed to acquire DRMMaster instance");
+      DLOGI("Failed to acquire DRMMaster instance %d", card_id_);
       return kErrorCriticalResource;
     }
     drm_master->GetHandle(&dev_fd);
-    DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+    DRMLibLoader::GetInstance(card_id_)->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (!drm_mgr_intf_) {
-      DRMLibLoader::Destroy();
-      DRMMaster::DestroyInstance();
+      DRMLibLoader::Destroy(card_id_);
+      DRMMaster::DestroyInstance(card_id_);
       DLOGE("Failed to get DRMManagerInterface");
       return kErrorCriticalResource;
     }
+  } else {
+      DRMLibLoader::Destroy(card_id_);
+      return kErrorCriticalResource;
   }
 
   return kErrorNone;
@@ -162,12 +193,13 @@ void HWInfoDRM::Deinit() {
   }
 
   if (drm_mgr_intf_) {
-    DRMLibLoader::GetInstance()->FuncDestroyDRMManager()();
+    DRMLibLoader::GetInstance(card_id_)->FuncDestroyDRMManager()();
     drm_mgr_intf_ = nullptr;
   }
 
-  DRMLibLoader::Destroy();
-  DRMMaster::DestroyInstance();
+  DRMLibLoader::Destroy(card_id_);
+
+  DRMMaster::DestroyInstance(card_id_);
 }
 
 HWInfoDRM::~HWInfoDRM() {
@@ -532,7 +564,9 @@ void HWInfoDRM::GetWBInfo(HWResourceInfo *hw_resource) {
   // Fake register
   ret = drm_mgr_intf_->RegisterDisplay(sde_drm::DRMDisplayType::VIRTUAL, &token);
   if (ret) {
-    DLOGE("Failed registering display %d. Error: %d.", sde_drm::DRMDisplayType::VIRTUAL, ret);
+    if (ret != -ENODEV) {
+      DLOGE("Failed registering display %d. Error: %d.", sde_drm::DRMDisplayType::VIRTUAL, ret);
+    }
     return;
   }
 
@@ -653,7 +687,6 @@ DisplayError HWInfoDRM::GetHWRotatorInfo(HWResourceInfo *hw_resource) {
     if (Sys::getline_(fs, line) && (!strncmp(line.c_str(), "sde_rotator", strlen("sde_rotator")))) {
       hw_resource->hw_rot_info.device_path = string("/dev/video" + to_string(i));
       hw_resource->hw_rot_info.num_rotator++;
-      hw_resource->hw_rot_info.type = HWRotatorInfo::ROT_TYPE_V4L2;
       hw_resource->hw_rot_info.has_downscale = true;
       GetRotatorSupportedFormats(i, hw_resource);
 
@@ -841,8 +874,8 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
 
   for (auto &iter : conns_info) {
     HWDisplayInfo hw_info = {};
-    hw_info.display_id =
-        ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 : (int32_t)(iter.first);
+    hw_info.display_id = ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 :
+                                               (int32_t)(MAKE_DISPLAY_ID(card_id_, iter.first));
     switch (iter.second.type) {
       case DRM_MODE_CONNECTOR_DSI:
         hw_info.display_type = kBuiltIn;
@@ -981,6 +1014,25 @@ DisplayError HWInfoDRM::SetPipeHandoff(uint32_t pipe_id) {
   } else {
     return kErrorNone;
   }
+}
+
+DisplayError HWInfoDRM::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
+  sde_drm::DRMScalerLUTInfo drm_lut_info = {};
+  drm_lut_info.cir_lut = lut_info->cir_lut;
+  drm_lut_info.dir_lut = lut_info->dir_lut;
+  drm_lut_info.sep_lut = lut_info->sep_lut;
+  drm_lut_info.cir_lut_size = lut_info->cir_lut_size;
+  drm_lut_info.dir_lut_size = lut_info->dir_lut_size;
+  drm_lut_info.sep_lut_size = lut_info->sep_lut_size;
+  drm_mgr_intf_->SetScalerLUT(drm_lut_info);
+
+  return kErrorNone;
+}
+
+DisplayError HWInfoDRM::UnsetScaleLutConfig() {
+  drm_mgr_intf_->UnsetScalerLUT();
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

@@ -32,10 +32,46 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.mapper@4.0.vendor \
     modetest
 
-ifneq ($(TARGET_IS_HEADLESS),true)
-PRODUCT_PACKAGES += \
-    vendor.qti.hardware.display.composer-service \
+SOONG_CONFIG_NAMESPACES += display_config_idl
+# Soong Keys
+SOONG_CONFIG_display_config_idl += target_aidl_or_hidl
+# Soong Values
 
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
+$(warning "Android-U compiling AIDL")
+SOONG_CONFIG_display_config_idl_target_aidl_or_hidl := target_aidl
+else
+$(warning "Non-Android-U compiling HIDL")
+SOONG_CONFIG_display_config_idl_target_aidl_or_hidl := target_hidl
+endif
+
+SOONG_CONFIG_NAMESPACES += display_config_composer3
+# Soong Keys
+SOONG_CONFIG_display_config_composer3 += vndk
+# Soong Values
+ifndef TARGET_ANDROID_BELOW_V15
+$(warning "Android-below-V15 not defined, compiling AIDL composer3 V2")
+SOONG_CONFIG_display_config_composer3_vndk := version_2
+else
+ifeq ($(TARGET_ANDROID_BELOW_V15),true)
+$(warning "Android-U compiling AIDL composer3 V2")
+SOONG_CONFIG_display_config_composer3_vndk := version_2
+else
+$(warning "Android-V compiling AIDL composer V3")
+SOONG_CONFIG_display_config_composer3_vndk := version_3
+endif
+endif #ifndef TARGET_ANDROID_BELOW_V15
+
+ifneq ($(TARGET_IS_HEADLESS),true)
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
+PRODUCT_PACKAGES += \
+    vendor.qti.hardware.display.composer-service
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_get_screen_decorator_support=1
+else
+PRODUCT_PACKAGES += \
+    android.hardware.graphics.composer@2.4-service
+endif
 endif #TARGET_IS_HEADLESS
 
 #Enable AIDL Hal for S
@@ -117,17 +153,26 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_scaler=0 \
     vendor.display.disable_inline_rotator=1 \
     vendor.display.disable_decimation=1 \
-    vendor.display.enable_null_display=0 \
     vendor.display.disable_excl_rect=0 \
     vendor.display.comp_mask=0 \
     vendor.display.enable_default_color_mode=1 \
     vendor.display.enable_optimize_refresh=1 \
-    vendor.display.disable_ui_3d_tonemap=1 \
+    vendor.display.disable_ui_3d_tonemap=0 \
     vendor.display.flush_on_layer_set_empty=1 \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_color_transformation=1
 
-ifeq ($(TARGET_BOARD_PLATFORM), msmnile)
+ifeq ($(TARGET_USES_QMAA),true)
+ifeq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.enable_null_display=0
+else
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.enable_null_display=1
+endif
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), msmnile gen4),$(TARGET_BOARD_PLATFORM))
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
 endif
 

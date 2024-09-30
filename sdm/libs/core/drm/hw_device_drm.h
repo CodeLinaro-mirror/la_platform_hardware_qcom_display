@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HW_DEVICE_DRM_H__
 #define __HW_DEVICE_DRM_H__
 
@@ -46,8 +53,8 @@
 #define IOCTL_LOGE(ioctl, type) \
   DLOGE("ioctl %s, device = %d errno = %d, desc = %s", #ioctl, type, errno, strerror(errno))
 
-#define UI_FBID_LIMIT 3
-#define VIDEO_FBID_LIMIT 16
+#define UI_FBID_LIMIT 4
+#define VIDEO_FBID_LIMIT 65
 #define OFFLINE_ROTATOR_FBID_LIMIT 2
 
 using sde_drm::DRMPowerMode;
@@ -106,8 +113,6 @@ class HWDeviceDRM : public HWInterface {
   virtual void GetHWPanelMaxBrightness() { return; }
   virtual DisplayError SetAutoRefresh(bool enable) { autorefresh_ = enable; return kErrorNone; }
   virtual DisplayError SetS3DMode(HWS3DMode s3d_mode);
-  virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
-  virtual DisplayError UnsetScaleLutConfig();
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes);
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
   virtual void InitializeConfigs();
@@ -174,6 +179,8 @@ class HWDeviceDRM : public HWInterface {
   class Registry {
    public:
     explicit Registry(BufferAllocator *buffer_allocator);
+    // Init master
+    void Init(Handle master) {master_ = master;}
     // Called on each Validate and Commit to map the handle_id to fb_id of each layer buffer.
     void Register(HWLayers *hw_layers);
     // Called on display disconnect to clear output buffer map and remove fb_ids.
@@ -194,6 +201,7 @@ class HWDeviceDRM : public HWInterface {
     std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> output_buffer_map_ {};
     BufferAllocator *buffer_allocator_ = {};
     uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
+    Handle master_ = nullptr;
   };
 
  protected:

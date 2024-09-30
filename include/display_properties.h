@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __DISPLAY_PROPERTIES_H__
 #define __DISPLAY_PROPERTIES_H__
 
@@ -136,4 +142,6 @@
 
 #define DISABLE_VIRTUAL_DISPLAY              DISPLAY_PROP("disable_virtual_display")
 #define DISABLE_COLOR_TRANSFORMATION         DISPLAY_PROP("disable_color_transformation")
+// Disable A8 format Screen Decorator support
+#define DISABLE_GET_SCREEN_DECORATOR_SUPPORT DISPLAY_PROP("disable_get_screen_decorator_support")
 #endif  // __DISPLAY_PROPERTIES_H__

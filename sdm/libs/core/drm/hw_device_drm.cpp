@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -100,7 +100,6 @@ using drm_utils::DRMResMgr;
 using drm_utils::DRMLibLoader;
 using drm_utils::DRMBuffer;
 using sde_drm::GetDRMManager;
-using sde_drm::DestroyDRMManager;
 using sde_drm::DRMDisplayType;
 using sde_drm::DRMDisplayToken;
 using sde_drm::DRMConnectorInfo;
@@ -317,15 +316,13 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
 
 class FrameBufferObject : public LayerBufferObject {
  public:
-  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format,
+  explicit FrameBufferObject(uint32_t fb_id, DRMMaster *master, LayerBufferFormat format,
                              uint32_t width, uint32_t height)
-    :fb_id_(fb_id), format_(format), width_(width), height_(height) {
+    :fb_id_(fb_id), master_(master), format_(format), width_(width), height_(height) {
   }
 
   ~FrameBufferObject() {
-    DRMMaster *master;
-    DRMMaster::GetInstance(&master);
-    int ret = master->RemoveFbId(fb_id_);
+    int ret = master_->RemoveFbId(fb_id_);
     if (ret < 0) {
       DLOGE("Removing fb_id %d failed with error %d", fb_id_, errno);
     }
@@ -337,6 +334,7 @@ class FrameBufferObject : public LayerBufferObject {
 
  private:
   uint32_t fb_id_;
+  DRMMaster *master_;
   LayerBufferFormat format_;
   uint32_t width_;
   uint32_t height_;
@@ -379,14 +377,8 @@ void HWDeviceDRM::Registry::Register(HWLayers *hw_layers) {
 }
 
 int HWDeviceDRM::Registry::CreateFbId(LayerBuffer *buffer, uint32_t *fb_id) {
-  DRMMaster *master = nullptr;
-  DRMMaster::GetInstance(&master);
+  DRMMaster *master = reinterpret_cast<DRMMaster*>(master_);
   int ret = -1;
-
-  if (!master) {
-    DLOGE("Failed to acquire DRM Master instance");
-    return ret;
-  }
 
   DRMBuffer layout{};
   AllocatedBufferInfo buf_info{};
@@ -412,6 +404,7 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, LayerBuffer* buffer) {
   }
 
   uint64_t handle_id = buffer->handle_id;
+
   if (!handle_id || disable_fbid_cache_) {
     // In legacy path, clear fb_id map in each frame.
     layer->buffer_map->buffer_map.clear();
@@ -428,8 +421,14 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, LayerBuffer* buffer) {
       }
     }
 
-    if (layer->buffer_map->buffer_map.size() >= fbid_cache_limit_) {
-      // Clear fb_id map, if the size reaches cache limit.
+    if (layer->buffer_map->buffer_map.size() == fbid_cache_limit_) {
+      // Erase the first buffer from fb_id map if current buffer is mismatch
+      // and the size reaches cache limit.
+      DLOGI_IF(kTagDisplay, "Erase the first cache buffer from fb_id map");
+      layer->buffer_map->buffer_map.erase(layer->buffer_map->buffer_map.begin());
+    } else if (layer->buffer_map->buffer_map.size() > fbid_cache_limit_) {
+      // Clear fb_id map, if the size reaches cache limit more than one.
+      DLOGI_IF(kTagDisplay, "Size reaches cache limit more than one, clear the fb_id map");
       layer->buffer_map->buffer_map.clear();
     }
   }
@@ -438,6 +437,7 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, LayerBuffer* buffer) {
   if (CreateFbId(buffer, &fb_id) >= 0) {
     // Create and cache the fb_id in map
     layer->buffer_map->buffer_map[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
+        reinterpret_cast<DRMMaster*>(master_),
         buffer->format, buffer->width, buffer->height);
   }
 }
@@ -471,6 +471,7 @@ void HWDeviceDRM::Registry::MapOutputBufferToFbId(LayerBuffer *output_buffer) {
   uint32_t fb_id = 0;
   if (CreateFbId(output_buffer, &fb_id) >= 0) {
     output_buffer_map_[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
+        reinterpret_cast<DRMMaster*>(master_),
         output_buffer->format, output_buffer->width, output_buffer->height);
   }
 }
@@ -509,16 +510,22 @@ HWDeviceDRM::HWDeviceDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator
 DisplayError HWDeviceDRM::Init() {
   int ret = 0;
   DRMMaster *drm_master = {};
-  DRMMaster::GetInstance(&drm_master);
+  DRMMaster::GetInstance(&drm_master, GET_CARD_ID(display_id_));
   drm_master->GetHandle(&dev_fd_);
-  DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
+  DRMLibLoader::GetInstance(GET_CARD_ID(display_id_))->FuncGetDRMManager()(dev_fd_, &drm_mgr_intf_);
+
+  if(!drm_mgr_intf_) {
+      DLOGE(" GetDRMManager failed");
+      return kErrorResources;
+  }
 
   if (-1 == display_id_) {
     if (drm_mgr_intf_->RegisterDisplay(disp_type_, &token_)) {
       DLOGE("RegisterDisplay (by type) failed for %s", device_name_);
       return kErrorResources;
     }
-  } else if (drm_mgr_intf_->RegisterDisplay(display_id_, &token_)) {
+    display_id_ = static_cast<int32_t>(token_.conn_id);
+  } else if (drm_mgr_intf_->RegisterDisplay(GET_CONN_ID(display_id_), &token_)) {
     DLOGE("RegisterDisplay (by id) failed for %s - %d", device_name_, display_id_);
     return kErrorResources;
   }
@@ -529,7 +536,7 @@ DisplayError HWDeviceDRM::Init() {
     return kErrorNotSupported;
   }
 
-  display_id_ = static_cast<int32_t>(token_.conn_id);
+  registry_.Init(drm_master);
 
   ret = drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
   if (ret) {
@@ -1569,6 +1576,25 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
   SetupAtomic(hw_layers, false /* validate */);
 
+  HWLayersInfo &hw_layer_info = hw_layers->info;
+  if (hw_layer_info.expected_present_time > 0) {
+    uint64_t vsync_period = display_attributes_[current_mode_index_].vsync_period_ns;
+    uint64_t expected_present_time = hw_layer_info.expected_present_time > 0 ?
+                                     hw_layer_info.expected_present_time - vsync_period : 0;
+
+    uint64_t future_timestamp = expected_present_time;
+    struct timespec t = {0, 0};
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    uint64_t current_time = (UINT64(t.tv_sec) * 1000000000LL + UINT64(t.tv_nsec));
+
+    if (current_time < future_timestamp) {
+      uint64_t sleep_period = future_timestamp - current_time;
+      DLOGI_IF(kTagDriverConfig, "current_time: %llu, future_timestamp: %llu, sleep_period: %llu,"
+              "vsync_period: %llu", current_time, future_timestamp, sleep_period, vsync_period);
+      usleep(UINT32(sleep_period / 1000));
+    }
+  }
+
   int ret = drm_atomic_intf_->Commit(synchronous_commit_, false /* retain_planes*/);
   int release_fence = INT(release_fence_);
   int retire_fence = INT(retire_fence_);
@@ -1586,7 +1612,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DLOGD_IF(kTagDriverConfig, "RELEASE fence created: fd:%d", release_fence);
   DLOGD_IF(kTagDriverConfig, "RETIRE fence created: fd:%d", retire_fence);
 
-  HWLayersInfo &hw_layer_info = hw_layers->info;
   LayerStack *stack = hw_layer_info.stack;
   stack->retire_fence_fd = retire_fence;
 
@@ -1915,25 +1940,6 @@ DisplayError HWDeviceDRM::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level)
 
 DisplayError HWDeviceDRM::SetS3DMode(HWS3DMode s3d_mode) {
   return kErrorNotSupported;
-}
-
-DisplayError HWDeviceDRM::SetScaleLutConfig(HWScaleLutInfo *lut_info) {
-  sde_drm::DRMScalerLUTInfo drm_lut_info = {};
-  drm_lut_info.cir_lut = lut_info->cir_lut;
-  drm_lut_info.dir_lut = lut_info->dir_lut;
-  drm_lut_info.sep_lut = lut_info->sep_lut;
-  drm_lut_info.cir_lut_size = lut_info->cir_lut_size;
-  drm_lut_info.dir_lut_size = lut_info->dir_lut_size;
-  drm_lut_info.sep_lut_size = lut_info->sep_lut_size;
-  drm_mgr_intf_->SetScalerLUT(drm_lut_info);
-
-  return kErrorNone;
-}
-
-DisplayError HWDeviceDRM::UnsetScaleLutConfig() {
-  drm_mgr_intf_->UnsetScalerLUT();
-
-  return kErrorNone;
 }
 
 DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
