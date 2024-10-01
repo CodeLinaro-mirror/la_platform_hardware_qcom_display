@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -950,6 +950,176 @@ ScopedAStatus DisplayConfigAIDL::unRegisterCallback(int64_t client_handle) {
 
   return ret == 0 ? ScopedAStatus::ok() : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
+
+ScopedAStatus DisplayConfigAIDL::queueTunnelledBuffer(
+                                 const ::aidl::android::hardware::common::NativeHandle& buffer,
+                                 const ::aidl::android::hardware::common::NativeHandle& acquire_fence,
+                                 int32_t* _aidl_return) {
+  if ((hwc_session_->tunneling_enabled_) == false) {
+    ALOGW("Tunneling not enabled\n");
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  sdm::HWCDisplay *hwc_display = hwc_session_->hwc_display_[hwc_session_->tunneled_display_id_];
+  if (!hwc_display) {
+    ALOGE("Primary Display is not connected. Exiting queueTunnelledBuffer\n");
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+  if (hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = hwc_display->GetHWCTunnelledLayer();
+    if (hwc_session_->tunneled_layer_ != -1) {
+      hwc_session_->SetLayerIsTunneled(hwc_session_->tunneled_display_id_,
+                                       hwc_session_->tunneled_layer_, true);
+    }
+  }
+
+  int32_t error = -EINVAL;
+  bool tunneled_layer_present = false;
+  hwc_session_->IsTunnelledLayerPresent(hwc_session_->tunneled_display_id_,
+                                        &tunneled_layer_present);
+  if (tunneled_layer_present == false || hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = -1;
+    ALOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = ::android::makeFromAidl(buffer);
+  if (!buffer_handle) {
+    ALOGE("Invalid native handle");
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
+  if (hwc_session_->tunneling_map_buffer_native_handle_.find(buffer_id) !=
+      hwc_session_->tunneling_map_buffer_native_handle_.end()) {
+    native_handle = hwc_session_->tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = hwc_session_->buffer_allocator_.ImportBuffer(buffer_handle);
+    if (native_handle == nullptr) {
+      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+    hwc_session_->tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id]
+                                                     = native_handle;
+  }
+
+  uint32_t types_count = 0;
+  uint32_t reqs_count = 0;
+  bool validate_only = false;
+  bool needsCommit = false;
+  const native_handle_t* native_fence_handle = ::android::makeFromAidl(acquire_fence);
+  std::shared_ptr<sdm::Fence> tunneled_layer_af = nullptr;    //Tunnel layer acquire fence.
+  // if native_fence_handle is NULL, acquire fence fd is considered -1
+  if (native_fence_handle) {
+    tunneled_layer_af = sdm::Fence::Create(dup(native_fence_handle->data[0]), "");
+  }
+  {
+    SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[hwc_session_->tunneled_display_id_]);
+  }
+  error = hwc_session_->SetLayerBuffer(hwc_session_->tunneled_display_id_,
+                                       hwc_session_->tunneled_layer_, native_handle,
+                                       tunneled_layer_af);
+  if (error != HWC2_ERROR_NONE) {
+    ALOGE("SetLayerBuffer failed! Exiting queueTunnelledBuffer.\n");
+    hwc_session_->tunneled_layer_ = -1;
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+  std::shared_ptr<sdm::Fence> validatefence = nullptr;
+  error = static_cast<int32_t>(hwc_session_->CommitOrPrepare(hwc_session_->tunneled_display_id_, validate_only,
+                                          &validatefence, &types_count, &reqs_count, &needsCommit));
+    if (error != HWC2_ERROR_NONE && error != HWC2_ERROR_HAS_CHANGES) {
+      ALOGE("CommitOrPrepare failed! Exiting queueTunnelledBuffer.\n");
+      hwc_session_->tunneled_layer_ = -1;
+      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+  hwc_session_->IsTunnelledLayerPresent(hwc_session_->tunneled_display_id_,
+                                        &tunneled_layer_present);
+  if (tunneled_layer_present == false || hwc_session_->tunneled_layer_ == -1) {
+    hwc_session_->tunneled_layer_ = -1;
+    ALOGW("No tunneled layer present! Exiting queueTunnelledBuffer");
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  auto hwc_layer = hwc_display->GetHWCLayer(hwc_session_->tunneled_layer_);
+  if (hwc_layer == nullptr) {
+    ALOGE("Unable to fetch corresponding hwc_layer for tunneled layer");
+    hwc_session_->tunneled_layer_ = -1;
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  std::shared_ptr<sdm::Fence> release_fence = nullptr;
+  hwc_layer->GetReleaseFence();
+  hwc_session_->tunneling_map_buffer_release_fence_[((private_handle_t *)native_handle)->id]
+                                                   = release_fence;
+
+  ALOGV("queueTunnelledBuffer successful.\n");
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::dequeueTunnelledBuffer(
+                                 const ::aidl::android::hardware::common::NativeHandle& buffer,
+                                 ::aidl::android::hardware::common::NativeHandle* release_fence_handle,
+                                 int32_t* _aidl_return) {
+  SEQUENCE_WAIT_SCOPE_LOCK(hwc_session_->locker_[hwc_session_->tunneled_display_id_]);
+  if ((hwc_session_->tunneling_enabled_) == false) {
+    ALOGE("Tunneling not enabled\n");
+  }
+
+  const native_handle_t *native_handle = NULL;
+  buffer_handle_t buffer_handle = ::android::makeFromAidl(buffer);
+  if (!buffer_handle) {
+    ALOGE("Invalid native handle");
+  }
+
+   uint64_t buffer_id = ((private_handle_t *)buffer_handle)->id;
+  if ((hwc_session_->tunneling_map_buffer_native_handle_.find(buffer_id)) !=
+      (hwc_session_->tunneling_map_buffer_native_handle_.end())) {
+    native_handle = hwc_session_->tunneling_map_buffer_native_handle_[buffer_id];
+  } else {
+    native_handle = hwc_session_->buffer_allocator_.ImportBuffer(buffer_handle);
+    hwc_session_->tunneling_map_buffer_native_handle_[((private_handle_t *)native_handle)->id]
+                                                     = native_handle;
+  }
+  private_handle_t *private_handle = (private_handle_t *)native_handle;
+
+  std::shared_ptr<sdm::Fence> release_fence =
+  hwc_session_->tunneling_map_buffer_release_fence_[private_handle->id];
+
+  if (release_fence) {
+    hwc_session_->tunneled_layer_rf_ = release_fence;
+    native_handle_t* temp_rf =  native_handle_create(1,0);
+    temp_rf->data[0] = std::stoi(sdm::Fence::GetStr(release_fence));
+    *release_fence_handle = ::android::dupToAidl(temp_rf);
+  }
+
+  ALOGV("dequeueTunnelledBuffer successful.\n");
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::tunnellingInit(int32_t* _aidl_return) {
+  char property[PROPERTY_VALUE_MAX] = {0};
+  property_get(ENABLE_TUNNELLING, property, "0");
+  if (!(strncmp(property, "0", PROPERTY_VALUE_MAX))) {
+     ALOGE("Tunnelling property not set. Exiting tunnellingInit!\n");
+     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+  hwc_session_->tunneling_enabled_ = true;
+  return ScopedAStatus::ok();
+}
+
+ ScopedAStatus DisplayConfigAIDL::tunnellingDeinit(int32_t* _aidl_return) {
+  hwc_session_->tunneling_enabled_ = false;
+     for (auto i : hwc_session_->tunneling_map_buffer_native_handle_) {
+     native_handle_close(i.second);
+   }
+
+      for (auto i : hwc_session_->tunneling_map_buffer_release_fence_) {
+     close(std::stoi(sdm::Fence::GetStr(i.second)));
+   }
+   hwc_session_->tunneling_map_buffer_native_handle_.clear();
+   hwc_session_->tunneling_map_buffer_release_fence_.clear();
+   return ScopedAStatus::ok();
+ }
 
 } // namespace config
 } // namespace display
