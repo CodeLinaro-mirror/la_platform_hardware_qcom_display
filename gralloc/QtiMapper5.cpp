@@ -53,6 +53,8 @@ namespace mapper5 {
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using gralloc::BufferInfo;
 
+std::mutex QtiMapper5::handles_heap_lock_;
+
 QtiMapper5::QtiMapper5() {
   enable_logs = property_get_bool(ENABLE_LOGS_PROP, 0);
   ALOGD_IF(enable_logs, "Created QtiMapper5 instance");
@@ -75,6 +77,7 @@ Error QtiMapper5::importBuffer(const native_handle_t *_Nonnull bufferHandle,
     return AIMAPPER_ERROR_NO_RESOURCES;
   }
 
+  std::lock_guard<std::mutex> lock(handles_heap_lock_);
   int snap_ret = snap_helper_->Import(importedBufferHandle);
   if (snap_ret) {
     ALOGE("%s: Unable to retain handle: %p", __FUNCTION__, importedBufferHandle);
@@ -91,6 +94,7 @@ Error QtiMapper5::importBuffer(const native_handle_t *_Nonnull bufferHandle,
 
 Error QtiMapper5::freeBuffer(buffer_handle_t _Nonnull buffer) {
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(buffer)
+  std::lock_guard<std::mutex> lock(handles_heap_lock_);
   int ret = snap_helper_->Free(const_cast<native_handle *>(buffer));
   if (ret) {
     ALOGW("%s: Unable to free buffer: %p", __FUNCTION__, buffer);
@@ -461,6 +465,7 @@ Error QtiMapper5::dumpBuffer(buffer_handle_t _Nonnull bufferHandle,
                              AIMapper_DumpBufferCallback _Nonnull dumpBufferCallback,
                              void *_Null_unspecified context) {
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
+  std::lock_guard<std::mutex> lock(handles_heap_lock_);
   return DumpBufferMetadata(bufferHandle, dumpBufferCallback, context);
 }
 
@@ -469,6 +474,7 @@ Error QtiMapper5::dumpAllBuffers(AIMapper_BeginDumpBufferCallback _Nonnull begin
                                  void *_Null_unspecified context) {
   REQUIRE_DRIVER()
   std::vector<buffer_handle_t> handle_list{};
+  std::lock_guard<std::mutex> lock(handles_heap_lock_);
   if (snap_helper_->GetAllHandles(&handle_list)) {
     return AIMAPPER_ERROR_UNSUPPORTED;
   }
