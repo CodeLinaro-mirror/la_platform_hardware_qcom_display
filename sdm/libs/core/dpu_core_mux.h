@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
   SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -102,7 +102,7 @@ class DPUCoreMux {
   template<typename T>
   bool AreAllEntriesSame(std::vector<T>& vec);
   void GetHWInterface(HWInterface **intf);
-  void GetDRMDisplayToken(sde_drm::DRMDisplayToken *token) const;
+  void GetDRMDisplayToken(uint32_t core_id, sde_drm::DRMDisplayToken *token) const;
   bool IsPrimaryDisplay() const;
   DisplayError GetFbConfig(uint32_t width, uint32_t height,
                            DisplayDeviceContext *device_ctx,

@@ -66,6 +66,10 @@ float lcm(float a, float b) {
   return (a * b) / gcd(a, b);
 }
 
+uint32_t round(uint32_t a, uint32_t b) {
+  return (a + b / 2) / b;
+}
+
 void CloseFd(int *fd) {
   if (*fd >= 0) {
     Sys::close_(*fd);

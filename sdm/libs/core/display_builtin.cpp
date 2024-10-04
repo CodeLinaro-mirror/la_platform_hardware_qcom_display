@@ -148,23 +148,46 @@ DisplayError DisplayBuiltIn::Init() {
     }
   }
 
+  std::vector<HWEvent> events;
 #ifdef TRUSTED_VM
-  event_list_ = {HWEvent::VSYNC, HWEvent::EXIT, HWEvent::PINGPONG_TIMEOUT, HWEvent::PANEL_DEAD,
-                 HWEvent::HW_RECOVERY};
+  events = {HWEvent::VSYNC,      HWEvent::EXIT,        HWEvent::PINGPONG_TIMEOUT,
+            HWEvent::PANEL_DEAD, HWEvent::HW_RECOVERY, HWEvent::POWER_EVENT};
 #else
-  event_list_ = {HWEvent::VSYNC,            HWEvent::EXIT,
-                 HWEvent::SHOW_BLANK_EVENT, HWEvent::THERMAL_LEVEL,
-                 HWEvent::PINGPONG_TIMEOUT, HWEvent::PANEL_DEAD,
-                 HWEvent::HW_RECOVERY,      HWEvent::HISTOGRAM,
-                 HWEvent::BACKLIGHT_EVENT,  HWEvent::POWER_EVENT,
-                 HWEvent::MMRM,             HWEvent::VM_RELEASE_EVENT};
+  events = {HWEvent::VSYNC,
+            HWEvent::EXIT,
+            HWEvent::SHOW_BLANK_EVENT,
+            HWEvent::THERMAL_LEVEL,
+            HWEvent::PINGPONG_TIMEOUT,
+            HWEvent::PANEL_DEAD,
+            HWEvent::HW_RECOVERY,
+            HWEvent::HISTOGRAM,
+            HWEvent::BACKLIGHT_EVENT,
+            HWEvent::POWER_EVENT,
+            HWEvent::MMRM,
+            HWEvent::VM_RELEASE_EVENT};
   if (client_ctx_.hw_panel_info.mode == kModeCommand) {
-    event_list_.push_back(HWEvent::IDLE_POWER_COLLAPSE);
+    events.push_back(HWEvent::IDLE_POWER_COLLAPSE);
   }
 #endif
-  event_list_.push_back(HWEvent::POWER_EVENT);
-  avr_prop_disabled_ = Debug::IsAVRDisabled();
+  std::bitset<8> core_id_map = display_id_info_.GetCoreIdMap();
+  bool master_core = true;
+  for (int i = 0; i < core_id_map.size(); i++) {
+    if (!core_id_map[i]) {
+      continue;
+    }
 
+    if (master_core) {
+      event_list_[i] = events;
+      primary_core_id_ = i;
+      master_core = false;
+    } else {
+      // register panel dead for all the cores
+      std::vector<HWEvent> core_event_list = {HWEvent::PANEL_DEAD};
+      event_list_[i] = core_event_list;
+    }
+  }
+
+  avr_prop_disabled_ = Debug::IsAVRDisabled();
   error = HWEventsInterface::Create(display_id_info_, kBuiltIn, this, event_list_, dpu_core_mux_,
                                     &hw_events_intf_);
   if (error != kErrorNone) {
@@ -172,6 +195,7 @@ DisplayError DisplayBuiltIn::Init() {
     dpu_core_mux_->Destroy();
     DLOGE("Failed to create hardware events interface on. Error = %d", error);
   }
+  master_hw_events_intf_ = hw_events_intf_[primary_core_id_];
 
   current_refresh_rate_ = client_ctx_.hw_panel_info.max_fps;
 
@@ -196,7 +220,7 @@ DisplayError DisplayBuiltIn::Init() {
       DLOGE("SPR Failed to initialize. Error = %d", error);
       DisplayBase::Deinit();
       dpu_core_mux_->Destroy();
-      HWEventsInterface::Destroy(hw_events_intf_);
+      HWEventsInterface::Destroy(&hw_events_intf_);
       return error;
     }
 
@@ -1118,10 +1142,10 @@ void DisplayBuiltIn::SetVsyncStatus(bool enable) {
   DTRACE_BEGIN(trace_name.c_str());
   if (enable) {
     // Enable if vsync is still enabled.
-    hw_events_intf_->SetEventState(HWEvent::VSYNC, vsync_enable_);
+    master_hw_events_intf_->SetEventState(HWEvent::VSYNC, vsync_enable_);
     pending_vsync_enable_ = false;
   } else {
-    hw_events_intf_->SetEventState(HWEvent::VSYNC, false);
+    master_hw_events_intf_->SetEventState(HWEvent::VSYNC, false);
     pending_vsync_enable_ = true;
   }
   DTRACE_END();

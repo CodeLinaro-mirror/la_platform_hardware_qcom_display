@@ -47,6 +47,7 @@ float lcm(float a, float b);
 void CloseFd(int *fd);
 uint64_t GetSystemTimeInNs();
 void SetRealTimePriority();
+uint32_t round(uint32_t a, uint32_t b);
 
 template<class T>
 bool SameConfig(T *t1, T *t2, unsigned int size) {
