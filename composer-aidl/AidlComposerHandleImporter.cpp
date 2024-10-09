@@ -42,10 +42,6 @@ namespace hardware {
 namespace display {
 namespace composer3 {
 
-#ifndef ENABLE_MAPPER_V5
-using android::hardware::graphics::mapper::V4_0::Error;
-#endif
-
 ComposerHandleImporter::ComposerHandleImporter() : mInitialized(false) {}
 
 void ComposerHandleImporter::initialize() {
@@ -54,17 +50,9 @@ void ComposerHandleImporter::initialize() {
     return;
   }
 
-#ifdef ENABLE_MAPPER_V5
   mMapper = GetMapperInstance();
-#else
-  mMapper = IMapper::getService();
-#endif
   if (mMapper == nullptr) {
-#ifdef ENABLE_MAPPER_V5
     ALOGE("%s: cannnot access QtiMapper5!", __FUNCTION__);
-#else
-    ALOGE("%s: cannnot acccess graphics mapper HAL!", __FUNCTION__);
-#endif
     return;
   }
 
@@ -77,11 +65,7 @@ void ComposerHandleImporter::initialize() {
 }
 
 void ComposerHandleImporter::cleanup() {
-#ifndef ENABLE_MAPPER_V5
-  mMapper->clear();
-#else
   mMapper = nullptr;
-#endif
   mInitialized = false;
 }
 
@@ -149,30 +133,12 @@ bool ComposerHandleImporter::importBuffer(buffer_handle_t &handle) {
 
   buffer_handle_t importedHandle;
 
-#ifdef ENABLE_MAPPER_V5
   auto ret = STABLEMAPPER(mMapper).importBuffer(handle, &importedHandle);
 
   if (ret != AIMAPPER_ERROR_NONE) {
     ALOGE("%s: mapper importBuffer failed: %d", __FUNCTION__, ret);
     return false;
   }
-#else
-  Error error;
-  auto ret = mMapper->importBuffer(hidl_handle(handle),
-                                   [&](const auto &tmpError, const auto &tmpBufferHandle) {
-                                     error = tmpError;
-                                     importedHandle = static_cast<buffer_handle_t>(tmpBufferHandle);
-                                   });
-
-  if (!ret.isOk()) {
-    ALOGE("%s: mapper importBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-    return false;
-  }
-
-  if (error != Error::NONE) {
-    return false;
-  }
-#endif
 
   handle = importedHandle;
 
@@ -205,17 +171,10 @@ void ComposerHandleImporter::freeBuffer(buffer_handle_t handle) {
     }
   }
 
-#ifdef ENABLE_MAPPER_V5
   auto ret = STABLEMAPPER(mMapper).freeBuffer(handle);
   if (ret != AIMAPPER_ERROR_NONE) {
     ALOGE("%s: mapper freeBuffer failed: %d", __FUNCTION__, ret);
   }
-#else
-  auto ret = mMapper->freeBuffer(const_cast<native_handle_t *>(handle));
-  if (!ret.isOk()) {
-    ALOGE("%s: mapper freeBuffer failed: %s", __FUNCTION__, ret.description().c_str());
-  }
-#endif
 }
 
 }  // namespace composer3

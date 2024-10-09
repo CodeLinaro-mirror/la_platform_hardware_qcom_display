@@ -18,7 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -236,7 +236,8 @@ int HWCSession::Init() {
     return status;
   }
   is_composer_up_ = true;
-  StartServices();
+
+  DLOGI("Initializing HWCSession...done!");
   return 0;
 }
 

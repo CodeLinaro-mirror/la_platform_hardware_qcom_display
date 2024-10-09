@@ -29,7 +29,6 @@
 /* This class translates HWC2 Layer functions to the SDM LayerStack
  */
 
-#include <QtiGralloc.h>
 #include <gralloc_priv.h>
 #include <qdMetaData.h>
 #include <core/layer_stack.h>

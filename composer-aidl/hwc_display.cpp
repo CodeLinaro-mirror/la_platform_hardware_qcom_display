@@ -35,7 +35,6 @@
 #include <utils/formats.h>
 #include <utils/rect.h>
 #include <qd_utils.h>
-#include <QtiGralloc.h>
 
 #include <algorithm>
 #include <iomanip>
@@ -702,25 +701,17 @@ void HWCDisplay::BuildLayerStack() {
         reinterpret_cast<native_handle_t *>(layer->input_buffer.buffer_id);
     if (handle) {
       uint32_t buffer_type = 0;
-#ifdef ENABLE_MAPPER_V5
       buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::BUFFER_TYPE, &buffer_type,
                                           sizeof(buffer_type));
-#else
-      buffer_allocator_->GetBufferType(const_cast<native_handle_t *>(handle), buffer_type);
-#endif
-      if (buffer_type == BUFFER_TYPE_VIDEO) {
+     if (buffer_type == BUFFER_TYPE_VIDEO) {
         layer_stack_.flags.video_present = true;
       }
       // TZ Protected Buffer - L1
       // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
       int32_t handle_flags;
-#ifdef ENABLE_MAPPER_V5
       buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::USAGE, &handle_flags,
                                           sizeof(handle_flags));
-#else
-      buffer_allocator_->GetPrivateFlags((void *)handle, handle_flags);
-#endif
-      if (handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
+     if (handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
         layer_stack_.flags.secure_present = true;
         is_secure = true;
       }

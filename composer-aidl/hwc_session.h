@@ -18,7 +18,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -262,10 +262,6 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
                     const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
                     VsyncPeriodChangeTimeline *out_timeline);
   HWC3::Error GetOverlaySupport(OverlayProperties *supported_props);
-  virtual int RegisterClientContext(std::shared_ptr<DisplayConfig::ConfigCallback> callback,
-                                    DisplayConfig::ConfigInterface **intf);
-  virtual void UnRegisterClientContext(DisplayConfig::ConfigInterface *intf);
-
 
   // HWCDisplayEventHandler
   virtual void DisplayPowerReset();
@@ -288,61 +284,6 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   static Locker display_config_locker_;
 
  private:
-
-  class DisplayConfigImpl: public DisplayConfig::ConfigInterface {
-   public:
-    explicit DisplayConfigImpl(std::weak_ptr<DisplayConfig::ConfigCallback> callback,
-                               HWCSession *hwc_session);
-
-   private:
-    virtual int IsDisplayConnected(DispType dpy, bool *connected);
-    virtual int SetDisplayStatus(DispType dpy, DisplayConfig::ExternalStatus status);
-    virtual int ConfigureDynRefreshRate(DisplayConfig::DynRefreshRateOp op, uint32_t refresh_rate);
-    virtual int GetConfigCount(DispType dpy, uint32_t *count);
-    virtual int GetActiveConfig(DispType dpy, uint32_t *config);
-    virtual int SetActiveConfig(DispType dpy, uint32_t config);
-    virtual int GetDisplayAttributes(uint32_t config_index, DispType dpy,
-                                     DisplayConfig::Attributes *attributes);
-    virtual int SetPanelBrightness(uint32_t level);
-    virtual int GetPanelBrightness(uint32_t *level);
-    virtual int MinHdcpEncryptionLevelChanged(DispType dpy, uint32_t min_enc_level);
-    virtual int RefreshScreen();
-    virtual int ControlPartialUpdate(DispType dpy, bool enable);
-    virtual int ToggleScreenUpdate(bool on);
-    virtual int SetIdleTimeout(uint32_t value);
-    virtual int GetHDRCapabilities(DispType dpy, DisplayConfig::HDRCapsParams *caps);
-    virtual int SetCameraLaunchStatus(uint32_t on);
-    virtual int DisplayBWTransactionPending(bool *status);
-    virtual int SetDisplayAnimating(uint64_t display_id, bool animating);
-    virtual int ControlIdlePowerCollapse(bool enable, bool synchronous);
-    virtual int GetWriteBackCapabilities(bool *is_wb_ubwc_supported);
-    virtual int SetDisplayDppsAdROI(uint32_t display_id, uint32_t h_start, uint32_t h_end,
-                                    uint32_t v_start, uint32_t v_end, uint32_t factor_in,
-                                    uint32_t factor_out);
-    virtual int UpdateVSyncSourceOnPowerModeOff();
-    virtual int UpdateVSyncSourceOnPowerModeDoze();
-    virtual int SetPowerMode(uint32_t disp_id, DisplayConfig::PowerMode power_mode);
-    virtual int IsPowerModeOverrideSupported(uint32_t disp_id, bool *supported);
-    virtual int IsHDRSupported(uint32_t disp_id, bool *supported);
-    virtual int IsWCGSupported(uint32_t disp_id, bool *supported);
-    virtual int SetLayerAsMask(uint32_t disp_id, uint64_t layer_id);
-    virtual int GetDebugProperty(const std::string prop_name, std::string value) {return -EINVAL;}
-    virtual int GetDebugProperty(const std::string prop_name, std::string *value);
-    virtual int GetActiveBuiltinDisplayAttributes(DisplayConfig::Attributes *attr);
-    virtual int SetPanelLuminanceAttributes(uint32_t disp_id, float min_lum, float max_lum);
-    virtual int IsBuiltInDisplay(uint32_t disp_id, bool *is_builtin);
-    virtual int GetSupportedDSIBitClks(uint32_t disp_id,
-                                       std::vector<uint64_t> bit_clks) {return -EINVAL;}
-    virtual int GetSupportedDSIBitClks(uint32_t disp_id, std::vector<uint64_t> *bit_clks);
-    virtual int GetDSIClk(uint32_t disp_id, uint64_t *bit_clk);
-    virtual int SetDSIClk(uint32_t disp_id, uint64_t bit_clk);
-    virtual int SetCWBOutputBuffer(uint32_t disp_id, const DisplayConfig::Rect rect,
-                                   bool post_processed, const native_handle_t *buffer);
-    virtual int SetQsyncMode(uint32_t disp_id, DisplayConfig::QsyncMode mode);
-
-    std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
-    HWCSession *hwc_session_ = nullptr;
-  };
 
   struct DisplayMapInfo {
     Display client_id = HWCCallbacks::kNumDisplays;        // mapped sf id for this display

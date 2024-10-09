@@ -28,8 +28,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -39,7 +39,6 @@
 #include <aidlcommonsupport/NativeHandle.h>
 
 #include <string>
-#include "QtiAllocator.h"
 #include "QtiAllocatorAIDL.h"
 
 using android::hardware::configureRpcThreadpool;

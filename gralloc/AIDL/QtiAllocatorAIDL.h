@@ -43,9 +43,7 @@ using ::android::hidl::base::V1_0::DebugInfo;
 using ::android::hidl::base::V1_0::IBase;
 using gralloc::BufferManager;
 
-using IMapper_v4 = ::android::hardware::graphics::mapper::V4_0::IMapper;
 using AidlPlaneLayout = aidl::android::hardware::graphics::common::PlaneLayout;
-using Error_v4 = ::android::hardware::graphics::mapper::V4_0::Error;
 using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 
 class QtiAllocatorAIDL : public BnAllocator {

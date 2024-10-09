@@ -187,7 +187,7 @@ soong_config_module_type {
 
 soong_config_string_variable {
      name: "target_aidl_or_hidl",
-     values: ["target_aidl", "target_hidl"],
+     values: ["target_aidl"],
 }
 
 soong_config_module_type {

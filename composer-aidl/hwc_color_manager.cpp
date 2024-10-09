@@ -28,9 +28,9 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -40,7 +40,6 @@
 #include <sync/sync.h>
 #include <utils/String16.h>
 #include <binder/Parcel.h>
-#include <QtiGralloc.h>
 #include <hardware/hwcomposer.h>
 #include <hardware/hwcomposer_defs.h>
 #include <QService.h>
