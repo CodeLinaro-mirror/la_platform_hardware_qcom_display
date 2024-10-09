@@ -247,7 +247,6 @@ case "$target" in
             setprop vendor.display.thermal.version 1
             setprop vendor.display.target.version 3
             setprop vendor.display.disable_mitigated_fps 1
-            setprop vendor.display.disable_cwb_idle_fallback 1
         ;;
     esac
     ;;
