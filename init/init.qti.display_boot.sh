@@ -247,6 +247,7 @@ case "$target" in
             setprop vendor.display.thermal.version 1
             setprop vendor.display.target.version 3
             setprop vendor.display.disable_mitigated_fps 1
+            setprop vendor.display.enable_rounded_corner 0
         ;;
     esac
     ;;
