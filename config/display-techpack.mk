@@ -2,6 +2,11 @@ include hardware/qcom/display/config/display-modules.mk
 include vendor/qcom/opensource/mm-drivers/mm_driver_product.mk
 include vendor/qcom/opensource/display-drivers/display_driver_product.mk
 
+# In the HY22 vendor build, the image did not contain the display prebuilds
+ifeq (,$(wildcard $(QCPATH)/display))
+-include $(QCPATH)/techpack/artifacts/display/$(TARGET_BOARD_PLATFORM)/prebuilt.mk
+endif
+
 ifneq (,$(wildcard $(QCPATH)/display))
 include $(QCPATH)/display/config/display-vendor-modules.mk
 endif
