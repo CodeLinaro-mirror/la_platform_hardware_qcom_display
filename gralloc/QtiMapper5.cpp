@@ -330,7 +330,7 @@ constexpr AIMapper_MetadataTypeDescription describeQTI(int64_t type, const char 
 Error QtiMapper5::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 63> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 64> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -353,8 +353,7 @@ Error QtiMapper5::listSupportedMetadataTypes(
       describeStandard(StandardMetadataType::SMPTE2086, true, true),
       describeStandard(StandardMetadataType::CTA861_3, true, true),
       describeStandard(StandardMetadataType::SMPTE2094_40, true, true),
-      // TODO: Investigate if this can be supported
-      // describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
+      describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
       describeStandard(StandardMetadataType::STRIDE, true, false),
       describeQTI(SnapMetadataType::VT_TIMESTAMP, "VT Timestamp", true, true),
       describeQTI(SnapMetadataType::MATRIX_COEFFICIENTS, "Color metadata - Matrix coefficients",
@@ -770,7 +769,7 @@ Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandl
 Error QtiMapper5Legacy::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 62> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 63> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -793,8 +792,7 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
       describeStandard(StandardMetadataType::SMPTE2086, true, true),
       describeStandard(StandardMetadataType::CTA861_3, true, true),
       describeStandard(StandardMetadataType::SMPTE2094_40, true, true),
-      // TODO: Investigate if this can be supported
-      // describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
+      describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
       describeStandard(StandardMetadataType::STRIDE, true, false),
       describeQTI(SnapMetadataType::VT_TIMESTAMP, "VT Timestamp", true, true),
       describeQTI(SnapMetadataType::MATRIX_COEFFICIENTS, "Color metadata - Matrix coefficients",

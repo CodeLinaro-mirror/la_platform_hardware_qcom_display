@@ -1649,6 +1649,49 @@ SnapError GrallocSnapHelper::CustomContentMetadataHelper(
   return error;
 }
 
+SnapError GrallocSnapHelper::SMPTE2094_10Helper(SnapHandle *hnd, uint32_t aidl_size,
+                                                void *gralloc_in_set, void *gralloc_out_get,
+                                                SnapDescriptor *buf_des, bool check_metadata_set,
+                                                int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    SnapCustomContentMetadata snap_custom_metadata = {};
+    void *snap_out_get = aidl_size ? &snap_custom_metadata : gralloc_out_get;
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::SMPTE2094_10, snap_out_get);
+    if (aidl_size && snap_custom_metadata.size) {
+      std::vector<uint8_t> custom_metadata_payload;
+      custom_metadata_payload.resize(sizeof(snap_custom_metadata.metadataPayload));
+      memcpy(custom_metadata_payload.data(), &snap_custom_metadata.metadataPayload,
+             sizeof(snap_custom_metadata.metadataPayload));
+      *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_10>(
+          custom_metadata_payload, gralloc_out_get, *mapper_return);
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    }
+  } else if (gralloc_in_set != nullptr) {
+    SnapCustomContentMetadata *snap_custom_metadata =
+        static_cast<SnapCustomContentMetadata *>(gralloc_in_set);
+    SnapCustomContentMetadata snap_converted_custom_metadata = {};
+    if (aidl_size) {
+      std::optional<std::vector<uint8_t>> custom_metadata_payload = {};
+      auto decoded_result =
+          Mapper5Decode<StandardMetadataType::SMPTE2094_10>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value()) {
+        return SnapError::UNSUPPORTED;
+      }
+      custom_metadata_payload = *decoded_result;
+      snap_converted_custom_metadata.size = static_cast<int>(custom_metadata_payload->size());
+      memcpy(&snap_converted_custom_metadata.metadataPayload, custom_metadata_payload->data(),
+             custom_metadata_payload->size());
+
+      snap_custom_metadata = &snap_converted_custom_metadata;
+    }
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::SMPTE2094_10, snap_custom_metadata);
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                     void *gralloc_in_set, void *gralloc_out_get,
                                                     SnapDescriptor *buf_des,
@@ -5549,6 +5592,55 @@ SnapError GrallocSnapHelperLegacy::CustomContentMetadataHelper(
     memcpy(&snap_customcontent_metadata, &custom_content_metadata, sizeof(custom_content_metadata));
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::CUSTOM_CONTENT_METADATA,
                                      &snap_customcontent_metadata);
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelperLegacy::SMPTE2094_10Helper(SnapHandle *hnd, bool hidl_bytestream,
+                                                      uint32_t aidl_size, void *gralloc_in_set,
+                                                      void *gralloc_out_get,
+                                                      SnapDescriptor *buf_des,
+                                                      bool check_metadata_set,
+                                                      int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    SnapCustomContentMetadata snap_custom_metadata = {};
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::SMPTE2094_10, &snap_custom_metadata);
+    error = CheckMetadataSet(SnapMetadataType::SMPTE2094_10, error, check_metadata_set);
+    std::vector<uint8_t> custom_metadata_payload = {};
+    custom_metadata_payload.resize(sizeof(snap_custom_metadata.metadataPayload));
+    memcpy(custom_metadata_payload.data(), &snap_custom_metadata.metadataPayload,
+           sizeof(snap_custom_metadata.metadataPayload));
+    if (hidl_bytestream) {
+      if (snap_custom_metadata.size <= CUSTOM_METADATA_SIZE_BYTES) {
+        if (android::gralloc4::encodeSmpte2094_10(
+                custom_metadata_payload, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+          return SnapError::BAD_VALUE;
+        }
+      } else {
+        if (android::gralloc4::encodeSmpte2094_10(
+                std::nullopt, static_cast<hidl_vec<uint8_t> *>(gralloc_out_get))) {
+          return SnapError::BAD_VALUE;
+        }
+      }
+    } else {
+      *static_cast<std::vector<uint8_t> *>(gralloc_out_get) = custom_metadata_payload;
+    }
+  } else if (gralloc_in_set != nullptr) {
+    SnapCustomContentMetadata snap_custom_metadata = {};
+    std::optional<std::vector<uint8_t>> custom_metadata_payload = {};
+    if (hidl_bytestream) {
+      if (android::gralloc4::decodeSmpte2094_10(*static_cast<hidl_vec<uint8_t> *>(gralloc_in_set),
+                                                &custom_metadata_payload)) {
+        return SnapError::UNSUPPORTED;
+      }
+    } else {
+      custom_metadata_payload = *static_cast<std::optional<std::vector<uint8_t>> *>(gralloc_in_set);
+    }
+    snap_custom_metadata.size = static_cast<int>(custom_metadata_payload->size());
+    memcpy(&snap_custom_metadata.metadataPayload, custom_metadata_payload->data(),
+           custom_metadata_payload->size());
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::SMPTE2094_10, &snap_custom_metadata);
   }
   return error;
 }

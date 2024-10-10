@@ -838,6 +838,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {static_cast<uint64_t>(
            aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_40),
        SnapMetadataType::DYNAMIC_METADATA},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_10),
+       SnapMetadataType::SMPTE2094_10},
       {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::CROP),
        SnapMetadataType::CROP},
       {static_cast<uint64_t>(
@@ -1099,6 +1102,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                   void *gralloc_out_get = nullptr,
                                   SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
                                   int32_t *mapper_return = nullptr);
+  SnapError SMPTE2094_10Helper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                               bool check_metadata_set = true, int32_t *mapper_return = nullptr);
   SnapError MatrixCoefficientsHelper(SnapHandle *, uint32_t aidl_size,
                                      void *gralloc_in_set = nullptr,
                                      void *gralloc_out_get = nullptr,
@@ -1216,6 +1222,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_40),
            &GrallocSnapHelper::DynamicMetadataHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2094_10),
+           &GrallocSnapHelper::SMPTE2094_10Helper},
           {COLOR_REMAPPING_INFO, &GrallocSnapHelper::ColorRemappingInfoHelper},
           {HEAP_NAME, &GrallocSnapHelper::HeapNameHelper},
           {IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
@@ -1619,6 +1628,9 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {static_cast<uint64_t>(
            aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_40),
        SnapMetadataType::DYNAMIC_METADATA},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_10),
+       SnapMetadataType::SMPTE2094_10},
       {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::CROP),
        SnapMetadataType::CROP},
       {static_cast<uint64_t>(
@@ -1887,6 +1899,10 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
                                         SnapDescriptor *buf_des = nullptr,
                                         bool check_metadata_set = true,
                                         int32_t *mapper_return = nullptr);
+  SnapError SMPTE2094_10Helper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                               void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                               SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                               int32_t *mapper_return = nullptr);
   SnapError VideoTranscodeStatsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                       void *gralloc_in_set = nullptr,
                                       void *gralloc_out_get = nullptr,
@@ -2023,6 +2039,9 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_40),
            &GrallocSnapHelperLegacy::DynamicMetadataHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2094_10),
+           &GrallocSnapHelperLegacy::SMPTE2094_10Helper},
           {COLOR_REMAPPING_INFO, &GrallocSnapHelperLegacy::ColorRemappingInfoHelper},
           {HEAP_NAME, &GrallocSnapHelperLegacy::HeapNameHelper},
           {IS_UBWC, &GrallocSnapHelperLegacy::IsUBWCHelper},
