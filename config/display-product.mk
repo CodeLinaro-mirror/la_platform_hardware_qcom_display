@@ -99,7 +99,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.hw=0 \
     debug.egl.hw=0 \
     debug.sf.latch_unsignaled=1 \
-    debug.sf.auto_latch_unsignaled=0 \
     debug.mdpcomp.logs=0 \
     vendor.gralloc.disable_ubwc=0 \
     vendor.gralloc.enable_logs=0 \
@@ -131,6 +130,12 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.predict_hwc_composition_strategy=0 \
     debug.sf.treat_170m_as_sRGB=1 \
     vendor.display.enable_display_extensions=1
+
+ifeq ($(PLATFORM_VERSION), 15)
+PRODUCT_PROPERTY_OVERRIDES +=  debug.sf.auto_latch_unsignaled=1
+else
+PRODUCT_PROPERTY_OVERRIDES +=  debug.sf.auto_latch_unsignaled=0
+endif
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
@@ -183,6 +188,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.set_touch_timer_ms=200
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_frame_buffer_acquired_buffers=3
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dimension=4096
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate_override=60
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), blair, parrot),$(TARGET_BOARD_PLATFORM))
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=0
 else
