@@ -231,6 +231,7 @@ case "$target" in
         setprop vendor.display.supports_background_blur 0
 	setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
         if [ "$soc_hwid" -eq 633 ] || [ "$soc_hwid" -eq 634 ]; then
             setprop vendor.display.enable_latch_media_content 1
         fi
