@@ -299,7 +299,9 @@ static int cec_send_message(const struct hdmi_cec_device* dev,
 
     struct cec_msg cmsg;
 
-    cec_msg_init(&cmsg, msg->initiator, msg->destination);
+    memset(&cmsg, 0, sizeof(cmsg));
+    cmsg.msg[0] = (msg->initiator << 4) | msg->destination;
+    cmsg.len = 1;
 
     if (msg->length > 0) {
         // Setting OPCODE
@@ -332,7 +334,7 @@ static int cec_send_message(const struct hdmi_cec_device* dev,
         }
     }
 
-    int opcode_ret = cec_msg_opcode(&cmsg);
+    int opcode_ret = cmsg.len > 1 ? cmsg.msg[1] : -1;
 
     ALOGI("%s: ioctl CEC_TRANSMIT - tx_status=%02x len=%d addr=%02x opcode=%02x",
             __FUNCTION__, cmsg.tx_status, cmsg.len, cmsg.msg[0], opcode_ret);
@@ -368,8 +370,8 @@ void cec_receive_message(cec_context_t *ctx, struct cec_msg *msg, ssize_t len)
     event.type = HDMI_EVENT_CEC_MESSAGE;
     event.dev = (hdmi_cec_device *) ctx;
     event.cec.length = len - 1;
-    event.cec.initiator = (cec_logical_address_t) cec_msg_initiator(msg);
-    event.cec.destination = (cec_logical_address_t) cec_msg_destination(msg);
+    event.cec.initiator = (cec_logical_address_t) (msg->msg[0] >> 4);
+    event.cec.destination = (cec_logical_address_t) (msg->msg[0] & 0xf);
     // Copy opcode and operand
     size_t copy_size = event.cec.length > sizeof(event.cec.body) ?
                        sizeof(event.cec.body) : event.cec.length;
