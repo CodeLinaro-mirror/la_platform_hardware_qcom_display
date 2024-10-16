@@ -30,7 +30,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -160,6 +160,8 @@ static const std::array<const DrmPPFeatureMap *,
 
 DisplayError (*HWColorManagerDrm::pp_features_[])(const PPFeatureInfo &,
                                                     DRMPPFeatureInfo *) = {
+//TODO : Revert change once LE compilation issue fixes
+#ifndef TRUSTED_VM
   [kFeaturePcc] = &HWColorManagerDrm::GetDrmPCC,
   [kFeatureIgc] = &HWColorManagerDrm::GetDrmIGC,
   [kFeaturePgc] = &HWColorManagerDrm::GetDrmPGC,
@@ -181,6 +183,29 @@ DisplayError (*HWColorManagerDrm::pp_features_[])(const PPFeatureInfo &,
   [kFeatureVigIgc] = &HWColorManagerDrm::GetDrmIGC,
   [kFeatureVigGamut] = &HWColorManagerDrm::GetDrmGamut,
 };
+#else
+  [0] = &HWColorManagerDrm::GetDrmPCC,
+  [1] = &HWColorManagerDrm::GetDrmIGC,
+  [2] = &HWColorManagerDrm::GetDrmPGC,
+  [3] = &HWColorManagerDrm::GetDrmMixerGC,
+  [4] = NULL,
+  [5] = &HWColorManagerDrm::GetDrmDither,
+  [6] = &HWColorManagerDrm::GetDrmDither,
+  [7] = &HWColorManagerDrm::GetDrmDither,
+  [8] = &HWColorManagerDrm::GetDrmGamut,
+  [9] = &HWColorManagerDrm::GetDrmPADither,
+  [10] = &HWColorManagerDrm::GetDrmPAHsic,
+  [11] = &HWColorManagerDrm::GetDrmPASixZone,
+  [12] = &HWColorManagerDrm::GetDrmPAMemColSkin,
+  [13] = &HWColorManagerDrm::GetDrmPAMemColSky,
+  [14] = &HWColorManagerDrm::GetDrmPAMemColFoliage,
+  [15] = &HWColorManagerDrm::GetDrmPAMemColProt,
+  [16] = &HWColorManagerDrm::GetDrmIGC,
+  [17] = &HWColorManagerDrm::GetDrmPGC,
+  [18] = &HWColorManagerDrm::GetDrmIGC,
+  [19] = &HWColorManagerDrm::GetDrmGamut,
+};
+#endif
 
 uint32_t HWColorManagerDrm::GetFeatureVersion(const DRMPPFeatureInfo &feature) {
   uint32_t version = PPFeatureVersion::kSDEPpVersionInvalid;

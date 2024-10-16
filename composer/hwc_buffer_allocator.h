@@ -96,6 +96,8 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height);
   int GetCustomContentMetadata(void *buf, CustomContentMetadata *dest);
   int GetMetadataValue(void *buf, SnapMetadataType type, void *dest, size_t dest_size);
+  int ImportBufferHandle(native_handle_t **handle, bool is_aidl_duped);
+  void ReleaseBufferHandle(const native_handle_t *handle);
 
  private:
   int GetGrallocInstance();
