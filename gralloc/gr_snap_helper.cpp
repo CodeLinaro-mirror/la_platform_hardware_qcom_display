@@ -1926,8 +1926,7 @@ int GrallocSnapHelper::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
       return SnapError::UNSUPPORTED;
     }
   } else {
-    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p id %d", __FUNCTION__, gr_hnd,
-          gr_hnd->data[13]);
+    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
     return SnapError::BAD_BUFFER;
   }
 
@@ -5898,8 +5897,7 @@ int GrallocSnapHelperLegacy::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
       return SnapError::UNSUPPORTED;
     }
   } else {
-    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p id %d", __FUNCTION__, gr_hnd,
-          gr_hnd->data[13]);
+    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
     return SnapError::BAD_BUFFER;
   }
 
