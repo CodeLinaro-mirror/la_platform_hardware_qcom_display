@@ -74,6 +74,7 @@
 #include <system/graphics.h>
 
 #include "gr_buf_descriptor.h"
+#include "gr_snap_debugger.h"
 
 namespace aidl::android::hardware::graphics::allocator {
 class AllocationResult;
@@ -294,10 +295,11 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapAlloc> snapallocator_;
   bool snap_alloc_enable_ = false;
   void *snap_impl_lib_ = nullptr;
-  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)() = nullptr;
-  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
+  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)(DebugCallbackIntf *) = nullptr;
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
   static GrallocSnapHelper *s_instance;
   bool enable_logs_ = false;
+  GrallocSnapDebugger debugger_impl_{};
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {
@@ -1216,10 +1218,11 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
   std::shared_ptr<ISnapAlloc> snapallocator_;
   bool snap_alloc_enable_ = false;
   void *snap_impl_lib_ = nullptr;
-  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)() = nullptr;
-  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)() = nullptr;
   static GrallocSnapHelperLegacy *s_instance;
   bool enable_logs_ = false;
+  std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)(DebugCallbackIntf *) = nullptr;
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
+  GrallocSnapDebugger debugger_impl_{};
 
   std::unordered_map<SnapFormatDescriptor, uint64_t, SnapFormatDescriptorHash>
       snap_to_gralloc_format_ = {

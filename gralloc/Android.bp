@@ -39,7 +39,6 @@ cc_library_shared {
         "libbinder_ndk",
         "libgralloc.qti",
         "libutilscallstack",
-        "libdisplaydebug",
     ],
     static_libs: [
         "libaidlcommonsupport",
@@ -55,8 +54,8 @@ cc_library_shared {
     srcs: [
         "gr_utils.cpp",
         "gr_adreno_info.cpp",
-        "gr_debugger.cpp",
         "gr_snap_helper.cpp",
+        "gr_snap_debugger.cpp",
     ],
 }
 
@@ -89,7 +88,6 @@ cc_library_shared {
        "libbinder_ndk",
        "libgralloc.qti",
        "libutilscallstack",
-       "libdisplaydebug",
        "android.hardware.graphics.allocator-V2-ndk",
        "libvndksupport",
     ],

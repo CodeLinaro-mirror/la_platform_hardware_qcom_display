@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#define DEBUG 0
 #include "QtiAllocatorAIDL.h"
 
 #include <cutils/properties.h>
