@@ -191,10 +191,6 @@ SOONG_CONFIG_qtidisplay_ubwcp_headers := true
 SOONG_CONFIG_qtidisplay_composer_version := v3_2
 SOONG_CONFIG_qtidisplay_mapper_ext := true
 
-ifeq ($(PLATFORM_VERSION), 14)
-    SOONG_CONFIG_qtidisplay_mapper_ext := false
-endif
-
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
 # PLATFORM_VERSION contains the version number of the current Android version.
