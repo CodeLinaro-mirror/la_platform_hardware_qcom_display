@@ -52,11 +52,11 @@ int main(int, char **) {
 
   // TODO(user): double-check for SCHED_FIFO logic
   // the conventional HAL might start binder services
-  // ProcessState::initWithDriver("/dev/vndbinder");
+  ProcessState::initWithDriver("/dev/vndbinder");
   sp<ProcessState> ps(ProcessState::self());
-  ps->setThreadPoolMaxThreadCount(4);
-  ps->startThreadPool();
-  ALOGI("ProcessState initialization completed");
+
+  // Explicitly set thread priority in case it isn't inherited correctly
+  setpriority(PRIO_PROCESS, 0, sdm::kThreadPriorityUrgent);
 
   // same as SF main thread
   struct sched_param param = {0};
@@ -67,11 +67,16 @@ int main(int, char **) {
     ALOGI("Scheduler priority settings completed");
   }
 
+  ALOGI("Configuring RPC threadpool");
+  configureRpcThreadpool(4, true /*callerWillJoin*/);
+  ALOGI("Configuring RPC threadpool...done!");
+  ABinderProcess_setThreadPoolMaxThreadCount(0);
+
   ALOGI("Initializing QtiComposer");
   std::shared_ptr<QtiComposer> composer = ndk::SharedRefBase::make<QtiComposer>();
   const std::string instance = std::string() + QtiComposer::descriptor + "/default";
   if (!composer->asBinder().get()) {
-    ALOGE("Initializing QtiComposer...failed!");
+    ALOGE("Initializing AidlComposer...failed!");
     return -EINVAL;
   }
 
@@ -80,15 +85,17 @@ int main(int, char **) {
   if (status != STATUS_OK) {
     ALOGW("Failed to register QtiComposer as a service (status: %d)", status);
   } else {
-    ALOGI("Successfully registered AidlComposer as a service");
+    ALOGI("Successfully registered QtiComposer as a service");
   }
 
-  ALOGI("Configuring RPC threadpool");
-  configureRpcThreadpool(4, true /*callerWillJoin*/);
-  ALOGI("Configuring RPC threadpool...done!");
-  ALOGI("Registering Display HW Composer HAL as a service...done!");
+  ps->setThreadPoolMaxThreadCount(4);
+  ps->startThreadPool();
+  ALOGI("ProcessState initialization completed");
+
   ALOGI("Joining RPC threadpool...");
-  joinRpcThreadpool();
+  ABinderProcess_setThreadPoolMaxThreadCount(5);
+  ABinderProcess_startThreadPool();
+  ABinderProcess_joinThreadPool();
 
   return 0;
 }
