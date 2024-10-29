@@ -352,15 +352,11 @@ int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
                               .bottom = gr_access_region.bottom};
 
     SnapFence acquire_fence;
-    acquire_fence.fence_fd = dup(fence_fd);
+    acquire_fence.fence_fd = fence_fd;
     SnapAddress ret_addr;
 
     auto status = snapmapper_->Lock(*hnd, static_cast<SnapUsage>(usage), access_region,
                                     acquire_fence, &ret_addr);
-
-    if (acquire_fence.fence_fd > 0) {
-      close(acquire_fence.fence_fd);
-    }
 
     if (status == SnapError::NONE) {
       *base_addr = ret_addr.addressPointer;

@@ -133,7 +133,6 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
                           uint64_t *_Nonnull outReservedSize) override;
 
  private:
-  void WaitFenceFd(int fence_fd);
   Error DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
                            AIMapper_DumpBufferCallback _Nonnull dumpBufferCallback,
                            void *_Null_unspecified context);
