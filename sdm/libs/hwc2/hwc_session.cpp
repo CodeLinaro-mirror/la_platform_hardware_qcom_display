@@ -442,19 +442,21 @@ int HWCSession::Open(const hw_module_t *module, const char *name, hw_device_t **
   }
 
   if (!strcmp(name, HWC_HARDWARE_COMPOSER)) {
-    HWCSession *hwc_session = new HWCSession(module);
+    auto hwc_session = android::sp<HWCSession>::make(module);
     if (!hwc_session) {
       return -ENOMEM;
     }
 
     int status = hwc_session->Init();
     if (status != 0) {
-      delete hwc_session;
-      hwc_session = NULL;
       return status;
     }
 
-    hwc2_device_t *composer_device = hwc_session;
+    // increase reference count before convert SP to raw pointer
+    hwc_session->incStrong(hwc_session.get());
+    // convert hwc_session to raw pointer
+    hwc2_device_t *composer_device = hwc_session.get();
+
     *device = reinterpret_cast<hw_device_t *>(composer_device);
   }
 
@@ -470,6 +472,8 @@ int HWCSession::Close(hw_device_t *device) {
   HWCSession *hwc_session = static_cast<HWCSession *>(composer_device);
 
   hwc_session->Deinit();
+  // decrease the reference count for the raw pointer
+  hwc_session->decStrong(hwc_session);
 
   return 0;
 }
@@ -2210,6 +2214,14 @@ android::status_t HWCSession::QdcmCMDDispatch(uint32_t display_id,
         break;
      }
     }
+
+    // Support pluggable displays to dispatch CMD
+    for (auto &map_info : map_info_pluggable_) {
+      if (map_info.client_id == display_id) {
+        is_physical_display = true;
+        break;
+     }
+    }
   }
 
   if (!is_physical_display) {
@@ -2345,6 +2357,22 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
               }
             }
           }
+
+          // Support init/deinit the pluggable displays
+          for (auto &map_info : map_info_pluggable_) {
+            uint32_t id = UINT32(map_info.client_id);
+            if (id < HWCCallbacks::kNumDisplays && hwc_display_[id]) {
+              int result = 0;
+              resp_payload.DestroyPayload();
+              result = hwc_display_[id]->ColorSVCRequestRoute(req_payload,
+                                                              &resp_payload,
+                                                              &pending_action);
+              if (result) {
+                DLOGW("Failed to dispatch action to disp %d ret %d", id, result);
+                ret = result;
+              }
+            }
+          }
           break;
         case kMultiDispGetId:
           ret = resp_payload.CreatePayloadBytes(HWCCallbacks::kNumDisplays, &disp_id);
@@ -2358,6 +2386,14 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
               disp_id[HWC_DISPLAY_PRIMARY] = HWC_DISPLAY_PRIMARY;
             }
             for (auto &map_info : map_info_builtin_) {
+              uint64_t id = map_info.client_id;
+              if (id < HWCCallbacks::kNumDisplays && hwc_display_[id]) {
+                disp_id[id] = (uint8_t)id;
+              }
+            }
+
+            // Support to get the disp_id of pluggable displays
+            for (auto &map_info : map_info_pluggable_) {
               uint64_t id = map_info.client_id;
               if (id < HWCCallbacks::kNumDisplays && hwc_display_[id]) {
                 disp_id[id] = (uint8_t)id;
