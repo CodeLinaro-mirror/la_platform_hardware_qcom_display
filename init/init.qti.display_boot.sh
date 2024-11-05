@@ -56,10 +56,18 @@ case "$target" in
     esac
     ;;
     "kalama")
+    #Set property for kalama
     #SOC ID for Kalama is 519
-    #SOC ID for QCS Kalama IoT Non-Pop is 668
+    #SOC ID for Kalama SG36 is 600
+    #SOC ID for Kalama SG p is 601
+    #SOC ID for Kalama APQ 536
     case "$soc_hwid" in
-      519|668)
+       519|600|601|603|604|536|668|688)
+        #Set property for kalama
+        #SOC ID for QCS Kalama is 603
+        #SOC ID for QCM Kalama is 604
+        #SOC ID for QCS Kalama IoT Non-Pop is 668
+        #SOC ID for QCM Kalama IoT Non-Pop is 688
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.display.target.version 4
         setprop vendor.gralloc.use_dma_buf_heaps 1
