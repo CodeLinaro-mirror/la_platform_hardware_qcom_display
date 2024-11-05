@@ -486,7 +486,7 @@ ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int
 
 ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) {
   auto ret = caps_->GetSupportedDSIClock(disp_id, bit_clks);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: Display: %d is not connected", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -496,7 +496,7 @@ ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector
 
 ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
   auto ret = settings_->GetDSIClk(disp_id, (uint64_t *)bit_clk);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -506,7 +506,7 @@ ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
 
 ScopedAStatus DisplayConfigAIDL::setDSIClk(int disp_id, long bit_clk) {
   auto ret = settings_->SetDSIClk(disp_id, (uint64_t)bit_clk);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -535,7 +535,7 @@ ScopedAStatus DisplayConfigAIDL::setQsyncMode(int disp_id, QsyncMode mode) {
   }
 
   auto ret = settings_->SetQsyncMode(disp_id, qsync_mode);
-  if (ret != sdm::kErrorNone) {
+  if (ret == sdm::kErrorResources) {
     ALOGW("%s: failed: %d", __FUNCTION__, ret);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
@@ -555,7 +555,7 @@ ScopedAStatus DisplayConfigAIDL::isSmartPanelConfig(int disp_id, int config_id, 
 
 ScopedAStatus DisplayConfigAIDL::isRotatorSupportedFormat(int hal_format, bool ubwc,
                                                           bool *supported) {
-  int flag = ubwc ? qtigralloc::PRIV_FLAGS_UBWC_ALIGNED : 0;
+  int flag = ubwc ? IS_UBWC : 0;
   sdm::LayerBufferFormat sdm_format = layer_builder_->GetSDMFormat(hal_format, flag, 0);
 
   *supported = caps_->IsRotatorSupportedFormat(sdm_format);
@@ -705,21 +705,23 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   roi.right = FLOAT(rect.right);
   roi.bottom = FLOAT(rect.bottom);
 
-  ALOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f)",
-        cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom);
+  ALOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f) for display-%d",
+        cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom, display_type);
 
   auto ret_status = EX_NONE;
 
   void *hdl = sdm::ConvertToSnapHandle(buffer);
 
-  if (!handle_importer_.importBuffer(static_cast<const SnapHandle *>(hdl))) {
-    ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
+  if (!hdl || !handle_importer_.importBuffer(static_cast<const SnapHandle *>(hdl))) {
+    ALOGE("%s: Either retrieving snaphandle or importing buffer failed.", __FUNCTION__);
     ret_status = EX_ILLEGAL_ARGUMENT;
   }
 
-  if (ret_status == EX_NONE && cwb_callbacks_.find(hdl) != cwb_callbacks_.end()) {
-    ALOGE("%s: buffer already being handled", __FUNCTION__);
-    ret_status = EX_ILLEGAL_ARGUMENT;
+  bool hdl_exists = false;
+  if (ret_status == EX_NONE) {
+    std::lock_guard<decltype(cwb_callbacks_lock_)> lock_guard(cwb_callbacks_lock_);
+    hdl_exists = cwb_callbacks_.find(hdl) != cwb_callbacks_.end();
+    ret_status = (hdl_exists) ? EX_ILLEGAL_ARGUMENT : EX_NONE;
   }
 
   if (ret_status == EX_NONE) {
@@ -727,8 +729,11 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
     if (ret != sdm::kErrorNone) {
       ret_status = EX_TRANSACTION_FAILED;
     } else {
-      cwb_callbacks_.insert({hdl, callback});
+      std::lock_guard<decltype(cwb_callbacks_lock_)> lock_guard(cwb_callbacks_lock_);
+      cwb_callbacks_.insert({hdl, {display_type, callback}});
     }
+  } else if (hdl_exists) {
+    ALOGE("%s: buffer(0x%x) already being handled by display-%d", __FUNCTION__, hdl, display_type);
   }
 
   if (ret_status != EX_NONE) {
@@ -741,22 +746,32 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
 }
 
 void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
-  if (cwb_callbacks_.find(hdl) == cwb_callbacks_.end()) {
-    ALOGE("%s: buffer not found", __FUNCTION__);
+  std::shared_ptr<IDisplayConfigCallback> callback = nullptr;
+  int32_t display_type = 0;
+
+  if (!hdl) {
+    ALOGE("%s: Null buffer handle is detected to notify!", __FUNCTION__);
     return;
+  } else {
+    std::lock_guard<decltype(cwb_callbacks_lock_)> lock_guard(cwb_callbacks_lock_);
+    auto hdl_exists = cwb_callbacks_.find(hdl) != cwb_callbacks_.end();
+    if (hdl_exists) {
+      std::tie(display_type, callback) = cwb_callbacks_[hdl];
+      cwb_callbacks_.erase(hdl);
+    }
   }
 
-  std::shared_ptr<IDisplayConfigCallback> callback = cwb_callbacks_[hdl];
-
-  NativeHandle buffer =
-      sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
-  if (callback) {
-    ALOGI("Notify the client about buffer status %d.", status);
+  if (!callback) {
+    ALOGE("%s: buffer handle(0x%x) not found", __FUNCTION__, hdl);
+  } else {
+    NativeHandle buffer =
+        sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
+    ALOGI("%s: Notify the client about buffer (0x%x) status %d for display-%d.", __FUNCTION__, hdl,
+          status, display_type);
 
     callback->notifyCWBBufferDone(status, buffer);
   }
 
-  cwb_callbacks_.erase(hdl);
   handle_importer_.freeBuffer(static_cast<const SnapHandle *>(hdl));
 }
 
@@ -773,6 +788,7 @@ ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t 
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
+#ifdef COMPOSER3_V3
 ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t fps) {
   int ret = -1;
 
@@ -785,6 +801,7 @@ ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t 
   return ret == sdm::kErrorNone ? ScopedAStatus::ok()
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
+#endif
 
 ScopedAStatus DisplayConfigAIDL::registerCallback(
     const std::shared_ptr<IDisplayConfigCallback> &callback, int64_t *client_handle) {
@@ -1031,11 +1048,13 @@ void DisplayConfigAIDL::NotifyIdleStatus(bool status) {
 void DisplayConfigAIDL::NotifyContentFps(const std::string &name, int32_t fps) {
   std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
 
+#ifdef COMPOSER3_V3
   for (auto const &[id, callback] : callback_clients_) {
     if (callback) {
       callback->notifyContentFps(name, fps);
     }
   }
+#endif
 }
 
 void DisplayConfigAIDL::OnHdmiHotplug(bool connected) {

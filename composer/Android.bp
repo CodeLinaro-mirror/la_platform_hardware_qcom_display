@@ -61,7 +61,6 @@ cc_defaults {
         "libdrm",
         "libbinder_ndk",
         "android.hardware.common-V2-ndk",
-        "vendor.qti.hardware.display.config-V12-ndk",
         "vendor.qti.hardware.display.composer3-V1-ndk",
         "vendor.qti.hardware.display.demura-V1-ndk",
         "libgrallocutils",
@@ -108,6 +107,7 @@ cc_binary {
 cc_fuzz {
     name: "displayconfig.aidl_fuzzer",
     defaults: [
+        "qtidisplay_defaults",
         "composer-service_defaults",
         "composer3_defaults",
     ],
@@ -168,19 +168,30 @@ soong_config_module_type {
 
 soong_config_string_variable {
     name: "composer_version",
-    values: ["v2", "v3", "v3_3", "qmaa"],
+    values: ["v3_2", "v3_3", "v3_4"],
 }
 
 qticomposer3_cc_defaults {
     name: "composer3_defaults",
     soong_config_variables: {
         composer_version: {
+            v3_4: {
+                srcs: ["DisplayAiqeAIDL.cpp"],
+                cflags: ["-DCOMPOSER3_V3"],
+                shared_libs: [
+                      "android.hardware.graphics.composer3-V4-ndk",
+                      "vendor.qti.hardware.display.aiqe-V2-ndk",
+                      "vendor.qti.hardware.display.config-V12-ndk",
+                ],
+                vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v4.xml"],
+            },
             v3_3: {
                 srcs: ["DisplayAiqeAIDL.cpp"],
                 cflags: ["-DCOMPOSER3_V3"],
                 shared_libs: [
                       "android.hardware.graphics.composer3-V3-ndk",
                       "vendor.qti.hardware.display.aiqe-V2-ndk",
+                      "vendor.qti.hardware.display.config-V12-ndk",
                 ],
                 vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v3.xml"],
             },
@@ -188,6 +199,7 @@ qticomposer3_cc_defaults {
                 cflags: ["-DCOMPOSER3_V2"],
                 shared_libs: [
                      "android.hardware.graphics.composer3-V2-ndk",
+                     "vendor.qti.hardware.display.config-V11-ndk",
                 ],
                 vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v2.xml"],
             },

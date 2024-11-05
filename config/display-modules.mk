@@ -1,11 +1,9 @@
 DISPLAY_MODULES_HARDWARE:= vendor.qti.hardware.display.composer-service \
                         android.hardware.graphics.mapper@4.0-impl-qti-display \
                         vendor.qti.hardware.display.mapper@4.0.vendor \
-                        vendor.qti.hardware.display.allocator-service
+                        vendor.qti.hardware.display.allocator-service \
+                        vendor.qti.hardware.display.snapalloc-impl
 
-ifeq ($(TARGET_BUILD_VARIANT),userdebug)
-    DISPLAY_MODULES_HARDWARE += libcomposertestservice
-endif
 
 TARGET_IS_HEADLESS := false
 ifeq ($(TARGET_USES_QMAA),true)
@@ -17,6 +15,10 @@ endif
 
 #Packages that should not be installed in QMAA are enabled here
 ifneq ($(TARGET_IS_HEADLESS),true)
+	ifeq ($(TARGET_BUILD_VARIANT),userdebug)
+		DISPLAY_MODULES_HARDWARE += libcomposertestservice
+	endif
+
     DISPLAY_MODULES_HARDWARE += libsdmcore \
                             libsdmdal \
                             libdrmutils \
@@ -34,6 +36,5 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             vendor.qti.hardware.display.demura-service \
                             modetest \
                             libdisplayconfig.qti \
-                            vendor.qti.hardware.display.snapalloc-impl \
                             libhwfenceclient
 endif

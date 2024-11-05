@@ -42,6 +42,9 @@ ifeq ($(TARGET_BOARD_PLATFORM),niobe)
     #TBD: derived from qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json
+
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json
 endif
 
 #Backlight calibration xml file for vtdr6130 amoled panels
@@ -96,7 +99,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.predict_hwc_composition_strategy=0 \
     debug.sf.treat_170m_as_sRGB=1 \
     debug.graphics.game_default_frame_rate.disabled=1 \
-    vendor.display.enable_display_extensions=1
+    vendor.display.enable_display_extensions=1 \
+    vendor.gralloc.enable_snapalloc=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
@@ -164,7 +168,8 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            gralloc4 displayconfig_enabled \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
-                           ubwcp_headers hwasan \
+                           ubwcp_headers hwasan mapper_ext \
+                           hy11 hy22 hy33
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -177,12 +182,38 @@ SOONG_CONFIG_qtidisplay_var1 := false
 SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_hwasan := false
+SOONG_CONFIG_qtidisplay_hy11 := false
+SOONG_CONFIG_qtidisplay_hy22 := false
+SOONG_CONFIG_qtidisplay_hy33 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
-SOONG_CONFIG_qtidisplay_composer_version := v3
-ifeq ($(PLATFORM_VERSION), 15)
-    SOONG_CONFIG_qtidisplay_composer_version := v3_3
+SOONG_CONFIG_qtidisplay_composer_version := v3_2
+SOONG_CONFIG_qtidisplay_mapper_ext := true
+
+# Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
+# PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
+# PLATFORM_VERSION contains the version number of the current Android version.
+# Before FRC, PLATFORM_VERSION matches with PLATFORM_VERSION_CODENAME.
+# Example:
+# Android V (After FRC)
+#   PLATFORM_VERSION_CODENAME = VanillaIceCream, PLATFORM_VERSION = 15
+# Android W (Before FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = W
+# Android W (After FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = 16
+
+# TODO: Update VanillaIceCream to Android W's code name
+ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
+    # TODO: Update VanillaIceCream to Android W's code name
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream))
+        SOONG_CONFIG_qtidisplay_composer_version := v3_4
+    endif
+else
+    # TODO: Add Android W's code name and version number
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream 15))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_3
+    endif
 endif
 
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
@@ -205,7 +236,6 @@ ifeq ($(TARGET_IS_HEADLESS), true)
     PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/qmaa
     SOONG_CONFIG_qtidisplay_headless := true
     SOONG_CONFIG_qtidisplay_default := false
-    SOONG_CONFIG_qtidisplay_composer_version := qmaa
 else
     #Packages that should not be installed in QMAA are enabled here.
     PRODUCT_PACKAGES += libdrmutils
@@ -218,10 +248,15 @@ else
         SOONG_CONFIG_qtidisplay_var1 := true
         SOONG_CONFIG_qtidisplay_var2 := true
         SOONG_CONFIG_qtidisplay_var3 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
+        SOONG_CONFIG_qtidisplay_hy33 := true
     endif
     ifneq ($(BUILD_DISPLAY_TECHPACK_SOURCE_VARIANT), true)
         SOONG_CONFIG_qtidisplay_var1 := true
         SOONG_CONFIG_qtidisplay_var2 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
     endif
 
     ifeq ($(PROFILE_COVERAGE_DATA), true)
@@ -235,10 +270,9 @@ else
 
     ifeq (,$(wildcard $(QCPATH)/display-noship))
         SOONG_CONFIG_qtidisplay_var1 := true
-    endif
-
-    ifeq (,$(wildcard $(QCPATH)/display))
         SOONG_CONFIG_qtidisplay_var2 := true
+        SOONG_CONFIG_qtidisplay_hy11 := true
+        SOONG_CONFIG_qtidisplay_hy22 := true
     endif
 endif
 

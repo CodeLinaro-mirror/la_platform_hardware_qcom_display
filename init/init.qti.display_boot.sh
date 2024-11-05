@@ -60,6 +60,37 @@ case "$target" in
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop debug.sf.enable_vrr_config 1
+        setprop vendor.display.enable_hal_self_refresh 1
+        setprop vendor.display.cpu_cluster_boost_mask 3
+        ;;
+    esac
+    ;;
+    "tuna")
+    #SOC ID for tuna is 655
+    #SOC ID for tuna7 is 681
+    #SOC ID for kera is 659
+    case "$soc_hwid" in
+      655|681|659)
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 2
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_latch_media_content 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.timed_render_enable 1
+        setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.cpu_cluster_boost_mask 15
         ;;
     esac
     ;;

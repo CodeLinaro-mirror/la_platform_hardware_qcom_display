@@ -83,7 +83,6 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   sideband_ = sideband;
 
   qservice_ = QServiceBackend::GetInstance();
-  qservice_->Init();
 
   mCommandEngine = std::make_unique<CommandEngine>(*this);
   if (mCommandEngine == nullptr) {
@@ -496,7 +495,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigs(int64_t in_display,
                                                     std::vector<int32_t> *aidl_return) {
   auto error = caps_->GetDisplayConfigs(in_display, aidl_return);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -724,7 +723,7 @@ ScopedAStatus AidlComposerClient::getReadbackBufferFence(int64_t in_display,
   shared_ptr<Fence> fence = nullptr;
   auto error = settings_->GetReadbackBufferFence(in_display, &fence);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::Unsupported));
   }
 
   *aidl_return = ::ndk::ScopedFileDescriptor(Fence::Dup(fence));
@@ -950,7 +949,7 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
 
   auto err = settings_->SetReadbackBuffer(in_display, (void *)buffer, fence);
   if (err != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -1139,6 +1138,13 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
     ExecuteCommand(displayCmd.presentOrValidateDisplay,
                    &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                    displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+#else
+    int32_t frameIntervalNs = -1;
+    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                   displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
+    ExecuteCommand(displayCmd.presentOrValidateDisplay,
+                   &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
+                   displayCmd.expectedPresentTime, frameIntervalNs);
 #endif
 
     ++mCommandIndex;

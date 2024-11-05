@@ -217,7 +217,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
                                         const CacV2ConfigExt &in_rightConfig,
                                         bool in_enable) override;
   ScopedAStatus allowIdleFallback() { return ScopedAStatus::ok(); }
+#ifdef COMPOSER3_V3
   ScopedAStatus setContentFps(const std::string &in_name, int32_t in_fps) override;
+#endif
 
   void NotifyQsyncChange(uint64_t display_id, bool qsync_enabled, uint32_t refresh_rate,
                          uint32_t qsync_refresh_rate) override;
@@ -277,7 +279,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 
   sdm::QServiceBackend *qservice_ = nullptr;
 
-  std::unordered_map<void *, std::shared_ptr<IDisplayConfigCallback>> cwb_callbacks_;
+  std::mutex cwb_callbacks_lock_;
+  std::unordered_map<void *, std::tuple<int32_t, std::shared_ptr<IDisplayConfigCallback>>>
+      cwb_callbacks_;
 
   // sdmclient callbacks
   std::unordered_map<uint64_t, GLColorConvert *> color_convert_map_;
