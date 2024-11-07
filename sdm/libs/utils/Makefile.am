@@ -14,4 +14,4 @@ libsdmutils_la_CPPFLAGS += -I$(srcdir)/../../include
 libsdmutils_la_CPPFLAGS += -I$(srcdir)/../../../libdebug
 libsdmutils_la_CPPFLAGS += -I$(srcdir)/../../../include
 libsdmutils_la_LIBADD = ../../../libdebug/libdisplaydebug.la
-libsdmutils_la_LDFLAGS = -shared -avoid-version
+libsdmutils_la_LDFLAGS = -shared -version-number @L_VERSION_NUMBER@

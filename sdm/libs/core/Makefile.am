@@ -42,4 +42,4 @@ libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../libdrmutils
 libsdmcore_la_CPPFLAGS +=  @LIBDRM_CFLAGS@
 libsdmcore_la_LIBADD = ../utils/libsdmutils.la ../dal/libsdmdal.la 
 libsdmcore_la_LIBADD += ../../../libdebug/libdisplaydebug.la
-libsdmcore_la_LDFLAGS = -shared -avoid-version -ldrm -ldl
+libsdmcore_la_LDFLAGS = -shared -version-number @L_VERSION_NUMBER@ -ldrm -ldl

@@ -11,4 +11,4 @@ libdisplaydebug_la_SOURCES = $(cpp_sources)
 libdisplaydebug_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"SDM\"
 libdisplaydebug_la_CPPFLAGS = $(AM_CPPFLAGS)
 libdisplaydebug_la_LIBADD = -ldl
-libdisplaydebug_la_LDFLAGS = -shared -avoid-version
+libdisplaydebug_la_LDFLAGS = -shared -version-number @L_VERSION_NUMBER@

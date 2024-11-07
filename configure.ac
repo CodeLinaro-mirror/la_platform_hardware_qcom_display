@@ -87,13 +87,16 @@ AC_SUBST([CFLAGS])
 AC_SUBST([CC])
 AC_CONFIG_FILES([ \
         Makefile \
-        qdcm-grpc/Makefile \
-        qdcm-grpc/proto/Makefile \
-        libdebug/Makefile \
-        libdrmutils/Makefile \
-        sde-drm/Makefile \
-        sdm/libs/utils/Makefile \
-        sdm/libs/dal/Makefile \
-        sdm/libs/core/Makefile
         ])
+AC_CONFIG_SUBDIRS([ \
+         libdebug \
+         libdrmutils \
+         sde-drm \
+         sdm/libs/utils \
+         sdm/libs/dal \
+         sdm/libs/core \
+         qdcm-grpc \
+         qdcm-grpc/proto \
+         ])
+
 AC_OUTPUT

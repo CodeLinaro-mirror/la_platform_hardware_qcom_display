@@ -23,4 +23,4 @@ libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../../libdrmutils
 libsdmdal_la_CPPFLAGS +=  @LIBDRM_CFLAGS@
 libsdmdal_la_LIBADD = ../utils/libsdmutils.la ../../../sde-drm/libsdedrm.la 
 libsdmdal_la_LIBADD += ../../../libdebug/libdisplaydebug.la
-libsdmdal_la_LDFLAGS = -shared -avoid-version -ldrm -ldl
+libsdmdal_la_LDFLAGS = -shared -version-number @L_VERSION_NUMBER@ -ldrm -ldl

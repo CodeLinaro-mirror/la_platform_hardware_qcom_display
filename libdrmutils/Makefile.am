@@ -15,4 +15,4 @@ libdrmutils_la_CPPFLAGS +=  @LIBDRM_CFLAGS@
 libdrmutils_la_CPPFLAGS +=  -I$(srcdir)/../include
 libdrmutils_la_CPPFLAGS +=  -I$(srcdir)/../libdebug
 libsdmcore_la_LIBADD = -ldrm
-libdrmutils_la_LDFLAGS = -shared -avoid-version
+libdrmutils_la_LDFLAGS = -shared -version-number @L_VERSION_NUMBER@

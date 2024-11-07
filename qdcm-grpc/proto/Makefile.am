@@ -13,7 +13,7 @@ BUILT_SOURCES = qdcm_service.grpc.pb.h \
 
 sources_libqdcmproto = $(nodist_proto_SOURCES)
 
-qdcmproto_includedir = $(pkgincludedir)/display
+qdcmproto_includedir = $(includedir)/display/display
 qdcmproto_include_HEADERS = $(BUILT_SOURCES)
 
 lib_LTLIBRARIES = libqdcmproto.la
@@ -23,5 +23,5 @@ requiredlibs_qdcmproto = -lgrpc++ -lprotobuf
 libqdcmproto_la_CC = @CC@
 libqdcmproto_la_SOURCES = $(sources_libqdcmproto)
 libqdcmproto_la_CFLAGS = $(AM_CFLAGS) @PROTOBUF_CFLAGS@ @GRPC_CFLAGS@
-libqdcmproto_la_LDFLAGS = -shared -avoid-version @LDFLAGS@ -lgrpc++
+libqdcmproto_la_LDFLAGS = -shared -version-number @L_VERSION_NUMBER@ @LDFLAGS@ -lgrpc++
 libqdcmproto_la_LIBADD = $(requiredlibs_qdcmproto)
