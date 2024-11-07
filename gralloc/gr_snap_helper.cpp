@@ -4369,6 +4369,9 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
                                                       int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   SnapBufferLayout snap_buffer_layout = {};
+  if (hnd == nullptr) {
+    return error;
+  }
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
   } else if (gralloc_out_get == nullptr) {
@@ -4381,9 +4384,7 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
   ConvertSnapBufferlayoutToGrallocPlaneLayout(hnd, buf_des, snap_buffer_layout, &gr_plane_layouts);
   android_ycbcr outYCbCr[2];
   uint64_t base_addr = 0;
-  if (hnd != nullptr) {
-    auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
-  }
+  error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
   ConvertGrallocPlaneLayoutToAndroidYCbCr(base_addr, gr_plane_layouts, outYCbCr);
   qti_ycbcr layout[2];
   for (int i = 0; i < 2; i++) {
