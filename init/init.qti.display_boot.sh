@@ -37,6 +37,18 @@ else
 fi
 
 case "$target" in
+    "canoe")
+    # SOC ID for Canoe is 660
+    # SOC ID for Canoe APQ is 661
+    case "$soc_hwid" in
+      660|661)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        ;;
+    esac
+    ;;
     "sun")
     #SOC ID for Sun is 618
     #SOC ID for Sun APQ is 639
