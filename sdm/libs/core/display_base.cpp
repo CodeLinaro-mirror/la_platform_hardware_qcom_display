@@ -2627,7 +2627,7 @@ bool DisplayBase::IsValidCwbRoi(const LayerRect &roi, const LayerRect &full_fram
   return is_valid;
 }
 
-DisplayError DisplayBase::ValidateCwbConfigInfo(CwbConfig *cwb_config,
+DisplayError DisplayBase::ValidateCwbConfigInfo(std::shared_ptr<CwbConfig> cwb_config,
                                                 const LayerBufferFormat &format) {
   CwbTapPoint &tap_point = cwb_config->tap_point;
   if (tap_point < CwbTapPoint::kLmTapPoint || tap_point > CwbTapPoint::kDemuraTapPoint) {
@@ -4466,7 +4466,10 @@ DisplayError DisplayBase::CaptureCwb(const LayerBuffer &output_buffer, const Cwb
     cwb_config.cwb_roi = cwb_config.cwb_full_rect;
   }
 
-  error = ValidateCwbConfigInfo(&cwb_config, output_buffer.format);
+  auto cwb_config_shared = std::make_shared<CwbConfig>(cwb_config);
+  error = ValidateCwbConfigInfo(cwb_config_shared, output_buffer.format);
+  cwb_config = *cwb_config_shared;
+  cwb_config_shared.reset();
   if (error != kErrorNone) {
     DLOGE("CWB_config validation failed.");
     return error;

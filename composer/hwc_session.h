@@ -463,6 +463,8 @@ class HWCSession : public HWCUEvent,
 #ifdef PROFILE_COVERAGE_DATA
   android::status_t DumpCodeCoverage(const android::Parcel *input_parcel);
 #endif
+  DisplayError WaitForPrimaryHotplug(HWDisplayInterfaceInfo *hw_disp_info);
+  void HandlePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info);
 
   // Uevent handler
   virtual void UEventHandler();

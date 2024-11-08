@@ -244,6 +244,7 @@
 #define PRIORITIZE_CLIENT_CWB                DISPLAY_PROP("prioritize_client_cwb")
 #define TRANSIENT_FPS_CYCLE_COUNT            DISPLAY_PROP("transient_fps_cycle_count")
 #define FORCE_LM_TO_FB_CONFIG                DISPLAY_PROP("force_lm_to_fb_config")
+#define WAIT_FOR_PRIMARY_DISPLAY             DISPLAY_PROP("wait_for_primary_display")
 
 // Add all other.properties above
 // End of property
