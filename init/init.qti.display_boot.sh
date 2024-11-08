@@ -127,6 +127,7 @@ case "$target" in
         setprop vendor.display.use_smooth_motion 0  #disable smooth motion
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.display.disable_dpps_features 1
         ;;
     esac
     ;;
