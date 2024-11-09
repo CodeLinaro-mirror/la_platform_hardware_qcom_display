@@ -37,6 +37,18 @@ else
 fi
 
 case "$target" in
+    "canoe")
+    # SOC ID for Canoe is 660
+    # SOC ID for Canoe APQ is 661
+    case "$soc_hwid" in
+      660|661)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        ;;
+    esac
+    ;;
     "sun")
     #SOC ID for Sun is 618
     #SOC ID for Sun APQ is 639
@@ -69,9 +81,11 @@ case "$target" in
     "tuna")
     #SOC ID for tuna is 655
     #SOC ID for tuna7 is 681
+    #SOC ID for tuna APQ is 694
     #SOC ID for kera is 659
+    #SOC ID for kera is 686
     case "$soc_hwid" in
-      655|681|659)
+      655|681|659|694|686)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 6
@@ -113,6 +127,7 @@ case "$target" in
         setprop vendor.display.use_smooth_motion 0  #disable smooth motion
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.display.disable_dpps_features 1
         ;;
     esac
     ;;
