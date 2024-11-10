@@ -36,11 +36,16 @@ namespace composer3 {
 AidlComposer::AidlComposer() : hwc_session_(HWCSession::GetInstance()) { }
 
 AidlComposer::AidlComposer(HWCSession *hwc_session) {
-  auto error = hwc_session_->Init();
-  if (error) {
-    ALOGE("Failed to get HWComposer instance");
-  } else {
-    ALOGI("Successfully initialized HWCSession, creating AidlComposer");
+  if (hwc_session_) {
+    auto error = hwc_session_->Init();
+    if (error) {
+      ALOGE("Failed to get HWComposer instance");
+    } else {
+      ALOGI("Successfully initialized HWCSession, creating AidlComposer");
+    }
+  }
+  else {
+    ALOGE("Invalid hwc_session");
   }
 }
 
