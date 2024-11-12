@@ -148,7 +148,7 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
     return AIMAPPER_ERROR_BAD_BUFFER;
   } else {
     ALOGD_IF(enable_logs, "QtiMapper5::lock address %lu\n", snap_base);
-    outData = reinterpret_cast<void * _Nullable * _Nonnull>(snap_base);
+    *outData = reinterpret_cast<void *>(snap_base);
     return AIMAPPER_ERROR_NONE;
   }
   return static_cast<Error>(ret_val);
