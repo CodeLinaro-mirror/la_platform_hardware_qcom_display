@@ -93,8 +93,6 @@ DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs) {
 }
 
 DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {
-  intf->UnsetScaleLutConfig();
-
   if (intf) {
     intf->UnsetScaleLutConfig();
     delete intf;
