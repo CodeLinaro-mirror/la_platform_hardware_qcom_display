@@ -200,14 +200,14 @@ AIMapper_Error SetStandardMetadata(AIMapper *_Nonnull mapper_, buffer_handle_t _
   auto size_required = Value::encode(value, nullptr, 0);
   if (size_required < 0) {
     ALOGW_IF(-AIMAPPER_ERROR_UNSUPPORTED != size_required,
-             "%s: Unexpected error %d during size calculation for setMetadata (%d) call",
+             "%s: Unexpected error %d during size calculation for setMetadata (%lld) call",
              __FUNCTION__, -size_required, static_cast<int64_t>(T));
     return static_cast<AIMapper_Error>(-size_required);
   }
   bytestream.resize(size_required);
   size_required = Value::encode(value, bytestream.data(), bytestream.size());
   if (size_required < 0 || (size_t)size_required > bytestream.size()) {
-    ALOGW("setMetadata (%d) failed, calculated size %d with buffer size %zd",
+    ALOGW("setMetadata (%lld) failed, calculated size %d with buffer size %zd",
           static_cast<int64_t>(T), size_required, bytestream.size());
     return static_cast<AIMapper_Error>(-size_required);
   }
