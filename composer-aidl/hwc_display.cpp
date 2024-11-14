@@ -845,6 +845,8 @@ HWC3::Error HWCDisplay::SetLayerZOrder(LayerId layer_id, uint32_t z) {
     return HWC3::Error::BadLayer;
   }
 
+  validated_ = false;
+
   const auto layer = map_layer->second;
   const auto z_range = layer_set_.equal_range(layer);
   bool layer_on_display = false;
