@@ -723,7 +723,7 @@ void HWCSession::CWB::NotifyCWBStatus(int status, std::shared_ptr<QueueNode> cwb
   std::shared_ptr<IDisplayConfigCallback> callback = cwb_node->callback;
   if (callback) {
     DLOGI("Notify the client about buffer status %d.", status);
-    callback->notifyCWBBufferDone(status, ::android::makeToAidl(cwb_node->buffer));
+    callback->notifyCWBBufferDone(status, ::android::dupToAidl(cwb_node->buffer));
   }
 
   hwc_session_->buffer_allocator_.ReleaseBufferHandle(cwb_node->buffer);
