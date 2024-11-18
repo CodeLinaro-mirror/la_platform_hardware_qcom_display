@@ -1398,6 +1398,11 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
       }
     }
 
+    if (align_x == 0 || align_y == 0) {
+       DLOGE("Unsupported Alignment: (%d %d)", align_x, align_y);
+       return kErrorParameters;
+    }
+
     // Align the width and height according to fb's aspect ratio
     *new_mixer_width = FloorToMultipleOf(UINT32((FLOAT(fb_width) / FLOAT(fb_height)) *
                                          layer_height), align_x);

@@ -6,7 +6,7 @@ ifneq ($(TARGET_IS_HEADLESS), true)
     display-hals += libcopybit liblight libmemtrack hdmi_cec \
                     gpu_tonemapper libdrmutils
 
-ifeq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
+ifeq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 W Baklava 16, $(PLATFORM_VERSION)))
 display-hals += $(sdm-libs)/hwc2
 endif
 
