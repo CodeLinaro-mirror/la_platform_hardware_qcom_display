@@ -79,11 +79,13 @@ int HWCBufferAllocator::GetGrallocInstance() {
     return kErrorNone;
   }
 
-  allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
-      AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
   if (allocator_ == nullptr) {
-    DLOGE("Unable to get allocator");
-    return kErrorCriticalResource;
+    allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+        AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
+    if (allocator_ == nullptr) {
+      DLOGE("Unable to get allocator");
+      return kErrorCriticalResource;
+    }
   }
 
   if (mapper_ == nullptr) {
@@ -200,6 +202,13 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   native_handle *raw_handle = android::makeFromAidl(result.buffers[0]);
 
   auto mapper_err = STABLEMAPPER(mapper_).importBuffer(raw_handle, &buf);
+
+  if (raw_handle) {
+    // Locally created raw handle use is over here, so need to deallocate corresponding memory
+    // to avoid memory leak.
+    native_handle_delete(raw_handle);
+    raw_handle = nullptr;
+  }
 
   if (mapper_err != AIMAPPER_ERROR_NONE) {
     DLOGE("Failed to import buffer into HWC");
@@ -454,6 +463,7 @@ int HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, i
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return err;
   }
   int ret;
   if (handle != nullptr) {
@@ -498,6 +508,7 @@ int HWCBufferAllocator::GetAlignedWidthAndHeight(int width, int height, int form
   err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return err;
   }
   if (snap_helper_->IsSnapAllocEnabled()) {
     uint64_t alignedw_ul = 0;
@@ -970,6 +981,37 @@ int HWCBufferAllocator::GetMetadataValue(void *buf, SnapMetadataType type, void 
   }
 
   return err;
+}
+
+int HWCBufferAllocator::ImportBufferHandle(native_handle_t **handle, bool is_aidl_duped) {
+  if (!handle || !(*handle)) {
+    return -EINVAL;
+  }
+
+  buffer_handle_t buf = nullptr;
+  auto mapper_err = STABLEMAPPER(mapper_).importBuffer(*handle, &buf);
+
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    DLOGE("Failed to import buffer into HWC");
+    return kErrorMemory;
+  }
+
+  if (is_aidl_duped) {
+    native_handle_close(*handle);
+  }
+
+  native_handle_delete(*handle);
+  *handle = const_cast<native_handle *>(buf);
+
+  return 0;
+}
+
+void HWCBufferAllocator::ReleaseBufferHandle(const native_handle_t *handle) {
+  if (!handle) {
+    return;
+  }
+
+  STABLEMAPPER(mapper_).freeBuffer(const_cast<native_handle_t *>(handle));
 }
 
 }  // namespace sdm
