@@ -763,6 +763,7 @@ int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr ycbcr[2]) 
         case HAL_PIXEL_FORMAT_RAW8:
         case HAL_PIXEL_FORMAT_Y8:
           std::swap(ycbcr->cb, ycbcr->cr);
+          break;
       }
     }
   }
@@ -3035,6 +3036,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
         }
       }
     }
+    [[fallthrough]];
     case QTI_YUV_PLANE_INFO: {
       if (copy) {
         qti_ycbcr layout[2];
@@ -3080,6 +3082,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
         }
       }
     }
+    [[fallthrough]];
     case QTI_CUSTOM_DIMENSIONS_HEIGHT: {
       if (copy) {
         int32_t stride = handle->width;
@@ -3093,6 +3096,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
         }
       }
     }
+    [[fallthrough]];
     case QTI_RGB_DATA_ADDRESS: {
       if (copy) {
         void *rgb_data = nullptr;
@@ -3105,6 +3109,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
         }
       }
     }
+    [[fallthrough]];
     case QTI_BUFFER_TYPE:
       if (copy) {
         *(reinterpret_cast<uint32_t *>(in)) = handle->buffer_type;
