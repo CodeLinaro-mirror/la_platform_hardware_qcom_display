@@ -537,7 +537,13 @@ void DisplayBase::ConfigureCwbParams(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
   if (hw_resource_info_.has_concurrent_writeback && layer_stack->output_buffer) {  // CWB requested
     cwb_configured_ = true;
-    comp_manager_->HandleCwbFrequencyBoost(true);
+
+    if (!cwb_freq_boosted_) {
+      error = comp_manager_->HandleCwbFrequencyBoost(true);
+      if (error == kErrorNone) {
+        cwb_freq_boosted_ = true;
+      }
+    }
 
     // Config dither data
     layer_stack->cwb_config->dither_info = nullptr;
@@ -562,7 +568,11 @@ void DisplayBase::ConfigureCwbParams(LayerStack *layer_stack) {
       }
     }
     cwb_configured_ = false;
-    comp_manager_->HandleCwbFrequencyBoost(false);
+
+    if (cwb_freq_boosted_) {
+      comp_manager_->HandleCwbFrequencyBoost(false);
+      cwb_freq_boosted_ = false;
+    }
   }
 }
 
@@ -4226,7 +4236,12 @@ DisplayError DisplayBase::ConfigureCwbForIdleFallback(LayerStack *layer_stack) {
     return error;
   }
 
-  comp_manager_->HandleCwbFrequencyBoost(true);
+  if (!cwb_freq_boosted_) {
+    error = comp_manager_->HandleCwbFrequencyBoost(true);
+    if (error == kErrorNone) {
+      cwb_freq_boosted_ = true;
+    }
+  }
 
   cwb_configured_ = true;
   error = ValidateCwbConfigInfo(disp_layer_stack_.info.hw_cwb_config,

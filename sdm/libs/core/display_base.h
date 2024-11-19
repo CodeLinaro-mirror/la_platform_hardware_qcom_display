@@ -467,6 +467,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   static bool primary_active_;
   bool draw_method_set_ = false;
   bool cwb_configured_ = false;
+  bool cwb_freq_boosted_ = false;
   bool transition_done_ = false;
   bool gpu_comp_frame_ = false;
   uint32_t retire_fence_offset_ = 0;
