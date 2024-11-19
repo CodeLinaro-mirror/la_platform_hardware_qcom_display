@@ -291,6 +291,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
       display_null_.GetDisplayState(&state);
       display_intf_->SetDisplayState(state, false /* teardown */, &release_fence);
 
+      display_intf_->SetDrawMethod(draw_method_);
       SetVsyncEnabled(HWC2::Vsync::Enable);
 
       display_null_.SetActive(false);
