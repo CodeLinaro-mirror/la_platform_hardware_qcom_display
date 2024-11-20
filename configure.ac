@@ -23,19 +23,21 @@ PKG_CHECK_MODULES([LIBDRM], [libdrm])
 AC_SUBST([LIBDRM_CFLAGS])
 AC_SUBST([LIBDRM_LIBS])
 
+PKG_CHECK_MODULES([LIBLOG], [liblog])
+AC_SUBST([LIBLOG_CFLAGS])
+AC_SUBST([LIBLOG_LIBS])
+
+PKG_CHECK_MODULES([LIBCUTILS], [libcutils])
+AC_SUBST([LIBCUTILS_CFLAGS])
+AC_SUBST([LIBCUTILS_LIBS])
+
+PKG_CHECK_MODULES([LIBUTILS], [libutils])
+AC_SUBST([LIBUTILS_FLAGS])
+AC_SUBST([LIBUTILS_LIBS])
+
 AC_SUBST([COMMON_CFLAGS], [-Wall -Werror -Wno-sign-conversion -Wconversion -DDEBUG_CALC_FPS])
 AC_SUBST([AM_CPPFLAGS], [--std=c++11])
 AC_SUBST([AM_CPPFLAGS], [-fno-operator-names])
-
-AC_ARG_WITH([core_includes],
-    AC_HELP_STRING([--with-core-includes=@<:@dir@:>@],
-       [Specify the location of the core headers]),
-    [core_incdir=$withval],
-    with_core_includes=no)
-
-if test "x$with_core_includes" != "xno"; then
-   CFLAGS="${CFLAGS} -I${core_incdir}"
-fi
 
 AC_ARG_WITH(sanitized-headers,
    AS_HELP_STRING([--with-sanitized-headers=DIR],
