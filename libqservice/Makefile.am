@@ -9,6 +9,8 @@ cpp_sources = QService.cpp \
               IQClient.cpp \
               IQHDMIClient.cpp
 
+AM_CPPFLAGS += "-DTRUSTED_VM"
+
 qservice_includedir = $(pkgincludedir)/display
 qservice_include_HEADERS = $(h_sources)
 
