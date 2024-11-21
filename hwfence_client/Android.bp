@@ -5,6 +5,7 @@ cc_library_headers {
 }
 cc_library_shared {
     name: "libhwfenceclient",
+    enabled: false,
 
     sanitize: {
         integer_overflow: true,
@@ -37,4 +38,3 @@ cc_library_shared {
         "-Wno-sign-conversion",
     ],
 }
-
