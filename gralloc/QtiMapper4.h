@@ -171,6 +171,9 @@ class QtiMapper : public IQtiMapper {
 
     uint64_t name_size;
     std::memcpy(&name_size, &in[index], sizeof(name_size));
+    if (name_size > gralloc::kBufferDescriptorMaxNameSize) {
+      return gralloc::Error::BAD_VALUE;
+    }
     index += sizeof(name_size);
 
     // The second check validates that the size and magic version are correct
