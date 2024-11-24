@@ -94,8 +94,10 @@ using aidl::android::hardware::graphics::composer3::DisplayAttribute;
 using aidl::android::hardware::graphics::composer3::DisplayBrightness;
 using aidl::android::hardware::graphics::composer3::DisplayCapability;
 using aidl::android::hardware::graphics::composer3::DisplayCommand;
+using aidl::android::hardware::graphics::composer3::LayerCommand;
 #ifdef COMPOSER3_V3
 using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
+using aidl::android::hardware::graphics::composer3::LayerLifecycleBatchCommandType;
 #endif
 using aidl::android::hardware::graphics::composer3::DisplayConnectionType;
 using aidl::android::hardware::graphics::composer3::DisplayContentSample;
@@ -297,8 +299,9 @@ class AidlComposerClient : public BnComposerClient,
   Error getDisplayReadbackBuffer(int64_t display, const SnapHandle *rawHandle);
 
   // Methods for extensions (QtiComposer3Client)
-  ScopedAStatus executeQtiCommands(const std::vector<QtiDisplayCommand> &in_commands,
-                                   std::vector<CommandResultPayload> *aidl_return);
+  ScopedAStatus executeQtiExtendedCommands(const std::vector<DisplayCommand> &in_commands,
+                                           const std::vector<QtiDisplayCommand> &in_qti_commands,
+                                           std::vector<CommandResultPayload> *aidl_return);
 
  protected:
   SpAIBinder createBinder() override;
@@ -331,6 +334,9 @@ class AidlComposerClient : public BnComposerClient,
                   std::vector<CommandResultPayload> *aidl_return);
     Error qtiExecute(const std::vector<QtiDisplayCommand> &in_commands,
                      std::vector<CommandResultPayload> *aidl_return);
+    Error qtiExtendedExecute(const std::vector<DisplayCommand> &in_commands,
+                             const std::vector<QtiDisplayCommand> &in_qti_commands,
+                             std::vector<CommandResultPayload> *aidl_return);
     Error validateDisplay(int64_t display);
     Error presentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
 
@@ -349,6 +355,9 @@ class AidlComposerClient : public BnComposerClient,
       mWriter->setError(mCommandIndex, INT32(err));
     }
 
+    void executeDisplayCommmands(const DisplayCommand &displayCmd);
+    void executeLayerCommmands(const DisplayCommand &displayCmd);
+
     // Commands from aidl::android::hardware::graphics::composer3::IComposerClient follow.
     void executeSetColorTransform(int64_t display, const std::vector<float> &matrix);
     void executeSetClientTarget(int64_t display, const ClientTarget &command);
@@ -363,6 +372,9 @@ class AidlComposerClient : public BnComposerClient,
     void executeAcceptDisplayChanges(int64_t display);
     void executePresentDisplay(int64_t display);
 
+#ifdef COMPOSER3_V3
+    void executeSetLayerLifecycleBatchCommandType(int64_t display, const LayerCommand &layerCmd);
+#endif
     void executeSetLayerCursorPosition(int64_t display, int64_t layer, const Point &cursorPosition);
     void executeSetLayerBuffer(int64_t display, int64_t layer, const Buffer &buffer);
     void executeSetLayerSurfaceDamage(int64_t display, int64_t layer,
