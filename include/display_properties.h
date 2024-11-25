@@ -228,7 +228,7 @@
 #define PRIORITIZE_CLIENT_CWB                DISPLAY_PROP("prioritize_client_cwb")
 #define TRANSIENT_FPS_CYCLE_COUNT            DISPLAY_PROP("transient_fps_cycle_count")
 #define FORCE_LM_TO_FB_CONFIG                DISPLAY_PROP("force_lm_to_fb_config")
-
+#define ENABLE_PRIMARY_HOTPLUG_TO_SF         "ro.surface_flinger.update_device_product_info_on_hotplug_reconnect"
 // Add all other.properties above
 // End of property
 #endif  // __DISPLAY_PROPERTIES_H__

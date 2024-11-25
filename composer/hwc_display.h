@@ -296,6 +296,8 @@ class HWCDisplay : public DisplayEventHandler {
     return kErrorNotSupported;
   }
 
+  virtual int UpdateFBResolution(int width, int height) {return 0;}
+
   virtual DisplayError Flush() {
     return kErrorNotSupported;
   }
