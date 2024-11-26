@@ -103,7 +103,7 @@ int DRMMaster::Init() {
 
   uint8_t retry = 0;
   do {
-    dev_fd_ = drmOpen("msm_drm", nullptr);
+    dev_fd_ = drmOpen("msm", nullptr);
     if(dev_fd_ < 0) {
       DRM_LOGW("drmOpen failed with error %d, retry %d", dev_fd_, retry);
       if (retry >= MAX_RETRY) {

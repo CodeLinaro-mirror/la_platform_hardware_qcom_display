@@ -2535,7 +2535,7 @@ DisplayError HWDeviceDRM::DumpDebugData() {
       } else {
         src >> driver_name;
         src.close();
-        if (driver_name == "DRIVER=msm_drm") {
+        if (driver_name == "DRIVER=msm") {
           closedir(dir);
           devcd_path = devcd_dir_path + i->d_name + "/data";
           src.rdbuf()->pubsetbuf(buffer, sizeof(buffer));
