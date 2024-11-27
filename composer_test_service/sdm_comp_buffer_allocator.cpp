@@ -977,6 +977,10 @@ int SDMCompBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
 
 int SDMCompBufferAllocator::MapBuffer(void *handle, shared_ptr<Fence> acquire_fence,
                                       void **base_ptr) {
+  if (handle == nullptr) {
+    DLOGE("Failed to Map buffer Invalid handle");
+    return kErrorUndefined;
+  }
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGW("Could not get gralloc instance");

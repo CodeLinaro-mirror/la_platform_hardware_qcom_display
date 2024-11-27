@@ -1015,6 +1015,21 @@ SnapError GrallocSnapHelper::MultiViewHelper(SnapHandle *hnd, uint32_t aidl_size
   return error;
 }
 
+SnapError GrallocSnapHelper::ThreeDimensionalRefInfoHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                                 void *gralloc_in_set, void *gralloc_out_get,
+                                                 SnapDescriptor *buf_des, bool check_metadata_set,
+                                                 int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::THREE_DIMENSIONAL_REF_INFO, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::THREE_DIMENSIONAL_REF_INFO, gralloc_in_set);
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                     void *gralloc_in_set, void *gralloc_out_get,
                                                     SnapDescriptor *buf_des,
@@ -1932,8 +1947,7 @@ int GrallocSnapHelper::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
       return SnapError::UNSUPPORTED;
     }
   } else {
-    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p id %d", __FUNCTION__, gr_hnd,
-          gr_hnd->data[13]);
+    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
     return SnapError::BAD_BUFFER;
   }
 
@@ -4370,6 +4384,9 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
                                                       int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   SnapBufferLayout snap_buffer_layout = {};
+  if (hnd == nullptr) {
+    return error;
+  }
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
   } else if (gralloc_out_get == nullptr) {
@@ -4382,9 +4399,7 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
   ConvertSnapBufferlayoutToGrallocPlaneLayout(hnd, buf_des, snap_buffer_layout, &gr_plane_layouts);
   android_ycbcr outYCbCr[2];
   uint64_t base_addr = 0;
-  if (hnd != nullptr) {
-    auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
-  }
+  error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
   ConvertGrallocPlaneLayoutToAndroidYCbCr(base_addr, gr_plane_layouts, outYCbCr);
   qti_ycbcr layout[2];
   for (int i = 0; i < 2; i++) {
@@ -5938,8 +5953,7 @@ int GrallocSnapHelperLegacy::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
       return SnapError::UNSUPPORTED;
     }
   } else {
-    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p id %d", __FUNCTION__, gr_hnd,
-          gr_hnd->data[13]);
+    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
     return SnapError::BAD_BUFFER;
   }
 
