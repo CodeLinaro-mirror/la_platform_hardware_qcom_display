@@ -231,6 +231,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetPanelResolution(uint32_t *width, uint32_t *height);
   virtual void GetRealPanelResolution(uint32_t *width, uint32_t *height);
   virtual void Dump(std::ostringstream *os);
+  virtual void SetTunneledLayer(bool enable);
 
   // CWB related methods
   virtual int GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels,
@@ -312,6 +313,7 @@ class HWCDisplay : public DisplayEventHandler {
   void BuildLayerStack(void);
   void BuildSolidFillStack(void);
   HWCLayer *GetHWCLayer(hwc2_layer_t layer_id);
+  hwc2_layer_t GetHWCTunnelledLayer();
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   void SetValidationState(DisplayValidateState state) { validate_state_ = state; }
   ColorMode GetCurrentColorMode() {
@@ -408,6 +410,8 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error CreateLayer(hwc2_layer_t *out_layer_id);
   virtual HWC2::Error DestroyLayer(hwc2_layer_t layer_id);
   virtual HWC2::Error SetLayerZOrder(hwc2_layer_t layer_id, uint32_t z);
+  virtual HWC2::Error SetLayerIsTunneled(hwc2_layer_t layer_id, bool tunneled);
+  virtual HWC2::Error IsTunnelledLayerPresent(bool *tunnelled_layer_present);
   virtual HWC2::Error SetLayerType(hwc2_layer_t layer_id, IQtiComposerClient::LayerType type);
   virtual HWC2::Error GetReleaseFences(uint32_t *out_num_elements, hwc2_layer_t *out_layers,
                                        std::vector<shared_ptr<Fence>> *out_fences);
@@ -659,6 +663,7 @@ class HWCDisplay : public DisplayEventHandler {
   std::map<CWBClient, CWBCaptureResponse> cwb_capture_status_map_;
   static constexpr unsigned int kCwbWaitMs = 100;
   bool validate_done_ = false;
+  bool has_tunneled_layer_ = false;
 
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
@@ -677,6 +682,8 @@ class HWCDisplay : public DisplayEventHandler {
   bool client_target_3_1_set_ = false;
   bool is_client_up_ = false;
   DisplayValidateState validate_state_ = kNormalValidate;
+  int tunnelling_enable_ = 0;
+  hwc2_layer_t tunnelled_layer_ = -1;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *  Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #ifndef __HWC_BUFFER_ALLOCATOR_H__
 #define __HWC_BUFFER_ALLOCATOR_H__
@@ -87,6 +87,7 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetBufferType(void *buf, uint32_t &buffer_type);
   int GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height);
   int GetCustomContentMetadata(void *buf, CustomContentMetadata *dest);
+  const native_handle_t* ImportBuffer(buffer_handle_t &handle);
 
  private:
   int GetGrallocInstance();

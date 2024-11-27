@@ -18,10 +18,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+*  Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __HWC_SESSION_H__
@@ -368,6 +367,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   static int commit_error_[HWCCallbacks::kNumDisplays];
   static Locker vm_release_locker_[HWCCallbacks::kNumDisplays];
   static std::bitset<HWCCallbacks::kNumDisplays> clients_waiting_for_vm_release_;
+  HWCSession *hwc_session_ = nullptr;
 
  private:
   class CWB {
@@ -654,6 +654,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   bool update_vsync_on_doze_ = false;
   std::vector<bool> is_hdr_display_;    // info on HDR supported
   std::map <hwc2_display_t, hwc2_display_t> map_hwc_display_;  // Real and dummy display pairs.
+  std::map <uint64_t, shared_ptr<Fence>> tunneling_map_buffer_release_fence_; // stores mapping
+                                                              // between buffer id and release fence
+  // stores mapping between buffer id and native handle
+  std::map <uint64_t, const native_handle_t *> tunneling_map_buffer_native_handle_;
   bool reset_panel_ = false;
   bool client_connected_ = false;
   bool new_bw_mode_ = false;
@@ -680,6 +684,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int32_t enable_primary_reconfig_req_ = 0;
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
+  bool tunneling_enabled_ = false;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
   CWB cwb_;
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
@@ -706,6 +711,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int display_reboot_strategy_ = kRebootStrategyDefault;
   bool null_display_active_ = false;
   int send_primary_hotplug_to_sf_ = 0;
+  hwc2_layer_t tunneled_layer_ = -1;
+  shared_ptr<Fence> tunneled_layer_rf_ = nullptr; // tunneled layer's release fence
+  uint64_t tunnel_buffer_id_ = -1;
 };
 }  // namespace sdm
 
