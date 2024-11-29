@@ -256,6 +256,10 @@ DisplayError DisplayBase::Init() {
   if (Debug::Get()->GetProperty(ALLOW_TONEMAP_NATIVE, &prop) == kErrorNone) {
     allow_tonemap_native_ = (prop == 1);
   }
+  prop = 0;
+  if (Debug::Get()->GetProperty(ENABLE_ASYNC_POWER_OFF_WAIT, &prop) == kErrorNone) {
+    enable_async_power_off_wait_ = (prop == 1);
+  }
 
   Debug::GetIdleTimeoutMs(&idle_active_ms_, &inactive_ms);
 
@@ -2006,21 +2010,39 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       return kErrorParameters;
   }
 
+  bool performing_async_poweroff_wait = false;
   if ((pending_power_state_ == kPowerStateNone) && !first_cycle_) {
     CacheRetireFence();
-    SyncPoints sync = {};
-    sync.retire_fence = retire_fence_;
-    WaitForCompletion(&sync);
+    if (enable_async_power_off_wait_ && state == kStateOff) {
+      performing_async_poweroff_wait = true;
+      std::thread(&DisplayBase::WaitForCompletionAsync, this, retire_fence_, sync_points).detach();
+    } else {
+      SyncPoints sync = {};
+      sync.retire_fence = retire_fence_;
+      WaitForCompletion(&sync);
+    }
   }
 
-  error = ReconfigureDisplay();
-  if (error != kErrorNone) {
-    return error;
+  if (!performing_async_poweroff_wait) {
+    error = PostSetDisplayState(state, active, sync_points);
+    if (error != kErrorNone) {
+      return error;
+    }
   }
 
-  DisablePartialUpdateOneFrameInternal();
+  if (release_fence) {
+    *release_fence = sync_points.release_fence;
+  }
 
+  return error;
+}
+
+DisplayError DisplayBase::PostSetDisplayState(DisplayState state, bool active,
+                                              SyncPoints sync_points) {
+  DTRACE_SCOPED();
+  auto error = ReconfigureDisplay();
   if (error == kErrorNone) {
+    DisablePartialUpdateOneFrameInternal();
     if (pending_power_state_ == kPowerStateNone) {
       active_ = active;
       state_ = state;
@@ -2034,14 +2056,9 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       }
     }
     comp_manager_->SetDisplayState(display_comp_ctx_, state, sync_points);
+    DLOGI("active %d-%d state %d-%d pending_power_state_ %d", active, active_, state, state_,
+          pending_power_state_);
   }
-  DLOGI("active %d-%d state %d-%d pending_power_state_ %d", active, active_, state, state_,
-        pending_power_state_);
-
-  if (release_fence) {
-    *release_fence = sync_points.release_fence;
-  }
-
   return error;
 }
 
@@ -2627,7 +2644,7 @@ bool DisplayBase::IsValidCwbRoi(const LayerRect &roi, const LayerRect &full_fram
   return is_valid;
 }
 
-DisplayError DisplayBase::ValidateCwbConfigInfo(CwbConfig *cwb_config,
+DisplayError DisplayBase::ValidateCwbConfigInfo(std::shared_ptr<CwbConfig> cwb_config,
                                                 const LayerBufferFormat &format) {
   CwbTapPoint &tap_point = cwb_config->tap_point;
   if (tap_point < CwbTapPoint::kLmTapPoint || tap_point > CwbTapPoint::kDemuraTapPoint) {
@@ -4056,6 +4073,15 @@ void DisplayBase::MMRMEvent(uint32_t clk) {
   event_handler_->Refresh();
 }
 
+void DisplayBase::WaitForCompletionAsync(shared_ptr<Fence> retire_fence, SyncPoints sync_points) {
+  ClientLock lock(disp_mutex_);
+  DTRACE_SCOPED();
+  SyncPoints sync = {};
+  sync.retire_fence = retire_fence;
+  WaitForCompletion(&sync);
+  PostSetDisplayState(DisplayState::kStateOff, false, sync_points);
+}
+
 void DisplayBase::WaitForCompletion(SyncPoints *sync_points) {
   DTRACE_SCOPED();
   // For displays in unified draw, wait on cached retire fence in steady state.
@@ -4466,7 +4492,10 @@ DisplayError DisplayBase::CaptureCwb(const LayerBuffer &output_buffer, const Cwb
     cwb_config.cwb_roi = cwb_config.cwb_full_rect;
   }
 
-  error = ValidateCwbConfigInfo(&cwb_config, output_buffer.format);
+  auto cwb_config_shared = std::make_shared<CwbConfig>(cwb_config);
+  error = ValidateCwbConfigInfo(cwb_config_shared, output_buffer.format);
+  cwb_config = *cwb_config_shared;
+  cwb_config_shared.reset();
   if (error != kErrorNone) {
     DLOGE("CWB_config validation failed.");
     return error;

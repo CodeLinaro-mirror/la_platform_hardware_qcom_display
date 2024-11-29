@@ -39,6 +39,7 @@ namespace gralloc {
 using android::hardware::hidl_vec;
 const uint32_t kBufferDescriptorSize = 7;
 const uint32_t kBufferDescriptorSizeV4 = 42;
+const uint32_t kBufferDescriptorMaxNameSize = 200;
 const uint32_t kMagicVersion = 0x76312E30;  // v1.0
 
 class BufferDescriptor {
