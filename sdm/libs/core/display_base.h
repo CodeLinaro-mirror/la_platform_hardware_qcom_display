@@ -469,6 +469,8 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   DisplayError GetNoisePluginParams(LayerStack *layer_stack);
   DisplayError InsertNoiseLayer(LayerStack *layer_stack);
   void WaitForCompletion(SyncPoints *sync_points);
+  void WaitForCompletionAsync(shared_ptr<Fence> retire_fence, SyncPoints sync_points);
+  DisplayError PostSetDisplayState(DisplayState state, bool active, SyncPoints sync_points);
   DisplayError PerformHwCommit(HWLayersInfo *hw_layers_info);
   void CacheRetireFence();
   void CacheFrameBuffer();
@@ -509,6 +511,7 @@ class DisplayBase : public DisplayInterface, public CompManagerEventHandler {
   HWDisplayMode default_panel_mode_ = kModeDefault;
   bool idle_hint_set_ = false;
   uint32_t idle_active_ms_ = 0;
+  bool enable_async_power_off_wait_ = false;
 };
 
 }  // namespace sdm
