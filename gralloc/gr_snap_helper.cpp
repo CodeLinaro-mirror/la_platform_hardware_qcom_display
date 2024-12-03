@@ -2987,7 +2987,7 @@ int GrallocSnapHelper::GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, Sna
              (snap_to_flat_ubwc_format_.find(snap_fmt_desc) != snap_to_flat_ubwc_format_.end())) {
     *snap_format = snap_to_flat_ubwc_format_.at(snap_fmt_desc);
   } else {
-    ALOGW("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
+    ALOGW("%s: No map for format: 0x%x - modifier : %d", __FUNCTION__, snap_fmt_desc.format, snap_fmt_desc.modifier);
     return SnapError::BAD_VALUE;
   }
 
@@ -7048,7 +7048,7 @@ int GrallocSnapHelperLegacy::GetGrallocFormat(SnapFormatDescriptor snap_fmt_desc
   } else if (snap_to_gralloc_format_.find(snap_fmt_desc) != snap_to_gralloc_format_.end()) {
     *gr_format = snap_to_gralloc_format_.at(snap_fmt_desc);
   } else {
-    ALOGE("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
+    ALOGE("%s: No map for format: 0x%x - modifier %d", __FUNCTION__, snap_fmt_desc.format, snap_fmt_desc.modifier);
     return SnapError::BAD_VALUE;
   }
 
