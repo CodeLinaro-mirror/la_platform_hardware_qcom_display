@@ -3325,7 +3325,7 @@ int HWCSession::RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info
   int temp_composer_setup_mode = composer_setup_mode_;
 
   uint32_t dummy_config_index = 0;
-  DisplayConfigVariableInfo dummy_fb_config = {};
+  DisplayConfigVariableInfo dummy_fb_config = {{0}};
   HWC2::PowerMode previous_mode = HWC2::PowerMode::Off;
   HWCDisplay::HWCLayerStack stack = {};
 
