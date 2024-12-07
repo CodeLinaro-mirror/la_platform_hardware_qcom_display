@@ -312,6 +312,7 @@ int HWCSession::Init() {
   HWCDebugHandler::Get()->GetProperty(ENABLE_PRIMARY_RECONFIG_REQUEST,
                                       &enable_primary_reconfig_req_);
   DLOGI("enable_primary_reconfig_req_: %d", enable_primary_reconfig_req_);
+  HWCDebugHandler::Get()->GetProperty(ENABLE_PRIMARY_HOTPLUG_TO_SF, &send_primary_hotplug_to_sf_);
 
   g_hwc_uevent_.Register(this);
   DLOGI("Registered HWCSession as the HWCUEvent handler");
@@ -3386,6 +3387,14 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
             }
           }
           primary_config_ = new_config;
+          if (send_primary_hotplug_to_sf_) {
+            status = hwc_display->UpdateFBResolution(primary_config_.x_pixels,
+                                                     primary_config_.y_pixels);
+            if (status) {
+              DLOGW("Update frame buffer resolution failed. Error = %d", status);
+              return status;
+            }
+          }
           DLOGD("Stored config information of connected primary display: %d x %d @ %d.",
                 primary_config_.x_pixels, primary_config_.y_pixels, primary_config_.fps);
           pluggable_primary_connected_ = true;
@@ -3394,6 +3403,9 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
                 "client id = %d", info.display_id, UINT32(client_id));
           map_info.disp_type = info.display_type;
           map_info.sdm_id = info.display_id;
+          if (send_primary_hotplug_to_sf_) {
+            pending_hotplugs.push_back((hwc2_display_t)client_id);
+          }
         }
       }
     }
