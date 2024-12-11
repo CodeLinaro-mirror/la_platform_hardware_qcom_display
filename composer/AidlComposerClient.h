@@ -217,6 +217,7 @@ class AidlComposerClient : public BnComposerClient,
                                       const ClockMonotonicTimestamp &expectedPresentTime,
                                       int32_t frameIntervalNs) override;
 #endif
+  ScopedAStatus getMaxLayerPictureProfiles(int64_t in_display, int32_t *_aidl_return);
 
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
                                        std::vector<DisplayCapability> *aidl_return) override;
