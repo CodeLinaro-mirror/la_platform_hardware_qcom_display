@@ -188,6 +188,7 @@ class GrallocSnapHelperIntf {
 class GrallocSnapHelper : public GrallocSnapHelperIntf {
  public:
   static GrallocSnapHelper *GetInstance();
+  static int GetSocId();
   int Allocate(gralloc::BufferDescriptor gr_desc, int buffer_count,
                aidl::android::hardware::graphics::allocator::AllocationResult *result);
   int Import(native_handle_t *gr_hnd);
