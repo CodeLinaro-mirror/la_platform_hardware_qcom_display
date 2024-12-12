@@ -323,7 +323,7 @@ ScopedAStatus DisplayConfigAIDL::displayBWTransactionPending(bool *status) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setDisplayAnimating(long display_id, bool animating) {
+ScopedAStatus DisplayConfigAIDL::setDisplayAnimating(int64_t display_id, bool animating) {
   sideband_->SetDisplayAnimating(display_id, animating);
   return ScopedAStatus::ok();
 }
@@ -381,7 +381,7 @@ ScopedAStatus DisplayConfigAIDL::isWCGSupported(int disp_id, bool *supported) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setLayerAsMask(int disp_id, long layer_id) {
+ScopedAStatus DisplayConfigAIDL::setLayerAsMask(int32_t disp_id, int64_t layer_id) {
   auto err = layer_builder_->SetLayerAsMask(disp_id, layer_id);
   if (err != sdm::kErrorNone) {
     return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
@@ -428,7 +428,7 @@ ScopedAStatus DisplayConfigAIDL::getActiveBuiltinDisplayAttributes(Attributes *a
   error = settings_->GetDisplayAttributes(disp_id, config, &var_info);
 
   if (error != sdm::kErrorNone) {
-    ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
+    ALOGW("%s: Invalid display = %llu", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
@@ -484,7 +484,8 @@ ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) {
+ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int32_t disp_id,
+                                                        std::vector<int64_t> *bit_clks) {
   auto ret = caps_->GetSupportedDSIClock(disp_id, bit_clks);
   if (ret == sdm::kErrorResources) {
     ALOGW("%s: Display: %d is not connected", __FUNCTION__, disp_id);
@@ -494,7 +495,7 @@ ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
+ScopedAStatus DisplayConfigAIDL::getDSIClk(int32_t disp_id, int64_t *bit_clk) {
   auto ret = settings_->GetDSIClk(disp_id, (uint64_t *)bit_clk);
   if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
@@ -504,7 +505,7 @@ ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setDSIClk(int disp_id, long bit_clk) {
+ScopedAStatus DisplayConfigAIDL::setDSIClk(int32_t disp_id, int64_t bit_clk) {
   auto ret = settings_->SetDSIClk(disp_id, (uint64_t)bit_clk);
   if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
@@ -663,7 +664,8 @@ int DisplayConfigAIDL::GetDispTypeFromPhysicalId(uint64_t physical_disp_id,
   return -ENODEV;
 }
 
-ScopedAStatus DisplayConfigAIDL::getDisplayType(long physical_disp_id, DisplayType *display_type) {
+ScopedAStatus DisplayConfigAIDL::getDisplayType(int64_t physical_disp_id,
+                                                DisplayType *display_type) {
   if (!display_type) {
     ALOGW("%s: Display type provided is invalid.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
