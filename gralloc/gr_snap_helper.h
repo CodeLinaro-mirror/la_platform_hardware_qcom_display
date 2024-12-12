@@ -647,6 +647,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::YCbCr_420_SP,
             .modifier = PIXEL_FORMAT_MODIFIER_FLEX_8_BATCH},
            SnapPixelFormat::NV12_FLEX_8_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::YCbCr_420_SP},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
