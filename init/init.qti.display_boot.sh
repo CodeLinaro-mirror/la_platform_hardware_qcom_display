@@ -1,5 +1,5 @@
 #!/vendor/bin/sh
-# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -57,8 +57,9 @@ case "$target" in
     ;;
     "kalama")
     #SOC ID for Kalama is 519
+    #SOC ID for QCS Kalama IoT Non-Pop is 668
     case "$soc_hwid" in
-      519)
+      519|668)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.display.target.version 4
         setprop vendor.gralloc.use_dma_buf_heaps 1
