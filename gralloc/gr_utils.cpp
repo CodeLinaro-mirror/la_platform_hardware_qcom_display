@@ -3309,6 +3309,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_YUV_PLANE_INFO: {
       if (copy) {
@@ -3354,6 +3355,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_CUSTOM_DIMENSIONS_HEIGHT: {
       if (copy) {
@@ -3367,6 +3369,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_RGB_DATA_ADDRESS: {
       if (copy) {
@@ -3379,6 +3382,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_BUFFER_TYPE:
       if (copy) {
