@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -334,6 +334,12 @@ class CoreInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id) = 0;
+
+  /*! @brief Method to set cpu perf hint.
+
+    @return returns true if cpu perf hint successfully set.
+  */
+  virtual DisplayError SetCpuPerfHint(bool isReset, const uint32_t &cpu_hint_freq) = 0;
 
  protected:
   virtual ~CoreInterface() { }

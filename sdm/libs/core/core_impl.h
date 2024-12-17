@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -109,6 +109,7 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info);
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
   virtual bool IsRotatorSupportedFormat(LayerBufferFormat format);
+  virtual DisplayError SetCpuPerfHint(bool isReset, const uint32_t &cpu_hint_freq);
   virtual DisplayError ReserveDemuraResources();
   virtual DisplayError RequestVirtualDisplayId(int32_t *vdisp_id);
 #ifdef PROFILE_COVERAGE_DATA

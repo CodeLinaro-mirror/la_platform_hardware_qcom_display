@@ -4,8 +4,6 @@
  *
  * Copyright 2015 The Android Open Source Project
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,33 +17,43 @@
  * limitations under the License.
  */
 
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __EGLIMAGE_BUFFER_H__
 #define __EGLIMAGE_BUFFER_H__
 
-#include <cutils/native_handle.h>
-#include <QtiGrallocPriv.h>
-#include <ui/GraphicBuffer.h>
+#include <gbm.h>
+#include <gbm_priv.h>
+#include "drm_master.h"
 #include "engine.h"
+#include "glengine.h"
 
 class EGLImageBuffer {
-  // android::sp<android::GraphicBuffer> graphicBuffer;
   void *eglImageID;
   int width;
   int height;
-  uint textureID;
-  uint renderbufferID;
-  uint framebufferID;
+  unsigned int textureID;
+  unsigned int renderbufferID;
+  unsigned int framebufferID;
+  struct gbm_device *gbm_;
+  int fd;
 
  public:
   int getWidth();
   int getHeight();
-  EGLImageBuffer(android::sp<android::GraphicBuffer>);
+  EGLImageBuffer(struct gbm_buf_info *gbo_info, void *userdata, void *userdata2);
+  EGLImageKHR create_eglImage(struct gbm_buf_info *gbo_info, void *userdata);
   unsigned int getTexture(int target);
   unsigned int getFramebuffer();
   void bindAsTexture(int target);
   void bindAsFramebuffer();
   ~EGLImageBuffer();
-  static EGLImageBuffer *from(const qtigralloc::private_handle_t *src);
+  static EGLImageBuffer *from(const void *src);
   static void clear();
 };
 

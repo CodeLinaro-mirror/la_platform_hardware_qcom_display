@@ -1,4 +1,4 @@
-HEADER_PATH := ${WORKSPACE}/display/hardware/qcom/display/sdm/include
+HEADER_PATH := ${srcdir}/../../include
 
 c_sources = core_interface.cpp \
             core_impl.cpp \
@@ -39,7 +39,6 @@ libsdmcore_la_CC = @CC@
 libsdmcore_la_SOURCES = $(c_sources)
 libsdmcore_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"SDM\"
 libsdmcore_la_CPPFLAGS = $(AM_CPPFLAGS) -DPP_DRM_ENABLE
-libsdmcore_la_CPPFLAGS = $(AM_CPPFLAGS)
 libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../include
 libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../libdebug
 libsdmcore_la_CPPFLAGS += -I$(srcdir)/../../../include

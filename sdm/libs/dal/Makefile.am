@@ -1,4 +1,4 @@
-HEADER_PATH := ${WORKSPACE}/display/hardware/qcom/display/sdm/include
+HEADER_PATH := ${srcdir}/../../include
 
 c_sources = hw_events_interface.cpp \
             hw_info_interface.cpp \
@@ -37,5 +37,9 @@ libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../../libdebug
 libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../../include
 libsdmdal_la_CPPFLAGS += -I$(srcdir)/../../../libdrmutils
 libsdmdal_la_CPPFLAGS += -I${includedir}/libdrm
+libsdmdal_la_CPPFLAGS += @LIBDRM_CFLAGS@
 libsdmdal_la_LIBADD = ../utils/libsdmutils.la ../../../sde-drm/libsdedrm.la -ldl -ldisplaydebug
 libsdmdal_la_LDFLAGS = -shared -avoid-version @LIBUTILS_LIBS@ @LIBCUTILS_LIBS@ @LIBLOG_LIBS@
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libsdmdal.pc

@@ -4,8 +4,6 @@
  *
  * Copyright 2015 The Android Open Source Project
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,37 +17,98 @@
  * limitations under the License.
  */
 
+/*
+ * ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include "EGLImageBuffer.h"
-#include <cutils/native_handle.h>
-#include <ui/GraphicBuffer.h>
-#include <map>
 #include "EGLImageWrapper.h"
-#include "glengine.h"
+#include <EGL/eglwaylandext.h>
+
+using namespace drm_utils;
 
 //-----------------------------------------------------------------------------
-EGLImageKHR create_eglImage(android::sp<android::GraphicBuffer> graphicBuffer)
+EGLImageKHR EGLImageBuffer::create_eglImage(struct gbm_buf_info *gbo_info, void *userdata)
 //-----------------------------------------------------------------------------
 {
-  bool isProtected = (graphicBuffer->getUsage() & GRALLOC_USAGE_PROTECTED);
-  EGLint attrs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE,
-                    isProtected ? EGL_PROTECTED_CONTENT_EXT : EGL_NONE,
-                    isProtected ? EGL_TRUE : EGL_NONE, EGL_NONE};
+  unsigned int secure_status = 0;
+  EGLImageKHR eglImage;
+  PFNEGLCREATEIMAGEKHRPROC create_image;
+  create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>
+                                  (eglGetProcAddress("eglCreateImageKHR"));
 
-  EGLImageKHR eglImage = eglCreateImageKHR(
-      eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID,
-      (EGLClientBuffer)(graphicBuffer->getNativeBuffer()), attrs);
+  EGLint attribs[20];
+  struct gbm_bo *bo = NULL;
+  int i=0;
+
+  bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
+                        GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
+
+  gbm_perform(GBM_PERFORM_GET_SECURE_BUFFER_STATUS, bo, &secure_status);
+  //We need to pass wl_resource to create egl image to support TP10_UBWC and NV12 formats in
+  // Forward tone mapper
+  if(gbo_info->format == GBM_FORMAT_YCbCr_420_TP10_UBWC || gbo_info->format == GBM_FORMAT_NV12) {
+    attribs[i++] = EGL_WAYLAND_PLANE_WL;
+    attribs[i++] = 0;
+    attribs[i++] = EGL_PROTECTED_CONTENT_EXT;
+    attribs[i++] = secure_status;
+    attribs[i++] = EGL_NONE;
+
+    EGLClientBuffer buffer = reinterpret_cast<EGLClientBuffer>(userdata);
+    eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
+                                      EGL_WAYLAND_BUFFER_WL, buffer, attribs);
+  } else {
+    attribs[i++] = EGL_WIDTH;
+    attribs[i++] = gbm_bo_get_width(bo);
+    attribs[i++] = EGL_HEIGHT;
+    attribs[i++] = gbm_bo_get_height(bo);
+    attribs[i++] = EGL_LINUX_DRM_FOURCC_EXT;
+    attribs[i++] = gbm_bo_get_format(bo);
+    attribs[i++] = EGL_DMA_BUF_PLANE0_FD_EXT;
+    attribs[i++] = gbm_bo_get_fd(bo);
+    attribs[i++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;
+    attribs[i++] = 0;
+    attribs[i++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;
+    attribs[i++] = gbm_bo_get_stride(bo);
+    attribs[i++] = EGL_PROTECTED_CONTENT_EXT;
+    attribs[i++] = secure_status;
+    attribs[i++] = EGL_NONE;
+
+    eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
+                                             EGL_LINUX_DMA_BUF_EXT, NULL, attribs);
+  }
+   // we no longer need the bo
+  if (bo) {
+    gbm_bo_destroy(bo);
+  }
 
   return eglImage;
 }
 
 //-----------------------------------------------------------------------------
-EGLImageBuffer::EGLImageBuffer(android::sp<android::GraphicBuffer> graphicBuffer)
+EGLImageBuffer::EGLImageBuffer(struct gbm_buf_info *gbuf_info, void *userdata, void *userdata2)
 //-----------------------------------------------------------------------------
 {
-  // this->graphicBuffer = graphicBuffer;
-  this->eglImageID = create_eglImage(graphicBuffer);
-  this->width = graphicBuffer->getWidth();
-  this->height = graphicBuffer->getHeight();
+
+  struct gbm_buf_info *gbo_info = gbuf_info;
+
+  DRMMaster *master = nullptr;
+  int ret = DRMMaster::GetInstance(&master);
+
+  if (ret < 0) {
+      fprintf(stderr, "Failed to acquire DRMMaster instance\n");
+  }
+
+  master->GetHandle(&fd);
+
+  gbm_ = (gbm_device*) userdata2;
+
+  this->eglImageID = create_eglImage(gbo_info, userdata);
+  this->width = gbo_info->width;
+  this->height = gbo_info->height;
 
   textureID = 0;
   renderbufferID = 0;
@@ -81,6 +140,16 @@ EGLImageBuffer::~EGLImageBuffer()
       eglDestroyImageKHR(eglGetCurrentDisplay(), eglImageID);
       eglImageID = 0;
   }
+
+  /* static variable initialized is for 2 purpose: */
+  /* 1: to help initialize by getting master fd and opening gbm device first time */
+  /* 2: On every buffer creation instance, a reference count is added to it to    */
+  /*    keep track of how many times this object has been instantiation. It is    */
+  /*    decremented in destructor. But if the object to be destroyed is with      */
+  /*    reference count = 1, then fd is set to invalid number and gbm device is   */
+  /*    destroyed */
+
+  fd = -1;
 }
 
 //-----------------------------------------------------------------------------
@@ -153,7 +222,7 @@ void EGLImageBuffer::bindAsFramebuffer()
                                  renderbufferID));
     GLenum result = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (result != GL_FRAMEBUFFER_COMPLETE) {
-      ALOGI("%s Framebuffer Invalid***************", __FUNCTION__);
+      fprintf(stderr, "%s Framebuffer Invalid***************", __FUNCTION__);
     }
   }
 
