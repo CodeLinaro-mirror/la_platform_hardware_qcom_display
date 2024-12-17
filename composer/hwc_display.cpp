@@ -641,8 +641,8 @@ void HWCDisplay::PopulateHWCExtendedDisplayResolution() {
         info = config.second;
         info.x_pixels = extended_display_resolutions.at(res_index).first;
         info.y_pixels = extended_display_resolutions.at(res_index).second;
-        info.x_dpi *= (info.x_pixels / max_panel_width_);
-        info.y_dpi *= (info.y_pixels / max_panel_height_);
+        info.x_dpi *= ((float)info.x_pixels / max_panel_width_);
+        info.y_dpi *= ((float)info.y_pixels / max_panel_height_);
         info.h_total -= (max_panel_width_ - info.x_pixels);
         info.v_total -= (max_panel_height_ - info.y_pixels);
         info.is_virtual_config = true;
