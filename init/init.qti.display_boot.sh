@@ -40,7 +40,7 @@ case "$target" in
     "pineapple")
     #SOC ID for Pineapple is 557
     case "$soc_hwid" in
-      557|577|682)
+      557|577|682|696)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 4
@@ -249,6 +249,8 @@ case "$target" in
             setprop vendor.display.disable_mitigated_fps 1
             setprop vendor.display.enable_rounded_corner 0
             setprop vendor.display.wait_for_primary_display 1
+            setprop vendor.display.force_gpu_composition 1
+            setprop vendor.display.allow_tonemap_native 1
         ;;
     esac
     ;;

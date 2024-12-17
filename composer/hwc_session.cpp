@@ -433,9 +433,15 @@ void HWCSession::InitSupportedDisplaySlots() {
 
   if (kPluggable == hw_disp_info.type) {
     // If primary is a pluggable display, we have already used one pluggable display interface.
-    max_pluggable--;
+    // max_pluggable/builtin can both be initialized to 0 in case of invalid panel node
+    // check to avoid overflow
+    if (max_pluggable) {
+      max_pluggable--;
+    }
   } else {
-    max_builtin--;
+    if (max_builtin) {
+      max_builtin--;
+    }
   }
 
   // Init slots in accordance to h/w capability.
@@ -839,7 +845,6 @@ HWC3::Error HWCSession::PresentDisplay(Display display, shared_ptr<Fence> *out_r
     if (pending_power_mode_[display]) {
       status = HWC3::Error::None;
     } else {
-      hwc_display_[display]->ProcessActiveConfigChange();
       status = hwc_display_[display]->Present(out_retire_fence);
       if (status == HWC3::Error::None) {
         PostCommitLocked(display, *out_retire_fence);

@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -181,6 +181,21 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
            StringDisplayList(registered_displays_).c_str(), display_comp_ctx->display_id,
            display_comp_ctx->display_type);
 
+  int force_gpu_comp = 0;
+  if (DebugHandler::Get()->GetProperty(FORCE_GPU_COMPOSITION, &force_gpu_comp) == kErrorNone) {
+    DLOGV_IF(kTagCompManager, "Force GPU composition: %d", force_gpu_comp);
+  }
+
+  if (force_gpu_comp) {
+    int display_count = registered_displays_.size();
+
+    // enable GPU comp for 1) mirror mode with two displays 2) dual LM
+    if ((display_count > 1 && display_attributes.topology == kSingleLM) ||
+        (display_attributes.topology == kDualLM)) {
+      force_gpu_comp_ = true;
+    }
+  }
+
   return kErrorNone;
 }
 
@@ -333,6 +348,10 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle,
   // Avoid safe mode, if there is only one app layer.
   if (app_layer_count == 1) {
      constraints->safe_mode = false;
+  }
+
+  if (force_gpu_comp_) {
+    DoGpuFallback(comp_handle);
   }
 }
 
