@@ -380,7 +380,6 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, shared_ptr<Fence> a
   buffer_allocator_->GetMetadataValue(hnd, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &fmt,
                                       sizeof(fmt));
   buffer_allocator_->GetPrivateFlags(hnd, flag);
-  ALOGW("%s: format: %d, flags: %d", __FUNCTION__, fmt, flag);
   LayerBufferFormat format = GetSDMFormat(fmt, flag);
 
 if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
