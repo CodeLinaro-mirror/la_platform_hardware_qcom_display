@@ -205,6 +205,8 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(StandardMetadataType::CTA861_3), sizeof(SnapContentLightLevel)},
       {static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA), sizeof(SnapDynamicMetadata)},
       {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40), sizeof(SnapDynamicMetadata)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_10),
+       sizeof(SnapCustomContentMetadata)},
       {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO),
        sizeof(SnapColorRemappingInfo)},
       {static_cast<uint64_t>(SnapMetadataType::MATRIX_COEFFICIENTS),
@@ -221,7 +223,8 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
        sizeof(SnapAnamorphicMetadata)},
       // TODO: Remove the legacy type below once HWC has moved to Snap defs
       {static_cast<uint64_t>(QTI_COLOR_METADATA), sizeof(ColorMetaData)},
-      {static_cast<uint64_t>(SnapMetadataType::THREE_DIMENSIONAL_REF_INFO), sizeof(SnapThreeDimensionalRefInfo)},
+      {static_cast<uint64_t>(SnapMetadataType::THREE_DIMENSIONAL_REF_INFO),
+       sizeof(SnapThreeDimensionalRefInfo)},
   };
 };
 
@@ -338,6 +341,8 @@ class QtiMapper5Legacy final : public ::vendor::mapper::IMapperV5Impl {
        sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
       {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40),
        sizeof(((SnapDynamicMetadata *)(0))->dynamicMetaDataPayload)},
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_10),
+       sizeof(SnapCustomContentMetadata)},
       {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO), sizeof(ColorRemappingInfo)},
       {static_cast<uint64_t>(SnapMetadataType::MATRIX_COEFFICIENTS),
        sizeof(SnapMatrixCoEfficients)},
