@@ -42,6 +42,7 @@
 #include <assert.h>
 #include <functional>
 #include <cstring>
+#include <stdint.h>
 
 // Do not define __CLASS__ for logging in shared utility header like this one
 

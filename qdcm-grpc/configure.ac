@@ -16,7 +16,7 @@ AM_MAINTAINER_MODE
 m4_include([../common.m4])
 COMMON_CONFIGS
 
-AC_SUBST([AM_CPPFLAGS], [--std=c++11])
+AC_SUBST([AM_CPPFLAGS], [--std=c++17])
 
 # Add project version as per MAJOR.MINOR.PATCH strategy
 # Increment MAJOR version when you make incompatible API changes

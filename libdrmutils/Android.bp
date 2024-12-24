@@ -20,7 +20,7 @@ cc_library_shared {
     cflags: [
         "-DLOG_TAG=\"DRMUTILS\"",
         "-Wall",
-        "-std=c++11",
+        "-std=c++17",
         "-Werror",
         "-fno-operator-names",
     ],

@@ -16,7 +16,7 @@ AM_MAINTAINER_MODE
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_SUBST([COMMON_CFLAGS], [-Wall -Werror -Wno-sign-conversion -Wconversion -DDEBUG_CALC_FPS])
-AC_SUBST([AM_CPPFLAGS], [--std=c++11])
+AC_SUBST([AM_CPPFLAGS], [--std=c++17])
 
 PKG_CHECK_MODULES([PROTOBUF], [protobuf])
 AC_SUBST([PROTOBUF_CFLAGS])

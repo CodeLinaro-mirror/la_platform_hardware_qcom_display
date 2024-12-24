@@ -1,7 +1,7 @@
 ---
 Language:        Cpp
 BasedOnStyle:  Google
-Standard : C++11
+Standard : C++17
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline

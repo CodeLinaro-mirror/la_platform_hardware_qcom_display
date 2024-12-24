@@ -34,7 +34,7 @@ cc_library_shared {
     cflags: [
         "-DLOG_TAG=\"SDM-histogram\"",
         "-Wall",
-        "-std=c++14",
+        "-std=c++17",
         "-Werror",
         "-fno-operator-names",
         "-Wthread-safety",
@@ -68,7 +68,7 @@ cc_binary {
     cflags: [
         "-DLOG_TAG=\"SDM-histogram\"",
         "-Wall",
-        "-std=c++14",
+        "-std=c++17",
         "-Werror",
         "-fno-operator-names",
         "-Wthread-safety",
@@ -104,7 +104,7 @@ cc_binary {
     cflags: [
         "-DLOG_TAG=\"SDM-histogram\"",
         "-Wall",
-        "-std=c++14",
+        "-std=c++17",
         "-Werror",
         "-fno-operator-names",
         "-Wthread-safety",
