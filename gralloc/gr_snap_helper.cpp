@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <QtiGralloc.h>
@@ -59,6 +59,9 @@ static SnapHandle *SnapHandleFromCNativeHandle(native_handle_t *native_handle,
   SnapHandle *snap_handle = vendor::qti::hardware::display::snapalloc::snap_handle_create(
       native_handle->numFds, native_handle->numInts);
 
+  if (!snap_handle)
+    return nullptr;
+
   for (size_t i = 0; i < native_handle->numFds; i++) {
     int fd = native_handle->data[i];
     snap_handle->buffer_data[i] = pass_fd_ownership ? fd : fcntl(fd, F_DUPFD_CLOEXEC, 0);
@@ -77,6 +80,9 @@ static native_handle_t *CNativeHandleFromSnapHandle(SnapHandle *snap_handle,
 
   native_handle_t *native_handle =
       native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
+
+  if (!native_handle)
+    return nullptr;
 
   for (size_t i = 0; i < snap_handle->num_fds; i++) {
     int fd = snap_handle->buffer_data[i];
