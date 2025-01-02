@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c)  2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -185,6 +185,23 @@ Error encodeVideoTimestampInfo(VideoTimestampInfo &in, hidl_vec<uint8_t> *out) {
   return Error::NONE;
 }
 
+Error decodeThreeDimensionalRefInfo(hidl_vec<uint8_t> &in, ThreeDimensionalRefInfo *out) {
+  if (!in.size() || !out) {
+    return Error::BAD_VALUE;
+  }
+  memcpy(out, in.data(), sizeof(ThreeDimensionalRefInfo));
+  return Error::NONE;
+}
+
+Error encodeThreeDimensionalRefInfo(ThreeDimensionalRefInfo &in, hidl_vec<uint8_t> *out) {
+  if (!out) {
+    return Error::BAD_VALUE;
+  }
+  out->resize(sizeof(ThreeDimensionalRefInfo));
+  memcpy(out->data(), &in, sizeof(ThreeDimensionalRefInfo));
+  return Error::NONE;
+}
+
 Error decodeYUVPlaneInfoMetadata(hidl_vec<uint8_t> &in, qti_ycbcr *out) {
   if (!in.size() || !out) {
     return Error::BAD_VALUE;
@@ -259,6 +276,10 @@ MetadataType getMetadataType(uint32_t in) {
       return MetadataType_ColorSpace;
     case QTI_YUV_PLANE_INFO:
       return MetadataType_YuvPlaneInfo;
+#ifdef QTI_THREE_DIMENSIONAL_REF_INFO
+    case QTI_THREE_DIMENSIONAL_REF_INFO:
+      return MetadataType_ThreeDimensionalRefInfo;
+#endif
     default:
       return MetadataType_Invalid;
   }
@@ -390,6 +411,12 @@ Error get(void *buffer, uint32_t type, void *param) {
     case QTI_YUV_PLANE_INFO:
       err = decodeYUVPlaneInfoMetadata(bytestream, reinterpret_cast<qti_ycbcr *>(param));
       break;
+#ifdef QTI_THREE_DIMENSIONAL_REF_INFO
+    case QTI_THREE_DIMENSIONAL_REF_INFO:
+      err = decodeThreeDimensionalRefInfo(bytestream,
+                                          reinterpret_cast<ThreeDimensionalRefInfo *>(param));
+      break;
+#endif
     default:
       param = nullptr;
       return Error::UNSUPPORTED;
@@ -466,6 +493,12 @@ Error set(void *buffer, uint32_t type, void *param) {
       err = static_cast<Error>(
           android::gralloc4::encodeInt32(qtigralloc::MetadataType_VideoEarlyNotifyLineCount,
                                          *reinterpret_cast<int32_t *>(param), &bytestream));
+      break;
+#endif
+#ifdef QTI_THREE_DIMENSIONAL_REF_INFO
+    case QTI_THREE_DIMENSIONAL_REF_INFO:
+      err = encodeThreeDimensionalRefInfo(*reinterpret_cast<ThreeDimensionalRefInfo *>(param),
+                                          &bytestream);
       break;
 #endif
     default:
