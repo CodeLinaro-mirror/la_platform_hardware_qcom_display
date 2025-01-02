@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -153,7 +153,7 @@ static AIMapper_Error GetVendorMetadata(AIMapper *_Nonnull mapper_,
 
   if (size_required < 0) {
     ALOGW_IF(-AIMAPPER_ERROR_UNSUPPORTED != size_required,
-             "%s: Unexpected error %d from valid getMetadata (%ld) call", __FUNCTION__,
+             "%s: Unexpected error %d from valid getMetadata (%lld) call", __FUNCTION__,
              -size_required, static_cast<int64_t>(type));
     ALOGW("Failed to get Metadata - IS_CACHED");
     return static_cast<AIMapper_Error>(-size_required);
