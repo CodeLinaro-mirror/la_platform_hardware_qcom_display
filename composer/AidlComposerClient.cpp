@@ -15,11 +15,11 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+*
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 
 #include "AidlComposerClient.h"
 #include "android/binder_auto_utils.h"
@@ -297,6 +297,7 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
 }
 #endif
 
+#ifdef COMPOSER3_V4
 ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
                                                              int32_t *_aidl_return) {
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
@@ -311,6 +312,7 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<B
                                           std::vector<Luts> *) {
   return TO_BINDER_STATUS(INT32(Error::None));
 }
+#endif
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
