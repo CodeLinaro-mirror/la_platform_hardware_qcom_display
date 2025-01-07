@@ -52,6 +52,7 @@
 #include <ReservedRegion.h>
 #include <ISnapMapper.h>
 #include <ISnapAlloc.h>
+#include <ThreeDimensionalRefInfo.h>
 
 #include <aidl/android/hardware/common/NativeHandle.h>
 #include <aidl/android/hardware/graphics/common/Dataspace.h>
@@ -120,6 +121,7 @@ using SnapVideoTimestampInfo = vendor_qti_hardware_display_common_VideoTimestamp
 using SnapVideoHistogramMetadata = vendor_qti_hardware_display_common_VideoHistogramMetadata;
 using SnapCustomContentMetadata = vendor_qti_hardware_display_common_CustomContentMetadata;
 using SnapAnamorphicMetadata = vendor_qti_hardware_display_common_QtiAnamorphicMetadata;
+using SnapThreeDimensionalRefInfo = vendor_qti_hardware_display_common_ThreeDimensionalRefInfo;
 
 using ::android::hardware::hidl_vec;
 using GrallocError = android::hardware::graphics::mapper::V4_0::Error;
@@ -897,6 +899,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {SnapMetadataType::PIXEL_FORMAT_ALLOCATED, SnapMetadataType::PIXEL_FORMAT_ALLOCATED},
       {SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA,
        SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA},
+      {SnapMetadataType::THREE_DIMENSIONAL_REF_INFO, SnapMetadataType::THREE_DIMENSIONAL_REF_INFO},
   };
 
   std::list<int> unsupported_formats = {
@@ -1162,6 +1165,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   SnapError MultiViewHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
                             void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
                             bool check_metadata_set = true, int32_t *mapper_return = nullptr);
+  SnapError ThreeDimensionalRefInfoHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                                void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                                bool check_metadata_set = true, int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1238,6 +1244,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {ANAMORPHIC_COMPRESSION_METADATA, &GrallocSnapHelper::CompressionMetadataHelper},
           {BASE_VIEW, &GrallocSnapHelper::BaseViewHelper},
           {MULTI_VIEW_INFO, &GrallocSnapHelper::MultiViewHelper},
+          {THREE_DIMENSIONAL_REF_INFO, &GrallocSnapHelper::ThreeDimensionalRefInfoHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>

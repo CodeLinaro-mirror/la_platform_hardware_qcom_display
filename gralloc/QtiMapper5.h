@@ -228,6 +228,7 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
        sizeof(SnapAnamorphicMetadata)},
       // TODO: Remove the legacy type below once HWC has moved to Snap defs
       {static_cast<uint64_t>(QTI_COLOR_METADATA), sizeof(ColorMetaData)},
+      {static_cast<uint64_t>(SnapMetadataType::THREE_DIMENSIONAL_REF_INFO), sizeof(SnapThreeDimensionalRefInfo)},
   };
 };
 
