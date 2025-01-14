@@ -154,14 +154,23 @@ AidlComposerClient::~AidlComposerClient() {
 ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buffer_slot_count,
                                               int64_t *aidl_return) {
   auto ret = Error::None;
-  DisplayData *disp_data_ptr = nullptr;
 
   if (aidl_return && in_display >= 0 && in_buffer_slot_count >= 0) {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
     auto dpy = mDisplayData.find(in_display);
     // The display entry may have already been removed by onHotplug.
     if (dpy != mDisplayData.end()) {
-      disp_data_ptr = &dpy->second;
+      sdm::LayerId layer = 0;
+      auto error = layer_builder_->CreateLayer(in_display, &layer);
+      if (error == sdm::kErrorNone) {
+        *aidl_return = static_cast<int64_t>(layer);
+        drawcycle_->LayerStackUpdated(in_display);
+
+        auto ly = dpy->second.Layers.emplace(layer, LayerBuffers()).first;
+        ly->second.Buffers.resize(in_buffer_slot_count);
+      } else {
+        ret = Error::BadLayer;
+      }
     } else {
       ret = Error::BadDisplay;
       // Note: We do not destroy the layer on this error as the hotplug
@@ -172,20 +181,6 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
     ret = Error::BadParameter;
   }
 
-  if (disp_data_ptr) {
-    sdm::LayerId layer = 0;
-    auto error = layer_builder_->CreateLayer(in_display, &layer);
-    if (error == sdm::kErrorNone) {
-      *aidl_return = static_cast<int64_t>(layer);
-      drawcycle_->LayerStackUpdated(in_display);
-
-      std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-      auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
-      ly->second.Buffers.resize(in_buffer_slot_count);
-    } else {
-      ret = Error::BadLayer;
-    }
-  }
   return TO_BINDER_STATUS(INT32(ret));
 }
 
@@ -448,6 +443,21 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
   return TO_BINDER_STATUS(INT32(error));
 }
 #endif
+
+ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
+                                                             int32_t *_aidl_return) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+
+ScopedAStatus AidlComposerClient::startHdcpNegotiation(
+    int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) {
+  return TO_BINDER_STATUS(INT32(Error::None));
+}
+
+ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<Buffer> &,
+                                          std::vector<Luts> *) {
+  return TO_BINDER_STATUS(INT32(Error::None));
+}
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {

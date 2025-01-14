@@ -514,6 +514,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            static_cast<int>(PixelFormat::YCBCR_420_888)},
           {{.format = SnapPixelFormat::YCBCR_420_888, .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
            static_cast<int>(PixelFormat::YCBCR_420_888)},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_YCbCr_422_P210},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -538,6 +542,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::TP10},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::YCBCR_P010},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::YCBCR_P210},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_VENUS},
            SnapPixelFormat::YCbCr_420_P010_VENUS},
           {{.format = SnapPixelFormat::RGBA_8888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -667,6 +673,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::YCbCr_420_SP_VENUS},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            SnapPixelFormat::YCBCR_P010},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           SnapPixelFormat::YCBCR_P210},
+
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -701,6 +710,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_ubwc_to_snap_format_;
@@ -840,6 +851,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {static_cast<uint64_t>(
            aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_40),
        SnapMetadataType::DYNAMIC_METADATA},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_10),
+       SnapMetadataType::SMPTE2094_10},
       {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::CROP),
        SnapMetadataType::CROP},
       {static_cast<uint64_t>(
@@ -1102,6 +1116,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                   void *gralloc_out_get = nullptr,
                                   SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
                                   int32_t *mapper_return = nullptr);
+  SnapError SMPTE2094_10Helper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                               bool check_metadata_set = true, int32_t *mapper_return = nullptr);
   SnapError MatrixCoefficientsHelper(SnapHandle *, uint32_t aidl_size,
                                      void *gralloc_in_set = nullptr,
                                      void *gralloc_out_get = nullptr,
@@ -1222,6 +1239,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_40),
            &GrallocSnapHelper::DynamicMetadataHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2094_10),
+           &GrallocSnapHelper::SMPTE2094_10Helper},
           {COLOR_REMAPPING_INFO, &GrallocSnapHelper::ColorRemappingInfoHelper},
           {HEAP_NAME, &GrallocSnapHelper::HeapNameHelper},
           {IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
@@ -1458,6 +1478,10 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_YCbCr_422_P210},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -1490,6 +1514,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
+           HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_ubwc_to_snap_format_;
@@ -1626,6 +1652,9 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       {static_cast<uint64_t>(
            aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_40),
        SnapMetadataType::DYNAMIC_METADATA},
+      {static_cast<uint64_t>(
+           aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_10),
+       SnapMetadataType::SMPTE2094_10},
       {static_cast<uint64_t>(aidl::android::hardware::graphics::common::StandardMetadataType::CROP),
        SnapMetadataType::CROP},
       {static_cast<uint64_t>(
@@ -1894,6 +1923,10 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
                                         SnapDescriptor *buf_des = nullptr,
                                         bool check_metadata_set = true,
                                         int32_t *mapper_return = nullptr);
+  SnapError SMPTE2094_10Helper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
+                               void *gralloc_in_set = nullptr, void *gralloc_out_get = nullptr,
+                               SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                               int32_t *mapper_return = nullptr);
   SnapError VideoTranscodeStatsHelper(SnapHandle *, bool hidl_bytestream, uint32_t aidl_size,
                                       void *gralloc_in_set = nullptr,
                                       void *gralloc_out_get = nullptr,
@@ -2030,6 +2063,9 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_40),
            &GrallocSnapHelperLegacy::DynamicMetadataHelper},
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2094_10),
+           &GrallocSnapHelperLegacy::SMPTE2094_10Helper},
           {COLOR_REMAPPING_INFO, &GrallocSnapHelperLegacy::ColorRemappingInfoHelper},
           {HEAP_NAME, &GrallocSnapHelperLegacy::HeapNameHelper},
           {IS_UBWC, &GrallocSnapHelperLegacy::IsUBWCHelper},
