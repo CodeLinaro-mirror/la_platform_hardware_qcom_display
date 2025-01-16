@@ -296,7 +296,7 @@ Return<void> QtiMapper::getTransportSize(void *buffer, getTransportSize_cb hidl_
       hidl_cb(err, num_fds, num_ints);
       return Void();
     }
-    num_fds = 2;
+    num_fds = hnd->numFds;
     // TODO(user): reduce to transported values;
     num_ints = static_cast<uint32_t>(hnd->numInts);
     err = Error::NONE;
