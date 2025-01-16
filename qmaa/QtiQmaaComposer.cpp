@@ -91,7 +91,6 @@ ScopedAStatus QtiComposer::createClient(std::shared_ptr<IComposerClient> *aidl_r
 
   mClientAlive = true;
   *aidl_return = composer_client;
-  ALOGI("JJ successfully created composer client");
 
   return ScopedAStatus::ok();
 }
