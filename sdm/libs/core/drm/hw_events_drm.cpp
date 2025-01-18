@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -56,6 +56,16 @@
 #include <vector>
 
 #include "hw_events_drm.h"
+
+#if defined(RT_SCHEDULE)
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "amss/compresmgr_client_api.h"
+#ifdef __cplusplus
+}
+#endif
+#endif
 
 #ifndef DRM_EVENT_SDE_HW_RECOVERY
 #define DRM_EVENT_SDE_HW_RECOVERY 0x80000007
@@ -210,6 +220,15 @@ void HWEventsDRM::PopulateHWEventData(const vector<HWEvent> &event_list) {
 DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
                                HWEventHandler *event_handler, const vector<HWEvent> &event_list,
                                const HWInterface *hw_intf) {
+ #if defined(RT_SCHEDULE)
+  CPUConfigReq_t  cpuConfigReq  = {0};
+  CPUConfigResp_t cpuConfigResp = {0};
+  std::string     procName      = "display";
+  std::string     thread_name   = event_thread_name_;
+  CompResmgrRet_e ret;
+  struct sched_param params;
+#endif
+
   if (!event_handler)
     return kErrorParameters;
 
@@ -222,14 +241,34 @@ DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
 
   event_handler_ = event_handler;
   poll_fds_.resize(event_list.size());
-  event_thread_name_ += " - " + std::to_string(display_id) + "-" + std::to_string(display_type);
 
+  event_thread_name_ += "-" + std::to_string(display_id) + "-" + std::to_string(display_type);
   PopulateHWEventData(event_list);
 
   if (pthread_create(&event_thread_, NULL, &DisplayEventThread, this) < 0) {
     DLOGE("Failed to start %s, error = %s", event_thread_name_.c_str(), strerror(errno));
     return kErrorResources;
   }
+
+#if defined(RT_SCHEDULE)
+  memcpy(cpuConfigReq.procName, procName.c_str(), procName.length() + 1);
+  memcpy(cpuConfigReq.thrdGrpName, thread_name.c_str(), thread_name.length() + 1);
+
+  ret = CompResmgrGetCPUConfig(&cpuConfigReq, &cpuConfigResp);
+
+  if (COMPRESMGR_RET_SUCCESS == ret) {
+    memset((char *)&params, 0x00, sizeof(struct sched_param));
+    params.sched_priority = cpuConfigResp.priority;
+
+    if (0 != pthread_setname_np(event_thread_, event_thread_name_.c_str())) {
+      DLOGE("pthread_setname_np: %s failed", event_thread_name_.c_str());
+    } else if (0 != pthread_setschedparam(event_thread_, cpuConfigResp.schedPolicy, &params)) {
+      DLOGE("pthread_setschedparam: %s failed", event_thread_name_.c_str());
+    }
+  } else {
+    DLOGE("CompResmgrGetCPUConfig: %s failed", event_thread_name_.c_str());
+  }
+#endif
 
   RegisterPanelDead(true);
   RegisterIdleNotify(true);

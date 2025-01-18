@@ -6,7 +6,7 @@ License: BSD-3-Clause
 URL: https://git.codelinaro.org/
 Source0: %{name}-%{version}.tar.gz
 
-BuildRequires:	autoconf automake display-commonsys-intf-linux libgbm-dev display-kernel-headers  
+BuildRequires:	autoconf automake display-commonsys-intf-linux libgbm-dev display-kernel-headers compresmgr_client
 BuildRequires:  pkgconfig(libdrm) = 2.4.110
 
 %global debug_package %{nil}
