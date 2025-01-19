@@ -444,6 +444,7 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
 }
 #endif
 
+#ifdef COMPOSER3_V4
 ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
                                                              int32_t *_aidl_return) {
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
@@ -458,6 +459,7 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<B
                                           std::vector<Luts> *) {
   return TO_BINDER_STATUS(INT32(Error::None));
 }
+#endif
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
