@@ -800,6 +800,13 @@ void HWCDisplay::BuildLayerStack() {
       }
     }
 
+    // VTS case failure with solid layer dimming due to no support on pipe
+    // TODO(user): Remove this when we add support for solid_fill in pipe
+    if (layer->flags.solid_fill && layer->layer_brightness != 1.0f) {
+      layer->flags.skip = true;
+      layer->flags.solid_fill = false;
+    }
+
     if (layer->flags.skip) {
       layer_stack_.flags.skip_present = true;
     }
@@ -3344,7 +3351,7 @@ HWC3::Error HWCDisplay::SetReadbackBuffer(const native_handle_t *buffer,
   } else {
     output_buffer.unaligned_height = static_cast<uint32_t>(tmp_height);
   }
-  int format, flag;
+  int format, flag = 0;
   err = buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &format,
                                             sizeof(format));
   if (err) {

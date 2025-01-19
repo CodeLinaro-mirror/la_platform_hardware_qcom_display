@@ -869,10 +869,6 @@ int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info, uin
     DLOGV("%s: Number of plane - %d, custom_format - %d", __FUNCTION__, plane_count, custom_format);
   }
 
-  if (buf_info.format == kFormatYCrCb420PlanarStride16) {
-    std::swap(offset[1], offset[2]);
-  }
-
   if (flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED) {
     std::fill(offset, offset + 4, 0);
   }
