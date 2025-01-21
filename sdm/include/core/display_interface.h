@@ -131,6 +131,7 @@ enum ContentQuality {
   kContentQualityLow,      // Low quality content, high artifact and noise,
   kContentQualityMedium,   // Medium quality, medium artifact and noise,
   kContentQualityHigh,     // High quality content, low artifact and noise
+  kContentQualityExtreme,  // Extreme quality content
   kContentQualityMax,
 };
 
