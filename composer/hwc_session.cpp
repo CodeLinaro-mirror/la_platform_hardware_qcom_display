@@ -926,12 +926,14 @@ void HWCSession::RegisterCallback(int32_t descriptor, hwc2_callback_data_t callb
     if (HandleBuiltInDisplays()) {
       DLOGW("Failed handling built-in displays.");
     }
-    DLOGI("Handling pluggable displays...");
-    int32_t err = HandlePluggableDisplays(false);
-    if (err) {
-      DLOGW("All displays could not be created. Error %d '%s'. Hotplug handling %s.", err,
-            strerror(abs(err)), pending_hotplug_event_ == kHotPlugEvent ? "deferred" :
-            "dropped");
+    if(!pluggable_is_primary_) {
+      DLOGI("Handling pluggable displays...");
+      int32_t err = HandlePluggableDisplays(false);
+      if (err) {
+        DLOGW("All displays could not be created. Error %d '%s'. Hotplug handling %s.", err,
+              strerror(abs(err)), pending_hotplug_event_ == kHotPlugEvent ? "deferred" :
+              "dropped");
+       }
     }
 
     // If previously registered, call hotplug for all connected displays to refresh
@@ -2681,21 +2683,20 @@ int HWCSession::CreatePrimaryDisplay() {
 
     auto hwc_display = &hwc_display_[HWC_DISPLAY_PRIMARY];
     hwc2_display_t client_id = map_info_primary_.client_id;
-    if (!info.is_connected) {
-      // primary display is not connected, create a dummy display.
-      HWCDisplayDummy::Create(core_intf_, &buffer_allocator_, &callbacks_, this, qservice_,
-                    0, 0, hwc_display);
+    DLOGI("Create primary display type = %d, sdm id = %d, client id = %d", info.display_type,
+                                                          info.display_id, UINT32(client_id));
+    if (!info.is_connected && info.display_type == kPluggable) {
+      pluggable_is_primary_ = true;
       null_display_active_ = true;
-      map_info_primary_.disp_type = info.display_type;
-      map_info_primary_.sdm_id = info.display_id;
-      status = kErrorNone;
-      break;
-    }
-
-    if (info.display_type == kBuiltIn) {
+      status = HWCDisplayDummy::Create(core_intf_, &buffer_allocator_, &callbacks_, this, qservice_,
+                                       client_id, info.display_id, hwc_display);
+      DLOGI("Pluggable display is primary but not connected!");
+    } else if (info.display_type == kBuiltIn) {
       status = HWCDisplayBuiltIn::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
                                          qservice_, client_id, info.display_id, hwc_display);
-    } else if (info.display_type == kPluggable) {
+    } else if (info.is_connected && info.display_type == kPluggable) {
+      pluggable_is_primary_ = true;
+      DLOGI("Pluggable display is primary and is connected!");
       status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
                                            qservice_, client_id, info.display_id, 0, 0, false,
                                            hwc_display);
@@ -2810,10 +2811,15 @@ int HWCSession::HandleBuiltInDisplays() {
 
 int HWCSession::HandlePluggableDisplays(bool delay_hotplug) {
   SCOPE_LOCK(pluggable_handler_lock_);
-  if (null_display_mode_) {
-    DLOGW("Skipped pluggable display handling in null-display mode");
-    return 0;
+  if (null_display_active_) {
+    SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+    auto &hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
+    HWCDisplayDummy::Destroy(hwc_display);
+    CoreInterface::DestroyCore();
+    DLOGI("Primary pluggable display is connected. Exit!");
+    _exit(1);
   }
+
   hwc2_display_t virtual_display_index =
       (hwc2_display_t)GetDisplayIndex(qdutils::DISPLAY_VIRTUAL);
   std::bitset<kSecureMax> secure_sessions = 0;
@@ -2876,16 +2882,38 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
   for (auto &iter : *hw_displays_info) {
     auto &info = iter.second;
 
-    if (info.is_primary && info.is_connected && null_display_active_) {
-      DLOGI("Pluggable display is connected. Exit!");
-      auto hwc_display_dummy = hwc_display_[HWC_DISPLAY_PRIMARY];
-      HWCDisplayDummy::Destroy(hwc_display_dummy);
-      CoreInterface::DestroyCore();
-      _exit(1);
+    if (pluggable_is_primary_) {
+      DisplayMapInfo map_info = map_info_primary_;
+      hwc2_display_t client_id = map_info.client_id;
+      {
+        SCOPE_LOCK(locker_[client_id]);
+        auto &hwc_display = hwc_display_[client_id];
+        if (hwc_display && info.is_primary && info.display_type == kPluggable
+            && info.is_connected) {
+          DLOGI("Create primary pluggable display, sdm id = %d, client id = %d",
+                info.display_id, UINT32(client_id));
+          status = hwc_display->SetState(true);
+          if (status) {
+            DLOGE("Pluggable display creation failed.");
+            return status;
+          }
+          is_hdr_display_[UINT32(client_id)] = HasHDRSupport(hwc_display);
+          DLOGI("Created primary pluggable display successfully: sdm id = %d,"
+                "client id = %d", info.display_id, UINT32(client_id));
+          map_info.disp_type = info.display_type;
+          map_info.sdm_id = info.display_id;
+        }
+      }
+      {
+          SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+          hwc_display_[HWC_DISPLAY_PRIMARY]->ResetValidation();
+      }
+      Refresh(0);
     }
 
     // Do not recreate primary display or if display is not connected.
-    if (info.is_primary || info.display_type != kPluggable || !info.is_connected) {
+    if (!pluggable_is_primary_ && (info.is_primary || info.display_type != kPluggable
+                                   || !info.is_connected)) {
       continue;
     }
 
@@ -3022,6 +3050,23 @@ bool HWCSession::HasHDRSupport(HWCDisplay *hwc_display) {
 }
 
 int HWCSession::HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info) {
+    if (pluggable_is_primary_) {
+    bool disconnect = true;
+    DisplayMapInfo map_info = map_info_primary_;
+    for (auto &iter : *hw_displays_info) {
+      auto &info = iter.second;
+      if (info.display_id != map_info.sdm_id) {
+        continue;
+      }
+      if (info.is_connected) {
+        disconnect = false;
+      }
+    }
+    if (disconnect) {
+      DestroyDisplay(&map_info);
+    }
+  }
+
   // Destroy pluggable displays which were connected earlier but got disconnected now.
   for (auto &map_info : map_info_pluggable_) {
     bool disconnect = true;   // disconnect in case display id is not found in list.
@@ -3060,7 +3105,10 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
   hwc2_display_t client_id = map_info->client_id;
 
   DLOGI("Notify hotplug display disconnected: client id = %d", UINT32(client_id));
-  callbacks_.Hotplug(client_id, HWC2::Connection::Disconnected);
+  if (!pluggable_is_primary_) {
+    // Notify SurfaceFlinger.
+    callbacks_.Hotplug(client_id, HWC2::Connection::Disconnected);
+  }
 
   SCOPE_LOCK(system_locker_);
   {
@@ -3071,6 +3119,11 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
     }
     DLOGI("Destroy display %d-%d, client id = %d", map_info->sdm_id, map_info->disp_type,
          UINT32(client_id));
+    if (pluggable_is_primary_){
+      hwc_display_[HWC_DISPLAY_PRIMARY]->SetState(false);
+      return;
+    }
+
     {
       SCOPE_LOCK(hdr_locker_[client_id]);
       is_hdr_display_[UINT32(client_id)] = false;
