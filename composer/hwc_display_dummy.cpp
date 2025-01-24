@@ -25,6 +25,10 @@
 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+* ​Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include "hwc_display_dummy.h"
@@ -79,6 +83,11 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   display_null_.SetFrameBufferConfig(config);
   num_configs_ = 1;
   display_intf_ = &display_null_;
+  client_target_ = new HWCLayer(id_, buffer_allocator_);
+  current_refresh_rate_ = max_refresh_rate_ = 60;
+  hwc_config_map_.resize(num_configs_);
+  variable_config_map_[0] = config;
+  hwc_config_map_.at(0) = 0;
 }
 
 HWC2::Error HWCDisplayDummy::GetActiveConfig(hwc2_config_t *out_config) {
