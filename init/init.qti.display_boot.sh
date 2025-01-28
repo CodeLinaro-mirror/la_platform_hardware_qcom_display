@@ -1,5 +1,5 @@
 #!/vendor/bin/sh
-# Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,9 @@ case "$target" in
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 1
         ;;
     esac
     ;;
