@@ -40,6 +40,10 @@
 #include <sync/sync.h>
 
 #include <vector>
+#include <mutex>
+
+using std::lock_guard;
+using std::mutex;
 
 static bool enable_logs = true;
 
@@ -53,7 +57,7 @@ namespace mapper5 {
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using gralloc::BufferInfo;
 
-std::mutex QtiMapper5::handles_heap_lock_;
+[[clang::no_destroy]] static std::mutex handles_heap_lock_;
 
 QtiMapper5::QtiMapper5() {
   enable_logs = property_get_bool(ENABLE_LOGS_PROP, 0);
@@ -105,21 +109,6 @@ Error QtiMapper5::freeBuffer(buffer_handle_t _Nonnull buffer) {
   return AIMAPPER_ERROR_NONE;
 }
 
-void QtiMapper5::WaitFenceFd(int fence_fd) {
-  if (fence_fd < 0) {
-    return;
-  }
-
-  const int timeout = 3000;
-  ATRACE_BEGIN("fence wait");
-  const int error = sync_wait(fence_fd, timeout);
-  ATRACE_END();
-  if (error < 0) {
-    ALOGE("QtiMapper5: lock fence %d didn't signal in %u ms -  error: %s", fence_fd, timeout,
-          strerror(errno));
-  }
-}
-
 Error QtiMapper5::getTransportSize(buffer_handle_t _Nonnull bufferHandle,
                                    uint32_t *_Nonnull outNumFds, uint32_t *_Nonnull outNumInts) {
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
@@ -132,10 +121,6 @@ Error QtiMapper5::getTransportSize(buffer_handle_t _Nonnull bufferHandle,
 
 Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage, ARect region,
                        int acquireFenceRawFd, void *_Nullable *_Nonnull outData) {
-  // We take ownership of the FD in all cases, even for errors
-  if (acquireFenceRawFd > 0) {
-    WaitFenceFd(acquireFenceRawFd);
-  }
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
   if (cpuUsage == 0) {
     ALOGE("Failed to lock. Bad cpu usage: %" PRIu64 ".", cpuUsage);
@@ -147,10 +132,6 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
       .left = region.left, .top = region.top, .right = region.right, .bottom = region.bottom};
   int ret_val = snap_helper_->Lock(const_cast<native_handle_t *>(bufferHandle), cpuUsage,
                                    gr_access_region, acquireFenceRawFd, &snap_base);
-
-  if (acquireFenceRawFd > 0) {
-    close(acquireFenceRawFd);
-  }
 
   if (ret_val != 0) {
     ALOGE("Snap failed to lock buffer");
