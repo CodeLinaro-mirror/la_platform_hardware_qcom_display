@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -29,6 +29,7 @@ DisplayAiqeAIDL::DisplayAiqeAIDL() {
 
   sideband_->GetProperty(AIQE_SSRC_ENABLE, &ssrc_enable_);
   sideband_->GetProperty(ENABLE_ABC, &abc_enable_);
+  sideband_->GetProperty(ENABLE_AI_SCALER_PROP, &ai_scaler_enable_);
 }
 
 DisplayAiqeAIDL::DisplayAiqeAIDL(sdm::SDMInterfaceFactory *sdm_factory) {
@@ -42,6 +43,7 @@ DisplayAiqeAIDL::DisplayAiqeAIDL(sdm::SDMInterfaceFactory *sdm_factory) {
 
   sideband_->GetProperty(AIQE_SSRC_ENABLE, &ssrc_enable_);
   sideband_->GetProperty(ENABLE_ABC, &abc_enable_);
+  sideband_->GetProperty(ENABLE_AI_SCALER_PROP, &ai_scaler_enable_);
 }
 
 bool DisplayAiqeAIDL::isSupported() {
@@ -158,6 +160,27 @@ ScopedAStatus DisplayAiqeAIDL::setABCMode(int32_t disp_id, const std::string &mo
   }
   return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
 }
+
+#ifdef COMPOSER3_V4
+ScopedAStatus DisplayAiqeAIDL::setAIScalerMode(int32_t disp_id, int32_t mode_id) {
+  if (ai_scaler_enable_) {
+    if (aiqe_intf_) {
+      int rc = aiqe_intf_->SetAIScalerMode(disp_id, (uint32_t)mode_id);
+      if (rc) {
+        ALOGE("%s: Unable to set AI Scaler Mode ID '%d'", __FUNCTION__, mode_id);
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+      }
+
+      return ScopedAStatus::ok();
+    } else {
+      ALOGE("%s: Unable to set AI Scaler mode ID. Interface initalized with bad session instance",
+            __FUNCTION__);
+      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+  }
+  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+}
+#endif
 
 }  // End of namespace aiqe
 }  // End of namespace display

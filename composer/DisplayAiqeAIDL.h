@@ -1,6 +1,6 @@
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -34,12 +34,16 @@ class DisplayAiqeAIDL : public BnDisplayAiqe {
   ndk::ScopedAStatus setABCState(int32_t disp_id, int32_t enable) override;
   ndk::ScopedAStatus setABCReconfig(int32_t disp_id) override;
   ndk::ScopedAStatus setABCMode(int32_t disp_id, const std::string &mode_name) override;
+#ifdef COMPOSER3_V4
+  ndk::ScopedAStatus setAIScalerMode(int32_t disp_id, int32_t mode_id) override;
+#endif
 
  private:
   std::shared_ptr<sdm::SDMDisplayAiqeIntf> aiqe_intf_;
   std::shared_ptr<sdm::SDMDisplaySideBandIntf> sideband_;
   int ssrc_enable_ = 0;
   int abc_enable_ = 0;
+  int ai_scaler_enable_ = 0;
 };
 
 }  // End of namespace aiqe
