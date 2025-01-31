@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -36,7 +36,7 @@ namespace display {
 namespace composer3 {
 using aidl::android::hardware::graphics::composer3::BnComposer;
 using aidl::android::hardware::graphics::composer3::Capability;
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
 #endif
 using aidl::android::hardware::graphics::composer3::IComposerClient;
