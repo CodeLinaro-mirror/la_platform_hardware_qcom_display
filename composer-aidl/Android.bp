@@ -27,6 +27,16 @@ composer_lib_defaults {
           ],
           vintf_fragments: ["vendor.qti.hardware.display.composer-service_v3.xml"],
        },
+       version_4: {
+          cflags: [
+              "-DENABLE_COMPOSER3_V4=1",
+          ],
+
+          shared_libs: [
+              "android.hardware.graphics.composer3-V4-ndk",
+          ],
+          vintf_fragments: ["vendor.qti.hardware.display.composer-service_v4.xml"],
+       },
     }
   },
 }
