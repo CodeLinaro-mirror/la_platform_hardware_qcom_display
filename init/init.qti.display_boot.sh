@@ -154,9 +154,29 @@ case "$target" in
         setprop vendor.display.enable_qsync_idle 1
         setprop vendor.display.enable_allow_idle_fallback 1
         ;;
-        475)
+        475|497|498|499|515)
         # Set property for Yupik
+        # SOC ID for Yupik is 475
+        # SOC ID for Yupikp is 499
+        # SOC ID for Kodiak IOT 497
+        # SOC ID for Kodiak IOT with modem is 498
+        # SOC ID for Faroe is 515
+        setprop vendor.display.target.version 2
         setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_rounded_corner 1
+        setprop vendor.display.disable_rounded_corner_thread 0
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_hdr10_gpu_target 1
+        setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_async_powermode 0
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_gpu_color_convert 0
         ;;
     esac
     ;;
