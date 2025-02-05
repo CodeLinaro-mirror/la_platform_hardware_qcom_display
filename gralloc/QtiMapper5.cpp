@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -91,13 +91,13 @@ Error QtiMapper5::importBuffer(const native_handle_t *_Nonnull bufferHandle,
 
 Error QtiMapper5::freeBuffer(buffer_handle_t _Nonnull buffer) {
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(buffer)
+  ALOGD_IF(enable_logs, "%s: handle: %p id: %" PRIu64, __FUNCTION__, buffer, QTI_HANDLE_CONST(buffer)->id);
   int ret = snap_helper_->Free(const_cast<native_handle *>(buffer));
   if (ret) {
     ALOGW("%s: Unable to free buffer: %p", __FUNCTION__, buffer);
     return AIMAPPER_ERROR_BAD_BUFFER;
   }
 
-  ALOGD_IF(enable_logs, "Freed handle: %p id: %" PRIu64, buffer, QTI_HANDLE_CONST(buffer)->id);
   return AIMAPPER_ERROR_NONE;
 }
 
