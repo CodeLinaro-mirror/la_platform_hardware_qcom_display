@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -52,9 +52,18 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
   qservice_->Init();
 
   // initialize SDMClient
-  lifecycle_->Init(&buffer_allocator_, &socket_handler_, &hwc_debugger_);
-
-  ALOGI("Created AidlComposer");
+  auto error = lifecycle_->Init(&buffer_allocator_, &socket_handler_, &hwc_debugger_);
+  if (error) {
+    ALOGE("Failed to initialize SDMClient!");
+    caps_ = nullptr;
+    settings_ = nullptr;
+    lifecycle_ = nullptr;
+    drawcycle_ = nullptr;
+    layers_ = nullptr;
+    sideband_ = nullptr;
+  } else {
+    ALOGI("Created AidlComposer");
+  }
 }
 
 AidlComposer::~AidlComposer() {}
