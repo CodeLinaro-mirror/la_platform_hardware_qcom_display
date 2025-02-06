@@ -317,6 +317,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   Layer cwb_layer_ = {};
   bool lower_fps_ = false;
   bool cwb_buffer_initialized_ = false;
+  bool enable_brightness_drm_prop_ = false;
 };
 
 }  // namespace sdm

@@ -614,6 +614,12 @@ enum struct DRMOps {
    *      uint64_t - Expected Present Time
    */
   CONNECTOR_SET_EPT,
+  /*
+   * Op: Sets Brightness on connector
+   * Arg: uint32_t - Connector ID
+   *      uint32_t - Brightness Level
+   */
+  CONNECTOR_SET_BRIGHTNESS,
 };
 
 enum struct DRMRotation {
