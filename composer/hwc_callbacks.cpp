@@ -68,7 +68,8 @@ HWC3::Error HWCCallbacks::Hotplug(Display display, bool state) {
   }
   // External display hotplug events are handled asynchronously
   if (display == HWC_DISPLAY_EXTERNAL || display == HWC_DISPLAY_EXTERNAL_2) {
-    std::thread(*hotplug_, callback_data_, static_cast<long>(display), INT32(state)).detach();
+    HWCCallbackParams param{CALLBACK_HOTPLUG, static_cast<long>(display), INT32(state)};
+    callback_queue_.push(param);
   } else {
     (*hotplug_)(callback_data_, display, INT32(state));
   }
@@ -83,8 +84,10 @@ HWC3::Error HWCCallbacks::Refresh(Display display) {
   if (!refresh_) {
     return HWC3::Error::NoResources;
   }
-  std::thread(*refresh_, callback_data_, static_cast<long>(display)).detach();
-  pending_refresh_.set(UINT32(display));
+
+  HWCCallbackParams param{CALLBACK_REFRESH, static_cast<long>(display)};
+  callback_queue_.push(param);
+
   return HWC3::Error::None;
 }
 
@@ -168,6 +171,43 @@ HWC3::Error HWCCallbacks::Register(CallbackCommand descriptor, void *callback_da
   }
   callback_data_ = callback_data;
 
+  // handle Register callback events in single callback thread
+  if (!callback_thread_.joinable()) {
+    callback_running_ = true;
+    std::thread callback_thread(&HWCCallbacks::PerformHWCCallback, this);
+    callback_thread_.swap(callback_thread);
+  }
+
+  // destroy callback thread on De-Register
+  if (!pointer && callback_thread_.joinable()) {
+    callback_running_ = false;
+    callback_queue_.notify();
+    callback_thread_.join();
+  }
+  return HWC3::Error::None;
+}
+
+HWC3::Error HWCCallbacks::PerformHWCCallback() {
+  while (1) {
+    callback_queue_.wait(&callback_running_);
+
+    if (!callback_running_ && callback_queue_.empty()) {
+      break;
+    }
+
+    HWCCallbackParams param = callback_queue_.pop();
+    switch (param.cmd) {
+      case CALLBACK_REFRESH: {
+        (*refresh_)(callback_data_, param.display);
+        pending_refresh_.set(param.display);
+      } break;
+      case CALLBACK_HOTPLUG: {
+        (*hotplug_)(callback_data_, param.display, param.state);
+      } break;
+      default:
+        return HWC3::Error::BadParameter;
+    }
+  }
   return HWC3::Error::None;
 }
 

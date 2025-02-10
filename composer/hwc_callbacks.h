@@ -37,10 +37,52 @@
 #ifndef __HWC_CALLBACKS_H__
 #define __HWC_CALLBACKS_H__
 
+#include <thread>
+#include <mutex>
+#include <queue>
 #include <utils/locker.h>
 #include "hwc_common.h"
 
 namespace sdm {
+
+template <typename T>
+class CallbackQueue {
+ public:
+  void push(const T &inbuf) {
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      queue_.push(inbuf);
+    }
+    cond_.notify_one();
+  }
+
+  T pop() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    while (queue_.empty()) {
+      cond_.wait(lock);
+    }
+    T head = queue_.front();
+    queue_.pop();
+    return head;
+  }
+
+  bool empty() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return queue_.empty();
+  }
+
+  void wait(bool *cond) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cond_.wait(lock, [&] { return !queue_.empty() || !*cond; });
+  }
+
+  void notify() { cond_.notify_one(); }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable cond_;
+  std::queue<T> queue_;
+};
 
 class HWCCallbacks {
  public:
@@ -72,8 +114,15 @@ class HWCCallbacks {
     SCOPE_LOCK(hotplug_lock_);
     return client_connected_;
   }
+  HWC3::Error PerformHWCCallback();
 
  private:
+  struct HWCCallbackParams {
+    CallbackCommand cmd;
+    long display;
+    int32_t state;
+  };
+
   void *callback_data_ = nullptr;
 
   onHotplug_func_t *hotplug_ = nullptr;
@@ -93,6 +142,9 @@ class HWCCallbacks {
   Locker vsync_changed_lock_;
   Locker seamless_possible_lock_;
   bool client_connected_ = false;
+  std::thread callback_thread_;
+  CallbackQueue<HWCCallbackParams> callback_queue_;
+  bool callback_running_ = false;
 };
 
 }  // namespace sdm
