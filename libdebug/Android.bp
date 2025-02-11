@@ -5,6 +5,9 @@ cc_library_shared {
     sanitize: {
         integer_overflow: true,
     },
+    arch: {
+        arm64: { enabled: true, },
+    },
     vendor: true,
 
     shared_libs: ["libdl"],

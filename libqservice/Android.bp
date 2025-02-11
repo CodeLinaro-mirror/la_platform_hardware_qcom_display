@@ -3,6 +3,9 @@ cc_library_shared {
     defaults: ["qtidisplay_defaults"],
     vendor: true,
     shared_libs: ["libbinder"],
+    arch: {
+        arm64: { enabled: true, },
+    },
     cflags: [
         "-DLOG_TAG=\"qdqservice\"",
         "-Wno-sign-conversion",

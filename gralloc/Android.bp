@@ -9,6 +9,9 @@ cc_library_shared {
     sanitize: {
         integer_overflow: true,
     },
+    arch: {
+        arm64: { enabled: true, },
+    },
     header_libs: [
         "display_headers",
         "qti_kernel_headers",
@@ -31,6 +34,7 @@ cc_library_shared {
         "android.hardware.graphics.mapper@4.0",
         "libbinder_ndk",
         "libgralloc.qti",
+        "libvndksupport",
         "android.hardware.graphics.allocator-V2-ndk",
     ],
     cflags: [
@@ -57,6 +61,9 @@ cc_library_shared {
        "qtidisplay_common_defaults",
     ],
     vendor: true,
+    arch: {
+        arm64: { enabled: true, },
+    },
     sanitize: {
         integer_overflow: true,
     },
@@ -115,6 +122,9 @@ cc_library_shared {
         "system/memory/libion/include",
         "system/memory/libion/kernel-headers",
     ],
+    arch: {
+        arm64: { enabled: true, },
+    },
     shared_libs: [
         "libdl",
         "libgrallocutils",
@@ -248,6 +258,9 @@ cc_library_shared {
         "android.hardware.graphics.allocator-V2-ndk",
         "libvndksupport",
     ],
+    arch: {
+        arm64: { enabled: true, },
+    },
     cflags: [
         "-DLOG_TAG=\"qdgralloc\"",
         "-D__QTI_DISPLAY_GRALLOC__",
@@ -302,6 +315,9 @@ cc_binary {
     static_libs: [
         "libaidlcommonsupport",
     ],
+    arch: {
+        arm64: { enabled: true, },
+    },
     cflags: [
         "-DLOG_TAG=\"qdgralloc\"",
         "-D__QTI_DISPLAY_GRALLOC__",
