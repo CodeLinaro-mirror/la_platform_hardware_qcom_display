@@ -270,5 +270,22 @@ bool Debug::GetPropertyDisableOfflineMode() {
   return (atoi(value) == 1);
 }
 
+int Debug::GetDeSharpenlevel(int16_t *sharpenlevel1, int16_t *sharpenlevel2) {
+  char value[64] = {};
+  int error = -EINVAL;
+  error = DebugHandler::Get()->GetProperty(DE_SHARPENLEVEL_PROP, value);
+
+  if (error != 0) {
+    return -EINVAL;
+  }
+
+  std::string str(value);
+  *sharpenlevel1 = int16_t(stof(str));
+  str = (str.substr(str.find(',') + 1));
+  *sharpenlevel2 = int16_t(stof(str));
+
+  return 0;
+}
+
 }  // namespace sdm
 
