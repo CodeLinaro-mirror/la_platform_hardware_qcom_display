@@ -87,7 +87,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_hdr10_gpu_target=1 \
     debug.sf.predict_hwc_composition_strategy=0 \
     debug.sf.treat_170m_as_sRGB=1 \
-    vendor.display.enable_display_extensions=1
+    vendor.display.enable_display_extensions=1 \
+    debug.graphics.game_default_frame_rate.disabled=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)

@@ -100,8 +100,9 @@ case "$target" in
     "crow")
     #SOC ID for Crow is 608
     #SOC ID for Crow 4g is 644
+    #SOC ID for Crow APQ is 687
     case "$soc_hwid" in
-       608|644)
+       608|644|687)
         #SOC ID for Crow is 608
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.display.target.version 5
