@@ -246,6 +246,7 @@
 #define FORCE_LM_TO_FB_CONFIG                DISPLAY_PROP("force_lm_to_fb_config")
 #define WAIT_FOR_PRIMARY_DISPLAY             DISPLAY_PROP("wait_for_primary_display")
 #define ENABLE_ASYNC_POWER_OFF_WAIT          DISPLAY_PROP("enable_async_power_off_wait")
+#define FORCE_GPU_COMPOSITION                DISPLAY_PROP("force_gpu_composition")
 
 // Add all other.properties above
 // End of property
