@@ -138,6 +138,15 @@ DisplayError DisplayBase::Init() {
   int32_t prop = 0;
   hw_intf_->GetActiveConfig(&active_index);
   hw_intf_->GetDisplayAttributes(active_index, &display_attributes_);
+
+  uint32_t available_mixers = GetAvailableMixerCount();
+  uint32_t required_mixers = GetMixerCountFromTopology(display_attributes_.topology);
+  if (available_mixers < required_mixers) {
+    DLOGW("Not enough mixers for display: %d-%d, available: %d, required: %d", display_id_,
+          display_type_, available_mixers, required_mixers);
+    return kErrorResources;
+  }
+
   fb_config_ = display_attributes_;
   active_refresh_rate_ = display_attributes_.fps;
 
@@ -244,6 +253,31 @@ CleanupOnError:
   }
 
   return error;
+}
+
+uint32_t DisplayBase::GetMixerCountFromTopology(HWTopology topology) {
+  switch (topology) {
+    case kSingleLM:
+    case kSingleLMDSC:
+      return 1;
+
+    case kDualLM:
+    case kDualLMDSC:
+    case kDualLMMerge:
+    case kDualLMMergeDSC:
+    case kDualLMDSCMerge:
+    case kPPSplit:
+      return 2;
+
+    case kQuadLMMerge:
+    case kQuadLMDSCMerge:
+    case kQuadLMMergeDSC:
+    case kQuadLMDSC4HSMerge:
+      return 4;
+
+    default:
+      return 0;
+  }
 }
 
 DisplayError DisplayBase::InitBorderLayers() {

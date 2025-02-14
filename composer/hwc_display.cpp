@@ -491,14 +491,16 @@ int HWCDisplay::Init() {
 
   error = core_intf_->CreateDisplay(sdm_id_, this, &display_intf_);
   if (error != kErrorNone) {
-    if (kErrorDeviceRemoved == error) {
-      DLOGW("Display creation cancelled. Display %d-%d removed.", sdm_id_, type_);
-      return -ENODEV;
-    } else {
+      if (kErrorResources == error) {
+        return -ENODEV;
+      }
+      if (kErrorDeviceRemoved == error) {
+        DLOGW("Display creation cancelled. Display %d-%d removed.", sdm_id_, type_);
+        return -ENODEV;
+      }
       DLOGE("Display create failed. Error = %d display_id = %d event_handler = %p disp_intf = %p",
             error, sdm_id_, this, display_intf_);
       return -EINVAL;
-    }
   }
 
   HWCDebugHandler::Get()->GetProperty(DISABLE_HDR, &disable_hdr_handling_);
