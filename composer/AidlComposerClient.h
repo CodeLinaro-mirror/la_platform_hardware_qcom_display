@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -230,7 +230,7 @@ class AidlComposerClient : public BnComposerClient,
   ScopedAStatus startHdcpNegotiation(
       int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) override;
 
-  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *) override;
+  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *);
 #endif
 
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
