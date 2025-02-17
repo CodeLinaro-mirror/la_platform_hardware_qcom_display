@@ -77,11 +77,13 @@ int HWCBufferAllocator::GetGrallocInstance() {
 	return 0;
   }
 
-  allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
-      AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
   if (allocator_ == nullptr) {
-    DLOGE("Unable to get allocator");
-    return -EINVAL; //kErrorCriticalResource;
+    allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+        AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
+    if (allocator_ == nullptr) {
+      DLOGE("Unable to get allocator");
+      return kErrorCriticalResource;
+    }
   }
 
   //mapper_ = IMapper::getService(); //TBD BALDEV 
@@ -455,6 +457,7 @@ int HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, i
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return err;
   }
   int ret = 0;
   if (handle != nullptr) {
@@ -496,6 +499,7 @@ int HWCBufferAllocator::GetAlignedWidthAndHeight(int width, int height, int form
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return err;
   }
   unsigned int alignedw, alignedh;
   *aligned_width = width;
