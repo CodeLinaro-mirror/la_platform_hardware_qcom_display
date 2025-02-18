@@ -18,7 +18,7 @@
  */
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <QtiGralloc.h>
@@ -1176,7 +1176,7 @@ LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const 
         format = kFormatYCbCr422P210Ubwc;
         break;
       case HAL_PIXEL_FORMAT_YCbCr_422_P210:
-        format = kFormatYCbCr422P210;
+        format = kFormatYCbCr422P210Ubwc;
         break;
       default:
         DLOGW("Unsupported format type for UBWC: %d", source);

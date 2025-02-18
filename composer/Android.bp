@@ -176,7 +176,10 @@ qticomposer3_cc_defaults {
         composer_version: {
             v3_4: {
                 srcs: ["DisplayAiqeAIDL.cpp"],
-                cflags: ["-DCOMPOSER3_V3"],
+                cflags: [
+                      "-DCOMPOSER3_V4",
+                      "-DCOMPOSER3_V3",
+                ],
                 shared_libs: [
                       "android.hardware.graphics.composer3-V4-ndk",
                       "vendor.qti.hardware.display.composer3-V1-ndk",

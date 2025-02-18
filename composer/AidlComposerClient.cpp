@@ -444,6 +444,7 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
 }
 #endif
 
+#ifdef COMPOSER3_V4
 ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
                                                              int32_t *_aidl_return) {
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
@@ -458,6 +459,7 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<B
                                           std::vector<Luts> *) {
   return TO_BINDER_STATUS(INT32(Error::None));
 }
+#endif
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
@@ -783,15 +785,15 @@ ScopedAStatus AidlComposerClient::getSupportedContentTypes(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::getDisplayDecorationSupport(
     int64_t in_display, std::optional<DisplayDecorationSupport> *aidl_return) {
-  PixelFormat format;
-  AlphaInterpretation alpha;
-
-  format = PixelFormat::R_8;
-  alpha = AlphaInterpretation::COVERAGE;
+  uint32_t format;
+  uint32_t alpha;
+  auto error = settings_->getDisplayDecorationSupport(in_display, &format, &alpha);
+  if (error != sdm::kErrorNone)
+    return TO_BINDER_STATUS(INT32(Error::Unsupported));
 
   aidl_return->emplace();
-  aidl_return->value().alphaInterpretation = alpha;
-  aidl_return->value().format = format;
+  aidl_return->value().alphaInterpretation = static_cast<AlphaInterpretation>(alpha);
+  aidl_return->value().format = static_cast<PixelFormat>(format);
 
   return ScopedAStatus::ok();
 }
