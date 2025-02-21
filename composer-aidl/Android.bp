@@ -21,6 +21,17 @@ composer_lib_defaults {
           ],
           vintf_fragments: ["vendor.qti.hardware.display.composer-service_v3.xml"],
        },
+       version_4: {
+          cflags: [
+              "-DENABLE_COMPOSER3_V4=1",
+              "-DENABLE_MAPPER_V5=1",
+          ],
+
+          shared_libs: [
+              "android.hardware.graphics.composer3-V4-ndk",
+          ],
+          vintf_fragments: ["vendor.qti.hardware.display.composer-service_v4.xml"],
+       },
     }
   },
 }
@@ -78,7 +89,6 @@ display_config_idl_cc_defaults {
                "mapper.qti",
                "android.hardware.graphics.allocator@2.0",
                "android.hardware.graphics.allocator@3.0",
-	       "android.hardware.graphics.composer3-V3-ndk",
                "android.hardware.graphics.allocator-V2-ndk",
                "libgralloctypes",
                "libdisplayconfig.qti",

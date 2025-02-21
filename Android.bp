@@ -206,7 +206,7 @@ soong_config_module_type {
 
 soong_config_string_variable {
      name: "vndk",
-     values: ["version_2", "version_3"],
+     values: ["version_3", "version_4"],
 }
 
 subdirs = [

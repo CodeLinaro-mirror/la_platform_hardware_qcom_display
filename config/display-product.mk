@@ -32,7 +32,7 @@ PRODUCT_PACKAGES += \
     modetest \
     vendor.qti.hardware.display.snapalloc-impl
 
-ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16, $(PLATFORM_VERSION)))
 $(warning "Android-U compiling AIDL")
 $(call soong_config_set, display_config_idl,target_aidl_or_hidl,target_aidl)
 else
@@ -40,21 +40,17 @@ $(warning "Non-Android-U compiling HIDL")
 $(call soong_config_set, display_config_idl,target_aidl_or_hidl,target_hidl)
 endif
 
-ifndef TARGET_ANDROID_BELOW_V15
-$(warning "Android-below-V15 not defined, compiling AIDL composer3 V2")
-$(call soong_config_set,display_config_composer3,vndk, version_2)
-else
-ifeq ($(TARGET_ANDROID_BELOW_V15),true)
-$(warning "Android-U compiling AIDL composer3 V2")
-$(call soong_config_set,display_config_composer3,vndk, version_2)
+
+ifneq ( ,$(filter Baklava 16, $(PLATFORM_VERSION)))
+$(warning "Android-16 compiling AIDL composer3 V4")
+$(call soong_config_set,display_config_composer3,vndk, version_4)
 else
 $(warning "Android-V compiling AIDL composer V3")
 $(call soong_config_set,display_config_composer3,vndk, version_3)
 endif
-endif #ifndef TARGET_ANDROID_BELOW_V15
 
 ifneq ($(TARGET_IS_HEADLESS),true)
-ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.composer-service
 PRODUCT_PROPERTY_OVERRIDES += \
