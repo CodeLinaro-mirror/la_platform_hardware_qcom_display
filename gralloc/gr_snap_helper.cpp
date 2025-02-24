@@ -20,8 +20,6 @@
 #include <aidl/android/hardware/graphics/allocator/AllocationResult.h>
 #include <android/hardware/graphics/mapper/utils/IMapperMetadataTypes.h>
 
-#include <fstream>
-
 using SnapFence = vendor_qti_hardware_display_common_Fence;
 using SnapAddress = vendor_qti_hardware_display_common_Address;
 
@@ -2897,43 +2895,9 @@ SnapError GrallocSnapHelper::ValidateGrallocUsage(uint64_t gralloc_usage) {
   return SnapError::NONE;
 }
 
-int GrallocSnapHelper::GetSocId() {
-//TBD(user): Handle soc id nodes from virtual driver
-#if defined(SDM_VIRTUAL_DRIVER) || defined(HDRLIB_STAND_ALONE)
-  return 0xffff;
-#endif
-
-  std::string soc_id;
-  std::ifstream in("/sys/devices/soc0/soc_id");
-
-  if (!in.is_open()) {
-    ALOGW("Cannot open soc id file.");
-    return -1;
-  }
-
-  std::getline(in, soc_id);
-  if (soc_id.length() <= 0) {
-    ALOGW("Cannot get soc id");
-    return -1;
-  }
-
-  return std::stoi(soc_id);
-}
-
 SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc,
                                                SnapDescriptor &snap_desc) {
   SnapFormatDescriptor snap_fmt_desc;
-  std::string gr_desc_name = gr_desc.GetName().c_str();
-  int soc_id = GetSocId();
-  bool isClarenceTarget = (soc_id == 568 || soc_id == 602 || soc_id == 653 || soc_id == 654) ? true : false;
-
-  if (gr_desc.GetFormat() == SnapPixelFormat::YV12 && (gr_desc.GetUsage() & GPU_RENDER_TARGET || gr_desc.GetUsage() & GPU_TEXTURE)
-      && (gr_desc_name.find("AHardwareBuffer") != std::string::npos) && isClarenceTarget) {
-     ALOGE("GrallocSnapHelper::GetSnapDescriptor - YV12 not supported with GFX usage for soc_id : %d", soc_id);
-     return SnapError::UNSUPPORTED;
-  }
-
-
   auto err = GetSnapFormat(gr_desc.GetFormat(), gr_desc.GetUsage(), &snap_fmt_desc);
   if (err) {
     ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.GetFormat());
