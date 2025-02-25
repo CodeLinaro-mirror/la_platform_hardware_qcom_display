@@ -168,7 +168,7 @@ PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=1
 SOONG_CONFIG_NAMESPACES += qtidisplay
 
 # Soong Keys
-SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 kernel_5_4 kernel_5_15
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 displayconfig_enabled default var1 var2 var3 kernel_5_4 kernel_5_15 composer_version
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -182,6 +182,33 @@ SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_kernel_5_4 := false
 SOONG_CONFIG_qtidisplay_kernel_5_15 := false
+SOONG_CONFIG_qtidisplay_composer_version := v3_4
+
+# Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
+# PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
+# PLATFORM_VERSION contains the version number of the current Android version.
+# Before FRC, PLATFORM_VERSION matches with PLATFORM_VERSION_CODENAME.
+# Example:
+# Android V (After FRC)
+#   PLATFORM_VERSION_CODENAME = VanillaIceCream, PLATFORM_VERSION = 15
+# Android W (Before FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = W
+# Android W (After FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = 16
+
+# BEFORE FRC
+ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_4
+    endif
+# AFTER FRC
+else
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 15))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_3
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_4
+    endif
+endif
 
 ifeq ($(call is-vendor-board-platform,QCOM),true)
     SOONG_CONFIG_qtidisplay_displayconfig_enabled := true
