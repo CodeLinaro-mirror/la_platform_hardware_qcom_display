@@ -1,8 +1,33 @@
+soong_config_module_type_import {
+  from: "hardware/qcom/display/Android.bp",
+  module_types: [
+      "grallocutils_lib_defaults",
+  ],
+}
+grallocutils_lib_defaults {
+  name: "shared_graphics_common_ndk_lib",
+  soong_config_variables: {
+    graphics_common_ndk: {
+       version_5: {
+          shared_libs: [
+              "android.hardware.graphics.common-V5-ndk",
+          ],
+       },
+       version_6: {
+          shared_libs: [
+              "android.hardware.graphics.common-V6-ndk",
+          ],
+       },
+    }
+  },
+}
+
 cc_library_shared {
     name: "libgrallocutils",
     defaults: [
         "qtidisplay_defaults",
         "qtidisplay_common_defaults",
+        "shared_graphics_common_ndk_lib"
     ],
     vendor: true,
     sanitize: {
@@ -30,7 +55,6 @@ cc_library_shared {
         "libgralloctypes",
         "libhidlbase",
         "android.hardware.graphics.allocator-V2-ndk",
-        "android.hardware.graphics.common-V5-ndk",
         "android.hardware.graphics.common@1.2",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@2.1",
@@ -289,7 +313,7 @@ display_config_idl_cc_defaults {
           ],
           cflags: [
                "-DLOG_TAG=\"qdgralloc\"",
-		"-DENABLE_MAPPER_V5=1"
+        "-DENABLE_MAPPER_V5=1"
           ],
           srcs: [
                "AIDL/QtiAllocatorAIDL.cpp",

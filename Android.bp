@@ -21,7 +21,7 @@ soong_config_module_type {
         "host_ldlibs",
         "ldflags",
         "native_coverage",
-	"vendor",
+    "vendor",
     ],
 }
 
@@ -196,6 +196,7 @@ soong_config_module_type {
   config_namespace: "display_config_composer3",
   variables: [
       "vndk",
+      "graphics_common_ndk",
   ],
   properties: [
       "shared_libs",
@@ -207,6 +208,23 @@ soong_config_module_type {
 soong_config_string_variable {
      name: "vndk",
      values: ["version_3", "version_4"],
+}
+
+soong_config_module_type {
+  name: "grallocutils_lib_defaults",
+  module_type: "cc_defaults",
+  config_namespace: "display_config_grallocutils",
+  variables: [
+      "graphics_common_ndk",
+  ],
+  properties: [
+      "shared_libs",
+  ],
+}
+
+soong_config_string_variable {
+     name: "graphics_common_ndk",
+     values: ["version_5", "version_6"],
 }
 
 subdirs = [
