@@ -42,8 +42,9 @@ case "$target" in
     "canoe")
     # SOC ID for Canoe is 660
     # SOC ID for Canoe APQ is 661
+    # SOC ID for KaM is 704
     case "$soc_hwid" in
-      660|661)
+      660|661|704)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
