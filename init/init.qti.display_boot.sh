@@ -89,6 +89,7 @@ case "$target" in
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.cpu_cluster_boost_mask 15
+        setprop vendor.display.supports_background_blur 0
         ;;
     esac
     ;;
