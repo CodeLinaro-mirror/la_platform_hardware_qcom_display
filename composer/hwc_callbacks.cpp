@@ -201,7 +201,7 @@ HWC3::Error HWCCallbacks::PerformHWCCallback() {
         SCOPE_LOCK(refresh_lock_);
         if (refresh_) {
           (*refresh_)(callback_data_, param.display);
-          pending_refresh_.set(param.display);
+          pending_refresh_.reset(param.display);
         }
       } break;
       case CALLBACK_HOTPLUG: {
