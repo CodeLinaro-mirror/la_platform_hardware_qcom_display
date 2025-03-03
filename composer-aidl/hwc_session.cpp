@@ -681,7 +681,7 @@ HWC3::Error HWCSession::GetDisplayConfigs(Display display, uint32_t *out_num_con
                              out_configs);
 }
 
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 HWC3::Error HWCSession::GetDisplayConfigurations(Display display,
                                                  std::vector<DisplayConfiguration> *out_configs) {
   return CallDisplayFunction(display, &HWCDisplay::GetDisplayConfigurations, out_configs);

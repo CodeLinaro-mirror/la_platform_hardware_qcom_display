@@ -67,7 +67,7 @@ using aidl::android::hardware::graphics::composer3::DisplayAttribute;
 using aidl::android::hardware::graphics::composer3::DisplayBrightness;
 using aidl::android::hardware::graphics::composer3::DisplayCapability;
 using aidl::android::hardware::graphics::composer3::DisplayCommand;
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
 #endif
 using aidl::android::hardware::graphics::composer3::DisplayConnectionType;
@@ -148,7 +148,7 @@ class AidlComposerClient : public BnComposerClient {
                                              std::vector<float> *aidl_return) override;
   ScopedAStatus getDisplayAttribute(int64_t in_display, int32_t in_config,
                                     DisplayAttribute in_attribute, int32_t *aidl_return) override;
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
   ScopedAStatus getDisplayConfigurations(int64_t in_display, int32_t maxFrameIntervalNs,
                                          std::vector<DisplayConfiguration> *outConfigs) override;
   ScopedAStatus notifyExpectedPresent(int64_t displayId,
