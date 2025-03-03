@@ -277,7 +277,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
   return TO_BINDER_STATUS(INT32(error));
 }
 
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs,
     std::vector<DisplayConfiguration> *out_configs) {
