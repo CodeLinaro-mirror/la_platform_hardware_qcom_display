@@ -1173,6 +1173,8 @@ void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayComma
                    layerCmd.layer, *layerCmd.perFrameMetadataBlob);
     ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
                    displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
+    ExecuteCommand(layerCmd.bufferSlotsToClear, &CommandEngine::executeSetLayerBufferSlotsToClear,
+                   displayCmd.display, layerCmd.layer, *layerCmd.bufferSlotsToClear);
   }
 }
 
@@ -1801,6 +1803,29 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   //     writeError(__FUNCTION__, Error::BadConfig);
   //   }
   // writeError(__FUNCTION__, Error::Unsupported);
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
+    int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
+  auto error = Error::None;
+  for (auto &slot : slotsToClear) {
+    SnapHandle *layerBuffer = nullptr;
+    lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, true, &layerBuffer);
+    if (layerBuffer &&
+        mClient.layer_builder_->CheckLayerBufferBinding(display, layer, layerBuffer)) {
+      // Avoid to clear active buffer slot
+      continue;
+    }
+
+    auto clearErr = updateBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, false, nullptr);
+    if (error == Error::None) {
+      error = clearErr;
+    }
+  }
+
+  if (error != Error::None) {
+    writeError(__FUNCTION__, error);
+  }
 }
 
 Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {

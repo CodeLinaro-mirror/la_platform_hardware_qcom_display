@@ -411,6 +411,8 @@ class AidlComposerClient : public BnComposerClient,
         int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
+    void executeSetLayerBufferSlotsToClear(int64_t display, int64_t layer,
+                                           const std::vector<int32_t> &slotsToClear);
     void executeSetFrameIntervalNsInternal(int64_t display, int32_t frameIntervalNs);
 
     // Commands from extensions (QtiComposer3Client)
