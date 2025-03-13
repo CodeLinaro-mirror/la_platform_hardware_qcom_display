@@ -109,6 +109,7 @@ using aidl::android::hardware::graphics::composer3::IComposerCallback;
 using aidl::android::hardware::graphics::composer3::LayerBrightness;
 #ifdef COMPOSER3_V4
 using aidl::android::hardware::graphics::composer3::Luts;
+using aidl::android::hardware::graphics::composer3::OutputType;
 #endif
 using aidl::android::hardware::graphics::composer3::OverlayProperties;
 using aidl::android::hardware::graphics::composer3::ParcelableBlendMode;

@@ -398,6 +398,18 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
+  sdm::DisplayConfigFixedInfo fixed_info{};
+  error = caps_->GetFixedConfig(in_display, &fixed_info);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
+  sdm::DisplayClass display_class;
+  error = caps_->GetDisplayConnectionType(in_display, &display_class);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  }
+
   out_configs->clear();
   out_configs->reserve(info.size());
 
@@ -411,6 +423,20 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup =
         settings_->GetDisplayConfigGroup(in_display, variable_config);
+
+#ifdef COMPOSER3_V4
+    // Display output colorspace is fixed for builtin displays regardless of HDR content.
+    // For external displays, colorspace will be changed for HDR content if display supports HDR.
+    // EOTF is checked for true HDR support because external is always marked as HDR supported
+    // if primary supports HDR to prevent SF from marking HDR layers as skip.
+    display_configuration.hdrOutputType =
+        (fixed_info.hdr_eotf & sdm::kHdrEOTFHDR10) ? OutputType::HDR10
+        : (fixed_info.hdr_eotf & sdm::kHdrEOTFSDR) ? OutputType::SDR
+                                                   : OutputType::INVALID;
+    if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+#endif
 
     ALOGI("GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, fps= %d",
           config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
