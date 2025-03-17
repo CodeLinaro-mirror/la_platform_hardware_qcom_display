@@ -649,9 +649,22 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
   // All individually supported properties by hardware
   static std::vector<PixelFormat> pixel_formats{
-      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,    PixelFormat::RGB_888,
-      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,    PixelFormat::YV12,
-      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102, PixelFormat::RGBA_FP16};
+      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,   PixelFormat::RGB_888,
+      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
+      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
+
+  static bool read_fp16_support = false;
+  if (!read_fp16_support) {
+    int value = 0;
+    sideband_->GetProperty(DISABLE_FP16_SUPPORT, &value);
+    bool disable_fp16_support = (value == 1);
+    ALOGV("disable_fp16_support: %d", disable_fp16_support);
+    if (!disable_fp16_support) {
+      pixel_formats.push_back(PixelFormat::RGBA_FP16);
+    }
+    read_fp16_support = true;
+  }
+
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
