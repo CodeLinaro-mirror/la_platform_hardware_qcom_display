@@ -70,7 +70,9 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
   }
 }
 
-AidlComposer::~AidlComposer() {}
+AidlComposer::~AidlComposer() {
+  lifecycle_->Deinit();
+}
 
 ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_return) {
   std::unique_lock<std::mutex> lock(mClientMutex);
