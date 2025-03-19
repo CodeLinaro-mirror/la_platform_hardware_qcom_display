@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -114,6 +114,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
 
 AidlComposerClient::~AidlComposerClient() {
   ALOGW("%s: Destroying composer client", __FUNCTION__);
+
+  // if init failed, no need to do anything
+  if (!caps_ || !settings_ || !lifecycle_ || !drawcycle_ || !layer_builder_) {
+    return;
+  }
 
   lifecycle_->RegisterCompositorCallback(nullptr, false);
 
