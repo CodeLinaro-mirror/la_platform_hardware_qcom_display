@@ -1,6 +1,7 @@
 cc_library_shared {
     name: "libgrallocutils",
     vendor: true,
+    defaults: ["display_config_gr_util_cc_defaults"],
     sanitize: {
         integer_overflow: true,
     },
@@ -321,6 +322,19 @@ display_config_idl_cc_defaults {
        },
     }
   }
+}
+
+display_config_idl_cc_defaults {
+  name: "display_config_gr_util_cc_defaults",
+  soong_config_variables: {
+    target_aidl_or_hidl: {
+       target_hidl: {
+          cflags: [
+            "-D__MAPPER_VERSION_3__",
+          ],
+       },
+    },
+  },
 }
 
 //Allocator
