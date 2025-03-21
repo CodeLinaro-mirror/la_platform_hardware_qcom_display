@@ -1144,8 +1144,16 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
 void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t display,
                                                                       int64_t layer,
                                                                       const Point &cursorPosition) {
-  auto err =
-      mClient.hwc_session_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  auto err = Error::None;
+  std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+  auto dpy = mClient.mDisplayData.find(display);
+
+  if (dpy != mClient.mDisplayData.end() && dpy->second.Layers.find(layer) != dpy->second.Layers.end()) {
+    err = mClient.hwc_session_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  } else {
+    ALOGW("Layer %ld has already been freed by destroy call", layer);
+  }
+
   if (err != Error::None) {
     writeError(__FUNCTION__, err);
   }
