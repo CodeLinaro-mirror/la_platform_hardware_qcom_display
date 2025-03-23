@@ -2,7 +2,8 @@ DISPLAY_MODULES_HARDWARE:= vendor.qti.hardware.display.composer-service \
                         android.hardware.graphics.mapper@4.0-impl-qti-display \
                         vendor.qti.hardware.display.mapper@4.0.vendor \
                         vendor.qti.hardware.display.allocator-service \
-                        vendor.qti.hardware.display.snapalloc-impl
+                        vendor.qti.hardware.display.snapalloc-impl \
+                        mapper.qti
 
 
 TARGET_IS_HEADLESS := false
@@ -28,7 +29,6 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             libqdutils \
                             libqdMetaData \
                             libgralloc.qti \
-                            mapper.qti \
                             libmapperutils \
                             vendor.display.config@2.0.vendor \
                             init.qti.display_boot.sh \
