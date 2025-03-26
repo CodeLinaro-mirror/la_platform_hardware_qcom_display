@@ -29,7 +29,7 @@
 
 /* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -81,7 +81,7 @@ Return<void> QtiMapperExtensions::getInterlacedFlag(void *buffer, getInterlacedF
     auto ret = getMetaData(hnd, GET_PP_PARAM_INTERLACED, &interlaced_flag);
     if (ret != 0) {
       interlaced_flag = 0;
-      ALOGW("%s: getMetaData returned %d, defaulting to "
+      ALOGW_IF(DEBUG, "%s: getMetaData returned %d, defaulting to "
       "interlaced_flag = %d", __FUNCTION__, ret, interlaced_flag);
     }
   }
