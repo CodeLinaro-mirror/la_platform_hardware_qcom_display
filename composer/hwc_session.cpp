@@ -446,18 +446,20 @@ void HWCSession::InitSupportedDisplaySlots() {
 
   // Init slots in accordance to h/w capability.
   uint32_t disp_count = UINT32(std::min(max_pluggable, HWCCallbacks::kNumPluggable));
-  Display base_id = qdutils::DISPLAY_EXTERNAL;
+  Display base_id = HWC_DISPLAY_EXTERNAL;
   map_info_pluggable_.resize(disp_count);
   for (auto &map_info : map_info_pluggable_) {
     map_info.client_id = base_id++;
   }
 
+  base_id = HWC_DISPLAY_BUILTIN_2;
   disp_count = UINT32(std::min(max_builtin, HWCCallbacks::kNumBuiltIn));
   map_info_builtin_.resize(disp_count);
   for (auto &map_info : map_info_builtin_) {
     map_info.client_id = base_id++;
   }
 
+  base_id = HWC_DISPLAY_VIRTUAL;
   disp_count = UINT32(std::min(max_virtual, HWCCallbacks::kNumVirtual));
   map_info_virtual_.resize(disp_count);
   for (auto &map_info : map_info_virtual_) {
@@ -3493,7 +3495,10 @@ void HWCSession::PerformDisplayPowerReset() {
     locker_[display].Unlock();
   }
 
-  callbacks_.Refresh(vsync_source);
+  // Do not call refresh if valid vsync source is not set i,e. Its kNumDisplay
+  if (vsync_source != HWCCallbacks::kNumDisplays) {
+    callbacks_.Refresh(vsync_source);
+  }
 }
 
 void HWCSession::DisplayPowerReset() {

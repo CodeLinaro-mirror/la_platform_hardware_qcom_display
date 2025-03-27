@@ -1,5 +1,5 @@
 #!/vendor/bin/sh
-# Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,10 @@ case "$target" in
     "pineapple")
     #SOC ID for Pineapple is 557
     case "$soc_hwid" in
-      557|577|682|696)
+      557|577|682|696|645|646|702)
+        #SOC ID for QCM Pineapple is 645
+        #SOC ID for QCS Pineapple is 646
+        #SOC ID for QCS8625 Pineapple is 702
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 4
