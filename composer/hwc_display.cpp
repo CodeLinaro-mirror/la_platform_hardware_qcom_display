@@ -3200,11 +3200,16 @@ void HWCDisplay::SetDrawMethod() {
   // Update it if client supports setting next FBT.
   DisplayConfigFixedInfo fixed_info = {};
   display_intf_->GetConfig(&fixed_info);
+  auto client_target_layer = client_target_->GetSDMLayer();
 
   draw_method_ = kDrawDefault;
   if (fixed_info.supports_unified_draw) {
     // Composer extn is not present.
-    draw_method_ = kDrawUnified;
+    if (client_target_layer->composition == kCompositionGPUTarget) {
+      draw_method_ = kDrawUnifiedWithGPUTarget;
+    } else {
+      draw_method_ = kDrawUnified;
+    }
   }
 
   DLOGI("Set draw method: %d", draw_method_);
