@@ -114,6 +114,9 @@ binder_status_t AidlComposer::dump(int fd, const char ** /*args*/, uint32_t /*nu
 ScopedAStatus AidlComposer::getCapabilities(std::vector<Capability> *aidl_return) {
   const std::array<Capability, 2> all_caps = {{
       Capability::SIDEBAND_STREAM,
+#ifdef COMPOSER3_V3
+      Capability::LAYER_LIFECYCLE_BATCH_COMMAND,
+#endif
   }};
 
   uint32_t count = 0;
