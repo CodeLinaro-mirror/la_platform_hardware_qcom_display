@@ -15,11 +15,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -2380,6 +2378,12 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       qtigralloc::encodeThreeDimensionalRefInfo(metadata->threeDimensionalRefInfo, out);
       break;
 #endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      android::gralloc4::encodeUint32(qtigralloc::MetadataType_ViewId,
+                                      metadata->viewId, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2764,6 +2768,12 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       qtigralloc::encodeThreeDimensionalRefInfo(metadata->threeDimensionalRefInfo, out);
       break;
 #endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      android::gralloc4::encodeUint32(qtigralloc::MetadataType_ViewId,
+                                      metadata->viewId, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -3054,6 +3064,14 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     case QTI_THREE_DIMENSIONAL_REF_INFO:
       if (qtigralloc::decodeThreeDimensionalRefInfo(in, &metadata->threeDimensionalRefInfo) !=
           IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
+      break;
+#endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_ViewId, in,
+                                          &metadata->viewId)) {
         return Error::UNSUPPORTED;
       }
       break;
