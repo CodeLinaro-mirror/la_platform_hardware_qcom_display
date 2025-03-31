@@ -167,6 +167,8 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
     if (dpy != mDisplayData.end()) {
       sdm::LayerId layer = 0;
       auto error = layer_builder_->CreateLayer(in_display, &layer);
+      ALOGV("%s: CreateLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+            layer, in_display);
       if (error == sdm::kErrorNone) {
         *aidl_return = static_cast<int64_t>(layer);
         drawcycle_->LayerStackUpdated(in_display);
@@ -221,6 +223,8 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
     }
   }
 
+  ALOGV("%s: destroyLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+        in_layer, in_display);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
   drawcycle_->LayerStackUpdated(in_display);
@@ -268,13 +272,14 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
-ScopedAStatus AidlComposerClient::executeQtiCommands(
-    const std::vector<QtiDisplayCommand> &in_commands,
+ScopedAStatus AidlComposerClient::executeQtiExtendedCommands(
+    const std::vector<DisplayCommand> &in_commands,
+    const std::vector<QtiDisplayCommand> &in_qti_commands,
     std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
   lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
-  Error error = mCommandEngine->qtiExecute(in_commands, aidl_return);
+  Error error = mCommandEngine->qtiExtendedExecute(in_commands, in_qti_commands, aidl_return);
   lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -1087,92 +1092,99 @@ bool AidlComposerClient::CommandEngine::init() {
   return (mWriter != nullptr);
 }
 
+void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCommand &displayCmd) {
+  ExecuteCommand(displayCmd.brightness, &CommandEngine::executeSetDisplayBrightness,
+                 displayCmd.display, *displayCmd.brightness);
+  ExecuteCommand(displayCmd.colorTransformMatrix, &CommandEngine::executeSetColorTransform,
+                 displayCmd.display, *displayCmd.colorTransformMatrix);
+  ExecuteCommand(displayCmd.clientTarget, &CommandEngine::executeSetClientTarget,
+                 displayCmd.display, *displayCmd.clientTarget);
+  ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
+                 displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
+  ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
+                 displayCmd.display);
+  ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
+                 displayCmd.display);
+#ifdef COMPOSER3_V3
+  ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                 displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+  ExecuteCommand(displayCmd.presentOrValidateDisplay,
+                 &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
+                 displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+#else
+  int32_t frameIntervalNs = -1;
+  ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                 displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
+  ExecuteCommand(displayCmd.presentOrValidateDisplay,
+                 &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
+                 displayCmd.expectedPresentTime, frameIntervalNs);
+#endif
+}
+
+void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayCommand &displayCmd) {
+  for (const auto &layerCmd : displayCmd.layers) {
+#ifdef COMPOSER3_V3
+    ExecuteCommand(layerCmd.layerLifecycleBatchCommandType,
+                   &CommandEngine::executeSetLayerLifecycleBatchCommandType, displayCmd.display,
+                   layerCmd);
+    if (layerCmd.layerLifecycleBatchCommandType == LayerLifecycleBatchCommandType::DESTROY) {
+      continue;
+    }
+#endif
+    ExecuteCommand(layerCmd.cursorPosition, &CommandEngine::executeSetLayerCursorPosition,
+                   displayCmd.display, layerCmd.layer, *layerCmd.cursorPosition);
+    ExecuteCommand(layerCmd.buffer, &CommandEngine::executeSetLayerBuffer, displayCmd.display,
+                   layerCmd.layer, *layerCmd.buffer);
+    ExecuteCommand(layerCmd.damage, &CommandEngine::executeSetLayerSurfaceDamage,
+                   displayCmd.display, layerCmd.layer, *layerCmd.damage);
+    ExecuteCommand(layerCmd.blendMode, &CommandEngine::executeSetLayerBlendMode, displayCmd.display,
+                   layerCmd.layer, *layerCmd.blendMode);
+    ExecuteCommand(layerCmd.composition, &CommandEngine::executeSetLayerComposition,
+                   displayCmd.display, layerCmd.layer, *layerCmd.composition);
+    // AIDL definiton of LayerCommand Color which calls into executeSetLayerColor:
+    // Sets the color of the given layer. If the composition type of the layer is not
+    // Composition.SOLID_COLOR, this call must succeed and have no other effect.
+    // Since the function depends on composition type to be set, executeSetLayerColor
+    // has to be called after executeSetLayerComposition
+    ExecuteCommand(layerCmd.color, &CommandEngine::executeSetLayerColor, displayCmd.display,
+                   layerCmd.layer, *layerCmd.color);
+    ExecuteCommand(layerCmd.dataspace, &CommandEngine::executeSetLayerDataspace, displayCmd.display,
+                   layerCmd.layer, *layerCmd.dataspace);
+    ExecuteCommand(layerCmd.displayFrame, &CommandEngine::executeSetLayerDisplayFrame,
+                   displayCmd.display, layerCmd.layer, *layerCmd.displayFrame);
+    ExecuteCommand(layerCmd.planeAlpha, &CommandEngine::executeSetLayerPlaneAlpha,
+                   displayCmd.display, layerCmd.layer, *layerCmd.planeAlpha);
+    ExecuteCommand(layerCmd.sidebandStream, &CommandEngine::executeSetLayerSidebandStream,
+                   displayCmd.display, layerCmd.layer, *layerCmd.sidebandStream);
+    ExecuteCommand(layerCmd.sourceCrop, &CommandEngine::executeSetLayerSourceCrop,
+                   displayCmd.display, layerCmd.layer, *layerCmd.sourceCrop);
+    ExecuteCommand(layerCmd.visibleRegion, &CommandEngine::executeSetLayerVisibleRegion,
+                   displayCmd.display, layerCmd.layer, *layerCmd.visibleRegion);
+    ExecuteCommand(layerCmd.transform, &CommandEngine::executeSetLayerTransform, displayCmd.display,
+                   layerCmd.layer, *layerCmd.transform);
+    ExecuteCommand(layerCmd.z, &CommandEngine::executeSetLayerZOrder, displayCmd.display,
+                   layerCmd.layer, *layerCmd.z);
+    ExecuteCommand(layerCmd.brightness, &CommandEngine::executeSetLayerBrightness,
+                   displayCmd.display, layerCmd.layer, *layerCmd.brightness);
+    ExecuteCommand(layerCmd.perFrameMetadata, &CommandEngine::executeSetLayerPerFrameMetadata,
+                   displayCmd.display, layerCmd.layer, *layerCmd.perFrameMetadata);
+    ExecuteCommand(layerCmd.perFrameMetadataBlob,
+                   &CommandEngine::executeSetLayerPerFrameMetadataBlobs, displayCmd.display,
+                   layerCmd.layer, *layerCmd.perFrameMetadataBlob);
+    ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
+                   displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
+    ExecuteCommand(layerCmd.bufferSlotsToClear, &CommandEngine::executeSetLayerBufferSlotsToClear,
+                   displayCmd.display, layerCmd.layer, *layerCmd.bufferSlotsToClear);
+  }
+}
+
 Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayCommand> &commands,
                                                  std::vector<CommandResultPayload> *result) {
-  // std::set<int64_t> displaysPendingBrightnessChange;
   mCommandIndex = 0;
-
   for (const auto &displayCmd : commands) {
-    ExecuteCommand(displayCmd.brightness, &CommandEngine::executeSetDisplayBrightness,
-                   displayCmd.display, *displayCmd.brightness);
-    for (const auto &layerCmd : displayCmd.layers) {
-      ExecuteCommand(layerCmd.cursorPosition, &CommandEngine::executeSetLayerCursorPosition,
-                     displayCmd.display, layerCmd.layer, *layerCmd.cursorPosition);
-      ExecuteCommand(layerCmd.buffer, &CommandEngine::executeSetLayerBuffer, displayCmd.display,
-                     layerCmd.layer, *layerCmd.buffer);
-      ExecuteCommand(layerCmd.damage, &CommandEngine::executeSetLayerSurfaceDamage,
-                     displayCmd.display, layerCmd.layer, *layerCmd.damage);
-      ExecuteCommand(layerCmd.blendMode, &CommandEngine::executeSetLayerBlendMode,
-                     displayCmd.display, layerCmd.layer, *layerCmd.blendMode);
-      ExecuteCommand(layerCmd.composition, &CommandEngine::executeSetLayerComposition,
-                     displayCmd.display, layerCmd.layer, *layerCmd.composition);
-      // AIDL definiton of LayerCommand Color which calls into executeSetLayerColor:
-      // Sets the color of the given layer. If the composition type of the layer is not
-      // Composition.SOLID_COLOR, this call must succeed and have no other effect.
-      // Since the function depends on composition type to be set, executeSetLayerColor
-      // has to be called after executeSetLayerComposition
-      ExecuteCommand(layerCmd.color, &CommandEngine::executeSetLayerColor, displayCmd.display,
-                     layerCmd.layer, *layerCmd.color);
-      ExecuteCommand(layerCmd.dataspace, &CommandEngine::executeSetLayerDataspace,
-                     displayCmd.display, layerCmd.layer, *layerCmd.dataspace);
-      ExecuteCommand(layerCmd.displayFrame, &CommandEngine::executeSetLayerDisplayFrame,
-                     displayCmd.display, layerCmd.layer, *layerCmd.displayFrame);
-      ExecuteCommand(layerCmd.planeAlpha, &CommandEngine::executeSetLayerPlaneAlpha,
-                     displayCmd.display, layerCmd.layer, *layerCmd.planeAlpha);
-      ExecuteCommand(layerCmd.sidebandStream, &CommandEngine::executeSetLayerSidebandStream,
-                     displayCmd.display, layerCmd.layer, *layerCmd.sidebandStream);
-      ExecuteCommand(layerCmd.sourceCrop, &CommandEngine::executeSetLayerSourceCrop,
-                     displayCmd.display, layerCmd.layer, *layerCmd.sourceCrop);
-      ExecuteCommand(layerCmd.visibleRegion, &CommandEngine::executeSetLayerVisibleRegion,
-                     displayCmd.display, layerCmd.layer, *layerCmd.visibleRegion);
-      ExecuteCommand(layerCmd.transform, &CommandEngine::executeSetLayerTransform,
-                     displayCmd.display, layerCmd.layer, *layerCmd.transform);
-      ExecuteCommand(layerCmd.z, &CommandEngine::executeSetLayerZOrder, displayCmd.display,
-                     layerCmd.layer, *layerCmd.z);
-      ExecuteCommand(layerCmd.brightness, &CommandEngine::executeSetLayerBrightness,
-                     displayCmd.display, layerCmd.layer, *layerCmd.brightness);
-      ExecuteCommand(layerCmd.perFrameMetadata, &CommandEngine::executeSetLayerPerFrameMetadata,
-                     displayCmd.display, layerCmd.layer, *layerCmd.perFrameMetadata);
-      ExecuteCommand(layerCmd.perFrameMetadataBlob,
-                     &CommandEngine::executeSetLayerPerFrameMetadataBlobs, displayCmd.display,
-                     layerCmd.layer, *layerCmd.perFrameMetadataBlob);
-      ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
-                     displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
-    }
-    ExecuteCommand(displayCmd.colorTransformMatrix, &CommandEngine::executeSetColorTransform,
-                   displayCmd.display, *displayCmd.colorTransformMatrix);
-    ExecuteCommand(displayCmd.clientTarget, &CommandEngine::executeSetClientTarget,
-                   displayCmd.display, *displayCmd.clientTarget);
-    ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
-                   displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
-    ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
-                   displayCmd.display);
-    ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
-                   displayCmd.display);
-#ifdef COMPOSER3_V3
-    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
-                   displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
-    ExecuteCommand(displayCmd.presentOrValidateDisplay,
-                   &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
-                   displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
-#else
-    int32_t frameIntervalNs = -1;
-    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
-                   displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
-    ExecuteCommand(displayCmd.presentOrValidateDisplay,
-                   &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
-                   displayCmd.expectedPresentTime, frameIntervalNs);
-#endif
-
+    executeLayerCommmands(displayCmd);
+    executeDisplayCommmands(displayCmd);
     ++mCommandIndex;
-
-    // TODO: Process brightness change on presentDisplay if both commands come in?????
-    // if (displayCmd.validateDisplay || displayCmd.presentDisplay ||
-    //     displayCmd.presentOrValidateDisplay) {
-    //   displaysPendingBrightnessChange.erase(displayCmd.display);
-    // } else if (DisplayCmd.brightness) {
-    //   displaysPendingBrightnessChange.insert(displayCmd.display);
-    // }
   }
 
   if (!mCommandIndex) {
@@ -1183,6 +1195,55 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
   reset();
 
   return (mCommandIndex) ? Error::None : Error::BadParameter;
+}
+
+Error AidlComposerClient::CommandEngine::qtiExtendedExecute(
+    const std::vector<DisplayCommand> &commands, const std::vector<QtiDisplayCommand> &qti_commands,
+    std::vector<CommandResultPayload> *result) {
+  std::vector<CommandResultPayload> qti_results = {};
+  auto status = Error::None;
+
+  // Execute all layer commands first.
+  mCommandIndex = 0;
+  for (const auto &displayCmd : commands) {
+    executeLayerCommmands(displayCmd);
+    ++mCommandIndex;
+  }
+
+  *result = mWriter->getPendingCommandResults();
+  reset();
+  // Execute all QTI extension commands after all layer commands.
+  if (!qti_commands.empty()) {
+    status = qtiExecute(qti_commands, &qti_results);
+  }
+
+  if (mCommandIndex) {
+    // Execute all display commands finally.
+    mCommandIndex = 0;
+    for (const auto &displayCmd : commands) {
+      executeDisplayCommmands(displayCmd);
+      ++mCommandIndex;
+    }
+
+    auto new_results = mWriter->getPendingCommandResults();
+    reset();
+    if (!new_results.empty()) {
+      for (auto &r : new_results) {
+        result->push_back(std::move(r));
+      }
+    }
+
+    if (!qti_results.empty()) {
+      for (auto &r : qti_results) {
+        result->push_back(std::move(r));
+      }
+    }
+  } else {
+    ALOGW("%s: No command found", __FUNCTION__);
+    status = Error::BadParameter;
+  }
+
+  return status;
 }
 
 Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplayCommand> &commands,
@@ -1379,6 +1440,76 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
     writeError(__FUNCTION__, err);
   }
 }
+
+#ifdef COMPOSER3_V3
+void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType(
+    int64_t display, const LayerCommand &layerCmd) {
+  DisplayData *disp_data_ptr = nullptr;
+  sdm::LayerId layer = layerCmd.layer;
+
+  if (display >= 0 && layer >= 0) {
+    std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+    auto dpy = mClient.mDisplayData.find(display);
+    // The display entry may have already been removed by onHotplug.
+    if (dpy != mClient.mDisplayData.end()) {
+      disp_data_ptr = &dpy->second;
+    } else {
+      // Note: We do not destroy the layer on this error as the hotplug
+      // disconnect invalidates the display id. The implementation should
+      // ensure all layers for the display are destroyed.
+      ALOGE("%s: Invalid  display Id(%lu)!", __FUNCTION__, display);
+      writeError(__FUNCTION__, Error::BadDisplay);
+      return;
+    }
+  } else {
+    ALOGE("%s: Invalid Parameter out of either display Id(%lu) or  layer Id(%lu)!", __FUNCTION__,
+          display, layer);
+    writeError(__FUNCTION__, Error::BadParameter);
+    return;
+  }
+
+  LayerLifecycleBatchCommandType cmd = layerCmd.layerLifecycleBatchCommandType;
+  if (cmd == LayerLifecycleBatchCommandType::CREATE) {
+    ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %lu for display-%lu.", __FUNCTION__,
+          layer, display);
+    auto error = mClient.layer_builder_->CreateLayer(display, &layer);
+    if (error == sdm::kErrorNone) {
+      mClient.drawcycle_->LayerStackUpdated(display);
+      std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+      auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
+      ly->second.Buffers.resize(layerCmd.newBufferSlotCount);
+    } else {
+      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      writeError(__FUNCTION__, Error::BadLayer);
+      return;
+    }
+  } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
+    ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %lu for display-%lu.", __FUNCTION__,
+          layer, display);
+    mClient.drawcycle_->WaitForDrawCycleToComplete(display);
+    auto error = mClient.layer_builder_->DestroyLayer(display, layer);
+    mClient.drawcycle_->LayerStackUpdated(display);
+
+    if (error == sdm::kErrorNone) {
+      std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+      auto dpy = mClient.mDisplayData.find(display);
+      // The display entry may have already been removed by onHotplug.
+      if (dpy != mClient.mDisplayData.end()) {
+        dpy->second.Layers.erase(layer);
+      }
+    } else {
+      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      writeError(__FUNCTION__, Error::BadLayer);
+      return;
+    }
+  } else {
+    ALOGE("%s: Unsupported LLCBC command Id %d for Layer-%lu and display-%lu !", __FUNCTION__, cmd,
+          layer, display);
+    writeError(__FUNCTION__, Error::BadConfig);
+    return;
+  }
+}
+#endif
 
 void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t display,
                                                                       int64_t layer,
@@ -1672,6 +1803,29 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   //     writeError(__FUNCTION__, Error::BadConfig);
   //   }
   // writeError(__FUNCTION__, Error::Unsupported);
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
+    int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
+  auto error = Error::None;
+  for (auto &slot : slotsToClear) {
+    SnapHandle *layerBuffer = nullptr;
+    lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, true, &layerBuffer);
+    if (layerBuffer &&
+        mClient.layer_builder_->CheckLayerBufferBinding(display, layer, layerBuffer)) {
+      // Avoid to clear active buffer slot
+      continue;
+    }
+
+    auto clearErr = updateBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, false, nullptr);
+    if (error == Error::None) {
+      error = clearErr;
+    }
+  }
+
+  if (error != Error::None) {
+    writeError(__FUNCTION__, error);
+  }
 }
 
 Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {

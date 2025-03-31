@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -35,19 +35,17 @@ ScopedAStatus QtiComposer3Client::qtiExecuteCommands(
     const std::vector<DisplayCommand> &in_commands,
     const std::vector<QtiDisplayCommand> &in_qtiCommands,
     std::vector<CommandResultPayload> *_aidl_return) {
-  std::vector<CommandResultPayload> qti_results;
-
   auto composer_client = composer_client_.lock();
 
   if (composer_client) {
-    auto qti_status = composer_client->executeQtiCommands(in_qtiCommands, &qti_results);
-    auto status = composer_client->executeCommands(in_commands, _aidl_return);
-
-    for (auto &result : qti_results) {
-      _aidl_return->push_back(std::move(result));
+    auto status = ScopedAStatus::ok();
+    if (!in_qtiCommands.empty()) {
+      status =
+          composer_client->executeQtiExtendedCommands(in_commands, in_qtiCommands, _aidl_return);
+    } else if (!in_commands.empty()) {
+      status = composer_client->executeCommands(in_commands, _aidl_return);
     }
-
-    return (!qti_status.isOk() ? std::move(qti_status) : std::move(status));
+    return std::move(status);
   }
   return TO_BINDER_STATUS(INT32(Error::NoResources));
 }
