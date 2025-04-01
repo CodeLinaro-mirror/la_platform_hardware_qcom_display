@@ -60,10 +60,13 @@ static bool GetConnector(int dev_fd, drmModeRes *res, drmModeConnector **connect
 static bool GetEncoder(int dev_fd, drmModeConnector *conn, drmModeEncoder **encoder) {
   for (auto i = 0; i < conn->count_encoders; i++) {
     drmModeEncoder *enc = drmModeGetEncoder(dev_fd, conn->encoders[i]);
-    if (enc && enc->encoder_type == DRM_MODE_ENCODER_DSI) {
-      *encoder = enc;
-      DRM_LOGI("Found encoder %d", enc->encoder_id);
-      return true;
+    if (enc) {
+      if (enc->encoder_type == DRM_MODE_ENCODER_DSI) {
+         *encoder = enc;
+         DRM_LOGI("Found encoder %d", enc->encoder_id);
+         return true;
+      }
+      drmModeFreeEncoder(enc);
     }
   }
   return false;
