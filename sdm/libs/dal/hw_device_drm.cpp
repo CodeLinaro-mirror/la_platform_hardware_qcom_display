@@ -30,7 +30,7 @@
 /*
  *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted (subject to the limitations in the
@@ -768,8 +768,7 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
     mm_width = connector_info_.mmWidth;
     mm_height = connector_info_.mmHeight;
     topology = connector_info_.modes[index].sub_modes[submode_idx].topology;
-    if (connector_info_.modes[index].sub_modes[submode_idx].panel_mode_caps &
-        DRM_MODE_FLAG_CMD_MODE_PANEL) {
+    if (connector_info_.modes[index].cur_panel_mode == DRM_MODE_FLAG_CMD_MODE_PANEL) {
       display_attributes_[index].smart_panel = true;
     }
   }
