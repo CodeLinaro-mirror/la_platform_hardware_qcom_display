@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -277,7 +277,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
   return TO_BINDER_STATUS(INT32(error));
 }
 
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs,
     std::vector<DisplayConfiguration> *out_configs) {
@@ -290,6 +290,23 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
     int32_t frameIntervalNs) {
   Error error = Error::Unsupported;
   return TO_BINDER_STATUS(INT32(error));
+}
+#endif
+
+#ifdef ENABLE_COMPOSER3_V4
+ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
+                                                             int32_t *_aidl_return) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+
+ScopedAStatus AidlComposerClient::startHdcpNegotiation(
+    int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) {
+  return TO_BINDER_STATUS(INT32(Error::None));
+}
+
+ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<Buffer> &,
+                                          std::vector<Luts> *) {
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 #endif
 
@@ -876,7 +893,24 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
     ALOGW("%s: No command found", __FUNCTION__);
   }
 
-  *result = mWriter->getPendingCommandResults();
+  std::vector<CommandResultPayload> pending_result = mWriter->getPendingCommandResults();
+  std::vector<CommandResultPayload> err_result;
+
+  for (auto& payload : pending_result) {
+    if (payload.getTag() == CommandResultPayload::Tag::error) {
+      err_result.emplace_back(std::move(payload));
+    }
+  }
+
+  if (err_result.empty()) {
+    *result = std::move(pending_result);
+  } else {
+    *result = std::move(err_result);
+    if(!pending_result.empty()) {
+      pending_result.clear();
+    }
+  }
+
   reset();
 
   return (mCommandIndex) ? Error::None : Error::BadParameter;
