@@ -18,8 +18,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -59,7 +59,7 @@
 namespace composer_V3 = aidl::android::hardware::graphics::composer3;
 using HwcDisplayCapability = composer_V3::DisplayCapability;
 using HwcDisplayConnectionType = composer_V3::DisplayConnectionType;
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using DisplayConfiguration = composer_V3::DisplayConfiguration;
 #endif
 
@@ -194,7 +194,7 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   HWC3::Error GetDisplayType(Display display, int32_t *out_type);
   HWC3::Error GetDisplayAttribute(Display display, Config config,
                               HwcAttribute attribute, int32_t *out_value);
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
   HWC3::Error GetDisplayConfigurations(Display display,
                                        std::vector<DisplayConfiguration> *out_configs);
 #endif

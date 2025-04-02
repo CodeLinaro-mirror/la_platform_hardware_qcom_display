@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -27,6 +27,9 @@
 #include <vector>
 #include <string>
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
+#ifdef ENABLE_COMPOSER3_V4
+#include <aidl/android/hardware/graphics/composer3/Luts.h>
+#endif
 #include <aidlcommonsupport/NativeHandle.h>
 #include "hwc_session.h"
 #include "AidlComposerHandleImporter.h"
@@ -67,7 +70,7 @@ using aidl::android::hardware::graphics::composer3::DisplayAttribute;
 using aidl::android::hardware::graphics::composer3::DisplayBrightness;
 using aidl::android::hardware::graphics::composer3::DisplayCapability;
 using aidl::android::hardware::graphics::composer3::DisplayCommand;
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
 #endif
 using aidl::android::hardware::graphics::composer3::DisplayConnectionType;
@@ -78,6 +81,9 @@ using aidl::android::hardware::graphics::composer3::FormatColorComponent;
 using aidl::android::hardware::graphics::composer3::HdrCapabilities;
 using aidl::android::hardware::graphics::composer3::IComposerCallback;
 using aidl::android::hardware::graphics::composer3::LayerBrightness;
+#ifdef ENABLE_COMPOSER3_V4
+using aidl::android::hardware::graphics::composer3::Luts;
+#endif
 using aidl::android::hardware::graphics::composer3::OverlayProperties;
 using aidl::android::hardware::graphics::composer3::ParcelableBlendMode;
 using aidl::android::hardware::graphics::composer3::ParcelableComposition;
@@ -148,12 +154,19 @@ class AidlComposerClient : public BnComposerClient {
                                              std::vector<float> *aidl_return) override;
   ScopedAStatus getDisplayAttribute(int64_t in_display, int32_t in_config,
                                     DisplayAttribute in_attribute, int32_t *aidl_return) override;
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
   ScopedAStatus getDisplayConfigurations(int64_t in_display, int32_t maxFrameIntervalNs,
                                          std::vector<DisplayConfiguration> *outConfigs) override;
   ScopedAStatus notifyExpectedPresent(int64_t displayId,
                                       const ClockMonotonicTimestamp &expectedPresentTime,
                                       int32_t frameIntervalNs) override;
+#endif
+#ifdef ENABLE_COMPOSER3_V4
+  ScopedAStatus getMaxLayerPictureProfiles(int64_t in_display, int32_t *_aidl_return);
+  ScopedAStatus startHdcpNegotiation(
+      int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels);
+
+  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *);
 #endif
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
                                        std::vector<DisplayCapability> *aidl_return) override;

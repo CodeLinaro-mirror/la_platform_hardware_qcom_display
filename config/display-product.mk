@@ -49,18 +49,23 @@ SOONG_CONFIG_NAMESPACES += display_config_composer3
 # Soong Keys
 SOONG_CONFIG_display_config_composer3 += vndk
 # Soong Values
+ifneq ( ,$(filter Baklava 16, $(PLATFORM_VERSION)))
+$(warning "Android-16 compiling AIDL composer3 V4")
+$(call soong_config_set,display_config_composer3,vndk, version_4)
+else
 ifndef TARGET_ANDROID_BELOW_V15
 $(warning "Android-below-V15 not defined, compiling AIDL composer3 V2")
-SOONG_CONFIG_display_config_composer3_vndk := version_2
+$(call soong_config_set,display_config_composer3,vndk, version_2)
 else
 ifeq ($(TARGET_ANDROID_BELOW_V15),true)
 $(warning "Android-U compiling AIDL composer3 V2")
-SOONG_CONFIG_display_config_composer3_vndk := version_2
+$(call soong_config_set,display_config_composer3,vndk, version_2)
 else
 $(warning "Android-V compiling AIDL composer V3")
-SOONG_CONFIG_display_config_composer3_vndk := version_3
+$(call soong_config_set,display_config_composer3,vndk, version_3)
 endif
-endif #ifndef TARGET_ANDROID_BELOW_V15
+endif
+endif
 
 ifneq ($(TARGET_IS_HEADLESS),true)
 ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 W Baklava 16, $(PLATFORM_VERSION)))
