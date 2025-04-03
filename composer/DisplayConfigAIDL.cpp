@@ -680,9 +680,9 @@ ScopedAStatus DisplayConfigAIDL::getDisplayType(int64_t physical_disp_id,
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
-    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &rect,
-    bool post_processed, const NativeHandle &buffer) {
+ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferInternal(
+    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &roi_rect,
+    const Rect &downscale_rect, int32_t cwb_control_flag, const NativeHandle &buffer) {
   if (!callback) {
     ALOGE("%s: Callback provided is invalid.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
@@ -703,22 +703,8 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   }
 
   int32_t display_type = disp_type_map[disp_id];
-
-  sdm::CwbConfig cwb_config = {};
-  cwb_config.tap_point = static_cast<sdm::CwbTapPoint>(post_processed);
-  sdm::LayerRect &roi = cwb_config.cwb_roi;
-  roi.left = FLOAT(rect.left);
-  roi.top = FLOAT(rect.top);
-  roi.right = FLOAT(rect.right);
-  roi.bottom = FLOAT(rect.bottom);
-
-  ALOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f) for display-%d",
-        cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom, display_type);
-
   auto ret_status = EX_NONE;
-
   void *hdl = sdm::ConvertToSnapHandle(buffer);
-
   if (!hdl || !handle_importer_.importBuffer(static_cast<const SnapHandle *>(hdl))) {
     ALOGE("%s: Either retrieving snaphandle or importing buffer failed.", __FUNCTION__);
     ret_status = EX_ILLEGAL_ARGUMENT;
@@ -732,6 +718,37 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   }
 
   if (ret_status == EX_NONE) {
+    sdm::CwbConfig cwb_config = {};
+    // Load CWB ROI configuration
+    auto &roi = cwb_config.cwb_roi;
+    roi.left = FLOAT(roi_rect.left);
+    roi.top = FLOAT(roi_rect.top);
+    roi.right = FLOAT(roi_rect.right);
+    roi.bottom = FLOAT(roi_rect.bottom);
+    // Load Downscaled Output Rectangle
+    auto &ds_rect = cwb_config.cwb_downscaled_rect;
+    ds_rect.left = FLOAT(downscale_rect.left);
+    ds_rect.top = FLOAT(downscale_rect.top);
+    ds_rect.right = FLOAT(downscale_rect.right);
+    ds_rect.bottom = FLOAT(downscale_rect.bottom);
+    ALOGI(
+        "CWB config passed by cwb_client: Tap_Point/Control_Flag: 0x%x CWB_ROI : (%f %f %f %f) "
+        "CWB_downscale_rect: (%f %f %f %f) for display-%d",
+        cwb_control_flag, roi.left, roi.top, roi.right, roi.bottom, ds_rect.left, ds_rect.top,
+        ds_rect.right, ds_rect.bottom, display_type);
+#define CFLAG_DUALBIT_TAP_POINT 2
+#define CFLAG_PU_AS_CWB_ROI_OFFSET 4
+#define CFLAG_AVOID_REFRESH_OFFSET 5
+    auto &cflag = cwb_control_flag;
+    // Load CWB control operations
+    cwb_config.tap_point = static_cast<sdm::CwbTapPoint>(cflag & LSB_MASK(CFLAG_DUALBIT_TAP_POINT));
+    cwb_config.pu_as_cwb_roi = BIT_TO_BOOL(cflag, CFLAG_PU_AS_CWB_ROI_OFFSET);
+    cwb_config.avoid_refresh = BIT_TO_BOOL(cflag, CFLAG_AVOID_REFRESH_OFFSET);
+    // Load input control flag to CWB config control flags.
+    cwb_config.cwb_control_params.value = cflag;
+    // Reset internal control flags
+    cwb_config.cwb_control_params.internal_control_flags = 0;
+    // Submit the CWB request with output buffer.
     sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
     if (ret != sdm::kErrorNone) {
       ret_status = EX_TRANSACTION_FAILED;
@@ -751,6 +768,23 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   return (ret_status == EX_NONE) ? ScopedAStatus::ok()
                                  : ScopedAStatus(AStatus_fromExceptionCode(ret_status));
 }
+
+ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
+    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &rect,
+    bool post_processed, const NativeHandle &buffer) {
+  const Rect ds_rect = {};
+  return setCWBOutputBufferInternal(callback, disp_id, rect, ds_rect,
+                                    static_cast<int32_t>(post_processed), buffer);
+}
+
+#ifdef COMPOSER3_V4
+ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferV2(
+    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &roi_rect,
+    const Rect &downscale_rect, int32_t cwb_control_flag, const NativeHandle &buffer) {
+  return setCWBOutputBufferInternal(callback, disp_id, roi_rect, downscale_rect, cwb_control_flag,
+                                    buffer);
+}
+#endif
 
 void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
   std::shared_ptr<IDisplayConfigCallback> callback = nullptr;
