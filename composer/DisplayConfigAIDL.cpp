@@ -238,9 +238,10 @@ ScopedAStatus DisplayConfigAIDL::setPanelBrightness(int level) {
   }
 
   if (level == 0) {
-    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, -1.0f);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, -1.0f, /*apply_immediately*/ true);
   } else {
-    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f,
+                                    /*apply_immediately*/ true);
   }
   return ScopedAStatus::ok();
 }
