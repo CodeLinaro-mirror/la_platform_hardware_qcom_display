@@ -2999,10 +2999,6 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
 SnapError GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
                                            SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
-    ALOGW(
-        "%s: Explicit UBWC formats such as %d are no longer supported, please switch to using base "
-        "/ linear formats + UBWC usage bits",
-        __FUNCTION__, static_cast<int>(hal_format));
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);

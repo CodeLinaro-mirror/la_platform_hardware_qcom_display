@@ -486,6 +486,21 @@ ScopedAStatus QtiComposerClient::setRefreshRateChangedCallbackDebugEnabled(int64
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
 }
 
+ScopedAStatus QtiComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
+                                                            int32_t *_aidl_return) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+
+ScopedAStatus QtiComposerClient::startHdcpNegotiation(int64_t in_display,
+                                                      const aidl::android::hardware::drm::HdcpLevels &in_levels) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+
+ScopedAStatus QtiComposerClient::getLuts(int64_t displayId, const std::vector<Buffer> &,
+                                         std::vector<Luts> *) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+
 void QtiComposerClient::getCapabilities() {
   uint32_t count = 2;
   DisplayCapability *outCapabilities;
