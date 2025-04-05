@@ -67,7 +67,7 @@ void BufferCacheEntry::clear() {
 bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
                               std::shared_ptr<SDMDisplaySettingsIntf> settings,
                               std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-                              std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+                              std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
                               std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
                               std::shared_ptr<SDMDisplaySideBandIntf> sideband) {
   if (!caps || !settings || !lifecycle || !drawcycle || !layers) {
@@ -654,9 +654,22 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
   // All individually supported properties by hardware
   static std::vector<PixelFormat> pixel_formats{
-      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,    PixelFormat::RGB_888,
-      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,    PixelFormat::YV12,
-      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102, PixelFormat::RGBA_FP16};
+      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,   PixelFormat::RGB_888,
+      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
+      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
+
+  static bool read_fp16_support = false;
+  if (!read_fp16_support) {
+    int value = 0;
+    sideband_->GetProperty(DISABLE_FP16_SUPPORT, &value);
+    bool disable_fp16_support = (value == 1);
+    ALOGV("disable_fp16_support: %d", disable_fp16_support);
+    if (!disable_fp16_support) {
+      pixel_formats.push_back(PixelFormat::RGBA_FP16);
+    }
+    read_fp16_support = true;
+  }
+
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
@@ -1305,8 +1318,13 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
   auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
                           &clientTarget);
   if (err == Error::None) {
-    auto error = mClient.drawcycle_->SetClientTarget(display, clientTarget, fence,
-                                                     INT32(command.dataspace), region, 0);
+    auto error = mClient.drawcycle_->SetClientTarget(
+        display, clientTarget, fence, INT32(command.dataspace), region, 0 /* version */
+#ifdef COMPOSER3_V3
+        ,
+        FLOAT(command.hdrSdrRatio)
+#endif
+    );
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
     if (error == sdm::kErrorNone) {
@@ -1966,7 +1984,12 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t displ
                           &clientTarget);
   if (err == Error::None) {
     auto error = mClient.drawcycle_->SetClientTarget(
-        display, clientTarget, fence, INT32(command.dataspace), region, 3 /* version*/);
+        display, clientTarget, fence, INT32(command.dataspace), region, 3 /* version */
+#ifdef COMPOSER3_V3
+        ,
+        FLOAT(command.hdrSdrRatio)
+#endif
+    );
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
     if (error == sdm::kErrorNone) {
