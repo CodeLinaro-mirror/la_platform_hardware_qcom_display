@@ -904,12 +904,12 @@ int HWCBufferAllocator::GetMetadataValue(void *buf, SnapMetadataType type, void 
 
     if (IsSettable(mapper_, type)) {
       error = GetMetadataState(static_cast<buffer_handle_t>(buf), type, &metadata_set);
-      DLOGE(">>> Metadata type (SnapMetadatatype) %ld state is %d (set = true)",
+      DLOGV(">>> Metadata type (SnapMetadatatype) %ld state is %d (set = true)",
             type, metadata_set);
     }
     if (metadata_set) {
       error = GetVendorMetadata(mapper_, static_cast<buffer_handle_t>(buf), type, dest, dest_size);
-      DLOGE(">>> GetVendorMetadata() called with type(%ld) and "\
+      DLOGV(">>> GetVendorMetadata() called with type(%ld) and "\
             "dest_size %d and returns err %d.\n", type, dest_size, error);
     }
 
