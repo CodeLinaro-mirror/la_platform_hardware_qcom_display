@@ -106,7 +106,7 @@ int HWCDisplayBuiltIn::Create(CoreInterface *core_intf, BufferAllocator *buffer_
   uint32_t builtin_height = 0;
 
   HWCDisplay *hwc_display_builtin =
-      new HWCDisplayBuiltIn(core_intf, buffer_allocator, callbacks, event_handler, qservice, id,
+      new HWCDisplayBuiltIn(core_intf, static_cast<HWCBufferAllocator *>(buffer_allocator), callbacks, event_handler, qservice, id,
                             sdm_id);
   status = hwc_display_builtin->Init();
   if (status) {
@@ -139,7 +139,7 @@ void HWCDisplayBuiltIn::Destroy(HWCDisplay *hwc_display) {
   delete hwc_display;
 }
 
-HWCDisplayBuiltIn::HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
+HWCDisplayBuiltIn::HWCDisplayBuiltIn(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                      HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                                      qService::QService *qservice, Display id,
                                      int32_t sdm_id)
@@ -507,22 +507,40 @@ HWC3::Error HWCDisplayBuiltIn::SetColorTransform(const float *matrix,
 HWC3::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
                                                  int32_t acquire_fence,
                                                  bool post_processed_output) {
-  const private_handle_t *handle = reinterpret_cast<const private_handle_t *>(buffer);
-  if (!handle || (handle->fd < 0)) {
+  const native_handle_t *handle = reinterpret_cast<const native_handle_t *>(buffer);
+  int fd;
+  buffer_allocator_->GetFd((void *)handle, fd);
+  uint32_t width, height, unaligned_width, unaligned_height = 0;
+  int32_t format, flags = 0;
+  uint64_t id = 0;
+  buffer_allocator_->GetWidth((void *)handle, width);
+  buffer_allocator_->GetHeight((void *)handle, height);
+  buffer_allocator_->GetUnalignedWidth((void *)handle, unaligned_width);
+  buffer_allocator_->GetUnalignedHeight((void *)handle, unaligned_height);
+  buffer_allocator_->GetFormat((void *)handle, format);
+  buffer_allocator_->GetPrivateFlags((void *)handle, flags);
+  buffer_allocator_->GetBufferId((void *)handle, id);
+
+  if (!handle) {
+    DLOGE("Bad parameter: handle is null");
+    return HWC3::Error::BadParameter;
+  }
+
+  if (fd < 0) {
+    DLOGE("Bad parameter: fd is null");
     return HWC3::Error::BadParameter;
   }
 
   // Configure the output buffer as Readback buffer
-  output_buffer_.width = UINT32(handle->width);
-  output_buffer_.height = UINT32(handle->height);
-  output_buffer_.unaligned_width = UINT32(handle->unaligned_width);
-  output_buffer_.unaligned_height = UINT32(handle->unaligned_height);
-  output_buffer_.format = HWCLayer::GetSDMFormat(handle->format, handle->flags);
-  output_buffer_.planes[0].fd = handle->fd;
-  output_buffer_.planes[0].stride = UINT32(handle->width);
-  output_buffer_.acquire_fence_fd = dup(acquire_fence);
-  output_buffer_.release_fence_fd = -1;
-  output_buffer_.handle_id = handle->id;
+  output_buffer_.width = UINT32(width);
+  output_buffer_.height = UINT32(height);
+  output_buffer_.unaligned_width = UINT32(unaligned_width);
+  output_buffer_.unaligned_height = UINT32(unaligned_height);
+  output_buffer_.format = HWCLayer::GetSDMFormat(format, flags);
+  output_buffer_.planes[0].fd = fd;
+  output_buffer_.planes[0].stride = UINT32(width);
+  output_buffer_.acquire_fence_fd = acquire_fence;
+  output_buffer_.handle_id = id;
 
   post_processed_output_ = post_processed_output;
   readback_buffer_queued_ = true;
