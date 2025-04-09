@@ -44,13 +44,9 @@ endif
 ifneq ( ,$(filter Baklava 16, $(PLATFORM_VERSION)))
 $(warning "Android-16 compiling AIDL composer3 V4")
 $(call soong_config_set,display_config_composer3,vndk, version_4)
-$(warning "Android-16 using graphics common ndk V6")
-$(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version_6)
 else
 $(warning "Android-V compiling AIDL composer V3")
 $(call soong_config_set,display_config_composer3,vndk, version_3)
-$(warning "Android-V using graphics common ndk V5")
-$(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version_5)
 endif
 
 ifneq ($(TARGET_IS_HEADLESS),true)
