@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -51,6 +51,11 @@ using aidl::android::hardware::graphics::composer3::DisplayRequest;
 using aidl::android::hardware::graphics::composer3::PresentFence;
 using aidl::android::hardware::graphics::composer3::PresentOrValidate;
 using aidl::android::hardware::graphics::composer3::ReleaseFences;
+#ifdef COMPOSER3_V4
+using aidl::android::hardware::graphics::composer3::DisplayLuts;
+using aidl::android::hardware::graphics::composer3::LutProperties;
+using aidl::android::hardware::graphics::composer3::Luts;
+#endif
 
 class ComposerServiceWriter {
  public:
@@ -138,6 +143,23 @@ class ComposerServiceWriter {
     clientTargetPropertyWithBrightness.dimmingStage = dimmingStage;
     mCommandsResults.emplace_back(std::move(clientTargetPropertyWithBrightness));
   }
+
+#ifdef COMPOSER3_V4
+  void setDisplayLuts(int64_t display, const std::vector<int64_t> &layers,
+                      const std::vector<Luts> &luts, std::vector<::ndk::ScopedFileDescriptor> fds) {
+    DisplayLuts displayLuts;
+    displayLuts.display = display;
+    displayLuts.layerLuts.reserve(layers.size());
+    for (int i = 0; i < layers.size(); i++) {
+      auto layerLut = DisplayLuts::LayerLut{.layer = layers[i],
+                                            .luts.pfd = std::move(fds[i]),
+                                            .luts.offsets = luts[i].offsets,
+                                            .luts.lutProperties = luts[i].lutProperties};
+      displayLuts.layerLuts.emplace_back(std::move(layerLut));
+    }
+    mCommandsResults.emplace_back(std::move(displayLuts));
+  }
+#endif
 
   std::vector<CommandResultPayload> getPendingCommandResults() {
     return std::move(mCommandsResults);
