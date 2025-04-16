@@ -388,8 +388,10 @@ unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int
         size = ALIGN((alignedw * alignedh) + (alignedw * alignedh) / 2 + 1, SIZE_4K);
         break;
       case HAL_PIXEL_FORMAT_YCbCr_420_P010:
+#ifdef __MAPPER_VERSION_3__
         size = ALIGN((alignedw * alignedh * 2) + (alignedw * alignedh) + 1, SIZE_4K);
         break;
+#endif
       case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
 #ifdef __MIN_ANDROID_VER_T__
         size = MMM_COLOR_FMT_BUFFER_SIZE(MMM_COLOR_FMT_P010, width, height);
@@ -656,10 +658,12 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
     case HAL_PIXEL_FORMAT_Y8:
       c_size = 0;
       break;
+#ifdef __MAPPER_VERSION_3__
     case HAL_PIXEL_FORMAT_YCbCr_420_P010:
       c_size = (width * height) + 1;
       c_height = height;
       break;
+#endif
     default:
       break;
   }
@@ -1238,8 +1242,10 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
     case HAL_PIXEL_FORMAT_YCbCr_422_I:
     case HAL_PIXEL_FORMAT_YCrCb_422_I:
     case HAL_PIXEL_FORMAT_YCbCr_420_P010:
+#ifdef __MAPPER_VERSION_3__
       aligned_w = ALIGN(width, 16);
       break;
+#endif
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
 #ifdef __MIN_ANDROID_VER_T__
       aligned_w = INT(MMM_COLOR_FMT_Y_STRIDE(MMM_COLOR_FMT_P010, width) / 2);
@@ -1665,18 +1671,6 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       }
       break;
 
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-      *plane_count = 2;
-      GetYuvSPPlaneInfo(info, format, width, height, 2, plane_info);
-      GetYuvSubSamplingFactor(format, &h_subsampling, &v_subsampling);
-      plane_info[0].h_subsampling = 0;
-      plane_info[0].v_subsampling = 0;
-      plane_info[0].step = 2;
-      plane_info[1].h_subsampling = h_subsampling;
-      plane_info[1].v_subsampling = v_subsampling;
-      plane_info[1].step = 4;
-      break;
-
     case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
       *plane_count = 4;
 #ifdef __MIN_ANDROID_VER_T__
@@ -1714,6 +1708,20 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
       plane_info[2].v_subsampling = plane_info[3].v_subsampling = 0;
       plane_info[2].step = plane_info[3].step = 0;
       break;
+
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
+#ifdef __MAPPER_VERSION_3__
+      *plane_count = 2;
+      GetYuvSPPlaneInfo(info, format, width, height, 2, plane_info);
+      GetYuvSubSamplingFactor(format, &h_subsampling, &v_subsampling);
+      plane_info[0].h_subsampling = 0;
+      plane_info[0].v_subsampling = 0;
+      plane_info[0].step = 2;
+      plane_info[1].h_subsampling = h_subsampling;
+      plane_info[1].v_subsampling = v_subsampling;
+      plane_info[1].step = 4;
+      break;
+#endif
 
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
       *plane_count = 2;
