@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -520,6 +520,14 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC},
           {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_4R},
            HAL_PIXEL_FORMAT_YCbCr_420_SP_4R_UBWC},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           static_cast<int>(SnapPixelFormat::NV12_UBWC_MIPMAP)},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           static_cast<int>(SnapPixelFormat::TP10_UBWC_MIPMAP)},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
+           static_cast<int>(SnapPixelFormat::P010_MIPMAP)},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
+           static_cast<int>(SnapPixelFormat::NV12_MIPMAP)},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -653,6 +661,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::RGBA_4444},
           {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::YCbCr_420_SP},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
+           SnapPixelFormat::P010_MIPMAP},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
+           SnapPixelFormat::NV12_MIPMAP},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -677,7 +689,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::YCBCR_P010},
           {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            SnapPixelFormat::YCBCR_P210},
-
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           SnapPixelFormat::NV12_UBWC_MIPMAP},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           SnapPixelFormat::TP10_UBWC_MIPMAP},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -714,6 +729,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC},
           {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           static_cast<int>(SnapPixelFormat::NV12_UBWC_MIPMAP)},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           static_cast<int>(SnapPixelFormat::TP10_UBWC_MIPMAP)},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_ubwc_to_snap_format_;
@@ -1484,6 +1503,14 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_YCbCr_422_P210},
           {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC},
            HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           static_cast<int>(SnapPixelFormat::NV12_UBWC_MIPMAP)},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
+           static_cast<int>(SnapPixelFormat::TP10_UBWC_MIPMAP)},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
+           static_cast<int>(SnapPixelFormat::P010_MIPMAP)},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
+           static_cast<int>(SnapPixelFormat::NV12_MIPMAP)},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;

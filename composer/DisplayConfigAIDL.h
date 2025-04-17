@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -70,7 +70,7 @@
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
 #include "sdm_display_intf_lifecycle.h"
-#include "sdm_display_intf_drawcycle.h"
+#include "sdm_display_intf_drawcycle_v2.h"
 #include "sdm_display_intf_sideband.h"
 #include "sdm_display_intf_layer_builder.h"
 #include "QServiceBackend.h"
@@ -123,13 +123,21 @@ using sdm::GLColorConvert;
 using sdm::GLLayerStitch;
 using sdm::GLRect;
 using sdm::SDMDisplayCapsIntf;
-using sdm::SDMDisplayDrawCycleIntf;
 using sdm::SDMDisplayLayerBuilderIntf;
 using sdm::SDMDisplayLifeCycleIntf;
 using sdm::SDMDisplaySettingsIntf;
 using sdm::SDMDisplaySideBandIntf;
 using sdm::SDMSideBandCompositorCbIntf;
 using sdm::HWC3::Error;
+
+// interface support for shared pointers is only present from composer3_v3
+#ifdef COMPOSER3_V3
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntfV2
+#else
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntf
+#endif
+
+using sdm::SDMDisplayDrawCycleIntfV;
 
 class DisplayConfigCallback : public BnDisplayConfigCallback {
  public:
@@ -271,7 +279,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
   std::shared_ptr<SDMDisplaySettingsIntf> settings_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
-  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle_;
   std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
   std::shared_ptr<SDMDisplayLayerBuilderIntf> layer_builder_;
   sdm::Locker *locker_ = nullptr;

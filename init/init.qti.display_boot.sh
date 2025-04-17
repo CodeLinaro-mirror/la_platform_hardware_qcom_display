@@ -57,6 +57,23 @@ case "$target" in
         ;;
     esac
     ;;
+    "seraph")
+    # SOC ID for Seraph is 672
+    # SOC ID for Seraph is 673
+    case "$soc_hwid" in
+      672|673)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        ;;
+    esac
+    ;;
     "sun")
     #SOC ID for Sun is 618
     #SOC ID for Sun APQ is 639
