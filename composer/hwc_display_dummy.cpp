@@ -28,7 +28,7 @@
 
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -38,6 +38,18 @@
 #define __CLASS__ "HWCDisplayDummy"
 
 namespace sdm {
+
+struct DummyMode {
+    int32_t id = 0;
+    int32_t width = 1920;
+    int32_t height = 1080;
+    int32_t x_dpi = 300.0f;
+    int32_t y_dpi = 300.0f;
+    int32_t fps = 60;
+    int64_t vsync_period_ns = 16666666;  // 60Hz
+    int32_t configGroup = 0;
+};
+static DummyMode kDummyMode;
 
 int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                             HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
@@ -57,6 +69,9 @@ int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_al
                                                       primary_width, primary_height);
   hwc_display_dummy->SetValidationState(HWCDisplay::kSkipValidate);
   *hwc_display = hwc_display_dummy;
+  kDummyMode.width = primary_width;
+  kDummyMode.height = primary_height;
+
   return kErrorNone;
 }
 
@@ -158,6 +173,25 @@ HWC2::Error HWCDisplayDummy::SetActiveConfigWithConstraints(
 
   ALOGI("Config change not allowed in async power mode transition");
   return HWC2::Error::Unsupported;
+}
+
+
+int HWCDisplayDummy::GetDisplayAttributesForConfig(int config,
+                                            DisplayConfigVariableInfo *display_attributes) {
+  HWC2::Error status = HWC2::Error::BadConfig;
+
+  ALOGI("GetDisplayAttributesForConfig for null display with  config id %d", config);
+
+  if(config == kDummyMode.id && display_attributes != NULL) {
+    display_attributes->x_pixels = kDummyMode.width;
+    display_attributes->y_pixels = kDummyMode.height;
+    display_attributes->x_dpi = kDummyMode.x_dpi;
+    display_attributes->y_dpi = kDummyMode.y_dpi;
+    display_attributes->fps = kDummyMode.fps;
+    display_attributes->vsync_period_ns = kDummyMode.vsync_period_ns;
+    status = HWC2::Error::None;
+  }
+  return (int)(status);
 }
 
 }  // namespace sdm
