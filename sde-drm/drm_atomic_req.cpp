@@ -165,6 +165,7 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::CONNECTOR_SET_OUTPUT_FB_ID:
     case DRMOps::CONNECTOR_SET_POWER_MODE:
     case DRMOps::CONNECTOR_SET_ROI:
+    case DRMOps::CONNECTOR_SET_BRIGHTNESS:
     case DRMOps::CONNECTOR_SET_AUTOREFRESH:
     case DRMOps::CONNECTOR_SET_FB_SECURE_MODE:
     case DRMOps::CONNECTOR_SET_POST_PROC:
