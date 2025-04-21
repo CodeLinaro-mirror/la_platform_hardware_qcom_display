@@ -1144,6 +1144,11 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
     return Error::BAD_BUFFER;
   }
 
+  if (bufferid_view_map_.find(hnd->id()) != bufferid_view_map_.end()) {
+    ALOGD_IF(DEBUG, "Erasing buf_id %d from bufferid_view_map_", hnd->id());
+    bufferid_view_map_.erase(hnd->id());
+  }
+
   auto meta_size = getMetaDataSize(hnd->reserved_size());
 
   if (allocator_->FreeBuffer(
@@ -2392,6 +2397,62 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 }
 
 #else
+Error BufferManager::GetViewToImport(private_handle_t *handle, const uint32_t view_requested,
+                                     uint32_t *view) {
+  // Get BufID
+  uint32_t buf_id_index_0 = handle->id();
+  // Init with default order 0-L & 1-R
+  uint32_t view_id_from_metadata = PRIV_VIEW_MASK_PRIMARY;
+  uint32_t left_id_from_sei = PRIV_VIEW_MASK_PRIMARY;
+  uint32_t right_id_from_sei = PRIV_VIEW_MASK_SECONDARY;
+
+  // Based on buf_id get viewId, SEI_left_id, SEI_right_id
+  if (bufferid_view_map_.find(buf_id_index_0) != bufferid_view_map_.end()) {
+    auto entry = bufferid_view_map_.at(buf_id_index_0);
+    view_id_from_metadata = entry.first;
+    left_id_from_sei = entry.second.left_id;
+    right_id_from_sei = entry.second.right_id;
+  } else {
+    ALOGW_IF(DEBUG, "Buffer_view_sei data mapping not found. Returning requested view: %d",
+             view_requested);
+    *view = view_requested;
+    return Error::UNSUPPORTED;
+  }
+
+  if (view_id_from_metadata == 0 || (left_id_from_sei == 0 && right_id_from_sei == 0)) {
+    ALOGW_IF(DEBUG, "ViewID or SEI metadata not set. Returning requested view: %d", view_requested);
+    *view = view_requested;
+    return Error::UNSUPPORTED;
+  }
+
+  // Get the view_id for requested view
+  uint32_t view_to_compare = view_requested;
+  if (view_requested == PRIV_VIEW_MASK_PRIMARY) {
+    view_to_compare = left_id_from_sei;
+    ALOGD_IF(DEBUG, "View to compare is left as requested is primary");
+  } else if (view_requested == PRIV_VIEW_MASK_SECONDARY) {
+    view_to_compare = right_id_from_sei;
+    ALOGD_IF(DEBUG, "view to compare is right as requested is secondary");
+  }
+
+  if (view_id_from_metadata == view_to_compare) {
+    ALOGD_IF(DEBUG, "View set in metadata is same as buf_index 0. returning primary view");
+    *view = PRIV_VIEW_MASK_PRIMARY;
+  } else {
+    ALOGD_IF(DEBUG, "View set in metadata is not same as buf_index 0. returning secondary view");
+    *view = PRIV_VIEW_MASK_SECONDARY;
+  }
+
+  ALOGD_IF(
+      DEBUG,
+      "view_requested %d view_id_from_metadata %d , left_id_from_sei %d, right_id_from_sei %d, "
+      "view_to_compare %d, view returned %d",
+      view_requested, view_id_from_metadata, left_id_from_sei, right_id_from_sei, view_to_compare,
+      *view);
+
+  return Error::NONE;
+}
+
 Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved_region,
                                        uint64_t *reserved_region_size) {
   std::shared_lock<std::shared_mutex> lock(buffer_lock_);
@@ -3066,6 +3127,24 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
           IMapper_4_0_Error::NONE) {
         return Error::UNSUPPORTED;
       }
+#ifdef MULTI_VIEW_SUPPORT
+      if (bufferid_view_map_.find(handle->id()) != bufferid_view_map_.end()) {
+        ALOGD_IF(DEBUG, "%s: buf id:%d exists in map", __FUNCTION__, handle->id());
+        auto &entry = bufferid_view_map_.at(handle->id());
+        ViewMapping mapping_entry = {
+            .left_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id,
+            .right_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id};
+        entry.second = mapping_entry;
+      } else {
+        ALOGD_IF(DEBUG, "%s: buf id:%d does not exist in map.Creating new entry", __FUNCTION__,
+                 handle->id());
+        ViewMapping mapping_entry = {
+            .left_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id,
+            .right_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id};
+        std::pair<uint32_t, ViewMapping> entry = {0, mapping_entry};
+        bufferid_view_map_.emplace(std::make_pair(handle->id(), entry));
+      }
+#endif
       break;
 #endif
 #ifdef QTI_VIEW_ID
@@ -3074,6 +3153,18 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
                                           &metadata->viewId)) {
         return Error::UNSUPPORTED;
       }
+#ifdef MULTI_VIEW_SUPPORT
+      if (bufferid_view_map_.find(handle->id()) != bufferid_view_map_.end()) {
+        ALOGD_IF(DEBUG, "%s: buf id:%d exists in map", __FUNCTION__, handle->id());
+        auto &entry = bufferid_view_map_.at(handle->id());
+        entry.first = metadata->viewId;
+      } else {
+        ALOGD_IF(DEBUG, "%s: buf id:%d does not exist in map.Creating new entry", __FUNCTION__,
+                 handle->id());
+        std::pair<uint32_t, ViewMapping> entry = {metadata->viewId, {}};
+        bufferid_view_map_.emplace(std::make_pair(handle->id(), entry));
+      }
+#endif
       break;
 #endif
     default:
