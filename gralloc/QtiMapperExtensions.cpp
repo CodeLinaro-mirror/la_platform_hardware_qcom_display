@@ -25,11 +25,9 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -614,8 +612,15 @@ Return<void> QtiMapperExtensions::importViewBuffer(void *bufferHandle, uint32_t 
     return Void();
   }
 
-  private_handle_t* view_handle =
-      static_cast<private_handle_t *>(bufferHandle)->CreateViewHandle(view);
+  uint32_t view_to_import = view;
+  auto err = static_cast<Error>(buf_mgr_->GetViewToImport(
+      static_cast<private_handle_t *>(bufferHandle), view, &view_to_import));
+  if (err != Error::NONE) {
+    ALOGW_IF(DEBUG, "%s: Error in GetViewToImport: requested_view %d", __FUNCTION__, view);
+  }
+
+  private_handle_t *view_handle =
+      static_cast<private_handle_t *>(bufferHandle)->CreateViewHandle(view_to_import);
   if (!view_handle) {
     ALOGE("%s: Unable to create view handle", __FUNCTION__);
     error = Error::NO_RESOURCES;
