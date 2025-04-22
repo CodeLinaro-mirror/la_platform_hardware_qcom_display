@@ -345,7 +345,7 @@ static Error getColorSpaceFromMetaData(ColorMetaData color_metadata, uint32_t *c
     default:
       err = Error::UNSUPPORTED;
       *color_space = 0;
-      ALOGW("Unknown Color primary = %d", color_metadata.colorPrimaries);
+      ALOGW_IF(DEBUG, "Unknown Color primary = %d", color_metadata.colorPrimaries);
       break;
   }
   return err;
