@@ -1132,8 +1132,9 @@ bool AidlComposerClient::CommandEngine::init() {
 }
 
 void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCommand &displayCmd) {
+  bool performing_commit = (displayCmd.presentOrValidateDisplay || displayCmd.validateDisplay);
   ExecuteCommand(displayCmd.brightness, &CommandEngine::executeSetDisplayBrightness,
-                 displayCmd.display, *displayCmd.brightness);
+                 displayCmd.display, *displayCmd.brightness, performing_commit);
   ExecuteCommand(displayCmd.colorTransformMatrix, &CommandEngine::executeSetColorTransform,
                  displayCmd.display, *displayCmd.colorTransformMatrix);
   ExecuteCommand(displayCmd.clientTarget, &CommandEngine::executeSetClientTarget,
@@ -1364,14 +1365,15 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
 }
 
 void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
-    uint64_t display, const DisplayBrightness &command) {
+    uint64_t display, const DisplayBrightness &command, bool performing_commit) {
   if (std::isnan(command.brightness) || command.brightness > 1.0f ||
       (command.brightness < 0.0f && command.brightness != -1.0f)) {
     writeError(__FUNCTION__, Error::BadParameter);
     return;
   }
 
-  auto err = mClient.settings_->SetDisplayBrightness(display, command.brightness);
+  auto err =
+      mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }

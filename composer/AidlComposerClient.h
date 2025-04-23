@@ -370,7 +370,8 @@ class AidlComposerClient : public BnComposerClient,
     // Commands from aidl::android::hardware::graphics::composer3::IComposerClient follow.
     void executeSetColorTransform(int64_t display, const std::vector<float> &matrix);
     void executeSetClientTarget(int64_t display, const ClientTarget &command);
-    void executeSetDisplayBrightness(uint64_t display, const DisplayBrightness &command);
+    void executeSetDisplayBrightness(uint64_t display, const DisplayBrightness &command,
+                                     bool performing_commit);
     void executeSetOutputBuffer(uint64_t display, const Buffer &buffer);
     void executeValidateDisplay(int64_t display,
                                 const std::optional<ClockMonotonicTimestamp> expectedPresentTime,
