@@ -1197,6 +1197,11 @@ HWC3::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
     }
   }
 
+  if (!core_intf_) {
+    DLOGE("%s: core_intf_ not initialized.", __func__);
+    return HWC3::Error::BadDisplay;
+  }
+
   HWDisplaysInfo hw_displays_info = {};
   DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
   if (error != kErrorNone) {
@@ -2291,6 +2296,10 @@ void HWCSession::UEventHandler(const char *uevent_data, int length) {
 
     if (str_plane || str_handoff) {
       NotifierInterface *notifier = NULL;
+      if (!core_intf_) {
+        DLOGE("%s: core_intf_ not initialized.", __func__);
+        return;
+      }
       core_intf_->GetNotifierInterface(&notifier);
       if (notifier) {
         if (str_plane) {
@@ -2439,6 +2448,10 @@ int HWCSession::CreatePrimaryDisplay() {
     hw_info.display_id = 1;
     hw_displays_info[hw_info.display_id] = hw_info;
   } else {
+    if (!core_intf_) {
+      DLOGE("%s: core_intf_ not initialized.", __func__);
+      return -ENOENT;
+    }
     DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
     if (error != kErrorNone) {
       DLOGE("Failed to get connected display list. Error = %d", error);
@@ -2518,6 +2531,11 @@ int HWCSession::HandleBuiltInDisplays() {
     return 0;
   }
 
+  if (!core_intf_) {
+    DLOGE("%s: core_intf_ not initialized.", __func__);
+    return -ENOENT;
+  }
+
   HWDisplaysInfo hw_displays_info = {};
   DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
   if (error != kErrorNone) {
@@ -2575,6 +2593,10 @@ int HWCSession::HandlePluggableDisplays(bool delay_hotplug) {
     return 0;
   }
 
+  if (!core_intf_) {
+    DLOGE("%s: core_intf_ not initialized.", __func__);
+    return -ENOENT;
+  }
   DLOGI("Handling hotplug...");
   HWDisplaysInfo hw_displays_info = {};
   DisplayError error = core_intf_->GetDisplaysStatus(&hw_displays_info);
