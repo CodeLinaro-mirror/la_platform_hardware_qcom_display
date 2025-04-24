@@ -59,10 +59,11 @@ DisplayError DisplayVirtual::Init() {
   ClientLock lock(disp_mutex_);
 
   DisplayError error = kErrorNone;
-  dpu_core_mux_ = new DPUCoreMux(display_id_info_, kVirtual, hw_info_intf_, buffer_allocator_);
+  dpu_core_mux_ =
+      DPUCoreMux::CreateCoreMux(display_id_info_, kVirtual, hw_info_intf_, buffer_allocator_);
 
-  if (error != kErrorNone) {
-    return error;
+  if (dpu_core_mux_ == nullptr) {
+    return kErrorUndefined;
   }
 
   dpu_core_mux_->GetHWInterface(&hw_intf_);
