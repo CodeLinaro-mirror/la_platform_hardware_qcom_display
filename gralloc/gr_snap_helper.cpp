@@ -2928,7 +2928,10 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
     ALOGD_IF(enable_logs_, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
              gr_desc.GetName().c_str(), snap_desc.name);
   }
-  if (!snapallocator_->IsFormatSupportedByGPU(snap_desc)) {
+  std::string gr_desc_name = gr_desc.GetName().c_str();
+  if (!snapallocator_->IsFormatSupportedByGPU(snap_desc) && (gr_desc.GetUsage() & GPU_RENDER_TARGET || gr_desc.GetUsage() & GPU_TEXTURE)
+      && (gr_desc_name.find("AHardwareBuffer") != std::string::npos)) {
+	  ALOGE("VJ ======================== not supported");
      return SnapError::UNSUPPORTED;
   }
   return SnapError::NONE;
