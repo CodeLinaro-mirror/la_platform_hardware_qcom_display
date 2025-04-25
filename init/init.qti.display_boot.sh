@@ -39,6 +39,22 @@ else
 fi
 
 case "$target" in
+    "vienna")
+    #SOC ID for Vienna is 669, Vienna P is 670
+    case "$soc_hwid" in
+      669|670)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        ;;
+    esac
+    ;;
     "canoe")
     # SOC ID for Canoe is 660
     # SOC ID for Canoe APQ is 661
@@ -54,6 +70,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
         ;;
     esac
     ;;
