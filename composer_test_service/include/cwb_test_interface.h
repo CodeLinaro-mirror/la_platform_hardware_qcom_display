@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -21,8 +21,8 @@ struct CWBConfig {
   /* target display */
   DisplayType disp = DisplayType::PRIMARY;
 
-  /* flag to specify DSPP output */
-  bool post_processed = false;
+  /* flag to control CWB output */
+  int32_t cwb_control_flag = 0;
 
   /* format of the output buffer */
   LayerBufferFormat format = kFormatRGBA8888;
