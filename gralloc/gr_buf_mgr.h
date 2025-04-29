@@ -74,6 +74,9 @@ class BufferManager {
 
 #ifdef MULTI_VIEW_SUPPORT
   Error AllocateBuffer(AllocData *ad, AllocData *m_data, uint64_t usage, int format);
+  Error SetAllocMetadata(private_handle_t *hnd, int buffer_type, uint64_t usage,
+                         GraphicsMetadata& graphics_metadata,
+                         const BufferDescriptor &descriptor);
 #endif  // MULTI_VIEW_SUPPORT
 
   // Imports the ion fds into the current process. Returns an error for invalid handles

@@ -1188,6 +1188,40 @@ Error BufferManager::AllocateBuffer(AllocData *ad, AllocData *m_data, uint64_t u
   return Error::NONE;
 }
 
+Error BufferManager::SetAllocMetadata(private_handle_t *hnd, int buffer_type, uint64_t usage,
+                                      GraphicsMetadata& graphics_metadata,
+                                      const BufferDescriptor &descriptor) {
+  bool use_adreno_for_size = CanUseAdrenoForSize(buffer_type, usage);
+  if (use_adreno_for_size) {
+    setMetaDataAndUnmap(hnd, SET_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
+  }
+
+  auto error = ValidateAndMap(hnd);
+
+  if (error != 0) {
+    ALOGE("ValidateAndMap failed");
+    return Error::BAD_BUFFER;
+  }
+  auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata());
+  auto nameLength = std::min(descriptor.GetName().size(), size_t(MAX_NAME_LEN - 1));
+  nameLength = descriptor.GetName().copy(metadata->name, nameLength);
+  metadata->name[nameLength] = '\0';
+
+#ifdef METADATA_V2
+  metadata->reservedSize = descriptor.GetReservedSize();
+#else
+  metadata->reservedRegion.size =
+      std::min(descriptor.GetReservedSize(), (uint64_t)RESERVED_REGION_SIZE);
+#endif
+  metadata->crop.top = 0;
+  metadata->crop.left = 0;
+  metadata->crop.right = hnd->width();
+  metadata->crop.bottom = hnd->height();
+
+  UnmapAndReset(hnd);
+  return Error::NONE;
+}
+
 Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_handle_t *handle,
                                     unsigned int bufferSize, bool testAlloc) {
   if (!handle)
@@ -1276,34 +1310,25 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
     return Error::NO_RESOURCES;
   }
 
-  bool use_adreno_for_size = CanUseAdrenoForSize(buffer_type, usage);
-  if (use_adreno_for_size) {
-    setMetaDataAndUnmap(hnd, SET_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
+  auto error = SetAllocMetadata(hnd, buffer_type, usage, graphics_metadata, descriptor);
+  if (error != Error::NONE) {
+    return error;
   }
 
-  auto error = ValidateAndMap(hnd);
+  if (usage & GRALLOC_USAGE_PRIVATE_MULTIVIEW) {
+    private_handle_t* view_handle = hnd->CreateViewHandle(PRIV_VIEW_MASK_SECONDARY);
+    if (!view_handle) {
+      ALOGE("Failed to create secondary view handle");
+      return Error::NO_RESOURCES;
+    }
 
-  if (error != 0) {
-    ALOGE("ValidateAndMap failed");
-    return Error::BAD_BUFFER;
+    error = SetAllocMetadata(view_handle, buffer_type, usage, graphics_metadata, descriptor);
+    view_handle->closeFds();
+    free(view_handle);
+    if (error != Error::NONE) {
+      return error;
+    }
   }
-  auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata());
-  auto nameLength = std::min(descriptor.GetName().size(), size_t(MAX_NAME_LEN - 1));
-  nameLength = descriptor.GetName().copy(metadata->name, nameLength);
-  metadata->name[nameLength] = '\0';
-
-#ifdef METADATA_V2
-  metadata->reservedSize = descriptor.GetReservedSize();
-#else
-  metadata->reservedRegion.size =
-      std::min(descriptor.GetReservedSize(), (uint64_t)RESERVED_REGION_SIZE);
-#endif
-  metadata->crop.top = 0;
-  metadata->crop.left = 0;
-  metadata->crop.right = hnd->width();
-  metadata->crop.bottom = hnd->height();
-
-  UnmapAndReset(hnd);
 
   *handle = hnd;
 
