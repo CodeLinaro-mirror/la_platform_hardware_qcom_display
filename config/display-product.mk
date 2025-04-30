@@ -236,9 +236,34 @@ SOONG_CONFIG_qtidisplay_var2 := false
 SOONG_CONFIG_qtidisplay_var3 := false
 SOONG_CONFIG_qtidisplay_llvmcov := false
 SOONG_CONFIG_qtidisplay_smmu_proxy := false
-SOONG_CONFIG_qtidisplay_composer_version := v3
-ifeq ($(PLATFORM_VERSION), 15)
-    SOONG_CONFIG_qtidisplay_composer_version := v3_3
+SOONG_CONFIG_qtidisplay_composer_version := v3_4
+
+# Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
+# PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
+# PLATFORM_VERSION contains the version number of the current Android version.
+# Before FRC, PLATFORM_VERSION matches with PLATFORM_VERSION_CODENAME.
+# Example:
+# Android V (After FRC)
+#   PLATFORM_VERSION_CODENAME = VanillaIceCream, PLATFORM_VERSION = 15
+# Android W (Before FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = W
+# Android W (After FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = 16
+
+# BEFORE FRC
+ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_4
+    endif
+# AFTER FRC
+else
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 14))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_2
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 15))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_3
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_4
+    endif
 endif
 
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
