@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -51,7 +51,9 @@
 namespace composer3 = aidl::android::hardware::graphics::composer3;
 using aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::Hdr;
+#ifdef COMPOSER3_V3
 using DisplayConfiguration = composer3::DisplayConfiguration;
+#endif
 using composer3::ColorMode;
 using composer3::RenderIntent;
 using HwcAttribute = composer3::DisplayAttribute;
@@ -346,7 +348,9 @@ class HWCDisplay : public DisplayEventHandler {
     return HWC3::Error::Unsupported;
   }
   virtual HWC3::Error GetDisplayConfigs(uint32_t *out_num_configs, Config *out_configs);
+#ifdef COMPOSER3_V3
   virtual HWC3::Error GetDisplayConfigurations(std::vector<DisplayConfiguration> *outConfigs);
+#endif
   virtual HWC3::Error GetDisplayAttribute(Config config, HwcAttribute attribute,
                                           int32_t *out_value);
   virtual HWC3::Error GetClientTargetSupport(uint32_t width, uint32_t height, int32_t format,

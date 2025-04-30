@@ -71,7 +71,9 @@ using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 namespace composer3 = aidl::android::hardware::graphics::composer3;
+#ifdef COMPOSER3_V3
 using DisplayConfiguration = composer3::DisplayConfiguration;
+#endif
 using HwcDisplayCapability = composer3::DisplayCapability;
 using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
@@ -243,8 +245,10 @@ class HWCSession : public HWCUEvent,
   HWC3::Error GetDisplayType(Display display, int32_t *out_type);
   HWC3::Error GetDisplayAttribute(Display display, Config config, HwcAttribute attribute,
                                   int32_t *out_value);
+  #ifdef COMPOSER3_V3
   HWC3::Error GetDisplayConfigurations(Display display,
                                        std::vector<DisplayConfiguration> *out_configs);
+  #endif
   HWC3::Error GetActiveConfig(Display display, Config *out_config);
   HWC3::Error GetColorModes(Display display, uint32_t *out_num_modes,
                             int32_t /*ColorMode*/ *int_out_modes);

@@ -17,7 +17,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -281,6 +281,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
   return TO_BINDER_STATUS(INT32(error));
 }
 
+#ifdef COMPOSER3_V3
 ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     int64_t in_display, int32_t maxFrameIntervalNs,
     std::vector<DisplayConfiguration> *out_configs) {
@@ -294,6 +295,7 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
   Error error = Error::Unsupported;
   return TO_BINDER_STATUS(INT32(error));
 }
+#endif
 
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
@@ -853,15 +855,17 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
                    displayCmd.display, *displayCmd.clientTarget);
     ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
                    displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
-    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
-                   displayCmd.display, displayCmd.expectedPresentTime);
     ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
                    displayCmd.display);
     ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
                    displayCmd.display);
+#ifdef COMPOSER3_V3
+    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                   displayCmd.display, displayCmd.expectedPresentTime);
     ExecuteCommand(displayCmd.presentOrValidateDisplay,
                    &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                    displayCmd.expectedPresentTime);
+#endif
 
     ++mCommandIndex;
 
