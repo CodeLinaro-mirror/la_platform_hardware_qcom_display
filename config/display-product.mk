@@ -204,16 +204,15 @@ SOONG_CONFIG_qtidisplay_mapper_ext := true
 # Android W (After FRC)
 #   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = 16
 
-# TODO: Update VanillaIceCream to Android W's code name
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
-    # TODO: Update VanillaIceCream to Android W's code name
-    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream))
-        SOONG_CONFIG_qtidisplay_composer_version := v3_4
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_4
     endif
 else
-    # TODO: Add Android W's code name and version number
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream 15))
       SOONG_CONFIG_qtidisplay_composer_version := v3_3
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+      SOONG_CONFIG_qtidisplay_composer_version := v3_4
     endif
 endif
 
