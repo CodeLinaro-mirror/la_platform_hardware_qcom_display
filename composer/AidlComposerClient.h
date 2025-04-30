@@ -29,6 +29,7 @@
 #include <string>
 #include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
+#include <aidl/android/hardware/graphics/composer3/Luts.h>
 #include <aidlcommonsupport/NativeHandle.h>
 #include "hwc_session.h"
 #include "AidlComposerHandleImporter.h"
@@ -80,6 +81,7 @@ using aidl::android::hardware::graphics::composer3::FormatColorComponent;
 using aidl::android::hardware::graphics::composer3::HdrCapabilities;
 using aidl::android::hardware::graphics::composer3::IComposerCallback;
 using aidl::android::hardware::graphics::composer3::LayerBrightness;
+using aidl::android::hardware::graphics::composer3::Luts;
 using aidl::android::hardware::graphics::composer3::OverlayProperties;
 using aidl::android::hardware::graphics::composer3::ParcelableBlendMode;
 using aidl::android::hardware::graphics::composer3::ParcelableComposition;
@@ -160,6 +162,11 @@ class AidlComposerClient : public BnComposerClient {
                                       int32_t frameIntervalNs) override;
 #endif
   ScopedAStatus getMaxLayerPictureProfiles(int64_t in_display, int32_t *_aidl_return);
+
+  ScopedAStatus startHdcpNegotiation(
+      int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) override;
+
+  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *) override;
 
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
                                        std::vector<DisplayCapability> *aidl_return) override;
