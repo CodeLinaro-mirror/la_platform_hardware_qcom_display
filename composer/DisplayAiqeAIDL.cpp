@@ -159,6 +159,12 @@ ScopedAStatus DisplayAiqeAIDL::setABCMode(int32_t disp_id, const std::string &mo
   return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
 }
 
+#ifdef COMPOSER3_V4
+ScopedAStatus DisplayAiqeAIDL::setAIScalerMode(int32_t disp_id, int32_t mode_id) {
+  return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+}
+#endif
+
 }  // End of namespace aiqe
 }  // End of namespace display
 }  // End of namespace hardware

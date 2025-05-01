@@ -34,12 +34,16 @@ class DisplayAiqeAIDL : public BnDisplayAiqe {
   ndk::ScopedAStatus setABCState(int32_t disp_id, int32_t enable) override;
   ndk::ScopedAStatus setABCReconfig(int32_t disp_id) override;
   ndk::ScopedAStatus setABCMode(int32_t disp_id, const std::string &mode_name) override;
+#ifdef COMPOSER3_V4
+  ndk::ScopedAStatus setAIScalerMode(int32_t disp_id, int32_t mode_id) override;
+#endif
 
  private:
   std::shared_ptr<sdm::SDMDisplayAiqeIntf> aiqe_intf_;
   std::shared_ptr<sdm::SDMDisplaySideBandIntf> sideband_;
   int ssrc_enable_ = 0;
   int abc_enable_ = 0;
+  int ai_scaler_enable_ = 0;
 };
 
 }  // End of namespace aiqe
