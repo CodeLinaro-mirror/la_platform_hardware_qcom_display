@@ -33,6 +33,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+
 #include <QtiGralloc.h>
 #include <aidl/vendor/qti/hardware/display/demura/IDemuraFileFinder.h>
 #include <android/binder_manager.h>
@@ -234,9 +235,9 @@ ScopedAStatus DisplayConfigAIDL::setPanelBrightness(int level) {
   }
 
   if (level == 0) {
-    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, -1.0f);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, -1.0f, false);
   } else {
-    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f, false);
   }
   return ScopedAStatus::ok();
 }
