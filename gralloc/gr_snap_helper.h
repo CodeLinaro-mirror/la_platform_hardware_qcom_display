@@ -528,6 +528,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            static_cast<int>(SnapPixelFormat::P010_MIPMAP)},
           {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
            static_cast<int>(SnapPixelFormat::NV12_MIPMAP)},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_1K_ALIGNED},
+           SnapPixelFormat::NV12_1024},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
+           SnapPixelFormat::YCBCR_P010_HEIF},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_1K_ALIGNED},
+           SnapPixelFormat::YCBCR_P010_1024},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -665,6 +671,12 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::P010_MIPMAP},
           {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
            SnapPixelFormat::NV12_MIPMAP},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_1K_ALIGNED},
+           SnapPixelFormat::NV12_1024},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_HEIF},
+           SnapPixelFormat::YCBCR_P010_HEIF},
+          {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_1K_ALIGNED},
+           SnapPixelFormat::YCBCR_P010_1024},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
