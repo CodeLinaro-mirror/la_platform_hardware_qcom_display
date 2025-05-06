@@ -208,7 +208,7 @@ case "$target" in
     ;;
     "parrot")
     case "$soc_hwid" in
-        537 | 583 | 613 | 631 | 633 | 634 | 638 | 663)
+        537 | 583 | 613 | 631 | 633 | 634 | 638 | 663 | 713 | 714)
         # Set property for Parrot
         # SOC ID for Gaming SKU with Modem is 633
         # SOC ID for Gaming SKU without Modem is 634
