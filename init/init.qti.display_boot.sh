@@ -154,13 +154,15 @@ case "$target" in
         setprop vendor.display.enable_qsync_idle 1
         setprop vendor.display.enable_allow_idle_fallback 1
         ;;
-        475|497|498|499|515)
+        475|497|498|499|515|575|576)
         # Set property for Yupik
         # SOC ID for Yupik is 475
         # SOC ID for Yupikp is 499
-        # SOC ID for Kodiak IOT 497
-        # SOC ID for Kodiak IOT with modem is 498
+        # SOC ID for Yupik IOT 497
+        # SOC ID for Yupik IOT with modem is 498
         # SOC ID for Faroe is 515
+        # SOC ID for QCS Yupik is 575
+        # SOC ID for QCM Yupik is 576
         setprop vendor.display.target.version 2
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
