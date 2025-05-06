@@ -40,22 +40,4 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
         <version>4</version>
         <fqname>IComposer/default</fqname>
     </hal>
-    <hal format="hidl">
-        <name>vendor.display.color</name>
-        <transport>hwbinder</transport>
-        <version>1.5</version>
-        <interface>
-            <name>IDisplayColor</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-    <hal format="hidl">
-        <name>vendor.display.postproc</name>
-        <transport>hwbinder</transport>
-        <version>1.0</version>
-        <interface>
-            <name>IDisplayPostproc</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
 </manifest>
