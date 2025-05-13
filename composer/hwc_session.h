@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -575,6 +575,7 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   void PerformQsyncCallback(Display display);
   bool isSmartPanelConfig(uint32_t disp_id, uint32_t config_id);
   void PerformIdleStatusCallback(Display display);
+  bool IsHWDisplayConnected(Display client_id);
 
   CoreInterface *core_intf_ = nullptr;
   HWCDisplay *hwc_display_[HWCCallbacks::kNumDisplays] = {nullptr};
