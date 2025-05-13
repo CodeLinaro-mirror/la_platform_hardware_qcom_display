@@ -25,13 +25,11 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-
-/*
-* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
 
 #define DEBUG 0
 
@@ -51,6 +49,7 @@
 #include "gr_camera_info.h"
 #include "gr_utils.h"
 #include "QtiGralloc.h"
+#include "color_extensions.h"
 
 #define ASTC_BLOCK_SIZE 16
 
@@ -2491,19 +2490,36 @@ bool CanAllocateZSLForSecureCamera() {
   return can_allocate;
 }
 
-uint64_t GetMetaDataSize(uint64_t reserved_region_size) {
+uint64_t GetCustomContentMetadataSize(int format, uint64_t usage) {
+#ifndef METADATA_V2
+  return 0;
+#else
+  if ((format == HAL_PIXEL_FORMAT_YCbCr_420_P010 ||
+       (format == HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC) ||
+       (format == HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC) ||
+       (format == HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS))) {
+    return sizeof(CustomContentMetadata);
+  } else {
+    return 0;
+  }
+#endif
+}
+
+uint64_t GetMetaDataSize(uint64_t reserved_region_size, uint64_t custom_content_md_region_size) {
 // Only include the reserved region size when using Metadata_t V2
 #ifndef METADATA_V2
   reserved_region_size = 0;
 #endif
-  return static_cast<uint64_t>(ROUND_UP_PAGESIZE(sizeof(MetaData_t) + reserved_region_size));
+  return static_cast<uint64_t>(
+      ROUND_UP_PAGESIZE(sizeof(MetaData_t) + reserved_region_size + custom_content_md_region_size));
 }
 
 #ifndef MULTI_VIEW_SUPPORT
 void UnmapAndReset(private_handle_t *handle) {
   uint64_t reserved_region_size = handle->reserved_size;
   if (private_handle_t::validate(handle) == 0 && handle->base_metadata) {
-    munmap(reinterpret_cast<void *>(handle->base_metadata), GetMetaDataSize(reserved_region_size));
+    munmap(reinterpret_cast<void *>(handle->base_metadata),
+           GetMetaDataSize(reserved_region_size, handle->custom_content_md_reserved_size));
     handle->base_metadata = 0;
   }
 }
@@ -2520,7 +2536,7 @@ int ValidateAndMap(private_handle_t *handle) {
 
   if (!handle->base_metadata) {
     uint64_t reserved_region_size = handle->reserved_size;
-    uint64_t size = GetMetaDataSize(reserved_region_size);
+    uint64_t size = GetMetaDataSize(reserved_region_size, handle->custom_content_md_reserved_size);
     void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, handle->fd_metadata, 0);
     if (base == reinterpret_cast<void *>(MAP_FAILED)) {
       ALOGE("%s: metadata mmap failed - handle:%p fd: %d err: %s", __func__, handle,
@@ -2537,7 +2553,7 @@ void UnmapAndReset(private_handle_t *handle) {
   uint64_t reserved_region_size = handle->reserved_size();
   if (private_handle_t::validate(handle) == 0 && handle->base_metadata()) {
     munmap(reinterpret_cast<void *>(handle->base_metadata()),
-           GetMetaDataSize(reserved_region_size));
+           GetMetaDataSize(reserved_region_size, handle->custom_content_md_reserved_size()));
     handle->base_metadata() = 0;
   }
 }
@@ -2554,7 +2570,8 @@ int ValidateAndMap(private_handle_t *handle) {
 
   if (!handle->base_metadata()) {
     uint64_t reserved_region_size = handle->reserved_size();
-    uint64_t size = GetMetaDataSize(reserved_region_size);
+    uint64_t size =
+        GetMetaDataSize(reserved_region_size, handle->custom_content_md_reserved_size());
     void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, handle->fd_metadata(), 0);
     if (base == reinterpret_cast<void *>(MAP_FAILED)) {
       ALOGE("%s: metadata mmap failed - handle:%p fd: %d err: %s", __func__, handle,
