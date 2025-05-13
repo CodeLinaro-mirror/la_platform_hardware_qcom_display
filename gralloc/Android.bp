@@ -112,7 +112,10 @@ cc_library_shared {
 
     srcs: ["QtiGralloc.cpp"],
 
-    header_libs: ["display_intf_headers"],
+    header_libs: [
+        "display_intf_headers",
+        "display_headers",
+    ],
 }
 
 soong_config_module_type {

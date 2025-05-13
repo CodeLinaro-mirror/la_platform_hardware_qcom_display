@@ -43,6 +43,7 @@
 #include "gr_utils.h"
 #include "qdMetaData.h"
 #include "qd_utils.h"
+#include "color_extensions.h"
 
 namespace gralloc {
 
@@ -448,6 +449,14 @@ void BufferManager::RegisterHandleLocked(const private_handle_t *hnd, int ion_ha
     } else {
       buffer->reserved_region_ptr = nullptr;
     }
+
+    buffer->custom_content_md_size = hnd->custom_content_md_reserved_size;
+    if (buffer->custom_content_md_size > 0) {
+      buffer->custom_content_md_region_ptr =
+          reinterpret_cast<void *>(hnd->base_metadata + sizeof(MetaData_t) + buffer->reserved_size);
+    } else {
+      buffer->custom_content_md_region_ptr = nullptr;
+    }
 #else
     buffer->reserved_region_ptr = reinterpret_cast<void *>(&(metadata->reservedRegion.data));
     buffer->reserved_size = metadata->reservedRegion.size;
@@ -561,6 +570,15 @@ void BufferManager::RegisterHandleLocked(const private_handle_t *hnd, int ion_ha
           reinterpret_cast<void *>(handle->base_metadata() + sizeof(MetaData_t));
     } else {
       buffer->reserved_region_ptr = nullptr;
+    }
+
+    private_handle_t *non_const_hnd = const_cast<private_handle_t *>(hnd);
+    buffer->custom_content_md_size = non_const_hnd->custom_content_md_reserved_size();
+    if (buffer->custom_content_md_size > 0) {
+      buffer->custom_content_md_region_ptr = reinterpret_cast<void *>(
+          non_const_hnd->base_metadata() + sizeof(MetaData_t) + buffer->reserved_size);
+    } else {
+      buffer->custom_content_md_region_ptr = nullptr;
     }
 #else
     buffer->reserved_region_ptr = reinterpret_cast<void *>(&(metadata->reservedRegion.data));
@@ -875,7 +893,9 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
 
   // Allocate memory for MetaData
   AllocData e_data;
-  e_data.size = static_cast<unsigned int>(GetMetaDataSize(descriptor.GetReservedSize()));
+  uint64_t custom_content_md_reserved_size = GetCustomContentMetadataSize(format, usage);
+  e_data.size = static_cast<unsigned int>(
+      GetMetaDataSize(descriptor.GetReservedSize(), custom_content_md_reserved_size));
   e_data.handle = data.handle;
   e_data.align = page_size;
 
@@ -908,6 +928,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   hnd->base = 0;
   hnd->base_metadata = 0;
   hnd->layer_count = layer_count;
+  hnd->custom_content_md_reserved_size = custom_content_md_reserved_size;
 
   bool use_adreno_for_size = CanUseAdrenoForSize(buffer_type, usage);
   if (use_adreno_for_size) {
@@ -1215,7 +1236,9 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
 
   // Allocate memory for MetaData
   AllocData e_data;
-  e_data.size = static_cast<unsigned int>(GetMetaDataSize(descriptor.GetReservedSize()));
+  uint64_t custom_content_md_reserved_size = GetCustomContentMetadataSize(format, usage);
+  e_data.size = static_cast<unsigned int>(
+      GetMetaDataSize(descriptor.GetReservedSize(), custom_content_md_reserved_size));
   e_data.handle = data.handle;
   e_data.align = page_size;
 
@@ -1242,15 +1265,15 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
     }
 
     hnd = private_handle_t::createLRMetaHandle(
-        data.fd, e_data.fd, data_2.fd, e_data_2.fd, INT(flags), INT(alignedw),
-        INT(alignedh), descriptor.GetWidth(), descriptor.GetHeight(), format,
-        buffer_type, id, ++next_id_, data.size, descriptor.GetReservedSize(),
-        layer_count, usage);
+        data.fd, e_data.fd, data_2.fd, e_data_2.fd, INT(flags), INT(alignedw), INT(alignedh),
+        descriptor.GetWidth(), descriptor.GetHeight(), format, buffer_type, id, ++next_id_,
+        data.size, descriptor.GetReservedSize(), layer_count, usage,
+        custom_content_md_reserved_size);
   } else {
     hnd = private_handle_t::createSingleHandle(
-        data.fd, e_data.fd, INT(flags), INT(alignedw), INT(alignedh),
-        descriptor.GetWidth(), descriptor.GetHeight(), format, buffer_type,
-        id, data.size, descriptor.GetReservedSize(), layer_count, usage);
+        data.fd, e_data.fd, INT(flags), INT(alignedw), INT(alignedh), descriptor.GetWidth(),
+        descriptor.GetHeight(), format, buffer_type, id, data.size, descriptor.GetReservedSize(),
+        layer_count, usage, custom_content_md_reserved_size);
   }
 
   if (hnd == nullptr) {
@@ -1376,6 +1399,24 @@ Error BufferManager::GetAllHandles(std::vector<const private_handle_t *> *out_ha
   return Error::NONE;
 }
 
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+static Error GetCustomMetadataHelper(void *custom_content_md_region_ptr,
+                                     uint64_t custom_content_md_size, hidl_vec<uint8_t> *out) {
+  Error error = Error::NONE;
+  if (custom_content_md_region_ptr == nullptr ||
+      custom_content_md_size != sizeof(CustomContentMetadata)) {
+    error = Error::UNSUPPORTED;
+  } else {
+    if (qtigralloc::encodeCustomContentMetadata(custom_content_md_region_ptr, out) !=
+        android::hardware::graphics::mapper::V4_0::Error::NONE) {
+      error = Error::BAD_VALUE;
+    }
+  }
+
+  return error;
+}
+#endif
+
 #ifndef MULTI_VIEW_SUPPORT
 Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved_region,
                                        uint64_t *reserved_region_size) {
@@ -1396,6 +1437,26 @@ Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved
   return Error::NONE;
 }
 
+Error BufferManager::GetCustomContentMdRegion(private_handle_t *handle,
+                                              void **custom_content_md_region,
+                                              uint64_t *custom_content_md_region_size) {
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
+  if (!handle)
+    return Error::BAD_BUFFER;
+
+  auto buf = GetBufferFromHandleLocked(handle);
+  if (buf == nullptr)
+    return Error::BAD_BUFFER;
+  if (!handle->base_metadata) {
+    return Error::BAD_BUFFER;
+  }
+
+  *custom_content_md_region = buf->custom_content_md_region_ptr;
+  *custom_content_md_region_size = buf->custom_content_md_size;
+
+  return Error::NONE;
+}
+
 Error BufferManager::GetMetadataValue(private_handle_t *handle, int64_t metadatatype_value,
                                       void *param) {
   std::lock_guard<std::shared_mutex> lock(buffer_lock_);
@@ -1410,7 +1471,22 @@ Error BufferManager::GetMetadataValue(private_handle_t *handle, int64_t metadata
   }
 
   auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata);
-  return GetMetaDataValue(handle, metadatatype_value, param);
+  if (metadatatype_value == QTI_CUSTOM_CONTENT_METADATA) {
+    Error error = Error::NONE;
+    void *custom_content_md_region = buf->custom_content_md_region_ptr;
+    uint64_t custom_content_md_region_size = buf->custom_content_md_size;
+
+    if (buf->custom_content_md_region_ptr == nullptr ||
+        buf->custom_content_md_size != sizeof(CustomContentMetadata)) {
+      error = Error::UNSUPPORTED;
+    } else {
+      memcpy(param, custom_content_md_region, sizeof(CustomContentMetadata));
+    }
+
+    return error;
+  } else {
+    return GetMetaDataValue(handle, metadatatype_value, param);
+  }
 }
 
 Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value,
@@ -1891,6 +1967,13 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
                                       metadata->viewId, out);
       break;
 #endif
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+    case QTI_CUSTOM_CONTENT_METADATA:
+      error = GetCustomMetadataHelper(buf->custom_content_md_region_ptr,
+                                      buf->custom_content_md_size, out);
+      break;
+#endif
+
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2337,6 +2420,12 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
                                       metadata->viewId, out);
       break;
 #endif
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+    case QTI_CUSTOM_CONTENT_METADATA:
+      error = GetCustomMetadataHelper(buf->custom_content_md_region_ptr,
+                                      buf->custom_content_md_size, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2348,6 +2437,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> in) {
   std::lock_guard<std::shared_mutex> lock(buffer_lock_);
+
   if (!handle)
     return Error::BAD_BUFFER;
 
@@ -2375,21 +2465,6 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
   auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata());
 #endif  // MULTI_VIEW_SUPPORT
 
-
-#ifdef METADATA_V2
-  // By default, set these to true
-  // Reset to false for special cases below
-  if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
-    if (GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-      metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] = true;
-    }
-  } else {
-    if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-      metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] =
-          true;
-    }
-  }
-#endif
 
   switch (metadatatype_value) {
     // These are constant (unchanged after allocation)
@@ -2669,22 +2744,35 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
 #endif
       break;
 #endif
-    default:
-#ifdef METADATA_V2
-      if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
-        if (GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-          metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] =
-              false;
-        }
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+    case QTI_CUSTOM_CONTENT_METADATA:
+      if (buf->custom_content_md_region_ptr == nullptr ||
+          buf->custom_content_md_size != sizeof(CustomContentMetadata)) {
+        return Error::UNSUPPORTED;
       } else {
-        if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-          metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] =
-              false;
+        if (qtigralloc::decodeCustomContentMetadata(in, buf->custom_content_md_region_ptr) !=
+            android::hardware::graphics::mapper::V4_0::Error::NONE) {
+          return Error::BAD_VALUE;
         }
       }
+      break;
 #endif
+    default:
       return Error::BAD_VALUE;
   }
+
+#ifdef METADATA_V2
+  if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
+    if (GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
+      metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] = true;
+    }
+  } else {
+    if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
+      metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] =
+          true;
+    }
+  }
+#endif
 
   return Error::NONE;
 }
