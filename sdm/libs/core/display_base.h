@@ -25,7 +25,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -243,6 +243,10 @@ class DisplayBase : public DisplayInterface {
   DisplayError SetupRC();
   DisplayError HandlePendingVSyncEnable(const shared_ptr<Fence> &retire_fence);
   DisplayError HandlePendingPowerState(const shared_ptr<Fence> &retire_fence);
+  bool IsRotationRequired(Layer* layer) {
+    return ((layer->transform.rotation == 90.0f) ||
+            (layer->transform.rotation == 270.0f));
+  }
 
   recursive_mutex recursive_mutex_;
   int32_t display_id_ = -1;
