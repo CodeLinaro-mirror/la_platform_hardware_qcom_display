@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -232,7 +232,10 @@ void HWCUEvent::UEventThreadBottom(HWCUEvent *hwc_uevent) {
       evt_lock.unlock();
       hwc_uevent->uevent_listener_->UEventHandler(hwc_uevent->uevent_listener_->connected);
       evt_lock.lock();
-      hwc_uevent->uevent_listener_->uevent_counter_--;
+      if (hwc_uevent->event_flag_) {
+        hwc_uevent->event_flag_ = false;
+      } else
+        hwc_uevent->uevent_listener_->uevent_counter_--;
     }
   }
 }
@@ -3285,6 +3288,10 @@ int HWCSession::HandlePluggableDisplays(bool delay_hotplug) {
   if (status) {
     switch (status) {
       case -EAGAIN:
+        pending_hotplug_event_ = kHotPlugEvent;
+        g_hwc_uevent_.event_flag_ = true;
+        status = 0;
+        break;
       case -ENODEV:
         // Errors like device removal or deferral for which we want to try another hotplug handling.
         pending_hotplug_event_ = kHotPlugEvent;
