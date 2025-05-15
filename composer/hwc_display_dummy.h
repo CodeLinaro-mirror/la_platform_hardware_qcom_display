@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -66,6 +66,8 @@ class HWCDisplayDummy : public HWCDisplay {
   virtual HWC2::Error SetActiveConfigWithConstraints(
       hwc2_config_t config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
       VsyncPeriodChangeTimeline *out_timeline);
+  virtual int GetDisplayAttributesForConfig(int config,
+                                    DisplayConfigVariableInfo *display_attributes);
  private:
   HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                   HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
