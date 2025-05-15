@@ -88,6 +88,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_null_display 1
         ;;
     esac
     ;;
