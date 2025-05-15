@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -133,7 +133,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
           }
           master->GetHandle(&poll_fds_[i].fd);
         } else {
-          poll_fds_[i].fd = drmOpen("msm", nullptr);
+          poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         }
         vsync_index_ = i;
       } break;
@@ -146,7 +146,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         Sys::pread_(poll_fds_[i].fd, data, kMaxStringLength, 0);
       } break;
       case HWEvent::IDLE_POWER_COLLAPSE: {
-        poll_fds_[i].fd = drmOpen("msm", nullptr);
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -155,7 +155,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         idle_pc_index_ = i;
       } break;
       case HWEvent::PANEL_DEAD: {
-        poll_fds_[i].fd = drmOpen("msm", nullptr);
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -164,7 +164,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         panel_dead_index_ = i;
       } break;
       case HWEvent::HW_RECOVERY: {
-        poll_fds_[i].fd = drmOpen("msm", nullptr);
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -173,7 +173,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         hw_recovery_index_ = i;
       } break;
       case HWEvent::HISTOGRAM: {
-        poll_fds_[i].fd = drmOpen("msm", nullptr);
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -194,7 +194,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         DLOGI("%s backlight_event_index_ %d", brightness_node_.c_str(), backlight_event_index_);
       } break;
       case HWEvent::MMRM: {
-        poll_fds_[i].fd = drmOpen("msm", nullptr);
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -203,7 +203,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         mmrm_index_ = i;
       } break;
       case HWEvent::POWER_EVENT: {
-        poll_fds_[i].fd = drmOpen("msm", nullptr);
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -212,7 +212,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         power_event_index_ = i;
       } break;
       case HWEvent::VM_RELEASE_EVENT: {
-        poll_fds_[i].fd = drmOpen("msm", nullptr);
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
