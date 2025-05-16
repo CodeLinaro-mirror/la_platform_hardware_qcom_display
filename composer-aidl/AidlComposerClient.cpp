@@ -876,7 +876,24 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
     ALOGW("%s: No command found", __FUNCTION__);
   }
 
-  *result = mWriter->getPendingCommandResults();
+  std::vector<CommandResultPayload> pending_result = mWriter->getPendingCommandResults();
+  std::vector<CommandResultPayload> err_result;
+
+  for (auto& payload : pending_result) {
+    if (payload.getTag() == CommandResultPayload::Tag::error) {
+      err_result.emplace_back(std::move(payload));
+    }
+  }
+
+  if (err_result.empty()) {
+    *result = std::move(pending_result);
+  } else {
+    *result = std::move(err_result);
+    if(!pending_result.empty()) {
+      pending_result.clear();
+    }
+  }
+
   reset();
 
   return (mCommandIndex) ? Error::None : Error::BadParameter;
