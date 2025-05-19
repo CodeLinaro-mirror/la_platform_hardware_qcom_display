@@ -89,6 +89,9 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.idle_time 0
+        setprop vendor.display.idle_time_inactive 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
         ;;
     esac
     ;;
