@@ -405,6 +405,11 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
   DRMPlanesInfo planes;
   drm_mgr_intf_->GetPlanesInfo(&planes);
 
+  if (planes.empty()) {
+    DLOGE("No valid plane resource");
+    return;
+  }
+
   // To simulate reduced config.
   uint32_t max_vig_pipes = 0;
   uint32_t max_dma_pipes = 0;
