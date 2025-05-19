@@ -15,11 +15,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -345,7 +343,7 @@ static Error getColorSpaceFromMetaData(ColorMetaData color_metadata, uint32_t *c
     default:
       err = Error::UNSUPPORTED;
       *color_space = 0;
-      ALOGW("Unknown Color primary = %d", color_metadata.colorPrimaries);
+      ALOGW_IF(DEBUG, "Unknown Color primary = %d", color_metadata.colorPrimaries);
       break;
   }
   return err;
@@ -1146,6 +1144,11 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
     return Error::BAD_BUFFER;
   }
 
+  if (bufferid_view_map_.find(hnd->id()) != bufferid_view_map_.end()) {
+    ALOGD_IF(DEBUG, "Erasing buf_id %d from bufferid_view_map_", hnd->id());
+    bufferid_view_map_.erase(hnd->id());
+  }
+
   auto meta_size = getMetaDataSize(hnd->reserved_size());
 
   if (allocator_->FreeBuffer(
@@ -1284,7 +1287,7 @@ Error BufferManager::MapBuffer(private_handle_t const *handle) {
 #endif  // MULTI_VIEW_SUPPORT
 
 Error BufferManager::IsBufferImported(const private_handle_t *hnd) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf != nullptr) {
     return Error::NONE;
@@ -1296,7 +1299,7 @@ Error BufferManager::IsBufferImported(const private_handle_t *hnd) {
 Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
   ALOGD_IF(DEBUG, "Retain buffer handle:%p id: %" PRIu64, hnd, hnd->id);
   auto err = Error::NONE;
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf != nullptr) {
     buf->IncRef();
@@ -1309,7 +1312,7 @@ Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
 
 Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
   ALOGD_IF(DEBUG, "Release buffer handle:%p", hnd);
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf == nullptr) {
     ALOGE("Could not find handle: %p", hnd);
@@ -1328,7 +1331,7 @@ Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
 }
 
 Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto err = Error::NONE;
   ALOGD_IF(DEBUG, "LockBuffer buffer handle:%p id: %" PRIu64, hnd, hnd->id);
 
@@ -1370,7 +1373,7 @@ Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
 }
 
 Error BufferManager::FlushBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -1388,7 +1391,7 @@ Error BufferManager::FlushBuffer(const private_handle_t *handle) {
 }
 
 Error BufferManager::RereadBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -1406,7 +1409,7 @@ Error BufferManager::RereadBuffer(const private_handle_t *handle) {
 }
 
 Error BufferManager::UnlockBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -1463,7 +1466,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
                                     unsigned int bufferSize, bool testAlloc) {
   if (!handle)
     return Error::BAD_BUFFER;
-  std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> buffer_lock(buffer_lock_);
 
   uint64_t usage = descriptor.GetUsage();
   int format = GetImplDefinedFormat(usage, descriptor.GetFormat());
@@ -1624,7 +1627,7 @@ void BufferManager:: BuffersDump() {
 }
 
 Error BufferManager::Dump(std::ostringstream *os) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> buffer_lock(buffer_lock_);
   for (auto it : handles_map_) {
     auto buf = it.second;
     auto hnd = buf->handle;
@@ -1653,7 +1656,7 @@ Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
   ALOGD_IF(DEBUG, "Retain buffer handle:%p id: %" PRIu64,
            hnd, const_cast<private_handle_t *>(hnd)->id());
   auto err = Error::NONE;
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf != nullptr) {
     buf->IncRef();
@@ -1666,7 +1669,7 @@ Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
 
 Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
   ALOGD_IF(DEBUG, "Release buffer handle:%p", hnd);
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf == nullptr) {
     ALOGE("Could not find handle: %p", hnd);
@@ -1685,7 +1688,7 @@ Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
 }
 
 Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto err = Error::NONE;
   private_handle_t *handle = const_cast<private_handle_t *>(hnd);
   ALOGD_IF(DEBUG, "LockBuffer buffer handle:%p id: %" PRIu64, hnd, handle->id());
@@ -1728,7 +1731,7 @@ Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
 }
 
 Error BufferManager::FlushBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -1746,7 +1749,7 @@ Error BufferManager::FlushBuffer(const private_handle_t *handle) {
 }
 
 Error BufferManager::RereadBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -1764,7 +1767,7 @@ Error BufferManager::RereadBuffer(const private_handle_t *handle) {
 }
 
 Error BufferManager::UnlockBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -1811,7 +1814,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
                                     unsigned int bufferSize, bool testAlloc) {
   if (!handle)
     return Error::BAD_BUFFER;
-  std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> buffer_lock(buffer_lock_);
 
   uint64_t usage = descriptor.GetUsage();
   int format = GetImplDefinedFormat(usage, descriptor.GetFormat());
@@ -1973,7 +1976,7 @@ void BufferManager:: BuffersDump() {
 }
 
 Error BufferManager::Dump(std::ostringstream *os) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> buffer_lock(buffer_lock_);
   for (auto it : handles_map_) {
     auto buf = it.second;
     auto hnd = const_cast<private_handle_t *>(buf->handle);
@@ -2000,7 +2003,7 @@ Error BufferManager::Dump(std::ostringstream *os) {
 
 // Get list of private handles in handles_map_
 Error BufferManager::GetAllHandles(std::vector<const private_handle_t *> *out_handle_list) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (handles_map_.empty()) {
     return Error::NO_RESOURCES;
   }
@@ -2014,7 +2017,7 @@ Error BufferManager::GetAllHandles(std::vector<const private_handle_t *> *out_ha
 #ifndef MULTI_VIEW_SUPPORT
 Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved_region,
                                        uint64_t *reserved_region_size) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
 
@@ -2033,7 +2036,7 @@ Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved
 
 Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> *out) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
   auto buf = GetBufferFromHandleLocked(handle);
@@ -2375,6 +2378,12 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       qtigralloc::encodeThreeDimensionalRefInfo(metadata->threeDimensionalRefInfo, out);
       break;
 #endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      android::gralloc4::encodeUint32(qtigralloc::MetadataType_ViewId,
+                                      metadata->viewId, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2383,9 +2392,65 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 }
 
 #else
+Error BufferManager::GetViewToImport(private_handle_t *handle, const uint32_t view_requested,
+                                     uint32_t *view) {
+  // Get BufID
+  uint32_t buf_id_index_0 = handle->id();
+  // Init with default order 0-L & 1-R
+  uint32_t view_id_from_metadata = PRIV_VIEW_MASK_PRIMARY;
+  uint32_t left_id_from_sei = PRIV_VIEW_MASK_PRIMARY;
+  uint32_t right_id_from_sei = PRIV_VIEW_MASK_SECONDARY;
+
+  // Based on buf_id get viewId, SEI_left_id, SEI_right_id
+  if (bufferid_view_map_.find(buf_id_index_0) != bufferid_view_map_.end()) {
+    auto entry = bufferid_view_map_.at(buf_id_index_0);
+    view_id_from_metadata = entry.first;
+    left_id_from_sei = entry.second.left_id;
+    right_id_from_sei = entry.second.right_id;
+  } else {
+    ALOGW_IF(DEBUG, "Buffer_view_sei data mapping not found. Returning requested view: %d",
+             view_requested);
+    *view = view_requested;
+    return Error::UNSUPPORTED;
+  }
+
+  if (view_id_from_metadata == 0 || (left_id_from_sei == 0 && right_id_from_sei == 0)) {
+    ALOGW_IF(DEBUG, "ViewID or SEI metadata not set. Returning requested view: %d", view_requested);
+    *view = view_requested;
+    return Error::UNSUPPORTED;
+  }
+
+  // Get the view_id for requested view
+  uint32_t view_to_compare = view_requested;
+  if (view_requested == PRIV_VIEW_MASK_PRIMARY) {
+    view_to_compare = left_id_from_sei;
+    ALOGD_IF(DEBUG, "View to compare is left as requested is primary");
+  } else if (view_requested == PRIV_VIEW_MASK_SECONDARY) {
+    view_to_compare = right_id_from_sei;
+    ALOGD_IF(DEBUG, "view to compare is right as requested is secondary");
+  }
+
+  if (view_id_from_metadata == view_to_compare) {
+    ALOGD_IF(DEBUG, "View set in metadata is same as buf_index 0. returning primary view");
+    *view = PRIV_VIEW_MASK_PRIMARY;
+  } else {
+    ALOGD_IF(DEBUG, "View set in metadata is not same as buf_index 0. returning secondary view");
+    *view = PRIV_VIEW_MASK_SECONDARY;
+  }
+
+  ALOGD_IF(
+      DEBUG,
+      "view_requested %d view_id_from_metadata %d , left_id_from_sei %d, right_id_from_sei %d, "
+      "view_to_compare %d, view returned %d",
+      view_requested, view_id_from_metadata, left_id_from_sei, right_id_from_sei, view_to_compare,
+      *view);
+
+  return Error::NONE;
+}
+
 Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved_region,
                                        uint64_t *reserved_region_size) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
 
@@ -2404,7 +2469,7 @@ Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved
 
 Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> *out) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
   auto buf = GetBufferFromHandleLocked(handle);
@@ -2759,6 +2824,12 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       qtigralloc::encodeThreeDimensionalRefInfo(metadata->threeDimensionalRefInfo, out);
       break;
 #endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      android::gralloc4::encodeUint32(qtigralloc::MetadataType_ViewId,
+                                      metadata->viewId, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2769,7 +2840,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 
 Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> in) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
 
@@ -3051,6 +3122,44 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
           IMapper_4_0_Error::NONE) {
         return Error::UNSUPPORTED;
       }
+#ifdef MULTI_VIEW_SUPPORT
+      if (bufferid_view_map_.find(handle->id()) != bufferid_view_map_.end()) {
+        ALOGD_IF(DEBUG, "%s: buf id:%d exists in map", __FUNCTION__, handle->id());
+        auto &entry = bufferid_view_map_.at(handle->id());
+        ViewMapping mapping_entry = {
+            .left_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id,
+            .right_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id};
+        entry.second = mapping_entry;
+      } else {
+        ALOGD_IF(DEBUG, "%s: buf id:%d does not exist in map.Creating new entry", __FUNCTION__,
+                 handle->id());
+        ViewMapping mapping_entry = {
+            .left_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id,
+            .right_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id};
+        std::pair<uint32_t, ViewMapping> entry = {0, mapping_entry};
+        bufferid_view_map_.emplace(std::make_pair(handle->id(), entry));
+      }
+#endif
+      break;
+#endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_ViewId, in,
+                                          &metadata->viewId)) {
+        return Error::UNSUPPORTED;
+      }
+#ifdef MULTI_VIEW_SUPPORT
+      if (bufferid_view_map_.find(handle->id()) != bufferid_view_map_.end()) {
+        ALOGD_IF(DEBUG, "%s: buf id:%d exists in map", __FUNCTION__, handle->id());
+        auto &entry = bufferid_view_map_.at(handle->id());
+        entry.first = metadata->viewId;
+      } else {
+        ALOGD_IF(DEBUG, "%s: buf id:%d does not exist in map.Creating new entry", __FUNCTION__,
+                 handle->id());
+        std::pair<uint32_t, ViewMapping> entry = {metadata->viewId, {}};
+        bufferid_view_map_.emplace(std::make_pair(handle->id(), entry));
+      }
+#endif
       break;
 #endif
     default:

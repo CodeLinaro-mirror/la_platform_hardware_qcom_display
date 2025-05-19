@@ -15,11 +15,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -28,7 +26,7 @@
 
 #include <pthread.h>
 
-#include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -65,6 +63,7 @@ class BufferManager {
   Error RereadBuffer(const private_handle_t *handle);
   Error GetAllHandles(std::vector<const private_handle_t *> *out_handle_list);
   int GetCustomDimensions(private_handle_t *handle, int *stride, int *height);
+  Error GetViewToImport(private_handle_t *handle, const uint32_t view_requested, uint32_t *view);
 
  private:
   BufferManager();
@@ -108,7 +107,7 @@ class BufferManager {
   // Get the wrapper Buffer object from the handle, returns nullptr if handle is not found
   std::shared_ptr<Buffer> GetBufferFromHandleLocked(const private_handle_t *hnd);
   Allocator *allocator_ = NULL;
-  std::mutex buffer_lock_;
+  std::shared_mutex buffer_lock_;
   std::unordered_map<const private_handle_t *, std::shared_ptr<Buffer>> handles_map_ = {};
   std::atomic<uint64_t> next_id_;
   uint64_t allocated_ = 0;
@@ -118,6 +117,12 @@ class BufferManager {
     const char *kDumpFile = "/data/misc/wmtrace/bufferdump.txt";
     uint64_t position = 0;
   } file_dump_;
+
+  struct ViewMapping {
+    uint32_t left_id;
+    uint32_t right_id;
+  };
+  std::unordered_map<uint64_t, std::pair<uint32_t, ViewMapping>> bufferid_view_map_ = {};
 };
 
 }  // namespace gralloc

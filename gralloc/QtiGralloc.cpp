@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c)  2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -280,6 +280,10 @@ MetadataType getMetadataType(uint32_t in) {
     case QTI_THREE_DIMENSIONAL_REF_INFO:
       return MetadataType_ThreeDimensionalRefInfo;
 #endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      return MetadataType_ViewId;
+#endif
     default:
       return MetadataType_Invalid;
   }
@@ -417,6 +421,13 @@ Error get(void *buffer, uint32_t type, void *param) {
                                           reinterpret_cast<ThreeDimensionalRefInfo *>(param));
       break;
 #endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      err = static_cast<Error>(
+          android::gralloc4::decodeUint32(qtigralloc::MetadataType_ViewId, bytestream,
+                                          reinterpret_cast<uint32_t *>(param)));
+      break;
+#endif
     default:
       param = nullptr;
       return Error::UNSUPPORTED;
@@ -499,6 +510,13 @@ Error set(void *buffer, uint32_t type, void *param) {
     case QTI_THREE_DIMENSIONAL_REF_INFO:
       err = encodeThreeDimensionalRefInfo(*reinterpret_cast<ThreeDimensionalRefInfo *>(param),
                                           &bytestream);
+      break;
+#endif
+#ifdef QTI_VIEW_ID
+    case QTI_VIEW_ID:
+      err = static_cast<Error>(
+          android::gralloc4::encodeUint32(qtigralloc::MetadataType_ViewId,
+                                          *reinterpret_cast<uint32_t *>(param), &bytestream));
       break;
 #endif
     default:

@@ -29,9 +29,11 @@
 
 /*
 * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-* Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
+
+#define DEBUG 0
 
 #ifndef QMAA
 #include <display/media/mmm_color_fmt.h>
@@ -1304,7 +1306,7 @@ void GetColorSpaceFromMetadata(private_handle_t *hnd, int *color_space) {
         *color_space = (color_metadata.range) ? HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
         break;
       default:
-        ALOGW("Unknown Color primary = %d", color_metadata.colorPrimaries);
+        ALOGW_IF(DEBUG, "Unknown Color primary = %d", color_metadata.colorPrimaries);
         break;
     }
   } else if (getMetaData(hnd, GET_COLOR_SPACE, color_space) != 0) {
