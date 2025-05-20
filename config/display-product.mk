@@ -172,9 +172,10 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
                            ubwcp_headers hwasan mapper_ext \
-                           hy11 hy22 hy33
+                           hy11 hy22 hy33 neo
 
 # Soong Values
+SOONG_CONFIG_qtidisplay_neo := false
 SOONG_CONFIG_qtidisplay_drmpp := true
 SOONG_CONFIG_qtidisplay_headless := false
 SOONG_CONFIG_qtidisplay_llvmsa := false
@@ -234,6 +235,10 @@ endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), kalama niobe), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_ubwcp_headers := false
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
+    SOONG_CONFIG_qtidisplay_neo := true
 endif
 
 # Techpack values

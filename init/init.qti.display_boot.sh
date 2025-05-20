@@ -39,6 +39,22 @@ else
 fi
 
 case "$target" in
+    "vienna")
+    #SOC ID for Vienna is 669, Vienna P is 670
+    case "$soc_hwid" in
+      669|670)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        ;;
+    esac
+    ;;
     "canoe")
     # SOC ID for Canoe is 660
     # SOC ID for Canoe APQ is 661
@@ -54,6 +70,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
         ;;
     esac
     ;;
@@ -71,6 +88,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_null_display 1
         ;;
     esac
     ;;
@@ -285,6 +303,27 @@ case "$target" in
         475)
         # Set property for Yupik
         setprop vendor.display.enable_posted_start_dyn 2
+        ;;
+    esac
+    ;;
+    "neo61")
+    case "$soc_hwid" in
+        554)
+        setprop vendor.display.enable_null_display 1
+        ;;
+        579)
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.target.version 3
+        setprop vendor.display.disable_mitigated_fps 1
+        setprop vendor.display.enable_rounded_corner 0
+        setprop vendor.display.wait_for_primary_display 1
+        setprop vendor.display.force_gpu_composition 1
+        setprop vendor.display.allow_tonemap_native 1
         ;;
     esac
     ;;
