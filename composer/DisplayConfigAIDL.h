@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -42,8 +42,10 @@
 #include <binder/Status.h>
 #include <log/log.h>
 #include <utils/locker.h>
+#include <cutils/properties.h>
 
 #include "hwc_session.h"
+#include "hwc_common.h"
 
 namespace aidl {
 namespace vendor {
@@ -135,6 +137,24 @@ class DisplayConfigAIDL : public BnDisplayConfig {
   ScopedAStatus notifyDisplayIdleState(const std::vector<int32_t> &display_ids) {
     return ScopedAStatus::ok();
   }
+  ScopedAStatus getDisplayPortId(int32_t in_dispId, int32_t* _aidl_return) override;
+  ScopedAStatus isCacV2Supported(int32_t in_dispId, bool* _aidl_return) override;
+  ScopedAStatus configureCacV2(int32_t in_dispId, const ::aidl::vendor::qti::hardware::display::config::CacV2Config& in_config, bool in_enable) override;
+  ScopedAStatus configureCacV2PerEye(int32_t in_dispId, const ::aidl::vendor::qti::hardware::display::config::CacV2Config& in_leftConfig, const ::aidl::vendor::qti::hardware::display::config::CacV2Config& in_rightConfig, bool in_enable) override;
+  ScopedAStatus configureCacV2ExtPerEye(int32_t in_dispId, const ::aidl::vendor::qti::hardware::display::config::CacV2ConfigExt& in_leftConfig, const ::aidl::vendor::qti::hardware::display::config::CacV2ConfigExt& in_rightConfig, bool in_enable)override;
+  ScopedAStatus allowIdleFallback() override;
+  ScopedAStatus setContentFps(const std::string& in_name, int32_t in_fps) override;
+  ScopedAStatus setCWBOutputBufferV2(const std::shared_ptr<::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback>& in_callback, int32_t in_dispId, const ::aidl::vendor::qti::hardware::display::config::Rect& in_roiRect, const ::aidl::vendor::qti::hardware::display::config::Rect& in_downscaleRect, int32_t in_cwbControlFlag, const ::aidl::android::hardware::common::NativeHandle& in_buffer) override;
+  ScopedAStatus queueTunnelledBuffer(
+         const ::aidl::android::hardware::common::NativeHandle& buffer,
+         const ::aidl::android::hardware::common::NativeHandle& acquire_fence,
+         int32_t* _aidl_return);
+  ScopedAStatus dequeueTunnelledBuffer(
+        const ::aidl::android::hardware::common::NativeHandle& buffer,
+        ::aidl::android::hardware::common::NativeHandle* release_fence_handle,
+        int32_t* _aidl_return);
+  ScopedAStatus tunnellingInit(int32_t* _aidl_return);
+  ScopedAStatus tunnellingDeinit(int32_t* _aidl_return);
 
  private:
   sdm::HWCSession *hwc_session_;

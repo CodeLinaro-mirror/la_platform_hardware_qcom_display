@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -364,6 +364,7 @@ class HWCSession : public HWCUEvent,
   static int commit_error_[HWCCallbacks::kNumDisplays];
   static Locker vm_release_locker_[HWCCallbacks::kNumDisplays];
   static std::bitset<HWCCallbacks::kNumDisplays> clients_waiting_for_vm_release_;
+  HWCSession *hwc_session_ = nullptr;
 
  private:
   class CWB {
@@ -577,6 +578,10 @@ class HWCSession : public HWCUEvent,
   bool update_vsync_on_doze_ = false;
   std::vector<bool> is_hdr_display_;            // info on HDR supported
   std::map<Display, Display> map_hwc_display_;  // Real and dummy display pairs.
+  std::map <uint64_t, shared_ptr<Fence>> tunneling_map_buffer_release_fence_; // stores mapping
+                                                              // between buffer id and release fence
+  // stores mapping between buffer id and native handle
+  std::map <uint64_t, const native_handle_t *> tunneling_map_buffer_native_handle_;
   bool reset_panel_ = false;
   bool client_connected_ = false;
   bool new_bw_mode_ = false;
@@ -605,6 +610,7 @@ class HWCSession : public HWCUEvent,
   int32_t enable_primary_reconfig_req_ = 0;
   float set_max_lum_ = -1.0;
   float set_min_lum_ = -1.0;
+  bool tunneling_enabled_ = false;
   std::bitset<HWCCallbacks::kNumDisplays> pending_refresh_;
   CWB cwb_;
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
@@ -641,6 +647,7 @@ class HWCSession : public HWCUEvent,
   // it up to terminate it before terminating hwc.
   void HpdThreadBottom();
   std::thread hpd_thread_;
+  LayerId tunneled_layer_ = -1;
 };
 
 }  // namespace sdm

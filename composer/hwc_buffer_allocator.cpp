@@ -34,7 +34,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -53,6 +53,7 @@
 #include "mapper_utils.h"
 
 #include <aidl/android/hardware/graphics/allocator/BufferDescriptorInfo.h>
+#include <android/hardware/graphics/mapper/IMapper.h>
 #include <android/rect.h>
 
 #define __CLASS__ "HWCBufferAllocator"
@@ -903,6 +904,27 @@ int HWCBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<Fenc
   }
 
   return kErrorNone;
+}
+
+const native_handle_t* HWCBufferAllocator::ImportBuffer(buffer_handle_t &handle) {
+  const native_handle_t* buf = nullptr;
+
+  if (!handle) {
+    return buf;
+  }
+
+  if (!handle->numFds && !handle->numInts) {
+    handle = nullptr;
+    return buf;
+  }
+
+  auto mapper_err = STABLEMAPPER(mapper_).importBuffer(handle, &buf);
+  if (mapper_err != AIMAPPER_ERROR_NONE) {
+    DLOGE("Failed to import buffer into HWC");
+    return nullptr;
+  }
+
+  return buf;
 }
 
 int HWCBufferAllocator::UnmapBuffer(const native_handle_t *handle, int *release_fence) {
