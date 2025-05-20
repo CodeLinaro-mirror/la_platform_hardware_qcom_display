@@ -225,6 +225,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void GetPanelResolution(uint32_t *width, uint32_t *height);
   virtual void GetRealPanelResolution(uint32_t *width, uint32_t *height);
   virtual void Dump(std::ostringstream *os);
+  virtual void SetTunneledLayer(bool enable);
 
   // CWB related methods
   virtual int GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t *x_pixels, uint32_t *y_pixels);
@@ -288,6 +289,7 @@ class HWCDisplay : public DisplayEventHandler {
   void BuildLayerStack(void);
   void BuildSolidFillStack(void);
   HWCLayer *GetHWCLayer(LayerId layer_id);
+  LayerId GetHWCTunnelledLayer();
   uint32_t GetGeometryChanges() { return geometry_changes_; }
   ColorMode GetCurrentColorMode() {
     return (color_mode_ ? color_mode_->GetCurrentColorMode() : ColorMode::SRGB);
@@ -374,6 +376,8 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC3::Error SetLayerType(LayerId layer_id, LayerType type);
   virtual HWC3::Error GetReleaseFences(uint32_t *out_num_elements, LayerId *out_layers,
                                        std::vector<shared_ptr<Fence>> *out_fences);
+  virtual HWC3::Error SetLayerIsTunneled(LayerId layer_id, bool tunneled);
+  virtual HWC3::Error IsTunnelledLayerPresent(bool *tunnelled_layer_present);
   virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence) = 0;
   virtual HWC3::Error GetHdrCapabilities(uint32_t *out_num_types, int32_t *out_types,
                                          float *out_max_luminance, float *out_max_average_luminance,
@@ -606,6 +610,7 @@ class HWCDisplay : public DisplayEventHandler {
   std::map<CWBClient, CWBCaptureResponse> cwb_capture_status_map_;
   static constexpr unsigned int kCwbWaitMs = 100;
   bool validate_done_ = false;
+  bool has_tunneled_layer_ = false;
 
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
@@ -626,6 +631,8 @@ class HWCDisplay : public DisplayEventHandler {
   bool client_target_3_1_set_ = false;
   bool is_client_up_ = false;
   uint64_t expected_present_time_ = 0;  // Expected Present time for current frame
+  int tunnelling_enable_ = 0;
+  LayerId tunnelled_layer_ = -1;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

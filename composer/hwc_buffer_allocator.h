@@ -34,7 +34,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -98,6 +98,7 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetMetadataValue(void *buf, SnapMetadataType type, void *dest, size_t dest_size);
   int ImportBufferHandle(native_handle_t **handle, bool is_aidl_duped);
   void ReleaseBufferHandle(const native_handle_t *handle);
+  const native_handle_t* ImportBuffer(buffer_handle_t &handle);
 
  private:
   int GetGrallocInstance();

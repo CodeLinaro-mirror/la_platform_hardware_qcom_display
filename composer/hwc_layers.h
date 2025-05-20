@@ -20,7 +20,7 @@
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -123,6 +123,8 @@ class HWCLayer {
   void SetReleaseFence(const shared_ptr<Fence> &release_fence);
   bool IsLayerCompatible() { return compatible_; }
   void IgnoreSdrHistogramMetadata(bool disable) { ignore_sdr_histogram_md_ = disable; }
+  void SetTunneled(bool tunneled) { tunneled_ = tunneled; }
+  bool IsTunneled() { return tunneled_; }
 
  private:
   Layer *layer_ = nullptr;
@@ -149,6 +151,7 @@ class HWCLayer {
   bool compatible_ = false;
   bool ignore_sdr_histogram_md_ = false;
   bool disable_get_screen_decorator_support_ = false;
+  bool tunneled_ = false;
 
   // Composition requested by client(SF) Original
   Composition client_requested_orig_ = Composition::DEVICE;
