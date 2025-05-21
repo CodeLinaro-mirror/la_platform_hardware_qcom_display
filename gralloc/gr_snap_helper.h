@@ -814,6 +814,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
       {GRALLOC_USAGE_PRIVATE_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
       {(uint64_t)SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO, SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO},
+      {(uint64_t)SnapUsage::QTI_PRIVATE_CLONED_MULTI_VIEW_INFO,
+       SnapUsage::QTI_PRIVATE_CLONED_MULTI_VIEW_INFO},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
