@@ -139,6 +139,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dim
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=1
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.clear_slots_with_set_layer_buffer=false
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate_override=60
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += vendor.display.disable_single_lm_split=1
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
 # Recovery is enabled, logging is enabled

@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -470,6 +470,17 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     display_conn_type = HwcDisplayConnectionType::INTERNAL;
   }
 
+  sdm::HWDisplaysInfo hw_displays_info = {};
+  ret = caps_->GetDisplaysStatus(&hw_displays_info);
+  if (sdm::kErrorNone == ret) {
+    auto iter = hw_displays_info.begin();
+    std::advance(iter, in_display);
+    auto &info = iter->second;
+    if (info.is_primary) {
+      display_conn_type = HwcDisplayConnectionType::INTERNAL;
+    }
+  }
+
   if (HwcDisplayConnectionType::INTERNAL == display_conn_type) {
     // SKIP_CLIENT_COLOR_TRANSFORM is used to prevent client from applying color transform on the
     // client composed layers. Since DSPP would apply color transform on the final composed output,
@@ -512,6 +523,17 @@ ScopedAStatus AidlComposerClient::getDisplayConnectionType(int64_t in_display,
   *aidl_return = HwcDisplayConnectionType::EXTERNAL;
   if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
     *aidl_return = HwcDisplayConnectionType::INTERNAL;
+  }
+
+  sdm::HWDisplaysInfo hw_displays_info = {};
+  ret = caps_->GetDisplaysStatus(&hw_displays_info);
+  if (sdm::kErrorNone == ret) {
+    auto iter = hw_displays_info.begin();
+    std::advance(iter, in_display);
+    auto &info = iter->second;
+    if (info.is_primary) {
+      *aidl_return = HwcDisplayConnectionType::INTERNAL;
+    }
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
