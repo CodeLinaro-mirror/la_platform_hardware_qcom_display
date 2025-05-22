@@ -1093,6 +1093,8 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
 
   if (error != 0) {
     ALOGE("validateAndMap failed");
+    delete hnd;
+    hnd = NULL;
     return Error::BAD_BUFFER;
   }
   auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
