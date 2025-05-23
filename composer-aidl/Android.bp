@@ -6,6 +6,44 @@ soong_config_module_type_import {
   ],
 }
 
+soong_config_module_type {
+  name: "vendor_composer_lib_defaults",
+  module_type: "cc_defaults",
+  config_namespace: "qti",
+  variables: [
+      "vndk",
+  ],
+  properties: [
+      "shared_libs",
+      "vintf_fragments",
+      "cflags",
+  ],
+}
+
+soong_config_string_variable {
+     name: "vndk",
+     values: ["version_1","version_2"],
+}
+
+vendor_composer_lib_defaults {
+  name: "vendor_shared_composer_vndk_lib",
+  soong_config_variables: {
+    vndk: {
+       version_1: {
+          shared_libs: [
+                "vendor.qti.hardware.display.composer3-V1-ndk",
+          ],
+       },
+       version_2: {
+          shared_libs: [
+                "vendor.qti.hardware.display.composer3-V2-ndk",
+          ],
+       },
+    }
+  },
+}
+
+
 composer_lib_defaults {
   name: "shared_composer_vndk_lib",
   soong_config_variables: {
@@ -36,6 +74,7 @@ display_config_idl_cc_defaults {
        target_aidl: {
           defaults: [
                 "shared_composer_vndk_lib",
+                "vendor_shared_composer_vndk_lib",
           ],
 
           header_libs: [
@@ -88,7 +127,6 @@ display_config_idl_cc_defaults {
                "libbinder_ndk",
                "android.hardware.common-V2-ndk",
                "vendor.qti.hardware.display.config-V7-ndk",
-               "vendor.qti.hardware.display.composer3-V1-ndk",
                "vendor.qti.hardware.display.demura-V1-ndk",
                "vendor.qti.hardware.display.mapperextensions@1.1",
                "vendor.qti.hardware.display.mapperextensions@1.2",
