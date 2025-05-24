@@ -19,7 +19,7 @@
 
 /* Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -2375,7 +2375,11 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       }
     }
 #endif
-
+#ifdef QTI_THREE_DIMENSIONAL_REF_INFO
+    case QTI_THREE_DIMENSIONAL_REF_INFO:
+      qtigralloc::encodeThreeDimensionalRefInfo(metadata->threeDimensionalRefInfo, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2755,6 +2759,11 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     }
 #endif
+#ifdef QTI_THREE_DIMENSIONAL_REF_INFO
+    case QTI_THREE_DIMENSIONAL_REF_INFO:
+      qtigralloc::encodeThreeDimensionalRefInfo(metadata->threeDimensionalRefInfo, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -3039,6 +3048,14 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     case QTI_EARLYNOTIFY_LINECOUNT:
       android::gralloc4::decodeInt32(qtigralloc::MetadataType_VideoEarlyNotifyLineCount, in,
                                      &metadata->videoEarlyNotifyLineCount);
+      break;
+#endif
+#ifdef QTI_THREE_DIMENSIONAL_REF_INFO
+    case QTI_THREE_DIMENSIONAL_REF_INFO:
+      if (qtigralloc::decodeThreeDimensionalRefInfo(in, &metadata->threeDimensionalRefInfo) !=
+          IMapper_4_0_Error::NONE) {
+        return Error::UNSUPPORTED;
+      }
       break;
 #endif
     default:
