@@ -3523,7 +3523,10 @@ void HWCSession::PerformDisplayPowerReset() {
     locker_[display].Unlock();
   }
 
-  callbacks_.Refresh(vsync_source);
+  // Do not call refresh if valid vsync source is not set i,e. Its kNumDisplay
+  if (vsync_source != HWCCallbacks::kNumDisplays) {
+    callbacks_.Refresh(vsync_source);
+  }
 }
 
 void HWCSession::DisplayPowerReset() {
