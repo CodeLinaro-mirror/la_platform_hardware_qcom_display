@@ -1,3 +1,13 @@
+soong_namespace {
+  imports: [
+            "vendor/qcom/opensource/monaco/commonsys-intf/display",
+            "vendor/qcom/opensource/monaco/display-core",
+            "device/qcom/monaco",
+            "vendor/qcom/proprietary/monaco",
+            "vendor/qcom/opensource/monaco/interfaces",
+            "vendor/qcom/opensource/monaco/display-intf",
+    ],
+}
 soong_config_module_type {
     name: "qtidisplay_cc_defaults",
     module_type: "cc_defaults",
