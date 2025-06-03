@@ -28,7 +28,6 @@ cc_library_shared {
         "-Wno-implicit-int-conversion",
         "-Wno-shorten-64-to-32",
     ],
-    clang: true,
     srcs: [
         "qdp_cec.cpp",
     ],
