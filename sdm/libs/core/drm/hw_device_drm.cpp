@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2023 , 2025 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1644,6 +1644,15 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   // scoped fence fds will be automatically closed when function scope ends,
   // atomic commit will have these fds already set on kernel by then.
   Fence::ScopedRef scoped_ref;
+  if (first_cycle_ && IsPrimaryDisplay()) {
+    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
+    int ret = NullCommit(true /* synchronous */, false /* retain_planes */);
+    if (ret) {
+      DLOGE("Failed with error: %d", ret);
+      return kErrorHardware;
+    }
+  }
+
   SetupAtomic(scoped_ref, hw_layers, false /* validate */, &release_fence_fd, &retire_fence_fd);
 
   bool sync_commit = synchronous_commit_ ||
