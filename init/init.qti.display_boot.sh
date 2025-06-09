@@ -92,6 +92,7 @@ case "$target" in
         setprop vendor.display.idle_time 0
         setprop vendor.display.idle_time_inactive 0
         setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_multirect 1
         ;;
     esac
     ;;
