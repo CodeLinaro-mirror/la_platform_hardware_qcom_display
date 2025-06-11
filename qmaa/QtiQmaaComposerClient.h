@@ -110,6 +110,7 @@ using aidl::android::hardware::graphics::composer3::VirtualDisplay;
 using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeConstraints;
 using aidl::android::hardware::graphics::composer3::VsyncPeriodChangeTimeline;
 using aidl::android::hardware::graphics::composer3::ZOrder;
+using aidl::android::hardware::graphics::composer3::Luts;
 
 typedef uint64_t Display;
 typedef uint32_t Config;
@@ -279,6 +280,10 @@ class QtiComposerClient : public BnComposerClient {
                                          Hdr *_aidl_return) override;
   ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t in_display,
                                                           bool in_enabled) override;
+  ScopedAStatus getMaxLayerPictureProfiles(int64_t in_display, int32_t* _aidl_return) override;
+  ScopedAStatus startHdcpNegotiation(int64_t in_display,
+                                     const aidl::android::hardware::drm::HdcpLevels& in_levels);
+  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *);
 
   // Methods for callbacks
   void onHotplug(Display display, bool connected);
