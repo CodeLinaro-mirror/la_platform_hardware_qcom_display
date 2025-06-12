@@ -66,7 +66,7 @@ using composer_V3::RenderIntent;
 using HwcAttribute = composer_V3::DisplayAttribute;
 using VsyncPeriodChangeConstraints = composer_V3::VsyncPeriodChangeConstraints;
 using ClientTargetProperty = composer_V3::ClientTargetProperty;
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using DisplayConfiguration = composer_V3::DisplayConfiguration;
 #endif
 using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
@@ -336,7 +336,7 @@ class HWCDisplay : public DisplayEventHandler {
     return HWC3::Error::Unsupported;
   }
   virtual HWC3::Error GetDisplayConfigs(uint32_t *out_num_configs, Config *out_configs);
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
   virtual HWC3::Error GetDisplayConfigurations(std::vector<DisplayConfiguration> *outConfigs);
 #endif
   virtual HWC3::Error GetDisplayAttribute(Config config, HwcAttribute attribute,

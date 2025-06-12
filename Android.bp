@@ -21,7 +21,7 @@ soong_config_module_type {
         "host_ldlibs",
         "ldflags",
         "native_coverage",
-	"vendor",
+    "vendor",
     ],
 }
 

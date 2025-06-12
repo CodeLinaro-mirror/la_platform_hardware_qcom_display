@@ -1087,7 +1087,7 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
   return HWC3::Error::None;
 }
 
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
   out_configs->clear();
   out_configs->reserve(variable_config_map_.size());
@@ -1779,7 +1779,7 @@ void HWCDisplay::DumpInputBuffers() {
     char dump_file_name[PATH_MAX];
     size_t result = 0;
 
-    uint32_t width, height, alloc_size = 0;
+    uint32_t width = 0, height = 0, alloc_size = 0;
     int32_t format = 0;
 
     buffer_allocator_->GetWidth((void *)handle, width);

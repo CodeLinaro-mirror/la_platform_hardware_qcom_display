@@ -30,7 +30,7 @@ cc_library_shared {
         "libgralloctypes",
         "libhidlbase",
         "android.hardware.graphics.allocator-V2-ndk",
-        "android.hardware.graphics.common-V5-ndk",
+        "android.hardware.graphics.common-V6-ndk",
         "android.hardware.graphics.common@1.2",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@2.1",
@@ -289,7 +289,7 @@ display_config_idl_cc_defaults {
           ],
           cflags: [
                "-DLOG_TAG=\"qdgralloc\"",
-		"-DENABLE_MAPPER_V5=1"
+        "-DENABLE_MAPPER_V5=1"
           ],
           srcs: [
                "AIDL/QtiAllocatorAIDL.cpp",
