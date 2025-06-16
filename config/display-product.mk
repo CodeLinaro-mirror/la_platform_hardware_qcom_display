@@ -104,7 +104,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.gralloc.enable_snapalloc=1 \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_set_display_brightness=1 \
-    vendor.display.enable_scale_for_all_displays=1
+    vendor.display.enable_scale_for_all_displays=1 \
+    vendor.display.disable_query_luts=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
