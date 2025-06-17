@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -103,7 +103,7 @@ int DRMMaster::Init() {
 
   uint8_t retry = 0;
   do {
-    dev_fd_ = drmOpen("msm", nullptr);
+    dev_fd_ = drmOpen("msm_drm", nullptr);
     if(dev_fd_ < 0) {
       DRM_LOGW("drmOpen failed with error %d, retry %d", dev_fd_, retry);
       if (retry >= MAX_RETRY) {
