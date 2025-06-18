@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1547,7 +1547,7 @@ int GetImplDefinedFormat(uint64_t usage, int format) {
       }
     } else if (usage & BufferUsage::CAMERA_OUTPUT) {
       if (format == HAL_PIXEL_FORMAT_YCbCr_420_888) {
-        gr_format = HAL_PIXEL_FORMAT_NV21_ZSL;  // NV21
+        gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP;  // NV12
       } else {
         gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS;  // NV12 preview
       }
