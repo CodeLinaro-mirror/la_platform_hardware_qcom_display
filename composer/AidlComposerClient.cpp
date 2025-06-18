@@ -1452,9 +1452,13 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
       }
       // Set result to validated, has comp changes
       mWriter->setPresentOrValidateResult(display, static_cast<PresentOrValidate::Result>(2));
-    } else {
+    } else if (status == sdm::kErrorNone) {
       // Set result to Presented.
       mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Presented);
+    } else {
+      ALOGE("CommitOrPrepare failed !needsCommit %d", status);
+      writeError(__FUNCTION__, Error::BadConfig);
+      return;
     }
     // perform post present display.
     postPresentDisplay(display, &presentFence);
