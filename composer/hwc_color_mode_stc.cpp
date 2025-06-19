@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <sync/sync.h>
 #include <utils/constants.h>
@@ -183,7 +189,7 @@ int32_t HWCColorModeStc::GetStcColorModeFromMap(const ColorMode &mode, const Ren
 
 uint32_t HWCColorModeStc::GetColorModeCount() {
   uint32_t count = UINT32(color_mode_map_.size());
-  DLOGI("Supported color mode count = %d", count);
+  DLOGV_IF(kTagQDCM, "Supported color mode count = %d", count);
   return std::max(1U, count);
 }
 
@@ -196,14 +202,14 @@ HWC2::Error HWCColorModeStc::GetColorModes(uint32_t *out_num_modes, ColorMode *o
   *out_num_modes = std::min(*out_num_modes, UINT32(color_mode_map_.size()));
   for (uint32_t i = 0; i < *out_num_modes; it++, i++) {
     out_modes[i] = it->first;
-    DLOGI("Color mode = %d is supported", out_modes[i]);
+    DLOGV_IF(kTagQDCM, "Color mode = %d is supported", out_modes[i]);
   }
   return HWC2::Error::None;
 }
 
 uint32_t HWCColorModeStc::GetRenderIntentCount(ColorMode mode) {
   uint32_t count = UINT32(color_mode_map_[mode].size());
-  DLOGI("mode: %d supported rendering intent count = %d", mode, count);
+  DLOGV_IF(kTagQDCM, "mode: %d supported rendering intent count = %d", mode, count);
   return std::max(1U, count);
 }
 
@@ -221,7 +227,8 @@ HWC2::Error HWCColorModeStc::GetRenderIntents(ColorMode mode, uint32_t *out_num_
   *out_num_intents = std::min(*out_num_intents, UINT32(color_mode_map_[mode].size()));
   for (uint32_t i = 0; i < *out_num_intents; it++, i++) {
     out_intents[i] = it->first;
-    DLOGI("Color mode = %d is supported with render intent = %d", mode, out_intents[i]);
+    DLOGV_IF(kTagQDCM,
+        "Color mode = %d is supported with render intent = %d", mode, out_intents[i]);
   }
   return HWC2::Error::None;
 }
@@ -276,7 +283,7 @@ HWC2::Error HWCColorModeStc::ApplyCurrentColorModeWithRenderIntent(bool hdr_pres
     return HWC2::Error::None;
   }
 
-  DLOGI(
+  DLOGV_IF(kTagQDCM,
       "Applying Stc mode (gamut %d gamma %d intent %d), curr mode %d, render intent %d, hdr "
       "present %d",
       mode.gamut, mode.gamma, mode.intent, current_color_mode_, current_render_intent_,
