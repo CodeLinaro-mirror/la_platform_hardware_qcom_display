@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1455,6 +1455,11 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
     } else if (status == sdm::kErrorNone) {
       // Set result to Presented.
       mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Presented);
+    } else if (status == sdm::kErrorParameters) {
+      // if external display is hotplugged out during a commit, sdm will return display not found
+      // which is expected so only warn in this case
+      ALOGW("CommitOrPrepare failed: display not found!");
+      return;
     } else {
       ALOGE("CommitOrPrepare failed !needsCommit %d", status);
       writeError(__FUNCTION__, Error::BadConfig);
