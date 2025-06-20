@@ -601,7 +601,53 @@ Return<Error> QtiMapperExtensions::getBaseView(void *bufferHandle, void* view) {
     err = static_cast<Error>(android::gralloc4::decodeUint32(
         qtigralloc::MetadataType_BaseView, metadata, (uint32_t*)view));
   }
-  return err;
+
+  if (hnd->getFds().size() > 1) {
+    ALOGD_IF(DEBUG, "%s: Metahandle - needs reassociation", __FUNCTION__);
+    if (!hnd->base_metadata()) {
+      ALOGW_IF(DEBUG, "%s: Metadatas not set. Returning", __FUNCTION__);
+      return err;
+    }
+
+    auto metadataAll = reinterpret_cast<MetaData_t *>(hnd->base_metadata());
+
+    if (!metadataAll->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_VIEW_ID)] ||
+        !metadataAll->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(
+            QTI_THREE_DIMENSIONAL_REF_INFO)]) {
+      ALOGW_IF(DEBUG, "%s: ViewID or SEI metadata not set. Returning", __FUNCTION__);
+      return err;
+    }
+
+    uint32_t view_id_from_metadata = metadataAll->viewId;
+    uint32_t left_id_from_sei =
+        (metadataAll->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id;
+    uint32_t right_id_from_sei =
+        (metadataAll->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id;
+
+    if (left_id_from_sei == right_id_from_sei) {
+      ALOGW_IF(
+          DEBUG,
+          "%s: left_id_from_sei and right_id_from_sei set to same view which is invalid. Returning",
+          __FUNCTION__);
+      return err;
+    }
+
+    uint32_t view_at_index_0;
+    if (view_id_from_metadata == left_id_from_sei) {
+      view_at_index_0 = hnd->view();
+    } else {
+      view_at_index_0 = hnd->getViewInfo() & (~hnd->view());
+    }
+
+    ALOGD_IF(DEBUG,
+             "%s: view_id_from_metadata %d , left_id_from_sei %d, right_id_from_sei %d, "
+             "view_at_index_0 %d",
+             __FUNCTION__, view_id_from_metadata, left_id_from_sei, right_id_from_sei,
+             view_at_index_0);
+    *(uint32_t *)view = view_at_index_0;
+  }
+  ALOGD_IF(DEBUG, "%s: Returning base view %d", __FUNCTION__, *(uint32_t *)view);
+  return Error::NONE;
 }
 
 Return<void> QtiMapperExtensions::importViewBuffer(void *bufferHandle, uint32_t view,
@@ -612,15 +658,15 @@ Return<void> QtiMapperExtensions::importViewBuffer(void *bufferHandle, uint32_t 
     return Void();
   }
 
-  uint32_t view_to_import = view;
+  uint32_t buf_to_import = view;
   auto err = static_cast<Error>(buf_mgr_->GetViewToImport(
-      static_cast<private_handle_t *>(bufferHandle), view, &view_to_import));
+      static_cast<private_handle_t *>(bufferHandle), view, &buf_to_import));
   if (err != Error::NONE) {
     ALOGW_IF(DEBUG, "%s: Error in GetViewToImport: requested_view %d", __FUNCTION__, view);
   }
 
   private_handle_t *view_handle =
-      static_cast<private_handle_t *>(bufferHandle)->CreateViewHandle(view_to_import);
+      static_cast<private_handle_t *>(bufferHandle)->CreateViewHandle(buf_to_import, view);
   if (!view_handle) {
     ALOGE("%s: Unable to create view handle", __FUNCTION__);
     error = Error::NO_RESOURCES;
