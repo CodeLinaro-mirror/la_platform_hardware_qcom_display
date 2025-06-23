@@ -122,12 +122,6 @@ class BufferManager {
     const char *kDumpFile = "/data/misc/wmtrace/bufferdump.txt";
     uint64_t position = 0;
   } file_dump_;
-
-  struct ViewMapping {
-    uint32_t left_id;
-    uint32_t right_id;
-  };
-  std::unordered_map<uint64_t, std::pair<uint32_t, ViewMapping>> bufferid_view_map_ = {};
 };
 
 }  // namespace gralloc
