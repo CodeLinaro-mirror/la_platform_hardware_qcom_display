@@ -25,6 +25,7 @@
 #include <android/binder_ibinder_platform.h>
 
 #include <sync/sync.h>
+#include <cutils/ashmem.h>
 
 #include "hwc_parcel.h"
 #include <fcntl.h>
@@ -1434,6 +1435,7 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
   uint32_t typesCount = 0;
   uint32_t reqsCount = 0;
   bool validate_only = false;
+  // TODO(user): remove typesCount and reqsCount as these are no longer used
   auto status = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
                                                     &typesCount, &reqsCount, &needsCommit);
   if (needsCommit) {
@@ -1441,12 +1443,12 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
       ALOGE("%s: CommitOrPrepare failed %d", __FUNCTION__, status);
     }
     // Implement post validation. Getcomptypes etc;
-    postValidateDisplay(display, typesCount, reqsCount);
+    postValidateDisplay(display);
     mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
   } else {
     if (status == sdm::kErrorNeedsCommit) {
       // Perform post validate.
-      auto error = postValidateDisplay(display, typesCount, reqsCount);
+      auto error = postValidateDisplay(display);
       if (error == Error::None) {
         mClient.drawcycle_->AcceptDisplayChanges(display);
       }
@@ -1902,7 +1904,7 @@ Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
     return Error::BadConfig;
   }
 
-  return postValidateDisplay(display, types_count, reqs_count);
+  return postValidateDisplay(display);
 }
 
 Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
@@ -1939,69 +1941,248 @@ Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
   return Error::None;
 }
 
-Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, uint32_t &types_count,
-                                                             uint32_t &reqs_count) {
-  std::vector<sdm::LayerId> changedLayers;
-  std::vector<Composition> compositionTypes;
+Error AidlComposerClient::CommandEngine::setChangedCompositionTypes(int64_t display) {
   std::vector<sdm::LayerId> requestedLayers;
-  std::vector<int32_t> requestMasks;
-  ClientTargetProperty clientTargetProperty;
-  changedLayers.resize(types_count);
-  compositionTypes.resize(types_count);
+  std::vector<Composition> compositionTypes;
+  uint32_t num_elements = 0;
+
   auto err =
-      mClient.drawcycle_->GetChangedCompositionTypes(display, &types_count, nullptr, nullptr);
+      mClient.drawcycle_->GetChangedCompositionTypes(display, &num_elements, nullptr, nullptr);
   if (err != sdm::kErrorNone) {
     return Error::BadConfig;
   }
 
-  err = mClient.drawcycle_->GetChangedCompositionTypes(
-      display, &types_count, changedLayers.data(),
-      reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
+  requestedLayers.resize(num_elements);
+  compositionTypes.resize(num_elements);
 
+  err = mClient.drawcycle_->GetChangedCompositionTypes(
+      display, &num_elements, requestedLayers.data(),
+      reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
     return static_cast<Error>(err);
   }
 
+  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(requestedLayers),
+                                      compositionTypes);
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayRequests(int64_t display) {
+  std::vector<sdm::LayerId> requestedLayers;
+  std::vector<int32_t> requestMasks;
   int32_t display_reqs = 0;
-  err =
-      mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count, nullptr, nullptr);
+  uint32_t num_elements = 0;
+
+  auto err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &num_elements, nullptr,
+                                                    nullptr);
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
     return Error::BadConfig;
   }
 
-  requestedLayers.resize(reqs_count);
-  requestMasks.resize(reqs_count);
-  err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count,
+  requestedLayers.resize(num_elements);
+  requestMasks.resize(num_elements);
+
+  err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &num_elements,
                                                requestedLayers.data(), requestMasks.data());
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
-
-    requestedLayers.clear();
-    requestMasks.clear();
+    return Error::BadConfig;
   }
 
+  mWriter->setDisplayRequests(display, display_reqs,
+                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setClientTargetProperty(int64_t display) {
+  ClientTargetProperty clientTargetProperty;
   sdm::SDMClientTargetProperty client_property{};
-  err = mClient.settings_->GetClientTargetProperty(display, &client_property);
+  static constexpr float kBrightness = 1.f;
+  DimmingStage dimmingStage = DimmingStage::NONE;
+
+  auto err = mClient.settings_->GetClientTargetProperty(display, &client_property);
   if (err != sdm::kErrorNone) {
-    // todo: reset to default values
     return Error::BadConfig;
   }
 
   clientTargetProperty.dataspace = static_cast<Dataspace>(client_property.dataspace);
   clientTargetProperty.pixelFormat = static_cast<PixelFormat>(client_property.pixel_format);
 
-  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(changedLayers),
-                                      compositionTypes);
-  mWriter->setDisplayRequests(display, display_reqs,
-                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
-  static constexpr float kBrightness = 1.f;
-  DimmingStage dimmingStage = DimmingStage::NONE;
   mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
+
+  return Error::None;
+}
+
+#ifdef COMPOSER3_V4
+Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts *luts,
+                                                             int32_t *lut_fd) {
+  if (!lut_3d) {
+    return Error::BadConfig;
+  }
+
+  // reset luts on client
+  if (lut_3d->lutEntries == nullptr) {
+    return Error::None;
+  }
+
+  // initialize optional vector
+  luts->offsets.emplace();
+  // a single zero offset is set since only one lut is present
+  // TODO(user): modify when multiple luts need to be supported for a single layer, eg: gridEntries
+  luts->offsets->emplace_back(INT32(0));
+
+  uint32_t num_offsets = luts->offsets->size();
+  for (auto count = 0; count < num_offsets; count++) {
+    LutProperties lutProperties = {};
+    // only 3d lut is currently supported
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.dimension = LutProperties::Dimension::THREE_D;
+    lutProperties.size = INT32(lut_3d->dim);
+    // although sampling_keys is a vector, framework only supports taking the first value
+    // RGB sampling is fixed for 3d lut
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+    luts->lutProperties.emplace_back(lutProperties);
+  }
+
+  // calculate size of buffer
+  uint32_t final_size = 0;
+  for (auto count = 0; count < num_offsets - 1; count++) {
+    // size of lut is equal to offset of next lut
+    final_size += luts->offsets->at(count + 1);
+  }
+
+  // calculate the size of last lut
+  uint32_t exponent =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t channels =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t lut_size = std::pow(luts->lutProperties[num_offsets - 1].size, exponent);
+  final_size += lut_size * channels;
+  size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
+
+  // use `ashmem_create_region` to create a shared memory segment
+  int32_t fd = ashmem_create_region("display_luts", buffer_size);
+  if (fd < 0 || !ashmem_valid(fd)) {
+    ALOGE("Couldn't create ashmem region: fd %d", fd);
+    return Error::BadConfig;
+  }
+
+  void *data = mmap(nullptr, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (data == MAP_FAILED) {
+    ALOGE("MAP_FAILED: fd %d", fd);
+    close(fd);
+    return Error::BadConfig;
+  }
+
+  // convert 3d lut entries to 1d normalized float buffer
+  std::vector<float> buffer;
+  // TODO(user): take correct lut_size when multiple luts will be supported
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].G) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].B) / 1023.f);
+  }
+
+  if (data) {
+    std::memcpy((float *)data, buffer.data(), buffer_size);
+  }
+
+  munmap(data, buffer_size);
+  buffer.clear();
+  lut_3d->validLutEntries = false;
+  lut_3d->validGridEntries = false;
+
+  if (lut_3d->lutEntries != nullptr) {
+    delete[] lut_3d->lutEntries;
+    lut_3d->lutEntries = nullptr;
+  }
+
+  if (lut_3d->gridEntries != nullptr) {
+    delete[] lut_3d->gridEntries;
+    lut_3d->gridEntries = nullptr;
+  }
+
+  *lut_fd = fd;
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
+  auto requested_luts = std::make_unique<std::vector<std::pair<sdm::LayerId, Lut3d *>>>();
+  std::vector<::ndk::ScopedFileDescriptor> requestedFds;
+  std::vector<int64_t> requestedLayers;
+  std::vector<Luts> requestedLuts;
+
+  auto err = mClient.drawcycle_->GetDisplayLuts(display, requested_luts);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
+  }
+
+  uint32_t num_elements = requested_luts->size();
+  if (!num_elements) {
+    return Error::None;
+  }
+
+  requestedLuts.resize(num_elements);
+  auto it = requested_luts->begin();
+  for (uint32_t i = 0; i < num_elements; i++, it++) {
+    int32_t fd = -1;
+    requestedLayers.emplace_back(static_cast<int64_t>(it->first));
+    auto error = populateDisplayLuts(it->second, &requestedLuts[i], &fd);
+    if (error != Error::None) {
+      return error;
+    }
+
+    if (fd == -1) {
+      ALOGI("%s: Resetting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(fd));
+    } else {
+      ALOGI("%s: Setting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(dup(fd)));
+      close(fd);
+    }
+  }
+
+  mWriter->setDisplayLuts(display, requestedLayers, requestedLuts, std::move(requestedFds));
+
+  return Error::None;
+}
+#endif
+
+Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display) {
+  auto error = setChangedCompositionTypes(display);
+  if (error != Error::None) {
+    return error;
+  }
+
+  error = setDisplayRequests(display);
+  if (error != Error::None) {
+    // clear mCommandsResults on error
+    reset();
+    return error;
+  }
+
+  error = setClientTargetProperty(display);
+  if (error != Error::None) {
+    reset();
+    return error;
+  }
+
+#ifdef COMPOSER3_V4
+  error = setDisplayLuts(display);
+  if (error != Error::None) {
+    reset();
+    return error;
+  }
+#endif
 
   return Error::None;
 }
