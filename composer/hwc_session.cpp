@@ -3719,8 +3719,7 @@ int32_t HWCSession::GetDisplayConnectionType(hwc2_display_t display,
   }
   *type = HwcDisplayConnectionType::EXTERNAL;
   if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN ||
-      (display == HWC_DISPLAY_PRIMARY && pluggable_is_primary_) ||
-      hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_PLUGGABLE) {
+      (display == HWC_DISPLAY_PRIMARY && pluggable_is_primary_)) {
     *type = HwcDisplayConnectionType::INTERNAL;
   }
 
