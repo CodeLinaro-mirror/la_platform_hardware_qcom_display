@@ -230,6 +230,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                         uint64_t *reserved_region_size);
   int ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
                        buffer_handle_t *out_buffer_handle);
+  int GetBaseView(native_handle_t *gr_hnd, uint32_t *view);
 
  private:
   GrallocSnapHelper();
