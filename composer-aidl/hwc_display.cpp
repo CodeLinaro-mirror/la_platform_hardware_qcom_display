@@ -19,7 +19,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -2590,7 +2590,7 @@ bool HWCDisplay::GetTransientVsyncPeriod(VsyncPeriodNanos *vsync_period) {
 
 std::tuple<int64_t, int64_t> HWCDisplay::RequestActiveConfigChange(
     Config config, VsyncPeriodNanos current_vsync_period, int64_t desired_time) {
-  int64_t refresh_time, applied_time;
+  int64_t refresh_time = 0, applied_time = 0;
   std::tie(refresh_time, applied_time) =
       EstimateVsyncPeriodChangeTimeline(current_vsync_period, desired_time);
 
