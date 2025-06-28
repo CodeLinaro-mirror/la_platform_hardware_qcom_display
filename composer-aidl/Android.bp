@@ -33,18 +33,6 @@ composer_lib_defaults {
           vintf_fragments: ["vendor.qti.hardware.display.composer-service_v4.xml"],
        },
     },
-    graphics_common_ndk: {
-        version_5: {
-            shared_libs: [
-                "android.hardware.graphics.common-V5-ndk",
-            ]
-        },
-        version_6: {
-            shared_libs: [
-                "android.hardware.graphics.common-V6-ndk",
-            ]
-        },
-    }
   },
 }
 
@@ -106,6 +94,7 @@ display_config_idl_cc_defaults {
                "libdisplayconfig.qti",
                "libdrm",
                "libbinder_ndk",
+               "android.hardware.graphics.common-V6-ndk",
                "android.hardware.common-V2-ndk",
                "vendor.qti.hardware.display.config-V7-ndk",
                "vendor.qti.hardware.display.composer3-V1-ndk",
