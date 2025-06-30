@@ -1519,6 +1519,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       // commands received after destruction of their display.
       ALOGW("%s: Can\'t destroy layer-%lu from destroyed Display-%lu layer stack!", __FUNCTION__,
             layer, display);
+      writeError(__FUNCTION__, Error::BadDisplay);
       return;
     } else {
       // Note: We do not destroy the layer on this error as the hotplug
