@@ -4228,7 +4228,7 @@ SnapError GrallocSnapHelperLegacy::ChromaSitingHelper(SnapHandle *hnd, bool hidl
     int64_t snap_chroma_siting = 0;
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::CHROMA_SITING, &snap_chroma_siting);
     error = CheckMetadataSet(SnapMetadataType::CHROMA_SITING, error, check_metadata_set);
-    GrallocExtendableType gr_chroma_siting = {};
+    GrallocExtendableType gr_chroma_siting = android::gralloc4::ChromaSiting_Unknown;
     if (snap_chroma_siting == vendor_qti_hardware_display_common_ChromaSiting::CHROMA_SITING_NONE) {
       gr_chroma_siting = android::gralloc4::ChromaSiting_None;
     }
