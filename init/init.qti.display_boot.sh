@@ -94,6 +94,7 @@ case "$target" in
         setprop vendor.display.disable_cwb_idle_fallback 1
         setprop vendor.display.disable_multirect 1
         setprop vendor.display.disable_llcbc_support 1
+        setprop vendor.display.enable_rounded_corner 0
         ;;
     esac
     ;;
