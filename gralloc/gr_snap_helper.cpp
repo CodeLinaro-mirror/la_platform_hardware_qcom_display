@@ -276,14 +276,6 @@ int GrallocSnapHelper::Free(native_handle_t *gr_hnd) {
 
 int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
                             CropRectangle_t gr_access_region, int fence_fd, uint64_t* base_addr) {
-  if (gr_hnd == nullptr) {
-    ALOGE("Invalid gralloc handle");
-    return SnapError::BAD_BUFFER;
-  }
-  if (!IsSnapAllocEnabled()) {
-    ALOGW("SnapAlloc is disabled");
-    return SnapError::UNSUPPORTED;
-  }
 
   std::lock_guard<std::mutex> lock(map_lock_);
 
@@ -316,6 +308,9 @@ int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
     }
   } else {
     ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
+    if (fence_fd >= 0) {
+     close(fence_fd);
+    }
   }
 
   return SnapError::BAD_BUFFER;

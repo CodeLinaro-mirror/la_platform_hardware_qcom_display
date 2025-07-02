@@ -113,9 +113,27 @@ Error QtiMapper5::getTransportSize(buffer_handle_t _Nonnull bufferHandle,
 
 Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage, ARect region,
                        int acquireFenceRawFd, void *_Nullable *_Nonnull outData) {
-  VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
+  if (!snap_helper_ || !snap_alloc_enable_) {
+    ALOGE("Failed to %s. Driver is uninitialized.", __func__);
+    if (acquireFenceRawFd >= 0) {
+      close(acquireFenceRawFd);
+    }
+    return AIMAPPER_ERROR_NO_RESOURCES;
+  }
+
+  if (!(bufferHandle)) {
+    ALOGW("Failed to %s. Null buffer_handle_t.", __func__);
+    if (acquireFenceRawFd >= 0) {
+      close(acquireFenceRawFd);
+    }
+    return AIMAPPER_ERROR_BAD_BUFFER;
+  }
+
   if (cpuUsage == 0) {
     ALOGE("Failed to lock. Bad cpu usage: %" PRIu64 ".", cpuUsage);
+    if (acquireFenceRawFd >= 0) {
+      close(acquireFenceRawFd);
+    }
     return AIMAPPER_ERROR_BAD_VALUE;
   }
 
