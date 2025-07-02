@@ -721,22 +721,35 @@ void HWCDisplay::BuildLayerStack() {
 
     bool is_secure = false;
     bool is_video = false;
-    const private_handle_t *handle =
-        reinterpret_cast<const private_handle_t *>(layer->input_buffer.buffer_id);
-    if (handle) {
-      if (handle->buffer_type == BUFFER_TYPE_VIDEO) {
-        layer_stack_.flags.video_present = true;
-        is_video = true;
+
+    void *hdl = reinterpret_cast<native_handle_t *>(layer->input_buffer.buffer_id);
+    if (hdl) {
+      uint32_t buffer_type;
+      if (buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::BUFFER_TYPE, &buffer_type,
+                                            sizeof(buffer_type)) == kErrorNone) {
+        if (buffer_type == BUFFER_TYPE_VIDEO) {
+          layer_stack_.flags.video_present = true;
+          is_video = true;
+        }
+      } else {
+        DLOGW("Failed to get buffer type metadata");
       }
+
       // TZ Protected Buffer - L1
-      // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
-      if (handle->flags & SnapUsage::PROTECTED) {
-        layer_stack_.flags.secure_present = true;
-        is_secure = true;
-      }
-      // UBWC PI format
-      if (handle->flags & SnapUsage::QTI_PRIVATE_ALLOC_UBWC_PI) {
-        layer->input_buffer.flags.ubwc_pi = true;
+      // SnapAlloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
+      SnapUsage handle_flags;
+      if (buffer_allocator_->GetMetadataValue(hdl, SnapMetadataType::USAGE, &handle_flags,
+                                            sizeof(handle_flags)) == kErrorNone) {
+        if (handle_flags & SnapUsage::PROTECTED) {
+          layer_stack_.flags.secure_present = true;
+          is_secure = true;
+        }
+        // UBWC PI format
+        if (handle_flags & SnapUsage::QTI_PRIVATE_ALLOC_UBWC_PI) {
+          layer->input_buffer.flags.ubwc_pi = true;
+        }
+      } else {
+        DLOGW("Failed to get usage metadata");
       }
     }
 
