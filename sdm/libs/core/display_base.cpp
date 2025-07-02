@@ -1696,7 +1696,7 @@ DisplayError DisplayBase::PostCommit(HWLayersInfo *hw_layers_info) {
   // Handle pending vsync enable if any after the commit
   error = HandlePendingVSyncEnable(retire_fence_);
   if (error != kErrorNone) {
-    return error;
+    DLOGW("HandlePendingVSyncEnable failed, ignore it");
   }
 
   comp_manager_->SetSafeMode(false);
