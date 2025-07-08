@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -259,8 +259,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       struct android_ycbcr *outYCbCr);
   int GetColorSpaceFromDataspaceMetadata(SnapDataspace snap_dataspace, uint32_t *color_space);
   int GetSnapDataspaceMetadataFromColorSpace(uint32_t color_space, SnapDataspace *snap_dataspace);
-  std::shared_ptr<ISnapMapper> snapmapper_;
-  std::shared_ptr<ISnapAlloc> snapallocator_;
+  std::shared_ptr<ISnapMapper> snapmapper_ = nullptr;
+  std::shared_ptr<ISnapAlloc> snapallocator_ = nullptr;
   bool snap_alloc_enable_ = false;
   void *snap_impl_lib_ = nullptr;
   std::shared_ptr<ISnapAlloc> (*LINK_FETCH_ISnapAlloc)(DebugCallbackIntf *) = nullptr;
