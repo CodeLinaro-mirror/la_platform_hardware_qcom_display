@@ -95,6 +95,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
     return false;
   }
 
+  int value = 0;
+  sideband_->GetProperty(DISABLE_QUERY_LUTS, &value);
+  disable_query_luts_ = (value == 1);
+  ALOGV("disable_query_luts_: %d", disable_query_luts_);
+
   return true;
 }
 
@@ -487,8 +492,54 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
-ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<Buffer> &,
-                                          std::vector<Luts> *) {
+ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buffer> &buffers,
+                                          std::vector<Luts> *aidl_return) {
+  if (disable_query_luts_) {
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+
+  uint32_t num_elements = buffers.size();
+  std::vector<SnapHandle *> requested_buffers;
+  for (uint32_t i = 0; i < num_elements; i++) {
+    SnapHandle *layerBuffer = sdm::ConvertToSnapHandle(*buffers.at(i).handle);
+    if (!mHandleImporter.importBuffer(layerBuffer)) {
+      ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
+      return TO_BINDER_STATUS(INT32(Error::NoResources));
+    }
+    requested_buffers.emplace_back(layerBuffer);
+  }
+
+  auto requested_luts = std::make_unique<std::vector<Lut3d *>>();
+  aidl_return->resize(num_elements);
+
+  auto error = mCommandEngine->getBufferLuts(display, requested_buffers, requested_luts);
+  // Free all imported buffers after getting luts
+  for (auto buffer : requested_buffers) {
+    mHandleImporter.freeBuffer(buffer);
+  }
+
+  if (error != Error::None) {
+    return TO_BINDER_STATUS(INT32(error));
+  }
+
+  auto it = requested_luts->begin();
+  for (uint32_t i = 0; i < num_elements; i++, it++) {
+    int32_t fd = -1;
+    error = mCommandEngine->populateDisplayLuts(*it, &(aidl_return->at(i)), &fd);
+    if (error != Error::None) {
+      return TO_BINDER_STATUS(INT32(error));
+    }
+
+    if (fd == -1) {
+      ALOGI("%s: Resetting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(fd));
+    } else {
+      ALOGI("%s: Setting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(dup(fd)));
+      close(fd);
+    }
+  }
+
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 #endif
@@ -701,6 +752,7 @@ ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_retu
       PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,    PixelFormat::RGB_888,
       PixelFormat::RGB_565,      PixelFormat::BGRA_8888,    PixelFormat::YV12,
       PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102, PixelFormat::RGBA_FP16};
+
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
@@ -1875,6 +1927,17 @@ Error AidlComposerClient::CommandEngine::setClientTargetProperty(int64_t display
 }
 
 #ifdef COMPOSER3_V4
+Error AidlComposerClient::CommandEngine::getBufferLuts(
+    uint64_t display, const std::vector<SnapHandle *> &buffers,
+    std::unique_ptr<std::vector<Lut3d *>> &out_luts) {
+  auto err = mClient.drawcycle_->GetBufferLuts(display, buffers, out_luts);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
+  }
+
+  return Error::None;
+}
+
 Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts *luts,
                                                              int32_t *lut_fd) {
   if (!lut_3d) {
@@ -1957,16 +2020,6 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts
   buffer.clear();
   lut_3d->validLutEntries = false;
   lut_3d->validGridEntries = false;
-
-  if (lut_3d->lutEntries != nullptr) {
-    delete[] lut_3d->lutEntries;
-    lut_3d->lutEntries = nullptr;
-  }
-
-  if (lut_3d->gridEntries != nullptr) {
-    delete[] lut_3d->gridEntries;
-    lut_3d->gridEntries = nullptr;
-  }
 
   *lut_fd = fd;
 

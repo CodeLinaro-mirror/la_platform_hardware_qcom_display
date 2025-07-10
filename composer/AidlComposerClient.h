@@ -236,7 +236,8 @@ class AidlComposerClient : public BnComposerClient,
   ScopedAStatus startHdcpNegotiation(
       int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) override;
 
-  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *);
+  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &buffers,
+                        std::vector<Luts> *aidl_return) override;
 #endif
 
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
@@ -311,6 +312,8 @@ class AidlComposerClient : public BnComposerClient,
 
  private:
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
+  bool disable_fp16_support_ = false;
+  bool disable_query_luts_ = false;
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;
@@ -339,6 +342,11 @@ class AidlComposerClient : public BnComposerClient,
                      std::vector<CommandResultPayload> *aidl_return);
     Error validateDisplay(int64_t display);
     Error presentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
+#ifdef COMPOSER3_V4
+    Error populateDisplayLuts(Lut3d *lut_3d, Luts *luts, int32_t *lut_fd);
+    Error getBufferLuts(uint64_t display, const std::vector<SnapHandle *> &buffers,
+                        std::unique_ptr<std::vector<Lut3d *>> &out_luts);
+#endif
 
     void reset() { mWriter->reset(); }
 
@@ -450,7 +458,6 @@ class AidlComposerClient : public BnComposerClient,
     Error setClientTargetProperty(int64_t display);
 #ifdef COMPOSER3_V4
     Error setDisplayLuts(int64_t display);
-    Error populateDisplayLuts(Lut3d *lut_3d, Luts *luts, int32_t *lut_fd);
 #endif
 
     void GetSDMRectFromRect(const Rect *rect, sdm::SDMRegion *region) {
