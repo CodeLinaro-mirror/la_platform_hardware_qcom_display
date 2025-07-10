@@ -61,15 +61,18 @@ case "$target" in
     # SOC ID for KaM is 704
     # SOC ID for Alor is 685
     # SOC ID for Alor APQ is 727
+    # SOC ID for Purwa is 635
     case "$soc_hwid" in
-      660|661|704|685|727)
+      660|661|704|685|727|635)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 1
-        setprop vendor.display.enable_inline_writeback 1
+        if [ "$soc_hwid" -ne 635 ]; then
+           setprop vendor.display.enable_inline_writeback 1
+        fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
