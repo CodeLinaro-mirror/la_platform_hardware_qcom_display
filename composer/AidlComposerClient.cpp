@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -25,6 +25,7 @@
 #include <android/binder_ibinder_platform.h>
 
 #include <sync/sync.h>
+#include <cutils/ashmem.h>
 
 #include "hwc_parcel.h"
 #include <fcntl.h>
@@ -67,7 +68,7 @@ void BufferCacheEntry::clear() {
 bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
                               std::shared_ptr<SDMDisplaySettingsIntf> settings,
                               std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-                              std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+                              std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
                               std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
                               std::shared_ptr<SDMDisplaySideBandIntf> sideband) {
   if (!caps || !settings || !lifecycle || !drawcycle || !layers) {
@@ -114,6 +115,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
 
 AidlComposerClient::~AidlComposerClient() {
   ALOGW("%s: Destroying composer client", __FUNCTION__);
+
+  // if init failed, no need to do anything
+  if (!caps_ || !settings_ || !lifecycle_ || !drawcycle_ || !layer_builder_) {
+    return;
+  }
 
   lifecycle_->RegisterCompositorCallback(nullptr, false);
 
@@ -162,6 +168,8 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
     if (dpy != mDisplayData.end()) {
       sdm::LayerId layer = 0;
       auto error = layer_builder_->CreateLayer(in_display, &layer);
+      ALOGV("%s: CreateLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+            layer, in_display);
       if (error == sdm::kErrorNone) {
         *aidl_return = static_cast<int64_t>(layer);
         drawcycle_->LayerStackUpdated(in_display);
@@ -216,6 +224,8 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
     }
   }
 
+  ALOGV("%s: destroyLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+        in_layer, in_display);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
   drawcycle_->LayerStackUpdated(in_display);
@@ -263,13 +273,14 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
-ScopedAStatus AidlComposerClient::executeQtiCommands(
-    const std::vector<QtiDisplayCommand> &in_commands,
+ScopedAStatus AidlComposerClient::executeQtiExtendedCommands(
+    const std::vector<DisplayCommand> &in_commands,
+    const std::vector<QtiDisplayCommand> &in_qti_commands,
     std::vector<CommandResultPayload> *aidl_return) {
   std::lock_guard<std::mutex> lock(m_command_mutex_);
 
   lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
-  Error error = mCommandEngine->qtiExecute(in_commands, aidl_return);
+  Error error = mCommandEngine->qtiExtendedExecute(in_commands, in_qti_commands, aidl_return);
   lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -388,6 +399,18 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
+  sdm::DisplayConfigFixedInfo fixed_info{};
+  error = caps_->GetFixedConfig(in_display, &fixed_info);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
+  sdm::DisplayClass display_class;
+  error = caps_->GetDisplayConnectionType(in_display, &display_class);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  }
+
   out_configs->clear();
   out_configs->reserve(info.size());
 
@@ -401,6 +424,20 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup =
         settings_->GetDisplayConfigGroup(in_display, variable_config);
+
+#ifdef COMPOSER3_V4
+    // Display output colorspace is fixed for builtin displays regardless of HDR content.
+    // For external displays, colorspace will be changed for HDR content if display supports HDR.
+    // EOTF is checked for true HDR support because external is always marked as HDR supported
+    // if primary supports HDR to prevent SF from marking HDR layers as skip.
+    display_configuration.hdrOutputType =
+        (fixed_info.hdr_eotf & sdm::kHdrEOTFHDR10) ? OutputType::HDR10
+        : (fixed_info.hdr_eotf & sdm::kHdrEOTFSDR) ? OutputType::SDR
+                                                   : OutputType::INVALID;
+    if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+#endif
 
     ALOGI("GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, fps= %d",
           config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
@@ -441,6 +478,23 @@ ScopedAStatus AidlComposerClient::notifyExpectedPresent(
 
   auto error = drawcycle_->NotifyExpectedPresent(in_display, ept, fi_ns);
   return TO_BINDER_STATUS(INT32(error));
+}
+#endif
+
+#ifdef COMPOSER3_V4
+ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
+                                                             int32_t *_aidl_return) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+
+ScopedAStatus AidlComposerClient::startHdcpNegotiation(
+    int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) {
+  return TO_BINDER_STATUS(INT32(Error::None));
+}
+
+ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<Buffer> &,
+                                          std::vector<Luts> *) {
+  return TO_BINDER_STATUS(INT32(Error::None));
 }
 #endif
 
@@ -490,7 +544,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigs(int64_t in_display,
                                                     std::vector<int32_t> *aidl_return) {
   auto error = caps_->GetDisplayConfigs(in_display, aidl_return);
   if (error != sdm::kErrorNone) {
-    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
   return TO_BINDER_STATUS(INT32(Error::None));
@@ -627,9 +681,22 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
   // All individually supported properties by hardware
   static std::vector<PixelFormat> pixel_formats{
-      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,    PixelFormat::RGB_888,
-      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,    PixelFormat::YV12,
-      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102, PixelFormat::RGBA_FP16};
+      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,   PixelFormat::RGB_888,
+      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
+      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
+
+  static bool read_fp16_support = false;
+  if (!read_fp16_support) {
+    int value = 0;
+    sideband_->GetProperty(DISABLE_FP16_SUPPORT, &value);
+    bool disable_fp16_support = (value == 1);
+    ALOGV("disable_fp16_support: %d", disable_fp16_support);
+    if (!disable_fp16_support) {
+      pixel_formats.push_back(PixelFormat::RGBA_FP16);
+    }
+    read_fp16_support = true;
+  }
+
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
@@ -1065,85 +1132,100 @@ bool AidlComposerClient::CommandEngine::init() {
   return (mWriter != nullptr);
 }
 
+void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCommand &displayCmd) {
+  bool performing_commit = (displayCmd.presentOrValidateDisplay || displayCmd.validateDisplay);
+  ExecuteCommand(displayCmd.brightness, &CommandEngine::executeSetDisplayBrightness,
+                 displayCmd.display, *displayCmd.brightness, performing_commit);
+  ExecuteCommand(displayCmd.colorTransformMatrix, &CommandEngine::executeSetColorTransform,
+                 displayCmd.display, *displayCmd.colorTransformMatrix);
+  ExecuteCommand(displayCmd.clientTarget, &CommandEngine::executeSetClientTarget,
+                 displayCmd.display, *displayCmd.clientTarget);
+  ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
+                 displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
+  ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
+                 displayCmd.display);
+  ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
+                 displayCmd.display);
+#ifdef COMPOSER3_V3
+  ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                 displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+  ExecuteCommand(displayCmd.presentOrValidateDisplay,
+                 &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
+                 displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
+#else
+  int32_t frameIntervalNs = -1;
+  ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
+                 displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
+  ExecuteCommand(displayCmd.presentOrValidateDisplay,
+                 &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
+                 displayCmd.expectedPresentTime, frameIntervalNs);
+#endif
+}
+
+void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayCommand &displayCmd) {
+  for (const auto &layerCmd : displayCmd.layers) {
+#ifdef COMPOSER3_V3
+    ExecuteCommand(layerCmd.layerLifecycleBatchCommandType,
+                   &CommandEngine::executeSetLayerLifecycleBatchCommandType, displayCmd.display,
+                   layerCmd);
+    if (layerCmd.layerLifecycleBatchCommandType == LayerLifecycleBatchCommandType::DESTROY) {
+      continue;
+    }
+#endif
+    ExecuteCommand(layerCmd.cursorPosition, &CommandEngine::executeSetLayerCursorPosition,
+                   displayCmd.display, layerCmd.layer, *layerCmd.cursorPosition);
+    ExecuteCommand(layerCmd.buffer, &CommandEngine::executeSetLayerBuffer, displayCmd.display,
+                   layerCmd.layer, *layerCmd.buffer);
+    ExecuteCommand(layerCmd.damage, &CommandEngine::executeSetLayerSurfaceDamage,
+                   displayCmd.display, layerCmd.layer, *layerCmd.damage);
+    ExecuteCommand(layerCmd.blendMode, &CommandEngine::executeSetLayerBlendMode, displayCmd.display,
+                   layerCmd.layer, *layerCmd.blendMode);
+    ExecuteCommand(layerCmd.composition, &CommandEngine::executeSetLayerComposition,
+                   displayCmd.display, layerCmd.layer, *layerCmd.composition);
+    // AIDL definiton of LayerCommand Color which calls into executeSetLayerColor:
+    // Sets the color of the given layer. If the composition type of the layer is not
+    // Composition.SOLID_COLOR, this call must succeed and have no other effect.
+    // Since the function depends on composition type to be set, executeSetLayerColor
+    // has to be called after executeSetLayerComposition
+    ExecuteCommand(layerCmd.color, &CommandEngine::executeSetLayerColor, displayCmd.display,
+                   layerCmd.layer, *layerCmd.color);
+    ExecuteCommand(layerCmd.dataspace, &CommandEngine::executeSetLayerDataspace, displayCmd.display,
+                   layerCmd.layer, *layerCmd.dataspace);
+    ExecuteCommand(layerCmd.displayFrame, &CommandEngine::executeSetLayerDisplayFrame,
+                   displayCmd.display, layerCmd.layer, *layerCmd.displayFrame);
+    ExecuteCommand(layerCmd.planeAlpha, &CommandEngine::executeSetLayerPlaneAlpha,
+                   displayCmd.display, layerCmd.layer, *layerCmd.planeAlpha);
+    ExecuteCommand(layerCmd.sidebandStream, &CommandEngine::executeSetLayerSidebandStream,
+                   displayCmd.display, layerCmd.layer, *layerCmd.sidebandStream);
+    ExecuteCommand(layerCmd.sourceCrop, &CommandEngine::executeSetLayerSourceCrop,
+                   displayCmd.display, layerCmd.layer, *layerCmd.sourceCrop);
+    ExecuteCommand(layerCmd.visibleRegion, &CommandEngine::executeSetLayerVisibleRegion,
+                   displayCmd.display, layerCmd.layer, *layerCmd.visibleRegion);
+    ExecuteCommand(layerCmd.transform, &CommandEngine::executeSetLayerTransform, displayCmd.display,
+                   layerCmd.layer, *layerCmd.transform);
+    ExecuteCommand(layerCmd.z, &CommandEngine::executeSetLayerZOrder, displayCmd.display,
+                   layerCmd.layer, *layerCmd.z);
+    ExecuteCommand(layerCmd.brightness, &CommandEngine::executeSetLayerBrightness,
+                   displayCmd.display, layerCmd.layer, *layerCmd.brightness);
+    ExecuteCommand(layerCmd.perFrameMetadata, &CommandEngine::executeSetLayerPerFrameMetadata,
+                   displayCmd.display, layerCmd.layer, *layerCmd.perFrameMetadata);
+    ExecuteCommand(layerCmd.perFrameMetadataBlob,
+                   &CommandEngine::executeSetLayerPerFrameMetadataBlobs, displayCmd.display,
+                   layerCmd.layer, *layerCmd.perFrameMetadataBlob);
+    ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
+                   displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
+    ExecuteCommand(layerCmd.bufferSlotsToClear, &CommandEngine::executeSetLayerBufferSlotsToClear,
+                   displayCmd.display, layerCmd.layer, *layerCmd.bufferSlotsToClear);
+  }
+}
+
 Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayCommand> &commands,
                                                  std::vector<CommandResultPayload> *result) {
-  // std::set<int64_t> displaysPendingBrightnessChange;
   mCommandIndex = 0;
-
   for (const auto &displayCmd : commands) {
-    ExecuteCommand(displayCmd.brightness, &CommandEngine::executeSetDisplayBrightness,
-                   displayCmd.display, *displayCmd.brightness);
-    for (const auto &layerCmd : displayCmd.layers) {
-      ExecuteCommand(layerCmd.cursorPosition, &CommandEngine::executeSetLayerCursorPosition,
-                     displayCmd.display, layerCmd.layer, *layerCmd.cursorPosition);
-      ExecuteCommand(layerCmd.buffer, &CommandEngine::executeSetLayerBuffer, displayCmd.display,
-                     layerCmd.layer, *layerCmd.buffer);
-      ExecuteCommand(layerCmd.damage, &CommandEngine::executeSetLayerSurfaceDamage,
-                     displayCmd.display, layerCmd.layer, *layerCmd.damage);
-      ExecuteCommand(layerCmd.blendMode, &CommandEngine::executeSetLayerBlendMode,
-                     displayCmd.display, layerCmd.layer, *layerCmd.blendMode);
-      ExecuteCommand(layerCmd.composition, &CommandEngine::executeSetLayerComposition,
-                     displayCmd.display, layerCmd.layer, *layerCmd.composition);
-      // AIDL definiton of LayerCommand Color which calls into executeSetLayerColor:
-      // Sets the color of the given layer. If the composition type of the layer is not
-      // Composition.SOLID_COLOR, this call must succeed and have no other effect.
-      // Since the function depends on composition type to be set, executeSetLayerColor
-      // has to be called after executeSetLayerComposition
-      ExecuteCommand(layerCmd.color, &CommandEngine::executeSetLayerColor, displayCmd.display,
-                     layerCmd.layer, *layerCmd.color);
-      ExecuteCommand(layerCmd.dataspace, &CommandEngine::executeSetLayerDataspace,
-                     displayCmd.display, layerCmd.layer, *layerCmd.dataspace);
-      ExecuteCommand(layerCmd.displayFrame, &CommandEngine::executeSetLayerDisplayFrame,
-                     displayCmd.display, layerCmd.layer, *layerCmd.displayFrame);
-      ExecuteCommand(layerCmd.planeAlpha, &CommandEngine::executeSetLayerPlaneAlpha,
-                     displayCmd.display, layerCmd.layer, *layerCmd.planeAlpha);
-      ExecuteCommand(layerCmd.sidebandStream, &CommandEngine::executeSetLayerSidebandStream,
-                     displayCmd.display, layerCmd.layer, *layerCmd.sidebandStream);
-      ExecuteCommand(layerCmd.sourceCrop, &CommandEngine::executeSetLayerSourceCrop,
-                     displayCmd.display, layerCmd.layer, *layerCmd.sourceCrop);
-      ExecuteCommand(layerCmd.visibleRegion, &CommandEngine::executeSetLayerVisibleRegion,
-                     displayCmd.display, layerCmd.layer, *layerCmd.visibleRegion);
-      ExecuteCommand(layerCmd.transform, &CommandEngine::executeSetLayerTransform,
-                     displayCmd.display, layerCmd.layer, *layerCmd.transform);
-      ExecuteCommand(layerCmd.z, &CommandEngine::executeSetLayerZOrder, displayCmd.display,
-                     layerCmd.layer, *layerCmd.z);
-      ExecuteCommand(layerCmd.brightness, &CommandEngine::executeSetLayerBrightness,
-                     displayCmd.display, layerCmd.layer, *layerCmd.brightness);
-      ExecuteCommand(layerCmd.perFrameMetadata, &CommandEngine::executeSetLayerPerFrameMetadata,
-                     displayCmd.display, layerCmd.layer, *layerCmd.perFrameMetadata);
-      ExecuteCommand(layerCmd.perFrameMetadataBlob,
-                     &CommandEngine::executeSetLayerPerFrameMetadataBlobs, displayCmd.display,
-                     layerCmd.layer, *layerCmd.perFrameMetadataBlob);
-      ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
-                     displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
-    }
-    ExecuteCommand(displayCmd.colorTransformMatrix, &CommandEngine::executeSetColorTransform,
-                   displayCmd.display, *displayCmd.colorTransformMatrix);
-    ExecuteCommand(displayCmd.clientTarget, &CommandEngine::executeSetClientTarget,
-                   displayCmd.display, *displayCmd.clientTarget);
-    ExecuteCommand(displayCmd.virtualDisplayOutputBuffer, &CommandEngine::executeSetOutputBuffer,
-                   displayCmd.display, *displayCmd.virtualDisplayOutputBuffer);
-    ExecuteCommand(displayCmd.acceptDisplayChanges, &CommandEngine::executeAcceptDisplayChanges,
-                   displayCmd.display);
-    ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
-                   displayCmd.display);
-#ifdef COMPOSER3_V3
-    ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
-                   displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
-    ExecuteCommand(displayCmd.presentOrValidateDisplay,
-                   &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
-                   displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
-#endif
-
+    executeLayerCommmands(displayCmd);
+    executeDisplayCommmands(displayCmd);
     ++mCommandIndex;
-
-    // TODO: Process brightness change on presentDisplay if both commands come in?????
-    // if (displayCmd.validateDisplay || displayCmd.presentDisplay ||
-    //     displayCmd.presentOrValidateDisplay) {
-    //   displaysPendingBrightnessChange.erase(displayCmd.display);
-    // } else if (DisplayCmd.brightness) {
-    //   displaysPendingBrightnessChange.insert(displayCmd.display);
-    // }
   }
 
   if (!mCommandIndex) {
@@ -1154,6 +1236,55 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
   reset();
 
   return (mCommandIndex) ? Error::None : Error::BadParameter;
+}
+
+Error AidlComposerClient::CommandEngine::qtiExtendedExecute(
+    const std::vector<DisplayCommand> &commands, const std::vector<QtiDisplayCommand> &qti_commands,
+    std::vector<CommandResultPayload> *result) {
+  std::vector<CommandResultPayload> qti_results = {};
+  auto status = Error::None;
+
+  // Execute all layer commands first.
+  mCommandIndex = 0;
+  for (const auto &displayCmd : commands) {
+    executeLayerCommmands(displayCmd);
+    ++mCommandIndex;
+  }
+
+  *result = mWriter->getPendingCommandResults();
+  reset();
+  // Execute all QTI extension commands after all layer commands.
+  if (!qti_commands.empty()) {
+    status = qtiExecute(qti_commands, &qti_results);
+  }
+
+  if (mCommandIndex) {
+    // Execute all display commands finally.
+    mCommandIndex = 0;
+    for (const auto &displayCmd : commands) {
+      executeDisplayCommmands(displayCmd);
+      ++mCommandIndex;
+    }
+
+    auto new_results = mWriter->getPendingCommandResults();
+    reset();
+    if (!new_results.empty()) {
+      for (auto &r : new_results) {
+        result->push_back(std::move(r));
+      }
+    }
+
+    if (!qti_results.empty()) {
+      for (auto &r : qti_results) {
+        result->push_back(std::move(r));
+      }
+    }
+  } else {
+    ALOGW("%s: No command found", __FUNCTION__);
+    status = Error::BadParameter;
+  }
+
+  return status;
 }
 
 Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplayCommand> &commands,
@@ -1215,8 +1346,13 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
   auto err = lookupBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot, useCache,
                           &clientTarget);
   if (err == Error::None) {
-    auto error = mClient.drawcycle_->SetClientTarget(display, clientTarget, fence,
-                                                     INT32(command.dataspace), region, 0);
+    auto error = mClient.drawcycle_->SetClientTarget(
+        display, clientTarget, fence, INT32(command.dataspace), region, 0 /* version */
+#ifdef COMPOSER3_V3
+        ,
+        FLOAT(command.hdrSdrRatio)
+#endif
+    );
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
     if (error == sdm::kErrorNone) {
@@ -1230,14 +1366,15 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
 }
 
 void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
-    uint64_t display, const DisplayBrightness &command) {
+    uint64_t display, const DisplayBrightness &command, bool performing_commit) {
   if (std::isnan(command.brightness) || command.brightness > 1.0f ||
       (command.brightness < 0.0f && command.brightness != -1.0f)) {
     writeError(__FUNCTION__, Error::BadParameter);
     return;
   }
 
-  auto err = mClient.settings_->SetDisplayBrightness(display, command.brightness);
+  auto err =
+      mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }
@@ -1298,6 +1435,7 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
   uint32_t typesCount = 0;
   uint32_t reqsCount = 0;
   bool validate_only = false;
+  // TODO(user): remove typesCount and reqsCount as these are no longer used
   auto status = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
                                                     &typesCount, &reqsCount, &needsCommit);
   if (needsCommit) {
@@ -1305,20 +1443,29 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
       ALOGE("%s: CommitOrPrepare failed %d", __FUNCTION__, status);
     }
     // Implement post validation. Getcomptypes etc;
-    postValidateDisplay(display, typesCount, reqsCount);
+    postValidateDisplay(display);
     mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
   } else {
     if (status == sdm::kErrorNeedsCommit) {
       // Perform post validate.
-      auto error = postValidateDisplay(display, typesCount, reqsCount);
+      auto error = postValidateDisplay(display);
       if (error == Error::None) {
         mClient.drawcycle_->AcceptDisplayChanges(display);
       }
       // Set result to validated, has comp changes
       mWriter->setPresentOrValidateResult(display, static_cast<PresentOrValidate::Result>(2));
-    } else {
+    } else if (status == sdm::kErrorNone) {
       // Set result to Presented.
       mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Presented);
+    } else if (status == sdm::kErrorParameters) {
+      // if external display is hotplugged out during a commit, sdm will return display not found
+      // which is expected so only warn in this case
+      ALOGW("CommitOrPrepare failed: display not found!");
+      return;
+    } else {
+      ALOGE("CommitOrPrepare failed !needsCommit %d", status);
+      writeError(__FUNCTION__, Error::BadConfig);
+      return;
     }
     // perform post present display.
     postPresentDisplay(display, &presentFence);
@@ -1350,6 +1497,88 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
     writeError(__FUNCTION__, err);
   }
 }
+
+#ifdef COMPOSER3_V3
+void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType(
+    int64_t display, const LayerCommand &layerCmd) {
+  DisplayData *disp_data_ptr = nullptr;
+  sdm::LayerId layer = layerCmd.layer;
+  LayerLifecycleBatchCommandType cmd = layerCmd.layerLifecycleBatchCommandType;
+
+  if (display >= 0 && layer >= 0) {
+    std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+    auto dpy = mClient.mDisplayData.find(display);
+    // The display entry may have already been removed by onHotplug.
+    if (dpy != mClient.mDisplayData.end()) {
+      disp_data_ptr = &dpy->second;
+    } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
+      // As from SF client, all destroy-layer commands are updated to command list in Display
+      // destructor while destroying display on hot plug disconnect call, but it doesn't share
+      // updated commands to composer while display is destroying, and sending all these commands
+      // in next cycle Validate() or PresentOrValidate() call, i.e. after destruction of display.
+      // Still composer flushes all pending layers from stack of unplugged display before
+      // destroying its dataset entirely. So, no need to report error for all destroy-layer
+      // commands received after destruction of their display.
+      ALOGW("%s: Can\'t destroy layer-%lu from destroyed Display-%lu layer stack!", __FUNCTION__,
+            layer, display);
+      writeError(__FUNCTION__, Error::BadDisplay);
+      return;
+    } else {
+      // Note: We do not destroy the layer on this error as the hotplug
+      // disconnect invalidates the display id. The implementation should
+      // ensure all layers for the display are destroyed.
+      ALOGE("%s: Invalid  display Id(%lu)!", __FUNCTION__, display);
+      writeError(__FUNCTION__, Error::BadDisplay);
+      return;
+    }
+  } else {
+    ALOGE("%s: Invalid Parameter out of either display Id(%lu) or  layer Id(%lu)!", __FUNCTION__,
+          display, layer);
+    writeError(__FUNCTION__, Error::BadParameter);
+    return;
+  }
+
+  if (cmd == LayerLifecycleBatchCommandType::CREATE) {
+    ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %lu for display-%lu.", __FUNCTION__,
+          layer, display);
+    auto error = mClient.layer_builder_->CreateLayer(display, &layer);
+    if (error == sdm::kErrorNone) {
+      mClient.drawcycle_->LayerStackUpdated(display);
+      std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+      auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
+      ly->second.Buffers.resize(layerCmd.newBufferSlotCount);
+    } else {
+      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      writeError(__FUNCTION__, Error::BadLayer);
+      return;
+    }
+  } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
+    ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %lu for display-%lu.", __FUNCTION__,
+          layer, display);
+    mClient.drawcycle_->WaitForDrawCycleToComplete(display);
+    auto error = mClient.layer_builder_->DestroyLayer(display, layer);
+    mClient.drawcycle_->LayerStackUpdated(display);
+
+    if (error == sdm::kErrorNone) {
+      std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+      auto dpy = mClient.mDisplayData.find(display);
+      // The display entry may have already been removed by onHotplug.
+      if (dpy != mClient.mDisplayData.end()) {
+        dpy->second.Layers.erase(layer);
+      }
+    } else {
+      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      writeError(__FUNCTION__, Error::BadLayer);
+      return;
+    }
+  } else {
+    ALOGE("%s: Unsupported LLCBC command Id %d for Layer-%lu and display-%lu !", __FUNCTION__, cmd,
+          layer, display);
+    writeError(__FUNCTION__, Error::BadConfig);
+    return;
+  }
+}
+#endif
 
 void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t display,
                                                                       int64_t layer,
@@ -1645,6 +1874,29 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   // writeError(__FUNCTION__, Error::Unsupported);
 }
 
+void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
+    int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
+  auto error = Error::None;
+  for (auto &slot : slotsToClear) {
+    SnapHandle *layerBuffer = nullptr;
+    lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, true, &layerBuffer);
+    if (layerBuffer &&
+        mClient.layer_builder_->CheckLayerBufferBinding(display, layer, layerBuffer)) {
+      // Avoid to clear active buffer slot
+      continue;
+    }
+
+    auto clearErr = updateBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, false, nullptr);
+    if (error == Error::None) {
+      error = clearErr;
+    }
+  }
+
+  if (error != Error::None) {
+    writeError(__FUNCTION__, error);
+  }
+}
+
 Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
   bool validate_only = true;
   bool needsCommit = false;
@@ -1658,7 +1910,7 @@ Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
     return Error::BadConfig;
   }
 
-  return postValidateDisplay(display, types_count, reqs_count);
+  return postValidateDisplay(display);
 }
 
 Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
@@ -1695,69 +1947,248 @@ Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
   return Error::None;
 }
 
-Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, uint32_t &types_count,
-                                                             uint32_t &reqs_count) {
-  std::vector<sdm::LayerId> changedLayers;
-  std::vector<Composition> compositionTypes;
+Error AidlComposerClient::CommandEngine::setChangedCompositionTypes(int64_t display) {
   std::vector<sdm::LayerId> requestedLayers;
-  std::vector<int32_t> requestMasks;
-  ClientTargetProperty clientTargetProperty;
-  changedLayers.resize(types_count);
-  compositionTypes.resize(types_count);
+  std::vector<Composition> compositionTypes;
+  uint32_t num_elements = 0;
+
   auto err =
-      mClient.drawcycle_->GetChangedCompositionTypes(display, &types_count, nullptr, nullptr);
+      mClient.drawcycle_->GetChangedCompositionTypes(display, &num_elements, nullptr, nullptr);
   if (err != sdm::kErrorNone) {
     return Error::BadConfig;
   }
 
-  err = mClient.drawcycle_->GetChangedCompositionTypes(
-      display, &types_count, changedLayers.data(),
-      reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
+  requestedLayers.resize(num_elements);
+  compositionTypes.resize(num_elements);
 
+  err = mClient.drawcycle_->GetChangedCompositionTypes(
+      display, &num_elements, requestedLayers.data(),
+      reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
     return static_cast<Error>(err);
   }
 
+  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(requestedLayers),
+                                      compositionTypes);
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayRequests(int64_t display) {
+  std::vector<sdm::LayerId> requestedLayers;
+  std::vector<int32_t> requestMasks;
   int32_t display_reqs = 0;
-  err =
-      mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count, nullptr, nullptr);
+  uint32_t num_elements = 0;
+
+  auto err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &num_elements, nullptr,
+                                                    nullptr);
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
     return Error::BadConfig;
   }
 
-  requestedLayers.resize(reqs_count);
-  requestMasks.resize(reqs_count);
-  err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count,
+  requestedLayers.resize(num_elements);
+  requestMasks.resize(num_elements);
+
+  err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &num_elements,
                                                requestedLayers.data(), requestMasks.data());
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
-
-    requestedLayers.clear();
-    requestMasks.clear();
+    return Error::BadConfig;
   }
 
+  mWriter->setDisplayRequests(display, display_reqs,
+                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setClientTargetProperty(int64_t display) {
+  ClientTargetProperty clientTargetProperty;
   sdm::SDMClientTargetProperty client_property{};
-  err = mClient.settings_->GetClientTargetProperty(display, &client_property);
+  static constexpr float kBrightness = 1.f;
+  DimmingStage dimmingStage = DimmingStage::NONE;
+
+  auto err = mClient.settings_->GetClientTargetProperty(display, &client_property);
   if (err != sdm::kErrorNone) {
-    // todo: reset to default values
     return Error::BadConfig;
   }
 
   clientTargetProperty.dataspace = static_cast<Dataspace>(client_property.dataspace);
   clientTargetProperty.pixelFormat = static_cast<PixelFormat>(client_property.pixel_format);
 
-  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(changedLayers),
-                                      compositionTypes);
-  mWriter->setDisplayRequests(display, display_reqs,
-                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
-  static constexpr float kBrightness = 1.f;
-  DimmingStage dimmingStage = DimmingStage::NONE;
   mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
+
+  return Error::None;
+}
+
+#ifdef COMPOSER3_V4
+Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts *luts,
+                                                             int32_t *lut_fd) {
+  if (!lut_3d) {
+    return Error::BadConfig;
+  }
+
+  // reset luts on client
+  if (lut_3d->lutEntries == nullptr) {
+    return Error::None;
+  }
+
+  // initialize optional vector
+  luts->offsets.emplace();
+  // a single zero offset is set since only one lut is present
+  // TODO(user): modify when multiple luts need to be supported for a single layer, eg: gridEntries
+  luts->offsets->emplace_back(INT32(0));
+
+  uint32_t num_offsets = luts->offsets->size();
+  for (auto count = 0; count < num_offsets; count++) {
+    LutProperties lutProperties = {};
+    // only 3d lut is currently supported
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.dimension = LutProperties::Dimension::THREE_D;
+    lutProperties.size = INT32(lut_3d->dim);
+    // although sampling_keys is a vector, framework only supports taking the first value
+    // RGB sampling is fixed for 3d lut
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+    luts->lutProperties.emplace_back(lutProperties);
+  }
+
+  // calculate size of buffer
+  uint32_t final_size = 0;
+  for (auto count = 0; count < num_offsets - 1; count++) {
+    // size of lut is equal to offset of next lut
+    final_size += luts->offsets->at(count + 1);
+  }
+
+  // calculate the size of last lut
+  uint32_t exponent =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t channels =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t lut_size = std::pow(luts->lutProperties[num_offsets - 1].size, exponent);
+  final_size += lut_size * channels;
+  size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
+
+  // use `ashmem_create_region` to create a shared memory segment
+  int32_t fd = ashmem_create_region("display_luts", buffer_size);
+  if (fd < 0 || !ashmem_valid(fd)) {
+    ALOGE("Couldn't create ashmem region: fd %d", fd);
+    return Error::BadConfig;
+  }
+
+  void *data = mmap(nullptr, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (data == MAP_FAILED) {
+    ALOGE("MAP_FAILED: fd %d", fd);
+    close(fd);
+    return Error::BadConfig;
+  }
+
+  // convert 3d lut entries to 1d normalized float buffer
+  std::vector<float> buffer;
+  // TODO(user): take correct lut_size when multiple luts will be supported
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].G) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].B) / 1023.f);
+  }
+
+  if (data) {
+    std::memcpy((float *)data, buffer.data(), buffer_size);
+  }
+
+  munmap(data, buffer_size);
+  buffer.clear();
+  lut_3d->validLutEntries = false;
+  lut_3d->validGridEntries = false;
+
+  if (lut_3d->lutEntries != nullptr) {
+    delete[] lut_3d->lutEntries;
+    lut_3d->lutEntries = nullptr;
+  }
+
+  if (lut_3d->gridEntries != nullptr) {
+    delete[] lut_3d->gridEntries;
+    lut_3d->gridEntries = nullptr;
+  }
+
+  *lut_fd = fd;
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
+  auto requested_luts = std::make_unique<std::vector<std::pair<sdm::LayerId, Lut3d *>>>();
+  std::vector<::ndk::ScopedFileDescriptor> requestedFds;
+  std::vector<int64_t> requestedLayers;
+  std::vector<Luts> requestedLuts;
+
+  auto err = mClient.drawcycle_->GetDisplayLuts(display, requested_luts);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
+  }
+
+  uint32_t num_elements = requested_luts->size();
+  if (!num_elements) {
+    return Error::None;
+  }
+
+  requestedLuts.resize(num_elements);
+  auto it = requested_luts->begin();
+  for (uint32_t i = 0; i < num_elements; i++, it++) {
+    int32_t fd = -1;
+    requestedLayers.emplace_back(static_cast<int64_t>(it->first));
+    auto error = populateDisplayLuts(it->second, &requestedLuts[i], &fd);
+    if (error != Error::None) {
+      return error;
+    }
+
+    if (fd == -1) {
+      ALOGI("%s: Resetting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(fd));
+    } else {
+      ALOGI("%s: Setting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(dup(fd)));
+      close(fd);
+    }
+  }
+
+  mWriter->setDisplayLuts(display, requestedLayers, requestedLuts, std::move(requestedFds));
+
+  return Error::None;
+}
+#endif
+
+Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display) {
+  auto error = setChangedCompositionTypes(display);
+  if (error != Error::None) {
+    return error;
+  }
+
+  error = setDisplayRequests(display);
+  if (error != Error::None) {
+    // clear mCommandsResults on error
+    reset();
+    return error;
+  }
+
+  error = setClientTargetProperty(display);
+  if (error != Error::None) {
+    reset();
+    return error;
+  }
+
+#ifdef COMPOSER3_V4
+  error = setDisplayLuts(display);
+  if (error != Error::None) {
+    reset();
+    return error;
+  }
+#endif
 
   return Error::None;
 }
@@ -1783,7 +2214,12 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t displ
                           &clientTarget);
   if (err == Error::None) {
     auto error = mClient.drawcycle_->SetClientTarget(
-        display, clientTarget, fence, INT32(command.dataspace), region, 3 /* version*/);
+        display, clientTarget, fence, INT32(command.dataspace), region, 3 /* version */
+#ifdef COMPOSER3_V3
+        ,
+        FLOAT(command.hdrSdrRatio)
+#endif
+    );
     auto updateBufErr = updateBuffer(display, -1, BufferCache::CLIENT_TARGETS, command.buffer.slot,
                                      useCache, clientTarget);
     if (error == sdm::kErrorNone) {

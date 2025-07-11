@@ -1,5 +1,4 @@
 #!/vendor/bin/sh
-# Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,7 +26,10 @@
 # OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-#
+
+# Changes from Qualcomm Technologies, Inc. are provided under the following license:
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
 
 target=`getprop ro.board.platform`
 if [ -f /sys/devices/soc0/soc_id ]; then
@@ -37,11 +39,74 @@ else
 fi
 
 case "$target" in
+    "vienna")
+    #SOC ID for Vienna is 669, Vienna P is 670
+    case "$soc_hwid" in
+      669|670)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        ;;
+    esac
+    ;;
+    "canoe")
+    # SOC ID for Canoe is 660
+    # SOC ID for Canoe APQ is 661
+    # SOC ID for KaM is 704
+    # SOC ID for Alor is 685
+    # SOC ID for Alor APQ is 727
+    case "$soc_hwid" in
+      660|661|704|685|727)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        ;;
+    esac
+    ;;
+    "seraph")
+    # SOC ID for Seraph is 672
+    # SOC ID for Seraph is 673
+    case "$soc_hwid" in
+      672|673)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.idle_time 0
+        setprop vendor.display.idle_time_inactive 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_multirect 1
+        setprop vendor.display.disable_llcbc_support 1
+        setprop vendor.display.enable_rounded_corner 0
+        ;;
+    esac
+    ;;
     "sun")
     #SOC ID for Sun is 618
     #SOC ID for Sun APQ is 639
+    #SOC ID for CQ8750S is 705
+    #SOC ID for CQ8725S is 706
     case "$soc_hwid" in
-      618|639)
+      618|639|705|706)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 6
@@ -89,7 +154,6 @@ case "$target" in
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.cpu_cluster_boost_mask 15
-        setprop vendor.display.supports_background_blur 0
         ;;
     esac
     ;;
@@ -103,7 +167,7 @@ case "$target" in
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.display.enable_rc_support 0
-        setprop vendor.display.target.version 4
+        setprop vendor.display.target.version 5
         setprop vendor.display.disable_mitigated_fps 1
         setprop vendor.display.disable_cwb_idle_fallback 1
         setprop vendor.display.enable_rounded_corner 0  #disable HW RC
@@ -112,6 +176,7 @@ case "$target" in
         setprop vendor.display.use_smooth_motion 0  #disable smooth motion
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.display.disable_dpps_features 1
         ;;
     esac
     ;;
@@ -248,6 +313,27 @@ case "$target" in
         475)
         # Set property for Yupik
         setprop vendor.display.enable_posted_start_dyn 2
+        ;;
+    esac
+    ;;
+    "neo61")
+    case "$soc_hwid" in
+        554)
+        setprop vendor.display.enable_null_display 1
+        ;;
+        579)
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.target.version 3
+        setprop vendor.display.disable_mitigated_fps 1
+        setprop vendor.display.enable_rounded_corner 0
+        setprop vendor.display.wait_for_primary_display 1
+        setprop vendor.display.force_gpu_composition 1
+        setprop vendor.display.allow_tonemap_native 1
         ;;
     esac
     ;;

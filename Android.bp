@@ -12,6 +12,7 @@ soong_config_module_type {
         "llvmcov",
         "smmu_proxy",
         "ubwcp_headers",
+        "neo"
     ],
     properties: [
         "cflags",
@@ -87,17 +88,6 @@ qtidisplay_cc_defaults {
 }
 
 qtidisplay_cc_defaults {
-    name: "qtidisplay_libubwcp_header_defaults",
-    soong_config_variables: {
-        ubwcp_headers: {
-            header_libs: [
-                "libubwcp_headers",
-            ]
-        }
-    }
-}
-
-qtidisplay_cc_defaults {
     name: "qtidisplay_common_defaults",
     cflags: [
         "-Wno-missing-field-initializers",
@@ -145,6 +135,9 @@ qtidisplay_cc_defaults {
         },
         ubwcp_headers: {
             cflags: ["-DTARGET_USES_UBWCP"],
+        },
+        neo: {
+            cflags: ["-DTARGET_INCLUDES_NEO"],
         },
         var3 : {
             enabled: false,
@@ -342,6 +335,7 @@ subdirs = [
     "gralloc",
     "gpu_tonemapper",
     "hdmi_cec",
+    "dp_cec",
     "sde-drm",
     "sdm/libs/utils",
     "sdm/libs/core",
