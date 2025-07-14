@@ -60,8 +60,9 @@ case "$target" in
     # SOC ID for Canoe APQ is 661
     # SOC ID for KaM is 704
     # SOC ID for Alor is 685
+    # SOC ID for Alor APQ is 727
     case "$soc_hwid" in
-      660|661|704|685)
+      660|661|704|685|727)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -102,8 +103,10 @@ case "$target" in
     "sun")
     #SOC ID for Sun is 618
     #SOC ID for Sun APQ is 639
+    #SOC ID for CQ8750S is 705
+    #SOC ID for CQ8725S is 706
     case "$soc_hwid" in
-      618|639)
+      618|639|705|706)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 6
