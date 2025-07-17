@@ -18,10 +18,10 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <cutils/properties.h>
 #include <errno.h>
@@ -799,9 +799,14 @@ void HWCDisplay::BuildLayerStack() {
 
     Layer *layer = hwc_layer->GetSDMLayer();
     layer->flags = {};   // Reset earlier flags
-    // Mark all layers to skip, when client target handle is NULL
-    if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Client ||
-        !client_target_->GetSDMLayer()->input_buffer.buffer_id) {
+
+    // Mark all layers to skip, when client target handle is NULL in default draw
+    if ((!client_target_->GetSDMLayer()->input_buffer.buffer_id) &&
+        (draw_method_ == kDrawDefault)) {
+      layer->flags.skip = true;
+    }
+
+    if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Client) {
       layer->flags.skip = true;
     } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::SolidColor) {
       layer->flags.solid_fill = true;
