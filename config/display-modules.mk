@@ -20,6 +20,8 @@ ifneq ($(TARGET_IS_HEADLESS),true)
 		DISPLAY_MODULES_HARDWARE += libcomposertestservice
 	endif
 
+    DISPLAY_FW_PREBUILTS = dcp.bin dcp_elf
+
     DISPLAY_MODULES_HARDWARE += libsdmcore \
                             libsdmdal \
                             libdrmutils \
