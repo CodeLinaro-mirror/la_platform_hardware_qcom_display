@@ -72,6 +72,8 @@ case "$target" in
         setprop vendor.display.enable_spec_fence 1
         if [ "$soc_hwid" -ne 635 ]; then
            setprop vendor.display.enable_inline_writeback 1
+        else
+           setprop vendor.display.disable_cwb_idle_fallback 1
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
