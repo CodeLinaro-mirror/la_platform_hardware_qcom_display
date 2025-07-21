@@ -208,6 +208,12 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
       const std::shared_ptr<IDisplayConfigCallback> &in_callback, int32_t in_disp_id,
       const Rect &in_rect, bool in_post_processed,
       const ::aidl::android::hardware::common::NativeHandle &in_buffer) override;
+#ifdef COMPOSER3_V4
+  ScopedAStatus setCWBOutputBufferV2(
+      const std::shared_ptr<IDisplayConfigCallback> &in_callback, int32_t in_disp_id,
+      const Rect &in_roi_rect, const Rect &in_downscale_rect, int32_t in_cwb_control_flag,
+      const ::aidl::android::hardware::common::NativeHandle &in_buffer) override;
+#endif
   ScopedAStatus setCameraSmoothInfo(CameraSmoothOp in_op, int32_t in_fps);
   ScopedAStatus registerCallback(const std::shared_ptr<IDisplayConfigCallback> &in_callback,
                                  int64_t *aidl_return);
@@ -268,6 +274,11 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   sdm::nsecs_t SystemTime(int clock);
 
  private:
+  ScopedAStatus setCWBOutputBufferInternal(
+      const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id,
+      const Rect &roi_rect, const Rect &downscale_rect, int32_t cwb_control_flag,
+      const ::aidl::android::hardware::common::NativeHandle &buffer);
+
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
 
   std::weak_ptr<DisplayConfig::ConfigCallback> callback_;

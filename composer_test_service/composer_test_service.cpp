@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -88,17 +88,19 @@ int ComposerTestService::ConfigureCWBTest(const android::Parcel *input_parcel) {
 
   struct CWBConfig cwb_config;
   cwb_config.disp = static_cast<DisplayType>(input_parcel->readInt32());
-  cwb_config.post_processed = input_parcel->readInt32();
+  cwb_config.cwb_control_flag = input_parcel->readInt32();
   cwb_config.format = static_cast<LayerBufferFormat>(input_parcel->readInt32());
   cwb_config.trigger_frequency = input_parcel->readInt64();
   cwb_config.cwb_roi.left = input_parcel->readInt32();
   cwb_config.cwb_roi.top = input_parcel->readInt32();
   cwb_config.cwb_roi.right = input_parcel->readInt32();
   cwb_config.cwb_roi.bottom = input_parcel->readInt32();
-  DLOGI("disp %d, post_processed %d, format %d, frequency %" PRIu64 "msec, "
-        "ROI: LTRB [%d %d %d %d]", cwb_config.disp, cwb_config.post_processed,
-        cwb_config.format, cwb_config.trigger_frequency, cwb_config.cwb_roi.left,
-        cwb_config.cwb_roi.top, cwb_config.cwb_roi.right, cwb_config.cwb_roi.bottom);
+  DLOGI("disp %d, cwb_control_flag %d, format %d, frequency %" PRIu64
+        "msec, "
+        "ROI: LTRB [%d %d %d %d]",
+        cwb_config.disp, cwb_config.cwb_control_flag, cwb_config.format,
+        cwb_config.trigger_frequency, cwb_config.cwb_roi.left, cwb_config.cwb_roi.top,
+        cwb_config.cwb_roi.right, cwb_config.cwb_roi.bottom);
 
   return cwb_test_intf_->ConfigureCWB(cwb_config);
 }

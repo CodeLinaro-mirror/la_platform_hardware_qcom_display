@@ -27,8 +27,8 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-# ​​​​​Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
-# Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+# Changes from Qualcomm Technologies, Inc. are provided under the following license:
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
 target=`getprop ro.board.platform`
@@ -60,8 +60,9 @@ case "$target" in
     # SOC ID for Canoe APQ is 661
     # SOC ID for KaM is 704
     # SOC ID for Alor is 685
+    # SOC ID for Alor APQ is 727
     case "$soc_hwid" in
-      660|661|704|685)
+      660|661|704|685|727)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -72,6 +73,7 @@ case "$target" in
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
         ;;
     esac
     ;;
@@ -101,8 +103,10 @@ case "$target" in
     "sun")
     #SOC ID for Sun is 618
     #SOC ID for Sun APQ is 639
+    #SOC ID for CQ8750S is 705
+    #SOC ID for CQ8725S is 706
     case "$soc_hwid" in
-      618|639)
+      618|639|705|706)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 6

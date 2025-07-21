@@ -108,7 +108,6 @@ using aidl::android::hardware::graphics::composer3::HdrCapabilities;
 using aidl::android::hardware::graphics::composer3::IComposerCallback;
 using aidl::android::hardware::graphics::composer3::LayerBrightness;
 #ifdef COMPOSER3_V4
-using aidl::android::hardware::graphics::composer3::Luts;
 using aidl::android::hardware::graphics::composer3::OutputType;
 #endif
 using aidl::android::hardware::graphics::composer3::OverlayProperties;
@@ -460,7 +459,14 @@ class AidlComposerClient : public BnComposerClient,
       return updateBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle);
     }
     Error postPresentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
-    Error postValidateDisplay(int64_t display, uint32_t &types_count, uint32_t &reqs_count);
+    Error postValidateDisplay(int64_t display);
+    Error setChangedCompositionTypes(int64_t display);
+    Error setDisplayRequests(int64_t display);
+    Error setClientTargetProperty(int64_t display);
+#ifdef COMPOSER3_V4
+    Error setDisplayLuts(int64_t display);
+    Error populateDisplayLuts(Lut3d *lut_3d, Luts *luts, int32_t *lut_fd);
+#endif
 
     void GetSDMRectFromRect(const Rect *rect, sdm::SDMRegion *region) {
       for (int i = 0; i < region->num_rects; i++) {
