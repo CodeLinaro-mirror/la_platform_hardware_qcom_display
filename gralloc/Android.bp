@@ -19,6 +19,8 @@ cc_library_shared {
     shared_libs: [
         "libqdMetaData",
         "libdl",
+        "libgralloctypes",
+        "libhidlbase",
         "android.hardware.graphics.common@1.2",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@2.1",
@@ -110,7 +112,10 @@ cc_library_shared {
 
     srcs: ["QtiGralloc.cpp"],
 
-    header_libs: ["display_intf_headers"],
+    header_libs: [
+        "display_intf_headers",
+        "display_headers",
+    ],
 }
 
 soong_config_module_type {

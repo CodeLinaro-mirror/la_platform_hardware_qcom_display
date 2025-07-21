@@ -43,6 +43,7 @@
 #include "gr_utils.h"
 #include "qdMetaData.h"
 #include "qd_utils.h"
+#include "color_extensions.h"
 
 namespace gralloc {
 
@@ -50,7 +51,6 @@ using aidl::android::hardware::graphics::common::BlendMode;
 using aidl::android::hardware::graphics::common::Cta861_3;
 using aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::PlaneLayout;
-using aidl::android::hardware::graphics::common::PlaneLayoutComponent;
 using aidl::android::hardware::graphics::common::Rect;
 using aidl::android::hardware::graphics::common::Smpte2086;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
@@ -63,81 +63,6 @@ static BufferInfo GetBufferInfo(const BufferDescriptor &descriptor) {
                     descriptor.GetUsage());
 }
 
-static uint64_t getMetaDataSize(uint64_t reserved_region_size) {
-// Only include the reserved region size when using Metadata_t V2
-#ifndef METADATA_V2
-  reserved_region_size = 0;
-#endif
-  return static_cast<uint64_t>(ROUND_UP_PAGESIZE(sizeof(MetaData_t) + reserved_region_size));
-}
-
-#ifndef MULTI_VIEW_SUPPORT
-static void unmapAndReset(private_handle_t *handle) {
-  uint64_t reserved_region_size = handle->reserved_size;
-  if (private_handle_t::validate(handle) == 0 && handle->base_metadata) {
-    munmap(reinterpret_cast<void *>(handle->base_metadata), getMetaDataSize(reserved_region_size));
-    handle->base_metadata = 0;
-  }
-}
-
-static int validateAndMap(private_handle_t *handle) {
-  if (private_handle_t::validate(handle)) {
-    ALOGE("%s: Private handle is invalid - handle:%p", __func__, handle);
-    return -1;
-  }
-  if (handle->fd_metadata < 0) {
-    // Silently return, metadata cannot be used
-    return -1;
-  }
-
-  if (!handle->base_metadata) {
-    uint64_t reserved_region_size = handle->reserved_size;
-    uint64_t size = getMetaDataSize(reserved_region_size);
-    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, handle->fd_metadata, 0);
-    if (base == reinterpret_cast<void *>(MAP_FAILED)) {
-      ALOGE("%s: metadata mmap failed - handle:%p fd: %d err: %s", __func__, handle,
-            handle->fd_metadata, strerror(errno));
-      return -1;
-    }
-    handle->base_metadata = (uintptr_t)base;
-  }
-  return 0;
-}
-
-#else
-static void unmapAndReset(private_handle_t *handle) {
-  uint64_t reserved_region_size = handle->reserved_size();
-  if (private_handle_t::validate(handle) == 0 && handle->base_metadata()) {
-    munmap(reinterpret_cast<void *>(handle->base_metadata()), getMetaDataSize(reserved_region_size));
-    handle->base_metadata() = 0;
-  }
-}
-
-static int validateAndMap(private_handle_t *handle) {
-  if (private_handle_t::validate(handle)) {
-    ALOGE("%s: Private handle is invalid - handle:%p", __func__, handle);
-    return -1;
-  }
-  if (handle->fd_metadata() < 0) {
-    // Silently return, metadata cannot be used
-    return -1;
-  }
-
-  if (!handle->base_metadata()) {
-    uint64_t reserved_region_size = handle->reserved_size();
-    uint64_t size = getMetaDataSize(reserved_region_size);
-    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, handle->fd_metadata(), 0);
-    if (base == reinterpret_cast<void *>(MAP_FAILED)) {
-      ALOGE("%s: metadata mmap failed - handle:%p fd: %d err: %s", __func__, handle,
-            handle->fd_metadata(), strerror(errno));
-      return -1;
-    }
-    handle->base_metadata() = (uintptr_t)base;
-  }
-  return 0;
-}
-#endif  // MULTI_VIEW_SUPPORT
-
 static Error dataspaceToColorMetadata(Dataspace dataspace, ColorMetaData *color_metadata) {
   ColorMetaData out;
   uint32_t primaries = (uint32_t)dataspace & (uint32_t)Dataspace::STANDARD_MASK;
@@ -148,7 +73,7 @@ static Error dataspaceToColorMetadata(Dataspace dataspace, ColorMetaData *color_
     case (uint32_t)Dataspace::STANDARD_BT709:
       out.colorPrimaries = ColorPrimaries_BT709_5;
       break;
-    // TODO(tbalacha): verify this is equivalent
+    // TODO(user): verify this is equivalent
     case (uint32_t)Dataspace::STANDARD_BT470M:
       out.colorPrimaries = ColorPrimaries_BT470_6M;
       break;
@@ -235,120 +160,6 @@ static Error dataspaceToColorMetadata(Dataspace dataspace, ColorMetaData *color_
   color_metadata->range = out.range;
   return Error::NONE;
 }
-static Error colorMetadataToDataspace(ColorMetaData color_metadata, Dataspace *dataspace) {
-  Dataspace primaries, transfer, range = Dataspace::UNKNOWN;
-
-  switch (color_metadata.colorPrimaries) {
-    case ColorPrimaries_BT709_5:
-      primaries = Dataspace::STANDARD_BT709;
-      break;
-    // TODO(tbalacha): verify this is equivalent
-    case ColorPrimaries_BT470_6M:
-      primaries = Dataspace::STANDARD_BT470M;
-      break;
-    case ColorPrimaries_BT601_6_625:
-      primaries = Dataspace::STANDARD_BT601_625;
-      break;
-    case ColorPrimaries_BT601_6_525:
-      primaries = Dataspace::STANDARD_BT601_525;
-      break;
-    case ColorPrimaries_GenericFilm:
-      primaries = Dataspace::STANDARD_FILM;
-      break;
-    case ColorPrimaries_BT2020:
-      primaries = Dataspace::STANDARD_BT2020;
-      break;
-    case ColorPrimaries_AdobeRGB:
-      primaries = Dataspace::STANDARD_ADOBE_RGB;
-      break;
-    case ColorPrimaries_DCIP3:
-      primaries = Dataspace::STANDARD_DCI_P3;
-      break;
-    default:
-      return Error::UNSUPPORTED;
-      /*
-       ColorPrimaries_SMPTE_240M;
-       ColorPrimaries_SMPTE_ST428;
-       ColorPrimaries_EBU3213;
-      */
-  }
-
-  switch (color_metadata.transfer) {
-    case Transfer_sRGB:
-      transfer = Dataspace::TRANSFER_SRGB;
-      break;
-    case Transfer_Gamma2_2:
-      transfer = Dataspace::TRANSFER_GAMMA2_2;
-      break;
-    case Transfer_Gamma2_8:
-      transfer = Dataspace::TRANSFER_GAMMA2_8;
-      break;
-    case Transfer_SMPTE_170M:
-      transfer = Dataspace::TRANSFER_SMPTE_170M;
-      break;
-    case Transfer_Linear:
-      transfer = Dataspace::TRANSFER_LINEAR;
-      break;
-    case Transfer_HLG:
-      transfer = Dataspace::TRANSFER_HLG;
-      break;
-    default:
-      return Error::UNSUPPORTED;
-      /*
-      Transfer_SMPTE_240M
-      Transfer_Log
-      Transfer_Log_Sqrt
-      Transfer_XvYCC
-      Transfer_BT1361
-      Transfer_sYCC
-      Transfer_BT2020_2_1
-      Transfer_BT2020_2_2
-      Transfer_SMPTE_ST2084
-      Transfer_ST_428
-      */
-  }
-
-  switch (color_metadata.range) {
-    case Range_Full:
-      range = Dataspace::RANGE_FULL;
-      break;
-    case Range_Limited:
-      range = Dataspace::RANGE_LIMITED;
-      break;
-    case Range_Extended:
-      range = Dataspace::RANGE_EXTENDED;
-      break;
-    default:
-      return Error::UNSUPPORTED;
-  }
-
-  *dataspace = (Dataspace)((uint32_t)primaries | (uint32_t)transfer | (uint32_t)range);
-  return Error::NONE;
-}
-
-#ifdef QTI_COLORSPACE
-static Error getColorSpaceFromMetaData(ColorMetaData color_metadata, uint32_t *color_space) {
-  Error err = Error::NONE;
-  switch (color_metadata.colorPrimaries) {
-    case ColorPrimaries_BT709_5:
-      *color_space = HAL_CSC_ITU_R_709;
-      break;
-    case ColorPrimaries_BT601_6_525:
-    case ColorPrimaries_BT601_6_625:
-      *color_space = ((color_metadata.range) ? HAL_CSC_ITU_R_601_FR : HAL_CSC_ITU_R_601);
-      break;
-    case ColorPrimaries_BT2020:
-      *color_space = (color_metadata.range) ? HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
-      break;
-    default:
-      err = Error::UNSUPPORTED;
-      *color_space = 0;
-      ALOGW_IF(DEBUG, "Unknown Color primary = %d", color_metadata.colorPrimaries);
-      break;
-  }
-  return err;
-}
-#endif
 
 #ifdef QTI_YUV_PLANE_INFO
 #ifndef MULTI_VIEW_SUPPORT
@@ -497,420 +308,7 @@ static Error getYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr y
 #endif  // MULTI_VIEW_SUPPORT
 #endif
 
-static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &comp) {
-  switch (format) {
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_8888):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBX_8888):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGB_888):
-      comp.sizeInBits = 8;
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.offsetInBits = 8;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.offsetInBits = 16;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value &&
-                 format != HAL_PIXEL_FORMAT_RGB_888) {
-        comp.offsetInBits = 24;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGB_565):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = 5;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.offsetInBits = 5;
-        comp.sizeInBits = 6;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.offsetInBits = 11;
-        comp.sizeInBits = 5;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGR_565):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.offsetInBits = 11;
-        comp.sizeInBits = 5;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.offsetInBits = 5;
-        comp.sizeInBits = 6;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = 5;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRA_8888):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRX_8888):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGR_888):
-      comp.sizeInBits = 8;
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.offsetInBits = 16;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.offsetInBits = 8;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value &&
-                 format != HAL_PIXEL_FORMAT_BGR_888) {
-        comp.offsetInBits = 24;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_5551):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.sizeInBits = 5;
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.sizeInBits = 5;
-        comp.offsetInBits = 5;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.sizeInBits = 5;
-        comp.offsetInBits = 10;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
-        comp.sizeInBits = 1;
-        comp.offsetInBits = 15;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_4444):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.sizeInBits = 4;
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.sizeInBits = 4;
-        comp.offsetInBits = 4;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.sizeInBits = 4;
-        comp.offsetInBits = 8;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
-        comp.sizeInBits = 4;
-        comp.offsetInBits = 12;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_R_8):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RG_88):
-      comp.sizeInBits = 8;
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value &&
-                 format != HAL_PIXEL_FORMAT_R_8) {
-        comp.offsetInBits = 8;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_1010102):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBX_1010102):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 10;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 20;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
-        comp.sizeInBits = 2;
-        comp.offsetInBits = 30;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_ARGB_2101010):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_XRGB_2101010):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 2;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 12;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 22;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
-        comp.sizeInBits = 2;
-        comp.offsetInBits = 0;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRA_1010102):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_BGRX_1010102):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 20;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 10;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
-        comp.sizeInBits = 2;
-        comp.offsetInBits = 30;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_ABGR_2101010):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_XBGR_2101010):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 22;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 12;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.sizeInBits = 10;
-        comp.offsetInBits = 2;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
-        comp.sizeInBits = 2;
-        comp.offsetInBits = 0;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RGBA_FP16):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_R.value) {
-        comp.sizeInBits = 16;
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_G.value) {
-        comp.sizeInBits = 16;
-        comp.offsetInBits = 16;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_B.value) {
-        comp.sizeInBits = 16;
-        comp.offsetInBits = 32;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_A.value) {
-        comp.sizeInBits = 16;
-        comp.offsetInBits = 48;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_SP):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_422_SP):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_NV12_ENCODEABLE):
-      comp.sizeInBits = 8;
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
-        comp.offsetInBits = 8;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_420_SP):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_422_SP):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_NV21_ZSL):
-      comp.sizeInBits = 8;
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
-        comp.offsetInBits = 0;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
-        comp.offsetInBits = 8;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_Y16):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = 16;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YV12):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = 8;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_Y8):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = 8;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
-        comp.offsetInBits = 6;
-        comp.sizeInBits = 10;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
-        comp.offsetInBits = 22;
-        comp.sizeInBits = 10;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RAW16):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_RAW.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = 16;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RAW12):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RAW10):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_RAW.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = -1;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_RAW8):
-      if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_RAW.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = 8;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-#ifdef PLANE_COMPONENT_TYPE_BLOB
-    case static_cast<int32_t>(PixelFormat::BLOB):
-      if (comp.type.value == qtigralloc::PlaneLayoutComponentType_Blob.value) {
-        comp.offsetInBits = 0;
-        comp.sizeInBits = -1;
-      } else {
-        return Error::BAD_VALUE;
-      }
-      break;
-#endif
-    default:
-      ALOGI_IF(DEBUG, "Offset and size in bits unknown for format %d", format);
-      return Error::UNSUPPORTED;
-  }
-  return Error::NONE;
-}
-
-static void grallocToStandardPlaneLayoutComponentType(uint32_t in,
-                                                      std::vector<PlaneLayoutComponent> *components,
-                                                      int32_t format) {
-  PlaneLayoutComponent comp;
-  comp.offsetInBits = -1;
-  comp.sizeInBits = -1;
-
-  if (in & PLANE_COMPONENT_Y) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_Y;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_Cb) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_CB;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_Cr) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_CR;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_R) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_R;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_G) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_G;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_B) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_B;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_A) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_A;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_RAW) {
-    comp.type = android::gralloc4::PlaneLayoutComponentType_RAW;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-      components->push_back(comp);
-  }
-
-  if (in & PLANE_COMPONENT_META) {
-    comp.type = qtigralloc::PlaneLayoutComponentType_Meta;
-    components->push_back(comp);
-  }
-
-#ifdef PLANE_COMPONENT_TYPE_BLOB
-  if (in & PLANE_COMPONENT_BLOB) {
-    comp.type = qtigralloc::PlaneLayoutComponentType_Blob;
-    if (getComponentSizeAndOffset(format, comp) == Error::NONE)
-    components->push_back(comp);
-  }
-#endif
-}
-
 #ifndef MULTI_VIEW_SUPPORT
-static Error getFormatLayout(private_handle_t *handle, std::vector<PlaneLayout> *out) {
-  std::vector<PlaneLayout> plane_info;
-  int plane_count = 0;
-  BufferInfo info(handle->unaligned_width, handle->unaligned_height, handle->format, handle->usage);
-
-  gralloc::PlaneLayoutInfo plane_layout[8] = {};
-  if (gralloc::IsYuvFormat(handle->format)) {
-    gralloc::GetYUVPlaneInfo(info, handle->format, handle->width, handle->height, handle->flags,
-                             &plane_count, plane_layout);
-  } else if (gralloc::IsUncompressedRGBFormat(handle->format) ||
-             gralloc::IsCompressedRGBFormat(handle->format)) {
-    gralloc::GetRGBPlaneInfo(info, handle->format, handle->width, handle->height, handle->flags,
-                             &plane_count, plane_layout);
-  } else {
-    return Error::BAD_BUFFER;
-  }
-  plane_info.resize(plane_count);
-  for (int i = 0; i < plane_count; i++) {
-    std::vector<PlaneLayoutComponent> components;
-    grallocToStandardPlaneLayoutComponentType(plane_layout[i].component, &plane_info[i].components,
-                                              handle->format);
-    plane_info[i].horizontalSubsampling = (1ull << plane_layout[i].h_subsampling);
-    plane_info[i].verticalSubsampling = (1ull << plane_layout[i].v_subsampling);
-    plane_info[i].offsetInBytes = static_cast<int64_t>(plane_layout[i].offset);
-    plane_info[i].sampleIncrementInBits = static_cast<int64_t>(plane_layout[i].step * 8);
-    plane_info[i].strideInBytes = static_cast<int64_t>(plane_layout[i].stride_bytes);
-    plane_info[i].totalSizeInBytes = static_cast<int64_t>(plane_layout[i].size);
-    plane_info[i].widthInSamples = handle->unaligned_width >> plane_layout[i].h_subsampling;
-    plane_info[i].heightInSamples = handle->unaligned_height >> plane_layout[i].v_subsampling;
-  }
-  *out = plane_info;
-  return Error::NONE;
-}
-
 int BufferManager::GetCustomDimensions(private_handle_t *hnd, int *stride, int *height) {
   auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
   hidl_vec<uint8_t> crop;
@@ -941,41 +339,6 @@ int BufferManager::GetCustomDimensions(private_handle_t *hnd, int *stride, int *
 }
 
 #else
-static Error getFormatLayout(private_handle_t *handle, std::vector<PlaneLayout> *out) {
-  std::vector<PlaneLayout> plane_info;
-  int plane_count = 0;
-  BufferInfo info(handle->unaligned_width(), handle->unaligned_height(),
-                  handle->format(), handle->usage());
-
-  gralloc::PlaneLayoutInfo plane_layout[8] = {};
-  if (gralloc::IsYuvFormat(handle->format())) {
-    gralloc::GetYUVPlaneInfo(info, handle->format(), handle->width(), handle->height(),
-                             handle->flags(), &plane_count, plane_layout);
-  } else if (gralloc::IsUncompressedRGBFormat(handle->format()) ||
-             gralloc::IsCompressedRGBFormat(handle->format())) {
-    gralloc::GetRGBPlaneInfo(info, handle->format(), handle->width(), handle->height(),
-                             handle->flags(), &plane_count, plane_layout);
-  } else {
-    return Error::BAD_BUFFER;
-  }
-  plane_info.resize(plane_count);
-  for (int i = 0; i < plane_count; i++) {
-    std::vector<PlaneLayoutComponent> components;
-    grallocToStandardPlaneLayoutComponentType(plane_layout[i].component, &plane_info[i].components,
-                                              handle->format());
-    plane_info[i].horizontalSubsampling = (1ull << plane_layout[i].h_subsampling);
-    plane_info[i].verticalSubsampling = (1ull << plane_layout[i].v_subsampling);
-    plane_info[i].offsetInBytes = static_cast<int64_t>(plane_layout[i].offset);
-    plane_info[i].sampleIncrementInBits = static_cast<int64_t>(plane_layout[i].step * 8);
-    plane_info[i].strideInBytes = static_cast<int64_t>(plane_layout[i].stride_bytes);
-    plane_info[i].totalSizeInBytes = static_cast<int64_t>(plane_layout[i].size);
-    plane_info[i].widthInSamples = handle->unaligned_width() >> plane_layout[i].h_subsampling;
-    plane_info[i].heightInSamples = handle->unaligned_height() >> plane_layout[i].v_subsampling;
-  }
-  *out = plane_info;
-  return Error::NONE;
-}
-
 int BufferManager::GetCustomDimensions(private_handle_t *hnd, int *stride, int *height) {
   auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata());
   hidl_vec<uint8_t> crop;
@@ -1037,7 +400,7 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
     return Error::BAD_BUFFER;
   }
 
-  auto meta_size = getMetaDataSize(hnd->reserved_size);
+  auto meta_size = GetMetaDataSize(hnd->reserved_size, buf->custom_content_md_size);
 
   if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset, hnd->fd,
                              buf->ion_handle_main) != 0) {
@@ -1086,6 +449,14 @@ void BufferManager::RegisterHandleLocked(const private_handle_t *hnd, int ion_ha
     } else {
       buffer->reserved_region_ptr = nullptr;
     }
+
+    buffer->custom_content_md_size = hnd->custom_content_md_reserved_size;
+    if (buffer->custom_content_md_size > 0) {
+      buffer->custom_content_md_region_ptr =
+          reinterpret_cast<void *>(hnd->base_metadata + sizeof(MetaData_t) + buffer->reserved_size);
+    } else {
+      buffer->custom_content_md_region_ptr = nullptr;
+    }
 #else
     buffer->reserved_region_ptr = reinterpret_cast<void *>(&(metadata->reservedRegion.data));
     buffer->reserved_size = metadata->reservedRegion.size;
@@ -1120,7 +491,7 @@ Error BufferManager::ImportHandleLocked(private_handle_t *hnd) {
   hnd->base_metadata = 0;
   hnd->gpuaddr = 0;
 
-  if (validateAndMap(hnd)) {
+  if (ValidateAndMap(hnd)) {
     ALOGE("Failed to map metadata: hnd: %p, fd:%d, id:%" PRIu64, hnd, hnd->fd, hnd->id);
     return Error::BAD_BUFFER;
   }
@@ -1144,12 +515,7 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
     return Error::BAD_BUFFER;
   }
 
-  if (bufferid_view_map_.find(hnd->id()) != bufferid_view_map_.end()) {
-    ALOGD_IF(DEBUG, "Erasing buf_id %d from bufferid_view_map_", hnd->id());
-    bufferid_view_map_.erase(hnd->id());
-  }
-
-  auto meta_size = getMetaDataSize(hnd->reserved_size());
+  auto meta_size = GetMetaDataSize(hnd->reserved_size(), buf->custom_content_md_size);
 
   if (allocator_->FreeBuffer(
       reinterpret_cast<void *>(hnd->base()), hnd->size(), hnd->offset(), hnd->fd(),
@@ -1200,6 +566,15 @@ void BufferManager::RegisterHandleLocked(const private_handle_t *hnd, int ion_ha
     } else {
       buffer->reserved_region_ptr = nullptr;
     }
+
+    private_handle_t *non_const_hnd = const_cast<private_handle_t *>(hnd);
+    buffer->custom_content_md_size = non_const_hnd->custom_content_md_reserved_size();
+    if (buffer->custom_content_md_size > 0) {
+      buffer->custom_content_md_region_ptr = reinterpret_cast<void *>(
+          non_const_hnd->base_metadata() + sizeof(MetaData_t) + buffer->reserved_size);
+    } else {
+      buffer->custom_content_md_region_ptr = nullptr;
+    }
 #else
     buffer->reserved_region_ptr = reinterpret_cast<void *>(&(metadata->reservedRegion.data));
     buffer->reserved_size = metadata->reservedRegion.size;
@@ -1234,7 +609,7 @@ Error BufferManager::ImportHandleLocked(private_handle_t *hnd) {
   hnd->base_metadata() = 0;
   hnd->gpuaddr() = 0;
 
-  if (validateAndMap(hnd)) {
+  if (ValidateAndMap(hnd)) {
     ALOGE("Failed to map metadata: hnd: %p, fd:%d, id:%" PRIu64, hnd, hnd->fd(), hnd->id());
     return Error::BAD_BUFFER;
   }
@@ -1513,7 +888,9 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
 
   // Allocate memory for MetaData
   AllocData e_data;
-  e_data.size = static_cast<unsigned int>(getMetaDataSize(descriptor.GetReservedSize()));
+  uint64_t custom_content_md_reserved_size = GetCustomContentMetadataSize(format, usage);
+  e_data.size = static_cast<unsigned int>(
+      GetMetaDataSize(descriptor.GetReservedSize(), custom_content_md_reserved_size));
   e_data.handle = data.handle;
   e_data.align = page_size;
 
@@ -1546,16 +923,17 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   hnd->base = 0;
   hnd->base_metadata = 0;
   hnd->layer_count = layer_count;
+  hnd->custom_content_md_reserved_size = custom_content_md_reserved_size;
 
   bool use_adreno_for_size = CanUseAdrenoForSize(buffer_type, usage);
   if (use_adreno_for_size) {
     setMetaDataAndUnmap(hnd, SET_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
   }
 
-  auto error = validateAndMap(hnd);
+  auto error = ValidateAndMap(hnd);
 
   if (error != 0) {
-    ALOGE("validateAndMap failed");
+    ALOGE("ValidateAndMap failed");
     return Error::BAD_BUFFER;
   }
   auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
@@ -1574,7 +952,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   metadata->crop.right = hnd->width;
   metadata->crop.bottom = hnd->height;
 
-  unmapAndReset(hnd);
+  UnmapAndReset(hnd);
 
   *handle = hnd;
 
@@ -1853,7 +1231,9 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
 
   // Allocate memory for MetaData
   AllocData e_data;
-  e_data.size = static_cast<unsigned int>(getMetaDataSize(descriptor.GetReservedSize()));
+  uint64_t custom_content_md_reserved_size = GetCustomContentMetadataSize(format, usage);
+  e_data.size = static_cast<unsigned int>(
+      GetMetaDataSize(descriptor.GetReservedSize(), custom_content_md_reserved_size));
   e_data.handle = data.handle;
   e_data.align = page_size;
 
@@ -1880,15 +1260,15 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
     }
 
     hnd = private_handle_t::createLRMetaHandle(
-        data.fd, e_data.fd, data_2.fd, e_data_2.fd, INT(flags), INT(alignedw),
-        INT(alignedh), descriptor.GetWidth(), descriptor.GetHeight(), format,
-        buffer_type, id, ++next_id_, data.size, descriptor.GetReservedSize(),
-        layer_count, usage);
+        data.fd, e_data.fd, data_2.fd, e_data_2.fd, INT(flags), INT(alignedw), INT(alignedh),
+        descriptor.GetWidth(), descriptor.GetHeight(), format, buffer_type, id, ++next_id_,
+        data.size, descriptor.GetReservedSize(), layer_count, usage,
+        custom_content_md_reserved_size);
   } else {
     hnd = private_handle_t::createSingleHandle(
-        data.fd, e_data.fd, INT(flags), INT(alignedw), INT(alignedh),
-        descriptor.GetWidth(), descriptor.GetHeight(), format, buffer_type,
-        id, data.size, descriptor.GetReservedSize(), layer_count, usage);
+        data.fd, e_data.fd, INT(flags), INT(alignedw), INT(alignedh), descriptor.GetWidth(),
+        descriptor.GetHeight(), format, buffer_type, id, data.size, descriptor.GetReservedSize(),
+        layer_count, usage, custom_content_md_reserved_size);
   }
 
   if (hnd == nullptr) {
@@ -1901,10 +1281,10 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
     setMetaDataAndUnmap(hnd, SET_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
   }
 
-  auto error = validateAndMap(hnd);
+  auto error = ValidateAndMap(hnd);
 
   if (error != 0) {
-    ALOGE("validateAndMap failed");
+    ALOGE("ValidateAndMap failed");
     return Error::BAD_BUFFER;
   }
   auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata());
@@ -1923,7 +1303,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   metadata->crop.right = hnd->width();
   metadata->crop.bottom = hnd->height();
 
-  unmapAndReset(hnd);
+  UnmapAndReset(hnd);
 
   *handle = hnd;
 
@@ -2014,6 +1394,24 @@ Error BufferManager::GetAllHandles(std::vector<const private_handle_t *> *out_ha
   return Error::NONE;
 }
 
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+static Error GetCustomMetadataHelper(void *custom_content_md_region_ptr,
+                                     uint64_t custom_content_md_size, hidl_vec<uint8_t> *out) {
+  Error error = Error::NONE;
+  if (custom_content_md_region_ptr == nullptr ||
+      custom_content_md_size != sizeof(CustomContentMetadata)) {
+    error = Error::UNSUPPORTED;
+  } else {
+    if (qtigralloc::encodeCustomContentMetadata(custom_content_md_region_ptr, out) !=
+        android::hardware::graphics::mapper::V4_0::Error::NONE) {
+      error = Error::BAD_VALUE;
+    }
+  }
+
+  return error;
+}
+#endif
+
 #ifndef MULTI_VIEW_SUPPORT
 Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved_region,
                                        uint64_t *reserved_region_size) {
@@ -2034,6 +1432,58 @@ Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved
   return Error::NONE;
 }
 
+Error BufferManager::GetCustomContentMdRegion(private_handle_t *handle,
+                                              void **custom_content_md_region,
+                                              uint64_t *custom_content_md_region_size) {
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
+  if (!handle)
+    return Error::BAD_BUFFER;
+
+  auto buf = GetBufferFromHandleLocked(handle);
+  if (buf == nullptr)
+    return Error::BAD_BUFFER;
+  if (!handle->base_metadata) {
+    return Error::BAD_BUFFER;
+  }
+
+  *custom_content_md_region = buf->custom_content_md_region_ptr;
+  *custom_content_md_region_size = buf->custom_content_md_size;
+
+  return Error::NONE;
+}
+
+Error BufferManager::GetMetadataValue(private_handle_t *handle, int64_t metadatatype_value,
+                                      void *param) {
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
+  if (!handle)
+    return Error::BAD_BUFFER;
+  auto buf = GetBufferFromHandleLocked(handle);
+  if (buf == nullptr)
+    return Error::BAD_BUFFER;
+
+  if (!handle->base_metadata) {
+    return Error::BAD_BUFFER;
+  }
+
+  auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata);
+  if (metadatatype_value == QTI_CUSTOM_CONTENT_METADATA) {
+    Error error = Error::NONE;
+    void *custom_content_md_region = buf->custom_content_md_region_ptr;
+    uint64_t custom_content_md_region_size = buf->custom_content_md_size;
+
+    if (buf->custom_content_md_region_ptr == nullptr ||
+        buf->custom_content_md_size != sizeof(CustomContentMetadata)) {
+      error = Error::UNSUPPORTED;
+    } else {
+      memcpy(param, custom_content_md_region, sizeof(CustomContentMetadata));
+    }
+
+    return error;
+  } else {
+    return GetMetaDataValue(handle, metadatatype_value, param);
+  }
+}
+
 Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> *out) {
   std::shared_lock<std::shared_mutex> lock(buffer_lock_);
@@ -2049,29 +1499,59 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 
   auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata);
 
+  void *metadata_ptr = nullptr;
+  auto result = GetMetaDataByReference(handle, metadatatype_value, &metadata_ptr);
   Error error = Error::NONE;
   switch (metadatatype_value) {
     case (int64_t)StandardMetadataType::BUFFER_ID:
-      android::gralloc4::encodeBufferId((uint64_t)handle->id, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeBufferId(*reinterpret_cast<uint64_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::NAME: {
-      std::string name(metadata->name);
-      android::gralloc4::encodeName(name, out);
+      if (metadata_ptr != nullptr) {
+        std::string name(reinterpret_cast<char *>(metadata_ptr));
+        android::gralloc4::encodeName(name, out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     }
     case (int64_t)StandardMetadataType::WIDTH:
-      android::gralloc4::encodeWidth((uint64_t)handle->unaligned_width, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeWidth(
+            static_cast<uint64_t>(*reinterpret_cast<int32_t *>(metadata_ptr)), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::HEIGHT:
-      android::gralloc4::encodeHeight((uint64_t)handle->unaligned_height, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeHeight(
+            static_cast<uint64_t>(*reinterpret_cast<int32_t *>(metadata_ptr)), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::LAYER_COUNT:
-      android::gralloc4::encodeLayerCount((uint64_t)handle->layer_count, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeLayerCount(
+            static_cast<uint64_t>(*reinterpret_cast<uint32_t *>(metadata_ptr)), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::PIXEL_FORMAT_REQUESTED:
-      // TODO(tbalacha): need to return IMPLEMENTATION_DEFINED,
+      // TODO(user): need to return IMPLEMENTATION_DEFINED,
       // which wouldn't be known from private_handle_t
-      android::gralloc4::encodePixelFormatRequested((PixelFormat)handle->format, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodePixelFormatRequested(
+            static_cast<PixelFormat>(*reinterpret_cast<int32_t *>(metadata_ptr)), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::PIXEL_FORMAT_FOURCC: {
       uint32_t drm_format = 0;
@@ -2088,12 +1568,21 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     }
     case (int64_t)StandardMetadataType::USAGE:
-      android::gralloc4::encodeUsage((uint64_t)handle->usage, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUsage(*reinterpret_cast<uint64_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::ALLOCATION_SIZE:
-      android::gralloc4::encodeAllocationSize((uint64_t)handle->size, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeAllocationSize(*reinterpret_cast<uint64_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::PROTECTED_CONTENT: {
+      // update to use metadata ptr when implemented
       uint64_t protected_content = (handle->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) ? 1 : 0;
       android::gralloc4::encodeProtectedContent(protected_content, out);
       break;
@@ -2106,7 +1595,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       if (metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)]) {
 #endif
         Dataspace dataspace;
-        colorMetadataToDataspace(metadata->color, &dataspace);
+        ColorMetadataToDataspace(metadata->color, &dataspace);
         android::gralloc4::encodeDataspace(dataspace, out);
 #ifdef METADATA_V2
       } else {
@@ -2131,12 +1620,16 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     case (int64_t)StandardMetadataType::PLANE_LAYOUTS: {
       std::vector<PlaneLayout> plane_layouts;
-      getFormatLayout(handle, &plane_layouts);
+      GetPlaneLayout(handle, &plane_layouts);
       android::gralloc4::encodePlaneLayouts(plane_layouts, out);
       break;
     }
     case (int64_t)StandardMetadataType::BLEND_MODE:
-      android::gralloc4::encodeBlendMode((BlendMode)metadata->blendMode, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeBlendMode(*reinterpret_cast<BlendMode *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case (int64_t)StandardMetadataType::SMPTE2086: {
       if (metadata->color.masteringDisplayInfo.colorVolumeSEIEnabled) {
@@ -2207,79 +1700,164 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     }
     case QTI_VT_TIMESTAMP:
-      android::gralloc4::encodeUint64(qtigralloc::MetadataType_VTTimestamp, metadata->vtTimeStamp,
-                                      out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUint64(qtigralloc::MetadataType_VTTimestamp,
+                                        *reinterpret_cast<uint64_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_COLOR_METADATA:
-      qtigralloc::encodeColorMetadata(metadata->color, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeColorMetadata(*reinterpret_cast<ColorMetaData *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_PP_PARAM_INTERLACED:
-      android::gralloc4::encodeInt32(qtigralloc::MetadataType_PPParamInterlaced,
-                                     metadata->interlaced, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeInt32(qtigralloc::MetadataType_PPParamInterlaced,
+                                       *reinterpret_cast<int32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_VIDEO_PERF_MODE:
-      android::gralloc4::encodeUint32(qtigralloc::MetadataType_VideoPerfMode,
-                                      metadata->isVideoPerfMode, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_VideoPerfMode,
+                                        *reinterpret_cast<uint32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_GRAPHICS_METADATA:
-      qtigralloc::encodeGraphicsMetadata(metadata->graphics_metadata, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeGraphicsMetadata(*reinterpret_cast<GraphicsMetadata *>(metadata_ptr),
+                                           out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_UBWC_CR_STATS_INFO:
-      qtigralloc::encodeUBWCStats(metadata->ubwcCRStats, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeUBWCStats(reinterpret_cast<UBWCStats *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_REFRESH_RATE:
-      android::gralloc4::encodeFloat(qtigralloc::MetadataType_RefreshRate, metadata->refreshrate,
-                                     out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeFloat(qtigralloc::MetadataType_RefreshRate,
+                                       *reinterpret_cast<float *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_MAP_SECURE_BUFFER:
-      android::gralloc4::encodeInt32(qtigralloc::MetadataType_MapSecureBuffer,
-                                     metadata->mapSecureBuffer, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeInt32(qtigralloc::MetadataType_MapSecureBuffer,
+                                       *reinterpret_cast<int32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_LINEAR_FORMAT:
-      android::gralloc4::encodeUint32(qtigralloc::MetadataType_LinearFormat, metadata->linearFormat,
-                                      out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_LinearFormat,
+                                        *reinterpret_cast<uint32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_SINGLE_BUFFER_MODE:
-      android::gralloc4::encodeUint32(qtigralloc::MetadataType_SingleBufferMode,
-                                      metadata->isSingleBufferMode, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_SingleBufferMode,
+                                        *reinterpret_cast<uint32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_CVP_METADATA:
-      qtigralloc::encodeCVPMetadata(metadata->cvpMetadata, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeCVPMetadata(*reinterpret_cast<CVPMetadata *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_VIDEO_HISTOGRAM_STATS:
-      qtigralloc::encodeVideoHistogramMetadata(metadata->video_histogram_stats, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeVideoHistogramMetadata(
+            *reinterpret_cast<VideoHistogramMetadata *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_FD:
-      android::gralloc4::encodeInt32(qtigralloc::MetadataType_FD, handle->fd, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeInt32(qtigralloc::MetadataType_FD,
+                                       *reinterpret_cast<int32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_PRIVATE_FLAGS:
-      android::gralloc4::encodeInt32(qtigralloc::MetadataType_PrivateFlags, handle->flags, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeInt32(qtigralloc::MetadataType_PrivateFlags,
+                                       *reinterpret_cast<int32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_ALIGNED_WIDTH_IN_PIXELS:
-      android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedWidthInPixels, handle->width,
-                                      out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedWidthInPixels,
+                                        *reinterpret_cast<uint32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_ALIGNED_HEIGHT_IN_PIXELS:
-      android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedHeightInPixels,
-                                      handle->height, out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_AlignedHeightInPixels,
+                                        *reinterpret_cast<uint32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
 #ifdef METADATA_V2
     case QTI_STANDARD_METADATA_STATUS:
-      qtigralloc::encodeMetadataState(metadata->isStandardMetadataSet, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeMetadataState(reinterpret_cast<bool *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
     case QTI_VENDOR_METADATA_STATUS:
-      qtigralloc::encodeMetadataState(metadata->isVendorMetadataSet, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeMetadataState(reinterpret_cast<bool *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
 #endif
 #ifdef QTI_BUFFER_TYPE
     case QTI_BUFFER_TYPE:
-      android::gralloc4::encodeUint32(qtigralloc::MetadataType_BufferType, handle->buffer_type,
-                                      out);
+      if (metadata_ptr != nullptr) {
+        android::gralloc4::encodeUint32(qtigralloc::MetadataType_BufferType,
+                                        *reinterpret_cast<uint32_t *>(metadata_ptr), out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
 #endif
 #ifdef QTI_VIDEO_TS_INFO
     case QTI_VIDEO_TS_INFO:
-      qtigralloc::encodeVideoTimestampInfo(metadata->videoTsInfo, out);
+      if (metadata_ptr != nullptr) {
+        qtigralloc::encodeVideoTimestampInfo(*reinterpret_cast<VideoTimestampInfo *>(metadata_ptr),
+                                             out);
+      } else {
+        return Error::BAD_VALUE;
+      }
       break;
 #endif
 #ifdef QTI_EARLYNOTIFY_LINECOUNT
@@ -2332,7 +1910,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 #ifdef QTI_COLORSPACE
     case QTI_COLORSPACE: {
       uint32_t colorspace;
-      error = getColorSpaceFromMetaData(metadata->color, &colorspace);
+      error = GetColorSpaceFromColorMetaData(metadata->color, &colorspace);
       if (error == Error::NONE) {
         android::gralloc4::encodeUint32(qtigralloc::MetadataType_ColorSpace, colorspace, out);
         break;
@@ -2384,6 +1962,13 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
                                       metadata->viewId, out);
       break;
 #endif
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+    case QTI_CUSTOM_CONTENT_METADATA:
+      error = GetCustomMetadataHelper(buf->custom_content_md_region_ptr,
+                                      buf->custom_content_md_size, out);
+      break;
+#endif
+
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2394,55 +1979,52 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 #else
 Error BufferManager::GetViewToImport(private_handle_t *handle, const uint32_t view_requested,
                                      uint32_t *view) {
-  // Get BufID
-  uint32_t buf_id_index_0 = handle->id();
-  // Init with default order 0-L & 1-R
-  uint32_t view_id_from_metadata = PRIV_VIEW_MASK_PRIMARY;
-  uint32_t left_id_from_sei = PRIV_VIEW_MASK_PRIMARY;
-  uint32_t right_id_from_sei = PRIV_VIEW_MASK_SECONDARY;
-
-  // Based on buf_id get viewId, SEI_left_id, SEI_right_id
-  if (bufferid_view_map_.find(buf_id_index_0) != bufferid_view_map_.end()) {
-    auto entry = bufferid_view_map_.at(buf_id_index_0);
-    view_id_from_metadata = entry.first;
-    left_id_from_sei = entry.second.left_id;
-    right_id_from_sei = entry.second.right_id;
-  } else {
-    ALOGW_IF(DEBUG, "Buffer_view_sei data mapping not found. Returning requested view: %d",
-             view_requested);
-    *view = view_requested;
-    return Error::UNSUPPORTED;
+  if (!handle->base_metadata()) {
+    return Error::BAD_BUFFER;
   }
 
-  if (view_id_from_metadata == 0 || (left_id_from_sei == 0 && right_id_from_sei == 0)) {
+  auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata());
+
+  if (!metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(QTI_VIEW_ID)] ||
+      !metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(
+          QTI_THREE_DIMENSIONAL_REF_INFO)]) {
     ALOGW_IF(DEBUG, "ViewID or SEI metadata not set. Returning requested view: %d", view_requested);
     *view = view_requested;
     return Error::UNSUPPORTED;
   }
 
-  // Get the view_id for requested view
-  uint32_t view_to_compare = view_requested;
-  if (view_requested == PRIV_VIEW_MASK_PRIMARY) {
-    view_to_compare = left_id_from_sei;
-    ALOGD_IF(DEBUG, "View to compare is left as requested is primary");
-  } else if (view_requested == PRIV_VIEW_MASK_SECONDARY) {
-    view_to_compare = right_id_from_sei;
-    ALOGD_IF(DEBUG, "view to compare is right as requested is secondary");
+  uint32_t view_id_from_metadata = metadata->viewId;
+  uint32_t left_id_from_sei = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id;
+  uint32_t right_id_from_sei =
+      (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id;
+
+  if (left_id_from_sei == right_id_from_sei) {
+    ALOGW_IF(DEBUG,
+             "left_id_from_sei and right_id_from_sei set to same view which is invalid. Returning "
+             "requested view: %d",
+             view_requested);
+    *view = view_requested;
+    return Error::UNSUPPORTED;
   }
 
-  if (view_id_from_metadata == view_to_compare) {
-    ALOGD_IF(DEBUG, "View set in metadata is same as buf_index 0. returning primary view");
-    *view = PRIV_VIEW_MASK_PRIMARY;
+  uint32_t view_at_index_0;
+  if (view_id_from_metadata == left_id_from_sei) {
+    view_at_index_0 = handle->view();
   } else {
-    ALOGD_IF(DEBUG, "View set in metadata is not same as buf_index 0. returning secondary view");
-    *view = PRIV_VIEW_MASK_SECONDARY;
+    view_at_index_0 = handle->getViewInfo() & (~handle->view());
+  }
+
+  if (view_requested == view_at_index_0) {
+    *view = handle->view();
+  } else {
+    *view = handle->getViewInfo() & (~handle->view());
   }
 
   ALOGD_IF(
       DEBUG,
       "view_requested %d view_id_from_metadata %d , left_id_from_sei %d, right_id_from_sei %d, "
-      "view_to_compare %d, view returned %d",
-      view_requested, view_id_from_metadata, left_id_from_sei, right_id_from_sei, view_to_compare,
+      "view_at_index_0 %d, view returned %d",
+      view_requested, view_id_from_metadata, left_id_from_sei, right_id_from_sei, view_at_index_0,
       *view);
 
   return Error::NONE;
@@ -2539,7 +2121,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       if (metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)]) {
 #endif
         Dataspace dataspace;
-        colorMetadataToDataspace(metadata->color, &dataspace);
+        ColorMetadataToDataspace(metadata->color, &dataspace);
         android::gralloc4::encodeDataspace(dataspace, out);
 #ifdef METADATA_V2
       } else {
@@ -2564,7 +2146,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     case (int64_t)StandardMetadataType::PLANE_LAYOUTS: {
       std::vector<PlaneLayout> plane_layouts;
-      getFormatLayout(handle, &plane_layouts);
+      GetPlaneLayout(handle, &plane_layouts);
       android::gralloc4::encodePlaneLayouts(plane_layouts, out);
       break;
     }
@@ -2765,7 +2347,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 #ifdef QTI_COLORSPACE
     case QTI_COLORSPACE: {
       uint32_t colorspace;
-      error = getColorSpaceFromMetaData(metadata->color, &colorspace);
+      error = GetColorSpaceFromColorMetaData(metadata->color, &colorspace);
       if (error == Error::NONE) {
         android::gralloc4::encodeUint32(qtigralloc::MetadataType_ColorSpace, colorspace, out);
         break;
@@ -2830,6 +2412,12 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
                                       metadata->viewId, out);
       break;
 #endif
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+    case QTI_CUSTOM_CONTENT_METADATA:
+      error = GetCustomMetadataHelper(buf->custom_content_md_region_ptr,
+                                      buf->custom_content_md_size, out);
+      break;
+#endif
     default:
       error = Error::UNSUPPORTED;
   }
@@ -2841,6 +2429,7 @@ Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_
 Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> in) {
   std::lock_guard<std::shared_mutex> lock(buffer_lock_);
+
   if (!handle)
     return Error::BAD_BUFFER;
 
@@ -2868,21 +2457,6 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
   auto metadata = reinterpret_cast<MetaData_t *>(handle->base_metadata());
 #endif  // MULTI_VIEW_SUPPORT
 
-
-#ifdef METADATA_V2
-  // By default, set these to true
-  // Reset to false for special cases below
-  if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
-    if (GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-      metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] = true;
-    }
-  } else {
-    if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-      metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] =
-          true;
-    }
-  }
-#endif
 
   switch (metadatatype_value) {
     // These are constant (unchanged after allocation)
@@ -3122,24 +2696,6 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
           IMapper_4_0_Error::NONE) {
         return Error::UNSUPPORTED;
       }
-#ifdef MULTI_VIEW_SUPPORT
-      if (bufferid_view_map_.find(handle->id()) != bufferid_view_map_.end()) {
-        ALOGD_IF(DEBUG, "%s: buf id:%d exists in map", __FUNCTION__, handle->id());
-        auto &entry = bufferid_view_map_.at(handle->id());
-        ViewMapping mapping_entry = {
-            .left_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id,
-            .right_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id};
-        entry.second = mapping_entry;
-      } else {
-        ALOGD_IF(DEBUG, "%s: buf id:%d does not exist in map.Creating new entry", __FUNCTION__,
-                 handle->id());
-        ViewMapping mapping_entry = {
-            .left_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).left_view_id,
-            .right_id = (metadata->threeDimensionalRefInfo.threedRefDispInfo[0]).right_view_id};
-        std::pair<uint32_t, ViewMapping> entry = {0, mapping_entry};
-        bufferid_view_map_.emplace(std::make_pair(handle->id(), entry));
-      }
-#endif
       break;
 #endif
 #ifdef QTI_VIEW_ID
@@ -3148,36 +2704,37 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
                                           &metadata->viewId)) {
         return Error::UNSUPPORTED;
       }
-#ifdef MULTI_VIEW_SUPPORT
-      if (bufferid_view_map_.find(handle->id()) != bufferid_view_map_.end()) {
-        ALOGD_IF(DEBUG, "%s: buf id:%d exists in map", __FUNCTION__, handle->id());
-        auto &entry = bufferid_view_map_.at(handle->id());
-        entry.first = metadata->viewId;
-      } else {
-        ALOGD_IF(DEBUG, "%s: buf id:%d does not exist in map.Creating new entry", __FUNCTION__,
-                 handle->id());
-        std::pair<uint32_t, ViewMapping> entry = {metadata->viewId, {}};
-        bufferid_view_map_.emplace(std::make_pair(handle->id(), entry));
-      }
+      break;
 #endif
+#ifdef QTI_CUSTOM_CONTENT_METADATA
+    case QTI_CUSTOM_CONTENT_METADATA:
+      if (buf->custom_content_md_region_ptr == nullptr ||
+          buf->custom_content_md_size != sizeof(CustomContentMetadata)) {
+        return Error::UNSUPPORTED;
+      } else {
+        if (qtigralloc::decodeCustomContentMetadata(in, buf->custom_content_md_region_ptr) !=
+            android::hardware::graphics::mapper::V4_0::Error::NONE) {
+          return Error::BAD_VALUE;
+        }
+      }
       break;
 #endif
     default:
-#ifdef METADATA_V2
-      if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
-        if (GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-          metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] =
-              false;
-        }
-      } else {
-        if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
-          metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] =
-              false;
-        }
-      }
-#endif
       return Error::BAD_VALUE;
   }
+
+#ifdef METADATA_V2
+  if (IS_VENDOR_METADATA_TYPE(metadatatype_value)) {
+    if (GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
+      metadata->isVendorMetadataSet[GET_VENDOR_METADATA_STATUS_INDEX(metadatatype_value)] = true;
+    }
+  } else {
+    if (GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value) < METADATA_SET_SIZE) {
+      metadata->isStandardMetadataSet[GET_STANDARD_METADATA_STATUS_INDEX(metadatatype_value)] =
+          true;
+    }
+  }
+#endif
 
   return Error::NONE;
 }

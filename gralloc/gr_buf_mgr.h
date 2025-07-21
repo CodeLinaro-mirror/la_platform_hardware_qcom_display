@@ -59,11 +59,14 @@ class BufferManager {
   Error SetMetadata(private_handle_t *handle, int64_t metadatatype_value, hidl_vec<uint8_t> in);
   Error GetReservedRegion(private_handle_t *handle, void **reserved_region,
                           uint64_t *reserved_region_size);
+  Error GetCustomContentMdRegion(private_handle_t *handle, void **custom_content_md_region,
+                                 uint64_t *custom_content_md_region_size);
   Error FlushBuffer(const private_handle_t *handle);
   Error RereadBuffer(const private_handle_t *handle);
   Error GetAllHandles(std::vector<const private_handle_t *> *out_handle_list);
   int GetCustomDimensions(private_handle_t *handle, int *stride, int *height);
   Error GetViewToImport(private_handle_t *handle, const uint32_t view_requested, uint32_t *view);
+  Error GetMetadataValue(private_handle_t *handle, int64_t metadatatype_value, void *out);
 
  private:
   BufferManager();
@@ -100,6 +103,8 @@ class BufferManager {
     bool DecRef() { return --ref_count == 0; }
     uint64_t reserved_size = 0;
     void *reserved_region_ptr = nullptr;
+    uint64_t custom_content_md_size = 0;
+    void *custom_content_md_region_ptr = nullptr;
   };
 
   Error FreeBuffer(std::shared_ptr<Buffer> buf);
@@ -117,12 +122,6 @@ class BufferManager {
     const char *kDumpFile = "/data/misc/wmtrace/bufferdump.txt";
     uint64_t position = 0;
   } file_dump_;
-
-  struct ViewMapping {
-    uint32_t left_id;
-    uint32_t right_id;
-  };
-  std::unordered_map<uint64_t, std::pair<uint32_t, ViewMapping>> bufferid_view_map_ = {};
 };
 
 }  // namespace gralloc

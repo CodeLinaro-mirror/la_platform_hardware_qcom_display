@@ -14,27 +14,55 @@
 
 namespace sdm {
 
-DPUCoreMux::DPUCoreMux(DisplayId display_id, DisplayType type,
-                       std::vector<HWInfoInterface*> hw_info_intf,
-                       BufferAllocator *buffer_allocator) : display_id_(display_id) {
-  DisplayError error = kErrorNone;
+DPUCoreMux *DPUCoreMux::CreateCoreMux(DisplayId display_id, DisplayType type,
+                                      std::vector<HWInfoInterface *> hw_info_intf,
+                                      BufferAllocator *buffer_allocator) {
+  DPUCoreMux *core_mux = new DPUCoreMux(display_id);
+  if (core_mux == nullptr) {
+    return core_mux;
+  }
+  auto error = core_mux->Init(display_id, type, hw_info_intf, buffer_allocator);
+  if (error != kErrorNone) {
+    DPUCoreMux::DestroyCoreMux(&core_mux);
+    return nullptr;
+  }
+
+  return core_mux;
+}
+
+DisplayError DPUCoreMux::DestroyCoreMux(DPUCoreMux **intf) {
+  (*intf)->DeInit();
+  delete *intf;
+  *intf = nullptr;
+
+  return kErrorNone;
+}
+
+DisplayError DPUCoreMux::Init(DisplayId display_id, DisplayType type,
+                              std::vector<HWInfoInterface *> hw_info_intf,
+                              BufferAllocator *buffer_allocator) {
   for (uint32_t i = 0; i < hw_info_intf.size(); i++) {
     HWInterface *hw = nullptr;
     uint32_t core_id = hw_info_intf[i]->GetCoreId();
-    error = HWInterface::Create(display_id.GetConnId(core_id), type, hw_info_intf[i],
-                                buffer_allocator, &hw);
+    auto error = HWInterface::Create(display_id.GetConnId(core_id), type, hw_info_intf[i],
+                                     buffer_allocator, &hw);
     if (error != kErrorNone) {
       DLOGE("HW interface create failed");
+      return error;
     }
+
     hw_intf_.insert(std::make_pair(core_id, hw));
     core_ids_.push_back(core_id);
   }
+
+  return kErrorNone;
 }
 
-DisplayError DPUCoreMux::Destroy() {
+DisplayError DPUCoreMux::DeInit() {
   for (auto hw_intf : hw_intf_) {
     HWInterface::Destroy(hw_intf.second);
   }
+
   return kErrorNone;
 }
 

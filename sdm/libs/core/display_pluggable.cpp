@@ -60,14 +60,11 @@ DisplayError DisplayPluggable::Init() {
 
   DisplayError error = kErrorNone;
 
-  dpu_core_mux_ = new DPUCoreMux(display_id_info_, kPluggable, hw_info_intf_, buffer_allocator_);
-  if (error != kErrorNone) {
-    if (kErrorDeviceRemoved == error) {
-      DLOGW("Aborted creating hardware interface. Device removed.");
-    } else {
-      DLOGE("Failed to create hardware interface. Error = %d", error);
-    }
-    return error;
+  dpu_core_mux_ =
+      DPUCoreMux::CreateCoreMux(display_id_info_, kPluggable, hw_info_intf_, buffer_allocator_);
+  if (!dpu_core_mux_) {
+    DLOGE("Failed to create DPU coreMux");
+    return kErrorUndefined;
   }
 
   dpu_core_mux_->GetHWInterface(&hw_intf_);
@@ -81,7 +78,7 @@ DisplayError DisplayPluggable::Init() {
   uint32_t active_mode_index = 0;
   error = dpu_core_mux_->GetActiveConfig(&active_mode_index);
   if (error != kErrorNone) {
-    dpu_core_mux_->Destroy();
+    DPUCoreMux::DestroyCoreMux(&dpu_core_mux_);
     return error;
   }
 
@@ -109,7 +106,7 @@ DisplayError DisplayPluggable::Init() {
     }
   }
   if (error != kErrorNone) {
-    dpu_core_mux_->Destroy();
+    DPUCoreMux::DestroyCoreMux(&dpu_core_mux_);
     return error;
   }
 
@@ -133,7 +130,6 @@ DisplayError DisplayPluggable::Init() {
                                     &hw_events_intf_);
   if (error != kErrorNone) {
     DisplayBase::Deinit();
-    dpu_core_mux_->Destroy();
     DLOGE("Failed to create hardware events interface. Error = %d", error);
   }
   master_hw_events_intf_ = hw_events_intf_[primary_core_id_];

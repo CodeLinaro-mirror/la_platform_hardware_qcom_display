@@ -31,12 +31,15 @@ namespace sdm {
 
 class DPUCoreMux {
  public:
-  DisplayError Destroy();
+  static DPUCoreMux *CreateCoreMux(DisplayId display_id, DisplayType type,
+                                   std::vector<HWInfoInterface *> hw_info_intf,
+                                   BufferAllocator *buffer_allocator);
+  static DisplayError DestroyCoreMux(DPUCoreMux **intf);
 
-  DPUCoreMux(DisplayId display_id, DisplayType type, std::vector<HWInfoInterface*> hw_info_intf,
-             BufferAllocator *buffer_allocator);
-  DisplayError Init();
-  DisplayError Deinit();
+  DPUCoreMux(DisplayId display_id) : display_id_(display_id) {}
+  DisplayError Init(DisplayId display_id, DisplayType type,
+                    std::vector<HWInfoInterface *> hw_info_intf, BufferAllocator *buffer_allocator);
+  DisplayError DeInit();
   DisplayError GetDisplayId(int32_t *display_id);
   DisplayError GetActiveConfig(uint32_t *active_config);
   DisplayError GetDefaultConfig(uint32_t *default_config);
