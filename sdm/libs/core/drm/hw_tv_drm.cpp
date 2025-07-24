@@ -193,10 +193,6 @@ DisplayError HWTVDRM::PowerOff(bool teardown) {
     return kErrorUndefined;
   }
 
-  if (first_cycle_) {
-    return kErrorNone;
-  }
-
 #ifdef HYPERVISOR
   teardown = true;
 #endif
