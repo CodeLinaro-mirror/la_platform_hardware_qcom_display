@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -684,7 +684,7 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferInternal(
     const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &roi_rect,
     const Rect &downscale_rect, int32_t cwb_control_flag, const NativeHandle &buffer) {
   if (!callback) {
-    ALOGE("%s: Callback provided is invalid.", __FUNCTION__);
+    ALOGW("%s: Callback provided is invalid.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
