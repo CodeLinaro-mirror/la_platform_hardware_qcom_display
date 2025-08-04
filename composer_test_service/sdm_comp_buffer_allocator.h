@@ -74,7 +74,8 @@ class SDMCompBufferAllocator : public BufferAllocator {
                                       AllocatedBufferInfo *allocated_buffer_info);
   int GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4],
                                uint32_t offset[4], uint32_t *num_planes);
-  int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
+  int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags,
+                    uint64_t *pixel_format_modifier);
   int MapBuffer(void *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
   int UnmapBuffer(void *handle, int *release_fence);
   int GetHeight(void *buf, uint32_t &height);
@@ -95,7 +96,7 @@ class SDMCompBufferAllocator : public BufferAllocator {
   // callbacks from sdmclient
   bool GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace){return 0;}
   LayerBufferFormat GetSDMFormat(const int32_t &source, const int32_t flags,
-                                 const int64_t compression_type) {
+                                 const int64_t compression_type, uint64_t pixel_format_modifier) {
     return kFormatInvalid;
   }
   DisplayError ColorMetadataToDataspace(Dataspace ds, uint32_t *int_dataspace) {return kErrorNone;}

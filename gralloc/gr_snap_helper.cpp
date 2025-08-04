@@ -1217,7 +1217,7 @@ SnapError GrallocSnapHelper::PlaneLayoutsHelper(SnapHandle *hnd, uint32_t aidl_s
       // Added to keep parity with getFormatLayout since sdm, composer and gralloc don't expect
       // meta planes for this usecase.
       if ((IsUncompressedRGBFormat(static_cast<int>(buf_des->format)) ||
-           IsCompressedRGBFormat(static_cast<int>(buf_des->format))) &&
+           IsCompressedRGBFormat(static_cast<int>(buf_des->format)) || buf_des->format == C_8) &&
           ubwc_enabled_in_snap) {
         (*static_cast<SnapBufferLayout *>(snap_out_get)).plane_count /= 2;
       }
@@ -4456,7 +4456,7 @@ SnapError GrallocSnapHelperLegacy::PlaneLayoutsHelper(SnapHandle *hnd, bool hidl
       // Added to keep parity with getFormatLayout since sdm, composer and gralloc don't expect
       // meta planes for this usecase.
       if ((IsUncompressedRGBFormat(static_cast<int>(buf_des->format)) ||
-           IsCompressedRGBFormat(static_cast<int>(buf_des->format))) &&
+           IsCompressedRGBFormat(static_cast<int>(buf_des->format)) || buf_des->format == C_8) &&
           ubwc_enabled_in_snap) {
         snap_buffer_layout.plane_count /= 2;
       }
