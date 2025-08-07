@@ -55,7 +55,49 @@ case "$target" in
         ;;
     esac
     ;;
-    "canoe")
+    "bengal")
+    setprop vendor.gralloc.use_dma_buf_heaps 1
+    setprop vendor.gralloc.hw_supports_ubwcp 0
+    setprop vendor.gralloc.enable_snapalloc 1
+    setprop vendor.display.enable_posted_start_dyn 2
+    setprop vendor.display.enable_allow_idle_fallback 1
+    setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+    setprop vendor.display.enable_rotator_ui 0
+    setprop vendor.display.enable_spec_fence 1
+    setprop vendor.display.thermal.version 1
+    setprop vendor.display.enable_rc_support 1
+    setprop vendor.display.target.version 2
+    setprop vendor.display.enable_qsync_idle 0
+    setprop vendor.display.disable_mitigated_fps 1
+    setprop vendor.display.secure_preview_buffer_format 420_sp
+    setprop vendor.gralloc.secure_preview_buffer_format 420_sp
+    setprop vendor.display.disable_non_wfd_vds 1
+    setprop vendor.display.supports_background_blur 0
+    setprop vendor.display.disable_get_screen_decorator_support 1
+    setprop vendor.display.enable_async_vds_creation 0
+    setprop vendor.display.disable_sdr_dimming 1
+    setprop vendor.display.enable_hdr10_gpu_target 0
+    setprop vendor.display.enable_dpps_dynamic_fps 0
+    setprop vendor.display.vds_allow_hwc 1
+    # Set property to differentiate bengal and khaje
+    # Soc Id for khaje is 518
+    # Soc Id for khaje APQ is 561
+    # Soc Id for khaje Gaming is 585 and IOT is 586
+    case "$soc_hwid" in
+        518|561|585|586)
+        # Set property for khaje
+        setprop vendor.display.disable_layer_stitch 1
+        setprop vendor.display.enable_rounded_corner 1
+        setprop vendor.display.disable_rounded_corner_thread 0
+        setprop vendor.display.enable_rc_support 1
+        ;;
+        417|420|444|445)
+        # Set property for bengal
+        setprop vendor.display.disable_layer_stitch 0
+        ;;
+    esac
+    ;;
+    "canoe"|"hamoa")
     # SOC ID for Canoe is 660
     # SOC ID for Canoe APQ is 661
     # SOC ID for KaM is 704
@@ -65,15 +107,17 @@ case "$target" in
     # SOC ID for CanoeS is 722
     # SOC ID for CanoeS APQ is 723
     # SOC ID for Canoe auto is 730
+    # SOC ID for Canoe Compute SKU and APQ SKU is 743
+    # SOC ID for Hamoa is 555
     case "$soc_hwid" in
-      660|661|704|685|727|635|722|723|730)
+      660|661|704|685|727|635|743|722|723|730|555)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 1
-        if [ "$soc_hwid" -ne 635 ]; then
+        if [ "$soc_hwid" -ne 635 ] && [ "$soc_hwid" -ne 555 ]; then
            setprop vendor.display.enable_inline_writeback 1
         else
            setprop vendor.display.disable_cwb_idle_fallback 1

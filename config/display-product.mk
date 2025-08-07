@@ -104,14 +104,14 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.gralloc.enable_snapalloc=1 \
     vendor.display.disable_fp16_support=1
 
-# Enable offline rotator for Bengal.
-ifneq ($(TARGET_BOARD_PLATFORM),bengal)
+# Enable offline rotator for Bengal, Khaje
+ifneq ($(filter bengal khaje, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_offline_rotator=1
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1 \
-    vendor.display.disable_layer_stitch=0
+    debug.sf.enable_hwc_vds=0
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),holi)
