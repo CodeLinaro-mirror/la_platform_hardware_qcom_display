@@ -61,15 +61,20 @@ case "$target" in
     # SOC ID for KaM is 704
     # SOC ID for Alor is 685
     # SOC ID for Alor APQ is 727
+    # SOC ID for Purwa is 635
     case "$soc_hwid" in
-      660|661|704|685|727)
+      660|661|704|685|727|635)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 1
-        setprop vendor.display.enable_inline_writeback 1
+        if [ "$soc_hwid" -ne 635 ]; then
+           setprop vendor.display.enable_inline_writeback 1
+        else
+           setprop vendor.display.disable_cwb_idle_fallback 1
+        fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
@@ -129,12 +134,14 @@ case "$target" in
         setprop vendor.display.enable_hal_self_refresh 1
         setprop vendor.display.cpu_cluster_boost_mask 3
         ;;
-      655|681|659|694|686)
+      655|681|659|694|686|720|721)
         #SOC ID for tuna is 655
         #SOC ID for tuna7 is 681
         #SOC ID for tuna APQ is 694
         #SOC ID for kera is 659
         #SOC ID for kera is 686
+        #SOC ID for kera is 720
+        #SOC ID for kera is 721
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 6
