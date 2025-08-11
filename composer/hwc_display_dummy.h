@@ -62,6 +62,11 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_DUMMY_H__
 #define __HWC_DISPLAY_DUMMY_H__
 
@@ -96,6 +101,8 @@ class HWCDisplayDummy : public HWCDisplay {
   virtual HWC2::Error SetActiveConfigWithConstraints(
       hwc2_config_t config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
       VsyncPeriodChangeTimeline *out_timeline);
+  virtual int GetDisplayAttributesForConfig(int config,
+                                    DisplayConfigVariableInfo *display_attributes);
  private:
   HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                   HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
