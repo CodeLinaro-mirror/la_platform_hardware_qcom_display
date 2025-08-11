@@ -20,7 +20,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -232,6 +232,7 @@ int HWCSession::Init() {
   DLOGI("disable_hotplug_bwcheck_: %d", disable_hotplug_bwcheck_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_MASK_LAYER_HINT, &disable_mask_layer_hint_);
   DLOGI("disable_mask_layer_hint_: %d", disable_mask_layer_hint_);
+  HWCDebugHandler::Get()->GetProperty(ENABLE_PRIMARY_HOTPLUG_TO_SF, &send_primary_hotplug_to_sf_);
 
   if (!null_display_mode_) {
     g_hwc_uevent_.Register(this);
@@ -3106,6 +3107,14 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
             }
           }
           primary_config_ = new_config;
+          if (send_primary_hotplug_to_sf_) {
+            status = hwc_display->UpdateFBResolution(primary_config_.x_pixels,
+                                                     primary_config_.y_pixels);
+            if (status) {
+              DLOGW("Update frame buffer resolution failed. Error = %d", status);
+              return status;
+            }
+          }
           DLOGD("Stored config information of connected primary display: %d x %d @ %d.",
                 primary_config_.x_pixels, primary_config_.y_pixels, primary_config_.fps);
           pluggable_primary_connected_ = true;
@@ -3114,6 +3123,9 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
                 "client id = %d", info.display_id, UINT32(client_id));
           map_info.disp_type = info.display_type;
           map_info.sdm_id = info.display_id;
+          if (send_primary_hotplug_to_sf_) {
+            pending_hotplugs.push_back((hwc2_display_t)client_id);
+          }
         }
       }
       {
