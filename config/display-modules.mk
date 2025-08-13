@@ -20,7 +20,10 @@ ifneq ($(TARGET_IS_HEADLESS),true)
 		DISPLAY_MODULES_HARDWARE += libcomposertestservice
 	endif
 
-    DISPLAY_FW_PREBUILTS = dcp.bin dcp_elf
+    ifneq ($(filter canoe seraph vienna, $(TARGET_BOARD_PLATFORM)),)
+        DISPLAY_FW_BUILD_TYPE := $(if $(wildcard $(QCPATH)/display-noship),test,pack)
+        DISPLAY_FW_PREBUILTS = dcp_bin_$(TARGET_BOARD_PLATFORM)_$(DISPLAY_FW_BUILD_TYPE) dcp_elf_$(TARGET_BOARD_PLATFORM)_$(DISPLAY_FW_BUILD_TYPE)
+    endif
 
     DISPLAY_MODULES_HARDWARE += libsdmcore \
                             libsdmdal \
