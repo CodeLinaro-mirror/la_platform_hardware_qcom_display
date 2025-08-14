@@ -136,7 +136,7 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
   if (ret_val != 0) {
     ALOGE("Snap failed to lock buffer");
   } else {
-    ALOGD_IF(enable_logs, "QtiMapper5::lock address %lu", snap_base);
+    ALOGD_IF(enable_logs, "QtiMapper5::lock address %" PRIu64, snap_base);
     *outData = reinterpret_cast<void *>(snap_base);
   }
   return static_cast<Error>(ret_val);
@@ -188,7 +188,7 @@ size_t QtiMapper5::GetExpectedSize(uint64_t metadata_type) {
   if (type_to_size_.find(metadata_type) != type_to_size_.end()) {
     return type_to_size_.at(metadata_type);
   }
-  ALOGW("Can't find expected metadata size, invalid metadata type: %ld", metadata_type);
+  ALOGW("Can't find expected metadata size, invalid metadata type: %" PRIu64, metadata_type);
   return 0;
 }
 
@@ -226,12 +226,12 @@ int32_t QtiMapper5::getMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metada
     if (expected_size != outDataSize) {
       ALOGW(
           "Metadata output size %d not equal to expected size %d. Returning without fetching "
-          "metadata: %ld",
+          "metadata: %" PRId64,
           outDataSize, expected_size, metadataType.value);
       return expected_size;
     }
-    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %ld ExpectedSize: %ld",
-             __FUNCTION__, buffer, metadataType.value, expected_size);
+    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " ExpectedSize: %" PRIu32,
+             __FUNCTION__, (uint64_t)buffer, metadataType.value, expected_size);
     return (GetMetadataPrivate(buffer, metadataType.value, outData, outDataSize, false));
   }
   return -AIMAPPER_ERROR_UNSUPPORTED;
@@ -239,8 +239,8 @@ int32_t QtiMapper5::getMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metada
 
 int32_t QtiMapper5::getStandardMetadata(buffer_handle_t _Nonnull bufferHandle, int64_t standardType,
                                         void *_Nonnull outData, size_t outDataSize) {
-  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld ExpectedSize: %ld",
-           __FUNCTION__, bufferHandle, standardType, outDataSize);
+  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %" PRId64 " ExpectedSize: %" PRIu32,
+           __FUNCTION__, (uint64_t)bufferHandle, standardType, outDataSize);
   // For cases where client sends in nullptr intentionally to know bytestream size, set outData to
   // a valid vector but keep outDataSize to be 0 as a hint to gr_snap_helper so we end up returning
   // the size without copying
@@ -277,12 +277,12 @@ Error QtiMapper5::setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metadata
     if (expected_size != metadataSize) {
       ALOGW(
           "Metadata size %d not equal to expected size %d. Returning without setting "
-          "metadata: %ld",
+          "metadata: %" PRId64,
           metadataSize, expected_size, metadataType.value);
       return AIMAPPER_ERROR_BAD_VALUE;
     }
-    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %ld MetadataSize: %ld",
-             __FUNCTION__, buffer, metadataType.value, metadataSize);
+    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " MetadataSize: %" PRIu32,
+             __FUNCTION__, (uint64_t)buffer, metadataType.value, metadataSize);
     return (SetMetadataPrivate(buffer, metadataType.value, metadata, metadataSize, false));
   }
   return AIMAPPER_ERROR_UNSUPPORTED;
@@ -291,8 +291,8 @@ Error QtiMapper5::setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metadata
 Error QtiMapper5::setStandardMetadata(buffer_handle_t _Nonnull bufferHandle,
                                       int64_t standardTypeRaw, const void *_Nonnull metadata,
                                       size_t metadataSize) {
-  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld MetadataSize: %ld",
-           __FUNCTION__, bufferHandle, standardTypeRaw, metadataSize);
+  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %" PRId64 " MetadataSize: %" PRIu32,
+           __FUNCTION__, (uint64_t)bufferHandle, standardTypeRaw, metadataSize);
   metadataSize = (metadataSize == 0 && metadata == nullptr) ? 1 : metadataSize;
   return (SetMetadataPrivate(bufferHandle, standardTypeRaw, metadata, metadataSize, true));
 }
@@ -421,7 +421,7 @@ Error QtiMapper5::DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
     if (size < 0) {
       ALOGD_IF(enable_logs,
                "%s: Failed to retrieve Metadata: %" PRIu64 " error: %d Handle:%" PRIu64,
-               __FUNCTION__, type.value, size, buffer);
+               __FUNCTION__, type.value, size, (uint64_t)buffer);
       // If buffer is deleted during metadata dump, return BAD_BUFFER
       if (size == -AIMAPPER_ERROR_BAD_BUFFER) {
         return AIMAPPER_ERROR_BAD_BUFFER;
@@ -634,7 +634,7 @@ Error QtiMapper5Legacy::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpu
     ALOGW("Failed to lock buffer");
     return err;
   }
-  ALOGD_IF(enable_logs, "QtiMapper5Legacy::lock address %lu", hnd->base);
+  ALOGD_IF(enable_logs, "QtiMapper5Legacy::lock address %" PRIu64, hnd->base);
   *outData = reinterpret_cast<void *>(hnd->base);
   return AIMAPPER_ERROR_NONE;
 }
@@ -700,8 +700,8 @@ int32_t QtiMapper5Legacy::getMetadata(buffer_handle_t _Nonnull buffer,
         (type_to_size_.find(static_cast<uint64_t>(metadataType.value)) != type_to_size_.end())
             ? type_to_size_.at(metadataType.value)
             : outDataSize;
-    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %ld ExpectedSize: %ld",
-             __FUNCTION__, buffer, metadataType.value, expected_size);
+    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " ExpectedSize: %" PRIu32,
+             __FUNCTION__, (uint64_t)buffer, metadataType.value, expected_size);
     return (GetMetadataPrivate(buffer, metadataType.value, outData, outDataSize, false));
   }
   return -AIMAPPER_ERROR_UNSUPPORTED;
@@ -710,8 +710,8 @@ int32_t QtiMapper5Legacy::getMetadata(buffer_handle_t _Nonnull buffer,
 int32_t QtiMapper5Legacy::getStandardMetadata(buffer_handle_t _Nonnull bufferHandle,
                                               int64_t standardType, void *_Nonnull outData,
                                               size_t outDataSize) {
-  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld ExpectedSize: %ld",
-           __FUNCTION__, bufferHandle, standardType, outDataSize);
+  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %" PRId64 " ExpectedSize: %" PRIu32,
+           __FUNCTION__, (uint64_t)bufferHandle, standardType, outDataSize);
   return (GetMetadataPrivate(bufferHandle, standardType, outData, outDataSize, true));
 }
 
@@ -732,8 +732,8 @@ Error QtiMapper5Legacy::setMetadata(buffer_handle_t _Nonnull buffer,
   if (isStandardMetadata(metadataType)) {
     return setStandardMetadata(buffer, metadataType.value, metadata, metadataSize);
   } else if (metadataType.name == qtigralloc::VENDOR_QTI) {
-    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %ld MetadataSize: %ld",
-             __FUNCTION__, buffer, metadataType.value, metadataSize);
+    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " MetadataSize: %" PRIu32,
+             __FUNCTION__, (uint64_t)buffer, metadataType.value, metadataSize);
     return (SetMetadataPrivate(buffer, metadataType.value, metadata, metadataSize, false));
   }
   return AIMAPPER_ERROR_UNSUPPORTED;
@@ -742,8 +742,8 @@ Error QtiMapper5Legacy::setMetadata(buffer_handle_t _Nonnull buffer,
 Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandle,
                                             int64_t standardTypeRaw, const void *_Nonnull metadata,
                                             size_t metadataSize) {
-  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %ld MetadataSize: %ld",
-           __FUNCTION__, bufferHandle, standardTypeRaw, metadataSize);
+  ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(standard): %" PRId64 " MetadataSize: %" PRIu32,
+           __FUNCTION__, (uint64_t)bufferHandle, standardTypeRaw, metadataSize);
   return (SetMetadataPrivate(bufferHandle, standardTypeRaw, metadata, metadataSize, true));
 }
 
@@ -850,7 +850,7 @@ Error QtiMapper5Legacy::DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
     if (size < 0) {
       ALOGD_IF(enable_logs,
                "%s: Failed to retrieve Metadata: %" PRIu64 " error: %d Handle:%" PRIu64,
-               __FUNCTION__, type.value, size, buffer);
+               __FUNCTION__, type.value, size, (uint64_t)buffer);
       // If buffer is deleted during metadata dump, return BAD_BUFFER
       if (size == -AIMAPPER_ERROR_BAD_BUFFER) {
         return AIMAPPER_ERROR_BAD_BUFFER;
@@ -871,7 +871,7 @@ Error QtiMapper5Legacy::DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
       dumpBufferCallback(context, it.metadataType, tempBuffer.data(), bufferSize);
     } else {
       ALOGW("%s: Failed to retrieve Metadata on 2nd attempt: %" PRIu64 " error: %d Handle:%" PRIu64,
-            __FUNCTION__, type.value, size, buffer);
+            __FUNCTION__, type.value, size, (uint64_t)buffer);
       continue;
     }
   }
