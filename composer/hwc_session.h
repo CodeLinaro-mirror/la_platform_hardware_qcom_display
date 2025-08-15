@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2023, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -656,6 +656,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   int tunneled_display_id_ = HWC_DISPLAY_PRIMARY;
   uint64_t tunnel_buffer_id_ = -1;
   bool enable_drs_ = false; // enable dynamic resolution switch feature
+  int send_primary_hotplug_to_sf_ = 0;
 };
 }  // namespace sdm
 
