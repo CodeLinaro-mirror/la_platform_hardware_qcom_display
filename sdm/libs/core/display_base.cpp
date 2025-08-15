@@ -3954,14 +3954,17 @@ void DisplayBase::WaitForCompletion(SyncPoints *sync_points) {
       DLOGI("Sync commit on primary");
       return;
     }
-    std::unique_lock<std::mutex> lck(power_mutex_);
-    while (!transition_done_) {
-      cv_.wait(lck);
-    }
+    // Dont wait for power event in case of HDMI powerOff without any commit
+    if (!(display_type_ == kHDMI && draw_method_ == kDrawUnified)) {
+      std::unique_lock<std::mutex> lck(power_mutex_);
+      while (!transition_done_) {
+        cv_.wait(lck);
+      }
 
-    // Unregister power events.
-    hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, false);
-    return;
+      // Unregister power events.
+      hw_events_intf_->SetEventState(HWEvent::POWER_EVENT, false);
+      return;
+    }
   }
 
   // For displays in unified draw, wait on cached retire fence in steady state.
