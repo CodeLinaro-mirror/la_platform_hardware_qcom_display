@@ -1559,28 +1559,28 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
     // The display entry may have already been removed by onHotplug.
     if (dpy != mClient.mDisplayData.end()) {
       disp_data_ptr = &dpy->second;
-    } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
+    } else {
       // As from SF client, all destroy-layer commands are updated to command list in Display
       // destructor while destroying display on hot plug disconnect call, but it doesn't share
       // updated commands to composer while display is destroying, and sending all these commands
       // in next cycle Validate() or PresentOrValidate() call, i.e. after destruction of display.
       // Still composer flushes all pending layers from stack of unplugged display before
       // destroying its dataset entirely. So, no need to report error for all destroy-layer
-      // commands received after destruction of their display.
-      ALOGW("%s: Can\'t destroy layer-%lu from destroyed Display-%lu layer stack!", __FUNCTION__,
-            layer, display);
-      writeError(__FUNCTION__, Error::BadDisplay);
-      return;
-    } else {
+      // commands received after destruction of their display. It may be possible that create layer
+      // requested, but before processing it display destroyed, in that case also request must be
+      // dropped.
+      ALOGW("%s: Can\'t %s layer-%lu from destroyed Display-%lu layer stack!", __FUNCTION__,
+            (cmd == LayerLifecycleBatchCommandType::DESTROY) ? "destroy" : "create", layer,
+            display);
       // Note: We do not destroy the layer on this error as the hotplug
       // disconnect invalidates the display id. The implementation should
       // ensure all layers for the display are destroyed.
-      ALOGE("%s: Invalid  display Id(%lu)!", __FUNCTION__, display);
+      ALOGW("%s: Invalid  display Id(%lu)!", __FUNCTION__, display);
       writeError(__FUNCTION__, Error::BadDisplay);
       return;
     }
   } else {
-    ALOGE("%s: Invalid Parameter out of either display Id(%lu) or  layer Id(%lu)!", __FUNCTION__,
+    ALOGW("%s: Invalid Parameter out of either display Id(%lu) or  layer Id(%lu)!", __FUNCTION__,
           display, layer);
     writeError(__FUNCTION__, Error::BadParameter);
     return;
@@ -1596,7 +1596,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
       ly->second.Buffers.resize(layerCmd.newBufferSlotCount);
     } else {
-      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      ALOGW("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
       writeError(__FUNCTION__, Error::BadLayer);
       return;
     }
@@ -1615,12 +1615,12 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
         dpy->second.Layers.erase(layer);
       }
     } else {
-      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      ALOGW("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
       writeError(__FUNCTION__, Error::BadLayer);
       return;
     }
   } else {
-    ALOGE("%s: Unsupported LLCBC command Id %d for Layer-%lu and display-%lu !", __FUNCTION__, cmd,
+    ALOGW("%s: Unsupported LLCBC command Id %d for Layer-%lu and display-%lu !", __FUNCTION__, cmd,
           layer, display);
     writeError(__FUNCTION__, Error::BadConfig);
     return;
