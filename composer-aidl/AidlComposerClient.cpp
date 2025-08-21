@@ -876,7 +876,24 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
     ALOGW("%s: No command found", __FUNCTION__);
   }
 
-  *result = mWriter->getPendingCommandResults();
+  std::vector<CommandResultPayload> pending_result = mWriter->getPendingCommandResults();
+  std::vector<CommandResultPayload> err_result;
+
+  for (auto& payload : pending_result) {
+    if (payload.getTag() == CommandResultPayload::Tag::error) {
+      err_result.emplace_back(std::move(payload));
+    }
+  }
+
+  if (err_result.empty()) {
+    *result = std::move(pending_result);
+  } else {
+    *result = std::move(err_result);
+    if(!pending_result.empty()) {
+      pending_result.clear();
+    }
+  }
+
   reset();
 
   return (mCommandIndex) ? Error::None : Error::BadParameter;
@@ -973,7 +990,7 @@ void AidlComposerClient::CommandEngine::executeValidateDisplay(
 
   std::vector<sdm::LayerId> changedLayers;
   std::vector<Composition> compositionTypes;
-  uint32_t displayRequestMask;
+  uint32_t displayRequestMask = 0;
   std::vector<sdm::LayerId> requestedLayers;
   std::vector<int32_t> requestMasks;
   ClientTargetProperty clientTargetProperty;
@@ -1110,8 +1127,16 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
 void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t display,
                                                                       int64_t layer,
                                                                       const Point &cursorPosition) {
-  auto err =
-      mClient.hwc_session_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  auto err = Error::None;
+  std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+  auto dpy = mClient.mDisplayData.find(display);
+
+  if (dpy != mClient.mDisplayData.end() && dpy->second.Layers.find(layer) != dpy->second.Layers.end()) {
+    err = mClient.hwc_session_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  } else {
+    ALOGW("Layer %ld has already been freed by destroy call", layer);
+  }
+
   if (err != Error::None) {
     writeError(__FUNCTION__, err);
   }

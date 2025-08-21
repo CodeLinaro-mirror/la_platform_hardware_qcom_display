@@ -110,7 +110,7 @@ class HWCDisplayBuiltIn : public HWCDisplay {
   virtual HWC3::Error SetPowerMode(PowerMode mode, bool teardown);
 
  private:
-  HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
+  HWCDisplayBuiltIn(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
                     qService::QService *qservice, Display id, int32_t sdm_id);
   void SetMetaDataRefreshRateFlag(bool enable);
@@ -140,7 +140,7 @@ class HWCDisplayBuiltIn : public HWCDisplay {
     int fd_wled_ = -1;
   };
 
-  BufferAllocator *buffer_allocator_ = nullptr;
+  HWCBufferAllocator *buffer_allocator_ = nullptr;
   CPUHint *cpu_hint_ = nullptr;
 
   // Builtin readback buffer configuration

@@ -29,8 +29,8 @@
 /* This class translates HWC2 Layer functions to the SDM LayerStack
  */
 
+#include <QtiGralloc.h>
 #include <gralloc_priv.h>
-#include <qdMetaData.h>
 #include <core/layer_stack.h>
 #include <core/layer_buffer.h>
 #include <utils/utils.h>
@@ -49,7 +49,7 @@ using aidl::android::hardware::graphics::composer3::PerFrameMetadataKey;
 
 namespace sdm {
 
-DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_metadata);
+DisplayError SetCSC(const native_handle_t *pvt_handle, ColorMetaData *color_metadata);
 bool GetColorPrimaryAndMatrixCoef(const int32_t &dataspace,
                                   ColorPrimaries *color_primary,
                                   MatrixCoEfficients *matrix_coefficients);
@@ -159,9 +159,9 @@ class HWCLayer {
   uint32_t GetUint32Color(const Color &source);
   LayerBufferS3DFormat GetS3DFormat(uint32_t s3d_format);
   void GetUBWCStatsFromMetaData(UBWCStats *cr_stats, UbwcCrStatsVector *cr_vec);
-  DisplayError SetMetaData(const private_handle_t *pvt_handle, Layer *layer);
+  DisplayError SetMetaData(const native_handle_t *pvt_handle, Layer *layer);
   uint32_t RoundToStandardFPS(float fps);
-  void ValidateAndSetCSC(const private_handle_t *handle);
+  void ValidateAndSetCSC(const native_handle_t *handle);
   void SetDirtyRegions(Region surface_damage);
 };
 
