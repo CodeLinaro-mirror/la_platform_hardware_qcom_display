@@ -708,7 +708,7 @@ void HWCDisplay::BuildLayerStack() {
       }
       // TZ Protected Buffer - L1
       // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
-      int32_t handle_flags;
+      uint64_t handle_flags;
       buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::USAGE, &handle_flags,
                                           sizeof(handle_flags));
      if (handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
