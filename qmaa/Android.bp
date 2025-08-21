@@ -1,10 +1,7 @@
 soong_namespace {
-    imports: [
-        "hardware/qcom/display/qmaa",
-    ],
+
 }
 composer_srcs = ["*.cpp"]
-
 
 soong_config_module_type {
     name: "qticomposer3_cc_defaults",
