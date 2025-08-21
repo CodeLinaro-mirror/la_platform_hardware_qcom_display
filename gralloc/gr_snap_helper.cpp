@@ -2942,6 +2942,9 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
     ALOGD_IF(enable_logs_, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
              gr_desc.GetName().c_str(), snap_desc.name);
   }
+  if (!snapallocator_->IsFormatSupportedByGPU(snap_desc)) {
+     return SnapError::UNSUPPORTED;
+  }
   return SnapError::NONE;
 }
 
