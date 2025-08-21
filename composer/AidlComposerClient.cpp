@@ -533,11 +533,18 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buf
   }
 
   auto it = requested_luts->begin();
-  for (uint32_t i = 0; i < num_elements; i++, it++) {
+  for (uint32_t i = 0; i < num_elements; i++) {
     int32_t fd = -1;
-    error = mCommandEngine->populateDisplayLuts(*it, &(aidl_return->at(i)), &fd);
-    if (error != Error::None) {
-      return TO_BINDER_STATUS(INT32(error));
+    if (it != requested_luts->end()) {
+      // populateDisplayLuts will return error if the lut pointer we pass is nullptr
+      // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
+      if (*it != nullptr) {
+        error = mCommandEngine->populateDisplayLuts(*it, &(aidl_return->at(i)), &fd);
+        if (error != Error::None) {
+          return TO_BINDER_STATUS(INT32(error));
+        }
+      }
+      it++;
     }
 
     if (fd == -1) {
