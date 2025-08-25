@@ -27,7 +27,12 @@ display_tp_feat: $(DISPLAY_MODULES_FEAT)
 
 display_tp_ext: $(DISPLAY_MODULES_EXT)
 
+ifneq ($(strip $(DISPLAY_FW_PREBUILTS)),)
 display_tp_dcpfw: $(DISPLAY_FW_PREBUILTS)
+else
+display_tp_dcpfw:
+	@echo "No display firmware prebuilts available"
+endif
 
 $(warning "Display Techpack configuration TARGET_USES_QMAA  = $(TARGET_USES_QMAA)")
 $(warning "Display Techpack configuration TARGET_USES_QMAA_OVERRIDE_DISPLAY  = $(TARGET_USES_QMAA_OVERRIDE_DISPLAY)")
