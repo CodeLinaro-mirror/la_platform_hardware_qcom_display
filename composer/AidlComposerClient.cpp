@@ -2008,6 +2008,7 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts
 
   // convert 3d lut entries to 1d normalized float buffer
   std::vector<float> buffer;
+  buffer.reserve(final_size);
   // TODO(user): take correct lut_size when multiple luts will be supported
   for (auto index = 0; index < lut_size; index++) {
     buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
