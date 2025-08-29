@@ -17,6 +17,11 @@
  * limitations under the License.
  */
 
+/*
+ * ​Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 // #define LOG_NDEBUG 0
 
@@ -180,8 +185,10 @@ set_light_backlight(struct light_device_t* dev,
     if (!err) {
         if (!access(LCD_FILE, F_OK)) {
             err = write_int(LCD_FILE, brightness);
-        } else {
+        } else if (!access(LCD_FILE2, F_OK)) {
             err = write_int(LCD_FILE2, brightness);
+        } else {
+            ALOGE("No LCD file found!");
         }
     }
 
