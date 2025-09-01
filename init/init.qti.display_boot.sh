@@ -55,7 +55,7 @@ case "$target" in
         ;;
     esac
     ;;
-    "canoe")
+    "canoe"|"hamoa")
     # SOC ID for Canoe is 660
     # SOC ID for Canoe APQ is 661
     # SOC ID for KaM is 704
@@ -65,15 +65,16 @@ case "$target" in
     # SOC ID for CanoeS is 722
     # SOC ID for CanoeS APQ is 723
     # SOC ID for Canoe auto is 730
+    # SOC ID for Hamoa is 555
     case "$soc_hwid" in
-      660|661|704|685|727|635|722|723|730)
+      660|661|704|685|727|635|722|723|730|555)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 1
-        if [ "$soc_hwid" -ne 635 ]; then
+        if [ "$soc_hwid" -ne 635 ] && [ "$soc_hwid" -ne 555 ]; then
            setprop vendor.display.enable_inline_writeback 1
         else
            setprop vendor.display.disable_cwb_idle_fallback 1
