@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -101,21 +101,6 @@ Error QtiMapper5::freeBuffer(buffer_handle_t _Nonnull buffer) {
   return AIMAPPER_ERROR_NONE;
 }
 
-void QtiMapper5::WaitFenceFd(int fence_fd) {
-  if (fence_fd < 0) {
-    return;
-  }
-
-  const int timeout = 3000;
-  ATRACE_BEGIN("fence wait");
-  const int error = sync_wait(fence_fd, timeout);
-  ATRACE_END();
-  if (error < 0) {
-    ALOGE("QtiMapper5: lock fence %d didn't signal in %u ms -  error: %s", fence_fd, timeout,
-          strerror(errno));
-  }
-}
-
 Error QtiMapper5::getTransportSize(buffer_handle_t _Nonnull bufferHandle,
                                    uint32_t *_Nonnull outNumFds, uint32_t *_Nonnull outNumInts) {
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
@@ -128,13 +113,27 @@ Error QtiMapper5::getTransportSize(buffer_handle_t _Nonnull bufferHandle,
 
 Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage, ARect region,
                        int acquireFenceRawFd, void *_Nullable *_Nonnull outData) {
-  // We take ownership of the FD in all cases, even for errors
-  if (acquireFenceRawFd > 0) {
-    WaitFenceFd(acquireFenceRawFd);
+  if (!snap_helper_ || !snap_alloc_enable_) {
+    ALOGE("Failed to %s. Driver is uninitialized.", __func__);
+    if (acquireFenceRawFd >= 0) {
+      close(acquireFenceRawFd);
+    }
+    return AIMAPPER_ERROR_NO_RESOURCES;
   }
-  VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
+
+  if (!(bufferHandle)) {
+    ALOGW("Failed to %s. Null buffer_handle_t.", __func__);
+    if (acquireFenceRawFd >= 0) {
+      close(acquireFenceRawFd);
+    }
+    return AIMAPPER_ERROR_BAD_BUFFER;
+  }
+
   if (cpuUsage == 0) {
     ALOGE("Failed to lock. Bad cpu usage: %" PRIu64 ".", cpuUsage);
+    if (acquireFenceRawFd >= 0) {
+      close(acquireFenceRawFd);
+    }
     return AIMAPPER_ERROR_BAD_VALUE;
   }
 
