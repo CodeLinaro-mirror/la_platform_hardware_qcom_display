@@ -30,7 +30,8 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -1604,12 +1605,21 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   Fence::ScopedRef scoped_ref;
   SetupAtomic(scoped_ref, hw_layers, false /* validate */, &release_fence_fd, &retire_fence_fd);
 
-  if (hw_layers->elapse_timestamp > 0) {
+  HWLayersInfo &hw_layer_info = hw_layers->info;
+  if (hw_layers->elapse_timestamp > 0 || hw_layer_info.expected_present_time > 0) {
+    uint64_t vsync_period = display_attributes_[current_mode_index_].vsync_period_ns;
+    uint64_t expected_present_time = hw_layer_info.expected_present_time > 0 ?
+                                     hw_layer_info.expected_present_time - vsync_period : 0;
+    uint64_t future_timestamp = std::max(hw_layers->elapse_timestamp, expected_present_time);
     struct timespec t = {0, 0};
     clock_gettime(CLOCK_MONOTONIC, &t);
-    uint64_t current_time = (UINT64(t.tv_sec) * 1000000000LL + t.tv_nsec);
-    if (current_time < hw_layers->elapse_timestamp) {
-      usleep(UINT32((hw_layers->elapse_timestamp - current_time) / 1000));
+    uint64_t current_time = (UINT64(t.tv_sec) * 1000000000ULL + UINT64(t.tv_nsec));
+
+    if (current_time < future_timestamp) {
+      uint64_t sleep_period = future_timestamp - current_time;
+      DLOGI_IF(kTagDriverConfig, "current_time: %llu, future_timestamp: %llu, sleep_period: %llu,"
+              "vsync_period: %llu", current_time, future_timestamp, sleep_period, vsync_period);
+      usleep(UINT32(sleep_period / 1000));
     }
   }
 
@@ -1628,7 +1638,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %s", Fence::GetStr(release_fence).c_str());
   DLOGD_IF(kTagDriverConfig, "RETIRE fence: fd: %s", Fence::GetStr(retire_fence).c_str());
 
-  HWLayersInfo &hw_layer_info = hw_layers->info;
   LayerStack *stack = hw_layer_info.stack;
   stack->retire_fence = retire_fence;
 

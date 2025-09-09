@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Innovation Center are provided under the following license:
+*
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_PROPERTY_H__
 #define __DRM_PROPERTY_H__
 
@@ -170,6 +177,7 @@ enum struct DRMProperty {
   SDE_SSPP_LAYOUT,
   DSPP_RC_MASK_V1,
   DSPP_CAPABILITIES,
+  EPT,
 
   // Insert above
   MAX

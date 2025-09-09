@@ -19,8 +19,8 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -454,14 +454,13 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   if (Debug::Get()->GetProperty(DISABLE_SKIP_VALIDATE_PROP, &value) == kErrorNone) {
     disable_skip_validate = (value == 1);
   }
-  uint32_t count = 2 + (disable_skip_validate ? 0 : 1);
+  uint32_t count = 1 + (disable_skip_validate ? 0 : 1);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
     outCapabilities[0] = INT32(Capability::SKIP_CLIENT_COLOR_TRANSFORM);
     if (!disable_skip_validate) {
       outCapabilities[1] = INT32(Capability::SKIP_VALIDATE);
     }
-    outCapabilities[2] = INT32(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
   }
   *outCount = count;
 }
@@ -3750,11 +3749,12 @@ HWC3::Error HWCSession::TryDrawMethod(Display display, DrawMethod drawMethod) {
 }
 
 HWC3::Error HWCSession::SetExpectedPresentTime(Display display, uint64_t expectedPresentTime) {
-  // Dummy Function: add implementation on need basis
   Locker::ScopeLock lock_d(locker_[display]);
   if (!hwc_display_[display]) {
     return HWC3::Error::BadDisplay;
   }
+  hwc_display_[display]->SetExpectedPresentTime(expectedPresentTime);
+
   return HWC3::Error::None;
 }
 

@@ -30,7 +30,8 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -451,6 +452,12 @@ enum struct DRMOps {
    *      uint32_t - colorspace value bit-mask
    */
   CONNECTOR_SET_COLORSPACE,
+  /*
+   * Op: Sets Expected Present Time on connector
+   * Arg: uint32_t - Connector ID
+   *      uint64_t - Expected Present Time
+   */
+  CONNECTOR_SET_EPT,
 };
 
 enum struct DRMRotation {
