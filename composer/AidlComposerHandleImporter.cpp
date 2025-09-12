@@ -87,10 +87,10 @@ void ComposerHandleImporter::InoFdMapInsert(int fd) {
     return;
   }
   uint64_t ino = (uint64_t)buf1.st_ino;
-  ALOGV("insert fd=%d, ino=%lu", fd, ino);
+  ALOGV("insert fd=%d, ino=%" PRIu64, fd, ino);
   ino_fds_map_[ino].push_back(fd);
   if (ino_fds_map_.size() > MAX_INO_VALS) {
-    ALOGW("ino allocation count=%lu", ino_fds_map_.size());
+    ALOGW("ino allocation count=%" PRIu32, ino_fds_map_.size());
   }
 }
 
@@ -104,16 +104,16 @@ void ComposerHandleImporter::InoFdMapRemove(int fd) {
   std::vector<uint32_t> *fds = &ino_fds_map_[ino];
   auto it = std::find(fds->begin(), fds->end(), fd);
   if (it == fds->end()) {
-    ALOGW("Ino value not found! Should not happen. ino=%lu, size=%lu", ino, fds->size());
+    ALOGW("Ino value not found! Should not happen. ino=%" PRIu64 ", size=%" PRIu32, ino, fds->size());
     return;
   }
-  ALOGV("remove fd=%d, ino=%lu", fd, ino);
+  ALOGV("remove fd=%d, ino=%" PRIu64, fd, ino);
   fds->erase(it);
   if (!ino_fds_map_[ino].size()) {
     ino_fds_map_.erase(ino);
   }
   if (ino_fds_map_.size() > MAX_INO_VALS) {
-    ALOGW("allocation count=%lu", ino_fds_map_.size());
+    ALOGW("allocation count=%" PRIu32, ino_fds_map_.size());
   }
 }
 
