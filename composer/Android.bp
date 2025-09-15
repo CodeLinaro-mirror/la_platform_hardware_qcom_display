@@ -61,8 +61,6 @@ cc_defaults {
         "libdrm",
         "libbinder_ndk",
         "android.hardware.common-V2-ndk",
-        "vendor.qti.hardware.display.config-V12-ndk",
-        "vendor.qti.hardware.display.composer3-V1-ndk",
         "vendor.qti.hardware.display.demura-V1-ndk",
         "libgrallocutils",
         "libtinyxml2",
@@ -83,6 +81,8 @@ cc_binary {
         "qtidisplay_defaults",
         "composer-service_defaults",
         "composer3_defaults",
+        "composer3_cflag_defaults",
+        "composer3_displayconfig_aidlintf_lib_defaults",
     ],
 
     sanitize: {
@@ -111,6 +111,8 @@ cc_fuzz {
         "qtidisplay_defaults",
         "composer-service_defaults",
         "composer3_defaults",
+        "composer3_cflag_defaults",
+        "composer3_displayconfig_aidlintf_lib_defaults",
     ],
 
     vendor: true,
@@ -169,29 +171,82 @@ soong_config_module_type {
 
 soong_config_string_variable {
     name: "composer_version",
-    values: ["v2", "v3", "v3_3", "qmaa"],
+    values: ["v3_2", "v3_3", "v3_4"],
 }
 
 qticomposer3_cc_defaults {
     name: "composer3_defaults",
     soong_config_variables: {
         composer_version: {
+            v3_4: {
+                srcs: ["DisplayAiqeAIDL.cpp"],
+                shared_libs: [
+                      "android.hardware.graphics.composer3-V4-ndk",
+                      "vendor.qti.hardware.display.composer3-V1-ndk",
+                      "vendor.qti.hardware.display.aiqe-V3-ndk",
+                ],
+                vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v4.xml"],
+            },
             v3_3: {
                 srcs: ["DisplayAiqeAIDL.cpp"],
-                cflags: ["-DCOMPOSER3_V3"],
                 shared_libs: [
                       "android.hardware.graphics.composer3-V3-ndk",
+                      "vendor.qti.hardware.display.composer3-V3-ndk",
                       "vendor.qti.hardware.display.aiqe-V2-ndk",
                 ],
                 vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v3.xml"],
             },
             conditions_default: {
-                cflags: ["-DCOMPOSER3_V2"],
                 shared_libs: [
                      "android.hardware.graphics.composer3-V2-ndk",
+                     "vendor.qti.hardware.display.composer3-V2-ndk",
                 ],
                 vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v2.xml"],
             },
         },
     },
 }
+
+qticomposer3_cc_defaults {
+    name: "composer3_cflag_defaults",
+    soong_config_variables: {
+        composer_version: {
+            v3_4: {
+                cflags: [
+                      "-DCOMPOSER3_V4",
+                      "-DCOMPOSER3_V3",
+                ],
+            },
+            v3_3: {
+                cflags: ["-DCOMPOSER3_V3"],
+            },
+            conditions_default: {
+                cflags: ["-DCOMPOSER3_V2"],
+            },
+        },
+    },
+}
+
+qticomposer3_cc_defaults {
+    name: "composer3_displayconfig_aidlintf_lib_defaults",
+    soong_config_variables: {
+        composer_version: {
+            v3_4: {
+                shared_libs: [
+                      "vendor.qti.hardware.display.config-V13-ndk",
+                ],
+            },
+            v3_3: {
+                shared_libs: [
+                      "vendor.qti.hardware.display.config-V12-ndk",
+                ],
+            },
+            conditions_default: {
+                shared_libs: [
+                     "vendor.qti.hardware.display.config-V11-ndk",
+                ],
+            },
+        },
+    },
+}
+

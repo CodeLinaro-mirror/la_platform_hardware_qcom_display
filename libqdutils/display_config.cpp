@@ -28,7 +28,7 @@
 *
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted (subject to the limitations in the
@@ -453,4 +453,45 @@ extern "C" int waitForComposerInitPerf() {
     }
 
     return !status;
+}
+
+extern "C" int getPanelResolution(int *width, int *height) {
+  status_t err = (status_t)FAILED_TRANSACTION;
+  sp<IQService> binder = getBinder();
+
+  if (nullptr == binder) {
+    return err;
+  }
+
+  Parcel inParcel, outParcel;
+  err = binder->dispatch(IQService::GET_PANEL_RESOLUTION, &inParcel, &outParcel);
+  if (0 != err) {
+    ALOGE("%s() failed with err %d", __FUNCTION__, err);
+    return err;
+  }
+
+  *width = outParcel.readInt32();
+  *height = outParcel.readInt32();
+
+  return err;
+}
+
+extern "C" int setStandByMode(int mode, int is_twm = false) {
+  status_t err = (status_t)FAILED_TRANSACTION;
+  sp<IQService> binder = getBinder();
+
+  if (nullptr == binder) {
+    return err;
+  }
+
+  Parcel inParcel, outParcel;
+  inParcel.writeInt32(mode);
+  inParcel.writeInt32(is_twm);
+  err = binder->dispatch(IQService::SET_STANDBY_MODE, &inParcel, &outParcel);
+  if (err) {
+    ALOGE("%s() failed with err %d", __FUNCTION__, err);
+    return err;
+  }
+
+  return err;
 }

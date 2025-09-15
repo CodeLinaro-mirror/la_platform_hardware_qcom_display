@@ -470,6 +470,10 @@ LayerBufferFormat SDMCompBufferAllocator::GetFormatSDM(const int32_t &source, co
       case HAL_PIXEL_FORMAT_RGBA_FP16:
         format = kFormatRGBA16161616FUbwc;
         break;
+      case HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC:
+      case HAL_PIXEL_FORMAT_YCbCr_422_P210:
+        format = kFormatYCbCr422P210Ubwc;
+        break;
       default:
         DLOGW("Unsupported format type for UBWC %s", qdutils::GetHALPixelFormatString(source));
         return kFormatInvalid;
@@ -577,6 +581,12 @@ LayerBufferFormat SDMCompBufferAllocator::GetFormatSDM(const int32_t &source, co
       break;
     case static_cast<int>(APixelFormat::R_8):
       format = kFormatA8;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC:
+      format = kFormatYCbCr422P210Ubwc;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_422_P210:
+      format = kFormatYCbCr422P210;
       break;
     default:
       DLOGW("Unsupported format type = %s", qdutils::GetHALPixelFormatString(source));
@@ -856,6 +866,13 @@ int SDMCompBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target,
       *target = HAL_PIXEL_FORMAT_RGBA_FP16;
       *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
       break;
+    case kFormatYCbCr422P210:
+      *target = HAL_PIXEL_FORMAT_YCbCr_422_P210;
+      break;
+    case kFormatYCbCr422P210Ubwc:
+      *target = HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC;
+      *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+      break;
     default:
       DLOGW("Unsupported format = 0x%x", format);
       return -EINVAL;
@@ -977,6 +994,10 @@ int SDMCompBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
 
 int SDMCompBufferAllocator::MapBuffer(void *handle, shared_ptr<Fence> acquire_fence,
                                       void **base_ptr) {
+  if (handle == nullptr) {
+    DLOGE("Failed to Map buffer Invalid handle");
+    return kErrorUndefined;
+  }
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGW("Could not get gralloc instance");

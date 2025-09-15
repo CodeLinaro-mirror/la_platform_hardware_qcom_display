@@ -29,7 +29,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -70,7 +70,7 @@
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
 #include "sdm_display_intf_lifecycle.h"
-#include "sdm_display_intf_drawcycle.h"
+#include "sdm_display_intf_drawcycle_v2.h"
 #include "sdm_display_intf_sideband.h"
 #include "sdm_display_intf_layer_builder.h"
 #include "QServiceBackend.h"
@@ -123,13 +123,21 @@ using sdm::GLColorConvert;
 using sdm::GLLayerStitch;
 using sdm::GLRect;
 using sdm::SDMDisplayCapsIntf;
-using sdm::SDMDisplayDrawCycleIntf;
 using sdm::SDMDisplayLayerBuilderIntf;
 using sdm::SDMDisplayLifeCycleIntf;
 using sdm::SDMDisplaySettingsIntf;
 using sdm::SDMDisplaySideBandIntf;
 using sdm::SDMSideBandCompositorCbIntf;
 using sdm::HWC3::Error;
+
+// interface support for shared pointers is only present from composer3_v3
+#ifdef COMPOSER3_V3
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntfV2
+#else
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntf
+#endif
+
+using sdm::SDMDisplayDrawCycleIntfV;
 
 class DisplayConfigCallback : public BnDisplayConfigCallback {
  public:
@@ -162,7 +170,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   ScopedAStatus getHDRCapabilities(DisplayType dpy, HDRCapsParams *aidl_return) override;
   ScopedAStatus setCameraLaunchStatus(int on) override;
   ScopedAStatus displayBWTransactionPending(bool *status) override;
-  ScopedAStatus setDisplayAnimating(long display_id, bool animating) override;
+  ScopedAStatus setDisplayAnimating(int64_t display_id, bool animating) override;
   ScopedAStatus controlIdlePowerCollapse(bool enable, bool synchronous) override;
   ScopedAStatus getWriteBackCapabilities(bool *is_wb_ubwc_supported);
   ScopedAStatus setDisplayDppsAdROI(int display_id, int h_start, int h_end, int v_start, int v_end,
@@ -173,16 +181,16 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   ScopedAStatus isPowerModeOverrideSupported(int disp_id, bool *supported) override;
   ScopedAStatus isHDRSupported(int disp_id, bool *supported) override;
   ScopedAStatus isWCGSupported(int disp_id, bool *supported) override;
-  ScopedAStatus setLayerAsMask(int disp_id, long layer_id) override;
+  ScopedAStatus setLayerAsMask(int32_t disp_id, int64_t layer_id) override;
   ScopedAStatus getDebugProperty(const std::string &prop_name, std::string *value) override;
   ScopedAStatus getActiveBuiltinDisplayAttributes(Attributes *attr) override;
   ScopedAStatus setPanelLuminanceAttributes(int disp_id, float min_lum, float max_lum) override;
   ScopedAStatus isBuiltInDisplay(int disp_id, bool *aidl_return) override;
   ScopedAStatus isAsyncVDSCreationSupported(bool *aidl_return) override;
   ScopedAStatus createVirtualDisplay(int width, int height, int format) override;
-  ScopedAStatus getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) override;
-  ScopedAStatus getDSIClk(int disp_id, long *bit_clk) override;
-  ScopedAStatus setDSIClk(int disp_id, long bit_clk) override;
+  ScopedAStatus getSupportedDSIBitClks(int32_t disp_id, std::vector<int64_t> *bit_clks) override;
+  ScopedAStatus getDSIClk(int32_t disp_id, int64_t *bit_clk) override;
+  ScopedAStatus setDSIClk(int32_t disp_id, int64_t bit_clk) override;
   ScopedAStatus setQsyncMode(int disp_id, QsyncMode mode) override;
   ScopedAStatus isSmartPanelConfig(int disp_id, int config_id, bool *is_smart) override;
   ScopedAStatus isRotatorSupportedFormat(int hal_format, bool ubwc, bool *supported) override;
@@ -195,11 +203,17 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   ScopedAStatus isRCSupported(int disp_id, bool *supported) override;
   ScopedAStatus controlIdleStatusCallback(bool enable) override;
   ScopedAStatus isSupportedConfigSwitch(int disp_id, int config, bool *supported) override;
-  ScopedAStatus getDisplayType(long physical_disp_id, DisplayType *display_type) override;
+  ScopedAStatus getDisplayType(int64_t physical_disp_id, DisplayType *display_type) override;
   ScopedAStatus setCWBOutputBuffer(
       const std::shared_ptr<IDisplayConfigCallback> &in_callback, int32_t in_disp_id,
       const Rect &in_rect, bool in_post_processed,
       const ::aidl::android::hardware::common::NativeHandle &in_buffer) override;
+#ifdef COMPOSER3_V4
+  ScopedAStatus setCWBOutputBufferV2(
+      const std::shared_ptr<IDisplayConfigCallback> &in_callback, int32_t in_disp_id,
+      const Rect &in_roi_rect, const Rect &in_downscale_rect, int32_t in_cwb_control_flag,
+      const ::aidl::android::hardware::common::NativeHandle &in_buffer) override;
+#endif
   ScopedAStatus setCameraSmoothInfo(CameraSmoothOp in_op, int32_t in_fps);
   ScopedAStatus registerCallback(const std::shared_ptr<IDisplayConfigCallback> &in_callback,
                                  int64_t *aidl_return);
@@ -217,7 +231,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
                                         const CacV2ConfigExt &in_rightConfig,
                                         bool in_enable) override;
   ScopedAStatus allowIdleFallback() { return ScopedAStatus::ok(); }
+#ifdef COMPOSER3_V3
   ScopedAStatus setContentFps(const std::string &in_name, int32_t in_fps) override;
+#endif
 
   void NotifyQsyncChange(uint64_t display_id, bool qsync_enabled, uint32_t refresh_rate,
                          uint32_t qsync_refresh_rate) override;
@@ -258,6 +274,11 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   sdm::nsecs_t SystemTime(int clock);
 
  private:
+  ScopedAStatus setCWBOutputBufferInternal(
+      const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id,
+      const Rect &roi_rect, const Rect &downscale_rect, int32_t cwb_control_flag,
+      const ::aidl::android::hardware::common::NativeHandle &buffer);
+
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
 
   std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
@@ -269,7 +290,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
   std::shared_ptr<SDMDisplaySettingsIntf> settings_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
-  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle_;
   std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
   std::shared_ptr<SDMDisplayLayerBuilderIntf> layer_builder_;
   sdm::Locker *locker_ = nullptr;

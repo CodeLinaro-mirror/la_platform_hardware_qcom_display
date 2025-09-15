@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -22,7 +22,7 @@ int HwFenceClient::Init(struct synx_init_data *data) {
   int32_t result;
   int32_t num = 0;
   struct synx_private_ioctl_arg synx_ioctl;
-  char *deviceName = "/dev/synx_device";
+  char *deviceName = (char *)"/dev/synx_device";
   int32_t synx_fd = open(deviceName, O_RDWR);
   struct synx_initialize_v2 *info = new struct synx_initialize_v2;
 

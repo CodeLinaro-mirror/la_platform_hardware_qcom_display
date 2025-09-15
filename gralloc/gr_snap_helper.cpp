@@ -821,7 +821,10 @@ SnapError GrallocSnapHelper::PixelFormatRequestedHelper(SnapHandle *hnd, uint32_
 
   if (gralloc_in_set != nullptr) {
     return SnapError::BAD_VALUE;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PIXEL_FORMAT_REQUESTED,
                                                  &snap_pixel_format);
@@ -872,7 +875,10 @@ SnapError GrallocSnapHelper::PixelFormatAllocatedHelper(SnapHandle *hnd, uint32_
 
   if (gralloc_in_set != nullptr) {
     return SnapError::BAD_VALUE;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   // This type is only supported as a vendor metadata type in Gralloc5
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PIXEL_FORMAT_ALLOCATED,
@@ -1023,6 +1029,19 @@ SnapError GrallocSnapHelper::ThreeDimensionalRefInfoHelper(SnapHandle *hnd, uint
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::THREE_DIMENSIONAL_REF_INFO, snap_out_get);
   } else if (gralloc_in_set != nullptr) {
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::THREE_DIMENSIONAL_REF_INFO, gralloc_in_set);
+  }
+  return error;
+}
+
+SnapError GrallocSnapHelper::ViewIdHelper(SnapHandle *hnd, uint32_t aidl_size, void *gralloc_in_set,
+                                          void *gralloc_out_get, SnapDescriptor *buf_des,
+                                          bool check_metadata_set, int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::VIEW_ID, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::VIEW_ID, gralloc_in_set);
   }
   return error;
 }
@@ -2460,10 +2479,13 @@ int GrallocSnapHelper::GetFromBufferDescriptor(gralloc::BufferDescriptor gr_desc
 int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
     SnapHandle *hnd, SnapDescriptor *buf_des, const SnapBufferLayout snap_buffer_layout,
     std::vector<GrallocPlaneLayout> *gr_plane_layouts) {
-  uint64_t width, height;
+  uint64_t width = 0, height = 0;
   SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
   bool is_raw = false;
   bool individually_packed = true;
+  if (!hnd && !buf_des) {
+    return SnapError::BAD_VALUE;
+  }
 
   if (hnd != nullptr) {
     // Get unaligned width
@@ -2512,6 +2534,7 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
     case SnapPixelFormat::RAW12:
     case SnapPixelFormat::RAW14:
       individually_packed = false;
+      [[fallthrough]];
     case SnapPixelFormat::RAW8:
     case SnapPixelFormat::RAW16:
       is_raw = true;
@@ -2989,10 +3012,6 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
 SnapError GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
                                            SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
-    ALOGW(
-        "%s: Explicit UBWC formats such as %d are no longer supported, please switch to using base "
-        "/ linear formats + UBWC usage bits",
-        __FUNCTION__, static_cast<int>(hal_format));
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);
@@ -3871,7 +3890,10 @@ SnapError GrallocSnapHelperLegacy::WidthHelper(SnapHandle *hnd, bool hidl_bytest
   uint64_t snap_width = 0;
   if (gralloc_in_set != nullptr) {
     return error;
+  } else if (gralloc_out_get == nullptr) {
+    return error;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::WIDTH, &snap_width);
   } else if (gralloc_out_get != nullptr) {
@@ -3904,7 +3926,10 @@ SnapError GrallocSnapHelperLegacy::HeightHelper(SnapHandle *hnd, bool hidl_bytes
   uint64_t snap_height = 0;
   if (gralloc_in_set != nullptr) {
     return error;
+  } else if (gralloc_out_get == nullptr) {
+    return error;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::HEIGHT, &snap_height);
   } else if (gralloc_out_get != nullptr) {
@@ -3938,7 +3963,10 @@ SnapError GrallocSnapHelperLegacy::LayerCountHelper(SnapHandle *hnd, bool hidl_b
   uint64_t layer_count = 0;
   if (gralloc_in_set != nullptr) {
     return SnapError::BAD_VALUE;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error =
         snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::LAYER_COUNT, &layer_count);
@@ -3980,7 +4008,10 @@ SnapError GrallocSnapHelperLegacy::PixelFormatRequestedHelper(
 
   if (gralloc_in_set != nullptr) {
     return SnapError::BAD_VALUE;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, metadata_type, &snap_pixel_format);
     error = CheckMetadataSet(metadata_type, error, check_metadata_set);
@@ -4033,7 +4064,10 @@ SnapError GrallocSnapHelperLegacy::PixelFormatAllocatedHelper(
 
   if (gralloc_in_set != nullptr) {
     return SnapError::BAD_VALUE;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PIXEL_FORMAT_ALLOCATED,
                                                  &snap_pixel_format);
@@ -4076,7 +4110,10 @@ SnapError GrallocSnapHelperLegacy::PixelFormatFourCCHelper(SnapHandle *hnd, bool
   uint32_t pixel_format_fourcc = 0;
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PIXEL_FORMAT_FOURCC,
                                                  &pixel_format_fourcc);
@@ -4111,7 +4148,10 @@ SnapError GrallocSnapHelperLegacy::DRMPixelFormatModifierHelper(
   uint64_t pixel_format_modifier = 0;
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(
         *buf_des, SnapMetadataType::DRM_PIXEL_FORMAT_MODIFIER, &pixel_format_modifier);
@@ -4148,7 +4188,10 @@ SnapError GrallocSnapHelperLegacy::AllocationSizeHelper(SnapHandle *hnd, bool hi
   uint32_t allocation_size = 0;
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::ALLOCATION_SIZE,
                                                  &allocation_size);
@@ -4185,7 +4228,10 @@ SnapError GrallocSnapHelperLegacy::ProtectedContentHelper(SnapHandle *hnd, bool 
   uint64_t protect_content = 0;
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PROTECTED_CONTENT,
                                                  &protect_content);
@@ -4220,7 +4266,10 @@ SnapError GrallocSnapHelperLegacy::CompressionHelper(SnapHandle *hnd, bool hidl_
   int64_t snap_compression = 0;
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
+
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::COMPRESSION,
                                                  &snap_compression);
@@ -4387,20 +4436,22 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
                                                       int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   SnapBufferLayout snap_buffer_layout = {};
+  if (hnd == nullptr) {
+    return error;
+  }
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return SnapError::BAD_VALUE;
   }
-  if (gralloc_out_get != nullptr) {
-    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PLANE_LAYOUTS, &snap_buffer_layout);
-  }
+
+  error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PLANE_LAYOUTS, &snap_buffer_layout);
   error = CheckMetadataSet(SnapMetadataType::PLANE_LAYOUTS, error, check_metadata_set);
   std::vector<GrallocPlaneLayout> gr_plane_layouts;
   ConvertSnapBufferlayoutToGrallocPlaneLayout(hnd, buf_des, snap_buffer_layout, &gr_plane_layouts);
   android_ycbcr outYCbCr[2];
   uint64_t base_addr = 0;
-  if (hnd != nullptr) {
-    auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
-  }
+  error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
   ConvertGrallocPlaneLayoutToAndroidYCbCr(base_addr, gr_plane_layouts, outYCbCr);
   qti_ycbcr layout[2];
   for (int i = 0; i < 2; i++) {
@@ -6616,10 +6667,13 @@ int GrallocSnapHelperLegacy::GetFromBufferDescriptor(gralloc::BufferDescriptor g
 int GrallocSnapHelperLegacy::ConvertSnapBufferlayoutToGrallocPlaneLayout(
     SnapHandle *hnd, SnapDescriptor *buf_des, const SnapBufferLayout snap_buffer_layout,
     std::vector<GrallocPlaneLayout> *gr_plane_layouts) {
-  uint64_t width, height;
+  uint64_t width = 0, height = 0;
   SnapPixelFormat snap_pixel_format = SnapPixelFormat::PIXEL_FORMAT_UNSPECIFIED;
   bool is_raw = false;
   bool individually_packed = true;
+  if (!hnd && !buf_des) {
+    return SnapError::BAD_VALUE;
+  }
 
   if (hnd != nullptr) {
     // Get unaligned width
@@ -6667,6 +6721,7 @@ int GrallocSnapHelperLegacy::ConvertSnapBufferlayoutToGrallocPlaneLayout(
     case SnapPixelFormat::RAW10:
     case SnapPixelFormat::RAW12:
       individually_packed = false;
+      [[fallthrough]];
     case SnapPixelFormat::RAW8:
     case SnapPixelFormat::RAW16:
       is_raw = true;
