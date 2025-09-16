@@ -15,7 +15,7 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -95,6 +95,16 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
     return false;
   }
 
+  int value = 0;
+  sideband_->GetProperty(DISABLE_FP16_SUPPORT, &value);
+  disable_fp16_support_ = (value == 1);
+  ALOGV("disable_fp16_support_: %d", disable_fp16_support_);
+
+  value = 0;
+  sideband_->GetProperty(DISABLE_QUERY_LUTS, &value);
+  disable_query_luts_ = (value == 1);
+  ALOGV("disable_query_luts_: %d", disable_query_luts_);
+
   return true;
 }
 
@@ -168,7 +178,7 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
     if (dpy != mDisplayData.end()) {
       sdm::LayerId layer = 0;
       auto error = layer_builder_->CreateLayer(in_display, &layer);
-      ALOGV("%s: CreateLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+      ALOGV("%s: CreateLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
             layer, in_display);
       if (error == sdm::kErrorNone) {
         *aidl_return = static_cast<int64_t>(layer);
@@ -224,7 +234,7 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
     }
   }
 
-  ALOGV("%s: destroyLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+  ALOGV("%s: destroyLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
         in_layer, in_display);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
@@ -492,8 +502,61 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
-ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<Buffer> &,
-                                          std::vector<Luts> *) {
+ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buffer> &buffers,
+                                          std::vector<Luts> *aidl_return) {
+  if (disable_query_luts_) {
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+
+  uint32_t num_elements = buffers.size();
+  std::vector<SnapHandle *> requested_buffers;
+  for (uint32_t i = 0; i < num_elements; i++) {
+    SnapHandle *layerBuffer = sdm::ConvertToSnapHandle(*buffers.at(i).handle);
+    if (!mHandleImporter.importBuffer(layerBuffer)) {
+      ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
+      return TO_BINDER_STATUS(INT32(Error::NoResources));
+    }
+    requested_buffers.emplace_back(layerBuffer);
+  }
+
+  auto requested_luts = std::make_unique<std::vector<Lut3d *>>();
+  aidl_return->resize(num_elements);
+
+  auto error = mCommandEngine->getBufferLuts(display, requested_buffers, requested_luts);
+  // Free all imported buffers after getting luts
+  for (auto buffer : requested_buffers) {
+    mHandleImporter.freeBuffer(buffer);
+  }
+
+  if (error != Error::None) {
+    return TO_BINDER_STATUS(INT32(error));
+  }
+
+  auto it = requested_luts->begin();
+  for (uint32_t i = 0; i < num_elements; i++) {
+    int32_t fd = -1;
+    if (it != requested_luts->end()) {
+      // populateDisplayLuts will return error if the lut pointer we pass is nullptr
+      // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
+      if (*it != nullptr) {
+        error = mCommandEngine->populateDisplayLuts(*it, &(aidl_return->at(i)), &fd);
+        if (error != Error::None) {
+          return TO_BINDER_STATUS(INT32(error));
+        }
+      }
+      it++;
+    }
+
+    if (fd == -1) {
+      ALOGI("%s: Resetting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(fd));
+    } else {
+      ALOGI("%s: Setting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(dup(fd)));
+      close(fd);
+    }
+  }
+
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 #endif
@@ -685,16 +748,8 @@ ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_retu
       PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
       PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
 
-  static bool read_fp16_support = false;
-  if (!read_fp16_support) {
-    int value = 0;
-    sideband_->GetProperty(DISABLE_FP16_SUPPORT, &value);
-    bool disable_fp16_support = (value == 1);
-    ALOGV("disable_fp16_support: %d", disable_fp16_support);
-    if (!disable_fp16_support) {
-      pixel_formats.push_back(PixelFormat::RGBA_FP16);
-    }
-    read_fp16_support = true;
+  if (!disable_fp16_support_) {
+    pixel_formats.push_back(PixelFormat::RGBA_FP16);
   }
 
   static std::vector<Dataspace> dataspace_standards{
@@ -1511,35 +1566,35 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
     // The display entry may have already been removed by onHotplug.
     if (dpy != mClient.mDisplayData.end()) {
       disp_data_ptr = &dpy->second;
-    } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
+    } else {
       // As from SF client, all destroy-layer commands are updated to command list in Display
       // destructor while destroying display on hot plug disconnect call, but it doesn't share
       // updated commands to composer while display is destroying, and sending all these commands
       // in next cycle Validate() or PresentOrValidate() call, i.e. after destruction of display.
       // Still composer flushes all pending layers from stack of unplugged display before
       // destroying its dataset entirely. So, no need to report error for all destroy-layer
-      // commands received after destruction of their display.
-      ALOGW("%s: Can\'t destroy layer-%lu from destroyed Display-%lu layer stack!", __FUNCTION__,
-            layer, display);
-      writeError(__FUNCTION__, Error::BadDisplay);
-      return;
-    } else {
+      // commands received after destruction of their display. It may be possible that create layer
+      // requested, but before processing it display destroyed, in that case also request must be
+      // dropped.
+      ALOGW("%s: Can\'t %s layer-%" PRId64 " from destroyed Display-%" PRId64 " layer stack!", __FUNCTION__,
+            (cmd == LayerLifecycleBatchCommandType::DESTROY) ? "destroy" : "create", layer,
+            display);
       // Note: We do not destroy the layer on this error as the hotplug
       // disconnect invalidates the display id. The implementation should
       // ensure all layers for the display are destroyed.
-      ALOGE("%s: Invalid  display Id(%lu)!", __FUNCTION__, display);
+      ALOGW("%s: Invalid  display Id(%" PRId64 ")!", __FUNCTION__, display);
       writeError(__FUNCTION__, Error::BadDisplay);
       return;
     }
   } else {
-    ALOGE("%s: Invalid Parameter out of either display Id(%lu) or  layer Id(%lu)!", __FUNCTION__,
+    ALOGW("%s: Invalid Parameter out of either display Id(%" PRId64 ") or  layer Id(%" PRId64 ")!", __FUNCTION__,
           display, layer);
     writeError(__FUNCTION__, Error::BadParameter);
     return;
   }
 
   if (cmd == LayerLifecycleBatchCommandType::CREATE) {
-    ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %lu for display-%lu.", __FUNCTION__,
+    ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
     auto error = mClient.layer_builder_->CreateLayer(display, &layer);
     if (error == sdm::kErrorNone) {
@@ -1548,12 +1603,12 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
       ly->second.Buffers.resize(layerCmd.newBufferSlotCount);
     } else {
-      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      ALOGW("%s: Layer Id %" PRId64 " not allowed for display-%" PRId64 " !", __FUNCTION__, layer, display);
       writeError(__FUNCTION__, Error::BadLayer);
       return;
     }
   } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
-    ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %lu for display-%lu.", __FUNCTION__,
+    ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
     mClient.drawcycle_->WaitForDrawCycleToComplete(display);
     auto error = mClient.layer_builder_->DestroyLayer(display, layer);
@@ -1567,12 +1622,12 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
         dpy->second.Layers.erase(layer);
       }
     } else {
-      ALOGE("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      ALOGW("%s: Layer Id %" PRId64 " not allowed for display-%" PRId64 " !", __FUNCTION__, layer, display);
       writeError(__FUNCTION__, Error::BadLayer);
       return;
     }
   } else {
-    ALOGE("%s: Unsupported LLCBC command Id %d for Layer-%lu and display-%lu !", __FUNCTION__, cmd,
+    ALOGW("%s: Unsupported LLCBC command Id %d for Layer-%" PRId64 " and display-%" PRId64 " !", __FUNCTION__, cmd,
           layer, display);
     writeError(__FUNCTION__, Error::BadConfig);
     return;
@@ -2021,6 +2076,17 @@ Error AidlComposerClient::CommandEngine::setClientTargetProperty(int64_t display
 }
 
 #ifdef COMPOSER3_V4
+Error AidlComposerClient::CommandEngine::getBufferLuts(
+    uint64_t display, const std::vector<SnapHandle *> &buffers,
+    std::unique_ptr<std::vector<Lut3d *>> &out_luts) {
+  auto err = mClient.drawcycle_->GetBufferLuts(display, buffers, out_luts);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
+  }
+
+  return Error::None;
+}
+
 Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts *luts,
                                                              int32_t *lut_fd) {
   if (!lut_3d) {
@@ -2084,6 +2150,7 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts
 
   // convert 3d lut entries to 1d normalized float buffer
   std::vector<float> buffer;
+  buffer.reserve(final_size);
   // TODO(user): take correct lut_size when multiple luts will be supported
   for (auto index = 0; index < lut_size; index++) {
     buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
@@ -2103,16 +2170,6 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts
   buffer.clear();
   lut_3d->validLutEntries = false;
   lut_3d->validGridEntries = false;
-
-  if (lut_3d->lutEntries != nullptr) {
-    delete[] lut_3d->lutEntries;
-    lut_3d->lutEntries = nullptr;
-  }
-
-  if (lut_3d->gridEntries != nullptr) {
-    delete[] lut_3d->gridEntries;
-    lut_3d->gridEntries = nullptr;
-  }
 
   *lut_fd = fd;
 
@@ -2146,11 +2203,11 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
     }
 
     if (fd == -1) {
-      ALOGI("%s: Resetting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+      ALOGI("%s: Resetting LUTs on client for layer %" PRId64 " on display-%" PRId64, __FUNCTION__,
             requestedLayers.back(), display);
       requestedFds.emplace_back(::ndk::ScopedFileDescriptor(fd));
     } else {
-      ALOGI("%s: Setting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+      ALOGI("%s: Setting LUTs on client for layer %" PRId64 " on display-%" PRId64, __FUNCTION__,
             requestedLayers.back(), display);
       requestedFds.emplace_back(::ndk::ScopedFileDescriptor(dup(fd)));
       close(fd);

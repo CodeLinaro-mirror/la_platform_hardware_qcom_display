@@ -1,6 +1,7 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
+PRODUCT_PACKAGES += $(DISPLAY_FW_PREBUILTS)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
 #Clstc library config xml file
@@ -101,8 +102,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.enable_display_extensions=1 \
     vendor.gralloc.enable_snapalloc=1 \
-    vendor.display.disable_fp16_support=1 \
-    vendor.display.disable_query_luts=1
+    vendor.display.disable_fp16_support=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
