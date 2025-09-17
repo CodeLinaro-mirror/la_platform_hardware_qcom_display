@@ -225,3 +225,13 @@ endif
 
 # Properties using default value:
 #    vendor.display.disable_hw_recovery=0
+#
+
+SOONG_CONFIG_NAMESPACES += qtidisplaycomposer
+SOONG_CONFIG_qtidisplaycomposer += qtidisplaycomposertargets
+
+ifeq ($(TARGET_HAS_LOW_RAM),true)
+  SOONG_CONFIG_qtidisplaycomposer_qtidisplaycomposertargets := qtidisplaycomposertarget_LOW_RAM_TARGET
+else
+  SOONG_CONFIG_qtidisplaycomposer_qtidisplaycomposertargets := qtidisplaycomposertarget_NON_LOW_RAM_TARGET
+endif
