@@ -1,6 +1,7 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
+PRODUCT_PACKAGES += $(DISPLAY_FW_PREBUILTS)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
 #Clstc library config xml file

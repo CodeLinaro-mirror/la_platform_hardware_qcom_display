@@ -763,7 +763,7 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferInternal(
       cwb_callbacks_.insert({hdl, {display_type, callback}});
     }
   } else if (hdl_exists) {
-    ALOGE("%s: buffer(0x%x) already being handled by display-%d", __FUNCTION__, hdl, display_type);
+    ALOGE("%s: buffer(%p) already being handled by display-%d", __FUNCTION__, hdl, display_type);
   }
 
   if (ret_status != EX_NONE) {
@@ -809,11 +809,11 @@ void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
   }
 
   if (!callback) {
-    ALOGE("%s: buffer handle(0x%x) not found", __FUNCTION__, hdl);
+    ALOGE("%s: buffer handle(%p) not found", __FUNCTION__, hdl);
   } else {
     NativeHandle buffer =
         sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
-    ALOGI("%s: Notify the client about buffer (0x%x) status %d for display-%d.", __FUNCTION__, hdl,
+    ALOGI("%s: Notify the client about buffer (%p) status %d for display-%d.", __FUNCTION__, hdl,
           status, display_type);
 
     callback->notifyCWBBufferDone(status, buffer);
@@ -1166,7 +1166,7 @@ GLRect SdmRectToGlRect(sdm::SDMRect &r) {
 
 void DisplayConfigAIDL::StitchLayers(uint64_t display, sdm::LayerStitchContext *ctx) {
   if (layer_stitch_map_.find(display) == layer_stitch_map_.end()) {
-    ALOGW("GL Layer stitch not initialized for display %lu!", display);
+    ALOGW("GL Layer stitch not initialized for display %" PRIu64 "!", display);
     return;
   }
 
@@ -1194,7 +1194,7 @@ void DisplayConfigAIDL::InitLayerStitch(uint64_t display) {
 
   layer_stitch_map_.at(display) = GLLayerStitch::GetInstance(false);
   if (layer_stitch_map_.at(display) == nullptr) {
-    ALOGW("Unable to initialize layer stitch: display %lu", display);
+    ALOGW("Unable to initialize layer stitch: display %" PRIu64, display);
     layer_stitch_map_.erase(display);
   }
 }
@@ -1219,7 +1219,7 @@ void DisplayConfigAIDL::InitColorConvert(uint64_t display, bool secure) {
 
 void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlitContext *ctx) {
   if (color_convert_map_.find(display) == color_convert_map_.end()) {
-    ALOGW("Display %lu: GL Color convert is not initialized", display);
+    ALOGW("Display %" PRIu64 ": GL Color convert is not initialized", display);
     return;
   }
 
@@ -1304,7 +1304,7 @@ void DisplayConfigAIDL::CollectHistogram(uint64_t display, uint64_t max_frames, 
                                          uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS],
                                          uint64_t *numFrames) {
   if (histogram_map_.find(display) == histogram_map_.end()) {
-    ALOGW("Display %lu: Histogram not initialized!", display);
+    ALOGW("Display %" PRIu64 ": Histogram not initialized!", display);
     return;
   }
 

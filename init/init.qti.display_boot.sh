@@ -62,8 +62,11 @@ case "$target" in
     # SOC ID for Alor is 685
     # SOC ID for Alor APQ is 727
     # SOC ID for Purwa is 635
+    # SOC ID for CanoeS is 722
+    # SOC ID for CanoeS APQ is 723
+    # SOC ID for Canoe auto is 730
     case "$soc_hwid" in
-      660|661|704|685|727|635)
+      660|661|704|685|727|635|722|723|730)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -134,7 +137,7 @@ case "$target" in
         setprop vendor.display.enable_hal_self_refresh 1
         setprop vendor.display.cpu_cluster_boost_mask 3
         ;;
-      655|681|659|694|686|720|721)
+      655|681|659|694|686|720|721|731|732)
         #SOC ID for tuna is 655
         #SOC ID for tuna7 is 681
         #SOC ID for tuna APQ is 694
@@ -142,6 +145,8 @@ case "$target" in
         #SOC ID for kera is 686
         #SOC ID for kera is 720
         #SOC ID for kera is 721
+        #SOC ID for kera iot with Modem is 731
+        #SOC ID for kera iot without Modem is 732
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 6

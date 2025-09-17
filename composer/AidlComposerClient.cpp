@@ -178,7 +178,7 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
     if (dpy != mDisplayData.end()) {
       sdm::LayerId layer = 0;
       auto error = layer_builder_->CreateLayer(in_display, &layer);
-      ALOGV("%s: CreateLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+      ALOGV("%s: CreateLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
             layer, in_display);
       if (error == sdm::kErrorNone) {
         *aidl_return = static_cast<int64_t>(layer);
@@ -234,7 +234,7 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
     }
   }
 
-  ALOGV("%s: destroyLayer called out of LLCBC group for layer %lu on display-%lu.", __FUNCTION__,
+  ALOGV("%s: destroyLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
         in_layer, in_display);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
@@ -1576,25 +1576,25 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       // commands received after destruction of their display. It may be possible that create layer
       // requested, but before processing it display destroyed, in that case also request must be
       // dropped.
-      ALOGW("%s: Can\'t %s layer-%lu from destroyed Display-%lu layer stack!", __FUNCTION__,
+      ALOGW("%s: Can\'t %s layer-%" PRId64 " from destroyed Display-%" PRId64 " layer stack!", __FUNCTION__,
             (cmd == LayerLifecycleBatchCommandType::DESTROY) ? "destroy" : "create", layer,
             display);
       // Note: We do not destroy the layer on this error as the hotplug
       // disconnect invalidates the display id. The implementation should
       // ensure all layers for the display are destroyed.
-      ALOGW("%s: Invalid  display Id(%lu)!", __FUNCTION__, display);
+      ALOGW("%s: Invalid  display Id(%" PRId64 ")!", __FUNCTION__, display);
       writeError(__FUNCTION__, Error::BadDisplay);
       return;
     }
   } else {
-    ALOGW("%s: Invalid Parameter out of either display Id(%lu) or  layer Id(%lu)!", __FUNCTION__,
+    ALOGW("%s: Invalid Parameter out of either display Id(%" PRId64 ") or  layer Id(%" PRId64 ")!", __FUNCTION__,
           display, layer);
     writeError(__FUNCTION__, Error::BadParameter);
     return;
   }
 
   if (cmd == LayerLifecycleBatchCommandType::CREATE) {
-    ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %lu for display-%lu.", __FUNCTION__,
+    ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
     auto error = mClient.layer_builder_->CreateLayer(display, &layer);
     if (error == sdm::kErrorNone) {
@@ -1603,12 +1603,12 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       auto ly = disp_data_ptr->Layers.emplace(layer, LayerBuffers()).first;
       ly->second.Buffers.resize(layerCmd.newBufferSlotCount);
     } else {
-      ALOGW("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      ALOGW("%s: Layer Id %" PRId64 " not allowed for display-%" PRId64 " !", __FUNCTION__, layer, display);
       writeError(__FUNCTION__, Error::BadLayer);
       return;
     }
   } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
-    ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %lu for display-%lu.", __FUNCTION__,
+    ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
     mClient.drawcycle_->WaitForDrawCycleToComplete(display);
     auto error = mClient.layer_builder_->DestroyLayer(display, layer);
@@ -1622,12 +1622,12 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
         dpy->second.Layers.erase(layer);
       }
     } else {
-      ALOGW("%s: Layer Id %lu not allowed for display-%lu !", __FUNCTION__, layer, display);
+      ALOGW("%s: Layer Id %" PRId64 " not allowed for display-%" PRId64 " !", __FUNCTION__, layer, display);
       writeError(__FUNCTION__, Error::BadLayer);
       return;
     }
   } else {
-    ALOGW("%s: Unsupported LLCBC command Id %d for Layer-%lu and display-%lu !", __FUNCTION__, cmd,
+    ALOGW("%s: Unsupported LLCBC command Id %d for Layer-%" PRId64 " and display-%" PRId64 " !", __FUNCTION__, cmd,
           layer, display);
     writeError(__FUNCTION__, Error::BadConfig);
     return;
@@ -2150,6 +2150,7 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts
 
   // convert 3d lut entries to 1d normalized float buffer
   std::vector<float> buffer;
+  buffer.reserve(final_size);
   // TODO(user): take correct lut_size when multiple luts will be supported
   for (auto index = 0; index < lut_size; index++) {
     buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
@@ -2202,11 +2203,11 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
     }
 
     if (fd == -1) {
-      ALOGI("%s: Resetting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+      ALOGI("%s: Resetting LUTs on client for layer %" PRId64 " on display-%" PRId64, __FUNCTION__,
             requestedLayers.back(), display);
       requestedFds.emplace_back(::ndk::ScopedFileDescriptor(fd));
     } else {
-      ALOGI("%s: Setting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+      ALOGI("%s: Setting LUTs on client for layer %" PRId64 " on display-%" PRId64, __FUNCTION__,
             requestedLayers.back(), display);
       requestedFds.emplace_back(::ndk::ScopedFileDescriptor(dup(fd)));
       close(fd);
