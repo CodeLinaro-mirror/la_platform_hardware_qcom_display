@@ -780,6 +780,9 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
       *target = HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC;
       *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC;
       break;
+    case kFormatRAW10:
+      *target = static_cast<int>(PixelFormat::RAW10);
+      break;
     default:
       DLOGW("Unsupported format = 0x%x", format);
       return -EINVAL;
@@ -1291,6 +1294,9 @@ LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const 
       break;
     case HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC:
       format = kFormatYCbCr422P210Ubwc;
+      break;
+    case static_cast<int>(PixelFormat::RAW10):
+      format = kFormatRAW10;
       break;
     default:
       DLOGW("Unsupported format type = %d", source);
