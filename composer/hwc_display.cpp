@@ -18,11 +18,11 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+*
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 
 #include <cutils/properties.h>
 #include <errno.h>
@@ -56,6 +56,9 @@
 
 #define __CLASS__ "HWCDisplay"
 
+#ifdef COMPOSER3_V4
+using aidl::android::hardware::graphics::composer3::OutputType;
+#endif
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 namespace sdm {
 
@@ -1171,6 +1174,13 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
 
 #ifdef COMPOSER3_V3
 HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
+  if (out_configs == nullptr) {
+    return HWC3::Error::BadParameter;
+  }
+
+  DisplayConfigFixedInfo fixed_info = {};
+  display_intf_->GetConfig(&fixed_info);
+
   out_configs->clear();
   out_configs->reserve(variable_config_map_.size());
   for (const auto &[config_id, variable_config] : variable_config_map_) {
@@ -1182,6 +1192,21 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup = GetDisplayConfigGroup(variable_config);
+
+#ifdef COMPOSER3_V4
+    // Display output colorspace is fixed for builtin displays regardless of HDR content.
+    // For external displays, colorspace will be changed for HDR content if display supports HDR.
+    // EOTF is checked for true HDR support because external is always marked as HDR supported
+    // if primary supports HDR to prevent SF from marking HDR layers as skip.
+    display_configuration.hdrOutputType =
+        (fixed_info.hdr_eotf & sdm::kHdrEOTFHDR10) ? OutputType::HDR10
+        : (fixed_info.hdr_eotf & sdm::kHdrEOTFSDR) ? OutputType::SDR
+                                                   : OutputType::INVALID;
+    if (display_class_ == DISPLAY_CLASS_BUILTIN) {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+#endif
+
     DLOGI(
         "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d",
         config_id, variable_config.vsync_period_ns, display_configuration.configGroup);
