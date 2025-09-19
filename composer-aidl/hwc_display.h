@@ -69,6 +69,9 @@ using ClientTargetProperty = composer_V3::ClientTargetProperty;
 #if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using DisplayConfiguration = composer_V3::DisplayConfiguration;
 #endif
+#ifdef ENABLE_COMPOSER3_V4
+using OutputType = composer_V3::OutputType;
+#endif
 using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
 
 typedef uint32_t VsyncPeriodNanos;
