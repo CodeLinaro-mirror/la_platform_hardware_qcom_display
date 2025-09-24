@@ -1093,6 +1093,9 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
 HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
   out_configs->clear();
   out_configs->reserve(variable_config_map_.size());
+  DisplayConfigFixedInfo fixed_info = {};
+  display_intf_->GetConfig(&fixed_info);
+  sdm::DisplayClass display_class = GetDisplayClass();
   for (const auto &[config_id, variable_config] : variable_config_map_) {
     DisplayConfiguration display_configuration;
     display_configuration.configId = config_id;
@@ -1102,6 +1105,16 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup = GetDisplayConfigGroupId(variable_config);
+#ifdef ENABLE_COMPOSER3_V4
+    if (fixed_info.hdr_supported) {
+      display_configuration.hdrOutputType = OutputType::HDR10;
+    } else {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+    if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+#endif
     display_configuration.vrrConfig = {
         static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
     DLOGI(
