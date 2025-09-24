@@ -2547,19 +2547,21 @@ void HWCSession::UEventHandler(const char *uevent_data, int length) {
       Locker::ScopeLock lock_a(locker_[active_builtin_disp_id]);
       hwc_display_[active_builtin_disp_id]->GetActiveSecureSession(&secure_sessions);
     }
-    if (secure_sessions[kSecureDisplay] ||
-        ((virtual_display_index != -1) && (hwc_display_[virtual_display_index]))) {
-      // Defer hotplug handling.
-      SCOPE_LOCK(pluggable_handler_lock_);
-      DLOGI("Marking hotplug pending...");
-      hotplug_pending_event_ = kHotPlugEvent;
-    } else {
-      // Handle hotplug.
-      int32_t err = HandlePluggableDisplays(true);
-      if (err) {
-        DLOGW("Hotplug handling failed. Error %d '%s'. Hotplug handling %s.", err,
-              strerror(abs(err)), (hotplug_pending_event_ == kHotPlugEvent) ?
-              "deferred" : "dropped");
+    if(secure_sessions != 0) {
+      if (secure_sessions[kSecureDisplay] ||
+          ((virtual_display_index != -1) && (hwc_display_[virtual_display_index]))) {
+        // Defer hotplug handling.
+        SCOPE_LOCK(pluggable_handler_lock_);
+        DLOGI("Marking hotplug pending...");
+        hotplug_pending_event_ = kHotPlugEvent;
+      } else {
+        // Handle hotplug.
+        int32_t err = HandlePluggableDisplays(true);
+        if (err) {
+          DLOGW("Hotplug handling failed. Error %d '%s'. Hotplug handling %s.", err,
+                strerror(abs(err)), (hotplug_pending_event_ == kHotPlugEvent) ?
+                "deferred" : "dropped");
+        }
       }
     }
 
