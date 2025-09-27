@@ -549,10 +549,10 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buf
     }
 
     if (fd == -1) {
-      ALOGI("%s: Resetting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      ALOGI("%s: Resetting LUTs on client for buffer on display-%lld", __FUNCTION__, display);
       aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(fd));
     } else {
-      ALOGI("%s: Setting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      ALOGI("%s: Setting LUTs on client for buffer on display-%lld", __FUNCTION__, display);
       aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(dup(fd)));
       close(fd);
     }
