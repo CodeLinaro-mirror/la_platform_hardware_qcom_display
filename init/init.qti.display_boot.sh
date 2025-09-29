@@ -65,9 +65,10 @@ case "$target" in
     # SOC ID for CanoeS is 722
     # SOC ID for CanoeS APQ is 723
     # SOC ID for Canoe auto is 730
+    # SOC ID for Canoe Compute SKU and APQ SKU is 743
     # SOC ID for Hamoa is 555
     case "$soc_hwid" in
-      660|661|704|685|727|635|722|723|730|555)
+      660|661|704|685|727|635|743|722|723|730|555)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -83,6 +84,7 @@ case "$target" in
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;

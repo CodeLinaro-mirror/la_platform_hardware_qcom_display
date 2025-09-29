@@ -2402,7 +2402,10 @@ SnapError GrallocSnapHelper::IsUBWCHelper(SnapHandle *hnd, uint32_t aidl_size, v
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
   }
-  if (gralloc_out_get != nullptr) {
+  if (buf_des != nullptr) {
+    error =
+        snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::IS_UBWC, gralloc_out_get);
+  } else if (gralloc_out_get != nullptr) {
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::IS_UBWC, gralloc_out_get);
   }
 
@@ -3145,6 +3148,11 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
              "usage %" PRIu64 " name from gralloc descriptor %s snap_desc %s",
              __FUNCTION__, gr_desc.GetFormat(), gr_desc.GetUsage(), snap_fmt_desc.format,
              snap_fmt_desc.modifier, snap_desc.usage, gr_desc.GetName().c_str(), snap_desc.name);
+  }
+  if (!snapallocator_->IsFormatSupportedByGPU(snap_desc)) {
+     ALOGW("%s: Format not supported by GPU - format %d, modifier %d, usage %" PRIu64 "",
+           __FUNCTION__, snap_desc.format, snap_fmt_desc.modifier, snap_desc.usage);
+     return SnapError::UNSUPPORTED;
   }
   return SnapError::NONE;
 }
