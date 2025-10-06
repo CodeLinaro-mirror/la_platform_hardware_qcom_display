@@ -245,7 +245,7 @@ void Allocator::GetIonHeapInfo(uint64_t usage, unsigned int *ion_heap_id, unsign
         if (secure_preview_only) {  // holi target
           flags |= UINT(ION_SC_PREVIEW_FLAGS);
         } else {  // Default
-          flags |= UINT(ION_SC_PREVIEW_FLAGS | ION_SC_FLAGS | ION_CP_FLAGS);
+          flags |= UINT(ION_SC_PREVIEW_FLAGS | ION_SC_FLAGS);
         }
       } else {
         flags |= UINT(ION_SC_FLAGS);
