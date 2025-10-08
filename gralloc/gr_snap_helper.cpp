@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <QtiGralloc.h>
@@ -276,14 +276,6 @@ int GrallocSnapHelper::Free(native_handle_t *gr_hnd) {
 
 int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
                             CropRectangle_t gr_access_region, int fence_fd, uint64_t* base_addr) {
-  if (gr_hnd == nullptr) {
-    ALOGE("Invalid gralloc handle");
-    return SnapError::BAD_BUFFER;
-  }
-  if (!IsSnapAllocEnabled()) {
-    ALOGW("SnapAlloc is disabled");
-    return SnapError::UNSUPPORTED;
-  }
 
   std::lock_guard<std::mutex> lock(map_lock_);
 
@@ -301,15 +293,11 @@ int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
                               .bottom = gr_access_region.bottom};
 
     SnapFence acquire_fence;
-    acquire_fence.fence_fd = dup(fence_fd);
+    acquire_fence.fence_fd = fence_fd;
     SnapAddress ret_addr;
 
     auto status = snapmapper_->Lock(*hnd, static_cast<SnapUsage>(usage), access_region,
                                     acquire_fence, &ret_addr);
-
-    if (acquire_fence.fence_fd > 0) {
-      close(acquire_fence.fence_fd);
-    }
 
     if (status == SnapError::NONE) {
       *base_addr = ret_addr.addressPointer;
@@ -320,6 +308,9 @@ int GrallocSnapHelper::Lock(native_handle_t *gr_hnd, uint64_t gr_usage,
     }
   } else {
     ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
+    if (fence_fd >= 0) {
+     close(fence_fd);
+    }
   }
 
   return SnapError::BAD_BUFFER;
