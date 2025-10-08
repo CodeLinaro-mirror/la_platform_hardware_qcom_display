@@ -327,22 +327,39 @@ int HWCSession::DisplayConfigImpl::GetPanelBrightness(uint32_t *level) {
 
 int HWCSession::MinHdcpEncryptionLevelChanged(int disp_id, uint32_t min_enc_level) {
   DLOGI("Display %d", disp_id);
+  int ret = -1;
+  bool invalid_display = true;
+  int disp_idx;
+  HWCDisplay *hwc_display;
 
-  disp_id = HWC_DISPLAY_PRIMARY;
-  int disp_idx = GetDisplayIndex(disp_id);
-  if (disp_idx == -1) {
-    DLOGE("Invalid display = %d", disp_id);
-    return -EINVAL;
-  }
+  do {
+    disp_idx = GetDisplayIndex(disp_id);
+    if (disp_idx == -1) {
+      DLOGE("Invalid display = %d", disp_id);
+      return -EINVAL;
+    }
 
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
-  HWCDisplay *hwc_display = hwc_display_[disp_idx];
-  if (!hwc_display) {
-    DLOGE("Display = %d is not connected.", disp_idx);
-    return -EINVAL;
-  }
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_idx]);
+    hwc_display = hwc_display_[disp_idx];
 
-  return hwc_display->OnMinHdcpEncryptionLevelChange(min_enc_level);
+    if (!hwc_display) {
+      if(disp_id == HWC_DISPLAY_PRIMARY) {
+        DLOGE("Primary display is not connected");
+        return -EINVAL;
+      }
+
+      disp_id = HWC_DISPLAY_PRIMARY;
+      DLOGW("Display = %d is not connected, Retrying with PRIMARY display", disp_idx);
+      continue;
+    }
+
+    invalid_display = false;
+  } while (invalid_display);
+
+  ret = hwc_display->OnMinHdcpEncryptionLevelChange(min_enc_level);
+
+  return ret;
+
 }
 
 int HWCSession::DisplayConfigImpl::MinHdcpEncryptionLevelChanged(DispType dpy,
