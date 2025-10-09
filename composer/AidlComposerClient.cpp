@@ -1351,10 +1351,12 @@ Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplay
                      layerCmd.layer, layerCmd.qtiLayerType);
       ExecuteCommand(layerCmd.qtiLayerFlags, &CommandEngine::executeSetLayerFlag,
                      displayCmd.display, layerCmd.layer, layerCmd.qtiLayerFlags);
+#ifdef COMPOSER3_V4
       ExecuteCommand(layerCmd.qtiPrivacyRegions, &CommandEngine::executeSetLayerPrivacyRegions,
                      displayCmd.display, layerCmd.layer, *layerCmd.qtiPrivacyRegions);
       ExecuteCommand(layerCmd.qtiCornerRadius, &CommandEngine::executeSetLayerCornerRadius,
                      displayCmd.display, layerCmd.layer, layerCmd.qtiCornerRadius);
+#endif
     }
     ExecuteCommand(displayCmd.clientTarget_3_1, &CommandEngine::executeSetClientTarget_3_1,
                    displayCmd.display, *displayCmd.clientTarget_3_1);
@@ -2321,6 +2323,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerFlag(int64_t display, int
   }
 }
 
+#ifdef COMPOSER3_V4
 void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
     int64_t display, int64_t layer,
     const std::vector<std::optional<QtiPrivacyRegion>> &privacyRegions) {
@@ -2373,6 +2376,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerCornerRadius(
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
+#endif
 
 Error AidlComposerClient::CommandEngine::lookupBufferCacheEntryLocked(
     int64_t display, int64_t layer, BufferCache cache, uint32_t slot, BufferCacheEntry **outEntry) {
