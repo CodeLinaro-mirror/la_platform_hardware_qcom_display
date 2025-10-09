@@ -18,9 +18,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -154,6 +154,13 @@ static EGLImageBuffer *L_wrap(const private_handle_t *src)
      ALOGE("Failed to get protected flag");
   }
 
+  uint32_t height = 0;
+  if(gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
+                               (int32_t)StandardMetadataType::HEIGHT,
+                               &height) != gralloc::Error::NONE) {
+    ALOGE("Failed to get unaligned height");
+  }
+
   int flags = android::GraphicBuffer::USAGE_HW_TEXTURE |
               android::GraphicBuffer::USAGE_SW_READ_NEVER |
               android::GraphicBuffer::USAGE_SW_WRITE_NEVER;
@@ -163,7 +170,7 @@ static EGLImageBuffer *L_wrap(const private_handle_t *src)
   }
 
   android::sp<android::GraphicBuffer> graphicBuffer =
-    new android::GraphicBuffer(unaligned_width, unaligned_height, src->format,
+    new android::GraphicBuffer(unaligned_width, height, src->format,
                                1,  // Layer count
                                flags, stride /*src->stride*/,
                                native_handle, false);
