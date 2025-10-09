@@ -184,7 +184,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.sf.color_mode=9 \
-    vendor.display.disable_sdr_dimming=0
+    vendor.display.disable_sdr_dimming=0 \
+    vendor.display.allow_tonemap_native=1
 endif
 
 #Set WCG properties
