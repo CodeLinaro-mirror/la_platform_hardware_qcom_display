@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -3140,8 +3140,10 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
     snap_desc.height = gr_desc.GetHeight();
     snap_desc.layerCount = gr_desc.GetLayerCount();
     snap_desc.reservedSize = gr_desc.GetReservedSize();
-    SnapKeyValuePair modifier = {.key = "pixel_format_modifier",
-                                 .value = static_cast<uint64_t>(snap_fmt_desc.modifier)};
+    SnapKeyValuePair modifier = {
+        .key = "pixel_format_modifier",
+        .value = GetPixelFormatModifierValue(gr_desc.GetAdditionalOptions(),
+                                             static_cast<uint64_t>(snap_fmt_desc.modifier))};
     snap_desc.additionalOptions.emplace_back(modifier);
     ALOGD_IF(enable_logs_,
              "%s gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
@@ -3155,6 +3157,18 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
      return SnapError::UNSUPPORTED;
   }
   return SnapError::NONE;
+}
+
+uint64_t GrallocSnapHelper::GetPixelFormatModifierValue(
+    std::vector<ExtendableType> additional_options, uint64_t modifier) {
+  for (auto type : additional_options) {
+    // TODO: use a versioned string
+    if (std::strcmp(type.name.c_str(), "pixel_format_modifier") == 0) {
+      modifier = type.value;
+      break;
+    }
+  }
+  return modifier;
 }
 
 SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
@@ -3176,8 +3190,10 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
     snap_desc.width = gr_desc.width;
     snap_desc.height = gr_desc.height;
     snap_desc.layerCount = gr_desc.layer_count;
-    SnapKeyValuePair modifier = {.key = "pixel_format_modifier",
-                                 .value = static_cast<uint64_t>(snap_fmt_desc.modifier)};
+    SnapKeyValuePair modifier = {
+        .key = "pixel_format_modifier",
+        .value = GetPixelFormatModifierValue(gr_desc.additional_options,
+                                             static_cast<uint64_t>(snap_fmt_desc.modifier))};
     snap_desc.additionalOptions.emplace_back(modifier);
 
     ALOGD_IF(enable_logs_,

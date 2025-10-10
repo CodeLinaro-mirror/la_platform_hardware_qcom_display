@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -30,6 +30,7 @@ namespace allocator {
 namespace impl {
 
 using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
+using ::aidl::android::hardware::graphics::common::ExtendableType;
 using ::android::sp;
 using ::android::hardware::hidl_array;
 using ::android::hardware::hidl_memory;
