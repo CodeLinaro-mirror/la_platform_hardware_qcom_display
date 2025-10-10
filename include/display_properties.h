@@ -28,11 +28,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #ifndef __DISPLAY_PROPERTIES_H__
 #define __DISPLAY_PROPERTIES_H__
