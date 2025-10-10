@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -212,6 +212,7 @@ int HWCSession::Init() {
   HWCDebugHandler::Get()->GetProperty(DISPLAY_REBOOT_STRATEGY, &display_reboot_strategy_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_HOTPLUG_BWCHECK, &disable_hotplug_bwcheck_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_MASK_LAYER_HINT, &disable_mask_layer_hint_);
+  HWCDebugHandler::Get()->GetProperty(ENABLE_PRIMARY_HOTPLUG_TO_SF, &send_primary_hotplug_to_sf_);
 
   if (!null_display_mode_) {
     g_hwc_uevent_.Register(this);
@@ -2941,6 +2942,14 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
             }
           }
           primary_config_ = new_config;
+          if (send_primary_hotplug_to_sf_) {
+            status = hwc_display->UpdateFBResolution(primary_config_.x_pixels,
+                                                     primary_config_.y_pixels);
+            if (status) {
+              DLOGW("Update frame buffer resolution failed. Error = %d", status);
+              return status;
+            }
+          }
           DLOGD("Stored config information of connected primary display: %d x %d @ %d.",
                 primary_config_.x_pixels, primary_config_.y_pixels, primary_config_.fps);
           pluggable_primary_connected_ = true;
@@ -3061,6 +3070,10 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
       // Display is created for this sdm id, move to next connected display.
       break;
     }
+  }
+
+  if (send_primary_hotplug_to_sf_) {
+   callbacks_.Hotplug(client_id, HWC2::Connection::Connected);
   }
 
   // No display was created.

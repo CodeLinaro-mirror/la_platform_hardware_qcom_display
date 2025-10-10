@@ -18,7 +18,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -267,6 +267,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int SetState(bool connected) {
     return kErrorNotSupported;
   }
+
+  virtual int UpdateFBResolution(int width, int height) {return 0;}
+
   virtual DisplayError Flush() {
     return kErrorNotSupported;
   }
