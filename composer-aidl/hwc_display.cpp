@@ -708,7 +708,7 @@ void HWCDisplay::BuildLayerStack() {
       }
       // TZ Protected Buffer - L1
       // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
-      int32_t handle_flags;
+      uint64_t handle_flags;
       buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::USAGE, &handle_flags,
                                           sizeof(handle_flags));
      if (handle_flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
@@ -845,6 +845,8 @@ HWC3::Error HWCDisplay::SetLayerZOrder(LayerId layer_id, uint32_t z) {
     DLOGE("[%" PRIu64 "] updateLayerZ failed to find layer", id_);
     return HWC3::Error::BadLayer;
   }
+
+  validated_ = false;
 
   const auto layer = map_layer->second;
   const auto z_range = layer_set_.equal_range(layer);
@@ -1091,6 +1093,9 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
 HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
   out_configs->clear();
   out_configs->reserve(variable_config_map_.size());
+  DisplayConfigFixedInfo fixed_info = {};
+  display_intf_->GetConfig(&fixed_info);
+  sdm::DisplayClass display_class = GetDisplayClass();
   for (const auto &[config_id, variable_config] : variable_config_map_) {
     DisplayConfiguration display_configuration;
     display_configuration.configId = config_id;
@@ -1100,6 +1105,16 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup = GetDisplayConfigGroupId(variable_config);
+#ifdef ENABLE_COMPOSER3_V4
+    if (fixed_info.hdr_supported) {
+      display_configuration.hdrOutputType = OutputType::HDR10;
+    } else {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+    if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+#endif
     display_configuration.vrrConfig = {
         static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
     DLOGI(

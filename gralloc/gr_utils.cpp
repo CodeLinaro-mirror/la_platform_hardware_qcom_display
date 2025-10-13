@@ -79,6 +79,7 @@
 #include "gr_utils.h"
 #include "gr_snap_helper.h"
 #include <Dataspace.h>
+#include <inttypes.h>
 
 #define ASTC_BLOCK_SIZE 16
 
@@ -2275,7 +2276,7 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
 #endif
       return true;
     default:
-      ALOGE("paramType %d not supported", paramType);
+      ALOGE("paramType %" PRId64 " not supported", paramType);
       return false;
   }
 }
@@ -3264,7 +3265,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
       break;
 #endif
     default:
-      ALOGD_IF(DEBUG, "Unsupported metadata type %d", type);
+      ALOGD_IF(DEBUG, "Unsupported metadata type %" PRId64, type);
       ret = Error::BAD_VALUE;
       break;
   }

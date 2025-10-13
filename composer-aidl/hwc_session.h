@@ -148,14 +148,7 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
     SCOPE_LOCK(locker_[display]);
     auto status = HWC3::Error::BadDisplay;
     if (hwc_display_[display]) {
-      status = HWC3::Error::BadLayer;
-      auto hwc_layer = hwc_display_[display]->GetHWCLayer(layer);
-      if (hwc_layer != nullptr) {
-        status = (hwc_layer->*member)(std::forward<Args>(args)...);
-        if (hwc_display_[display]->GetGeometryChanges()) {
-          hwc_display_[display]->ResetValidation();
-        }
-      }
+      status = hwc_display_[display]->CallLayerFunction(layer, member, args...);
     }
     return status;
   }

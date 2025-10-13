@@ -69,6 +69,9 @@ using ClientTargetProperty = composer_V3::ClientTargetProperty;
 #if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using DisplayConfiguration = composer_V3::DisplayConfiguration;
 #endif
+#ifdef ENABLE_COMPOSER3_V4
+using OutputType = composer_V3::OutputType;
+#endif
 using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
 
 typedef uint32_t VsyncPeriodNanos;
@@ -245,6 +248,19 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int GetDisplayConfigCount(uint32_t *count);
   virtual int GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes);
+  template <typename... Args>
+  HWC3::Error CallLayerFunction(LayerId layer, HWC3::Error (HWCLayer::*member)(Args... ),
+                            Args... args) {
+    auto status = HWC3::Error::BadLayer;
+    validated_ = false;
+    auto hwc_layer = GetHWCLayer(layer);
+    if (hwc_layer != nullptr) {
+      status = (hwc_layer->*member)(std::forward<Args>(args)...);
+    }
+
+    return status;
+  }
+
   virtual int SetState(bool connected) {
     return kErrorNotSupported;
   }

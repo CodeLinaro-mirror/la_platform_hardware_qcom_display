@@ -798,10 +798,10 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       format = kFormatBGR888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
-      format = kFormatRGB565;
+      format = kFormatBGR565;
       break;
     case HAL_PIXEL_FORMAT_BGR_565:
-      format = kFormatBGR565;
+      format = kFormatRGB565;
       break;
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
@@ -934,7 +934,7 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   }
 
   int32_t interlaced = 0;
-  buffer_allocator_->GetMetadataValue((void *)handle, (SnapMetadataType)PP_PARAM_INTERLACED, &interlaced,
+  buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::MD_PP_PARAM_INTERLACED, &interlaced,
                                       sizeof(interlaced));
   bool interlace = interlaced ? true : false;
 
@@ -944,7 +944,7 @@ DisplayError HWCLayer::SetMetaData(const native_handle_t *pvt_handle, Layer *lay
   }
 
   uint32_t linear_format = 0;
-  if (!buffer_allocator_->GetMetadataValue((void *)handle, (SnapMetadataType)LINEAR_FORMAT, &linear_format,
+  if (!buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::MD_LINEAR_FORMAT, &linear_format,
                                            sizeof(linear_format))) {
     layer_buffer->format = GetSDMFormat(INT32(linear_format), 0);
   }
