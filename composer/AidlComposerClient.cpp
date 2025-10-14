@@ -539,7 +539,8 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buf
       // populateDisplayLuts will return error if the lut pointer we pass is nullptr
       // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
       if (*it != nullptr) {
-        error = mCommandEngine->populateDisplayLuts(*it, &(aidl_return->at(i)), &fd);
+        error = mCommandEngine->populateDisplayLuts(*it, false /* reset_luts */,
+                                                    &(aidl_return->at(i)), &fd);
         if (error != Error::None) {
           return TO_BINDER_STATUS(INT32(error));
         }
@@ -548,10 +549,10 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buf
     }
 
     if (fd == -1) {
-      ALOGI("%s: Resetting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      ALOGI("%s: Resetting LUTs on client for buffer on display-%lld", __FUNCTION__, display);
       aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(fd));
     } else {
-      ALOGI("%s: Setting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      ALOGI("%s: Setting LUTs on client for buffer on display-%lld", __FUNCTION__, display);
       aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(dup(fd)));
       close(fd);
     }
@@ -2087,8 +2088,8 @@ Error AidlComposerClient::CommandEngine::getBufferLuts(
   return Error::None;
 }
 
-Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts *luts,
-                                                             int32_t *lut_fd) {
+Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, bool reset_luts,
+                                                             Luts *luts, int32_t *lut_fd) {
   if (!lut_3d) {
     return Error::BadConfig;
   }
@@ -2168,8 +2169,10 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, Luts
 
   munmap(data, buffer_size);
   buffer.clear();
-  lut_3d->validLutEntries = false;
-  lut_3d->validGridEntries = false;
+  if (reset_luts) {
+    lut_3d->validLutEntries = false;
+    lut_3d->validGridEntries = false;
+  }
 
   *lut_fd = fd;
 
@@ -2197,7 +2200,7 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
   for (uint32_t i = 0; i < num_elements; i++, it++) {
     int32_t fd = -1;
     requestedLayers.emplace_back(static_cast<int64_t>(it->first));
-    auto error = populateDisplayLuts(it->second, &requestedLuts[i], &fd);
+    auto error = populateDisplayLuts(it->second, true /* reset_luts */, &requestedLuts[i], &fd);
     if (error != Error::None) {
       return error;
     }
