@@ -76,15 +76,6 @@ fi
 # Enable camera smooth for all targets
 setprop vendor.display.enable_camera_smooth 1
 
-case "$soc_hwid" in
-    497|498)
-        setprop vendor.display.allow_secure_cam_gpu_comp 1
-        ;;
-    *)
-        setprop vendor.display.allow_secure_cam_gpu_comp 0
-        ;;
-esac
-
 case "$target" in
     "lahaina")
     #Set property to differentiate Lahaina & Shima
