@@ -32,7 +32,11 @@
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
 target=`getprop ro.board.platform`
-if [ -f /sys/devices/soc0/soc_id ]; then
+if [ -f /sys/devices/soc1/soc_id ]; then
+    soc_hwid=`cat /sys/devices/soc1/soc_id`
+elif [ -f /sys/devices/system/soc/soc1/id ]; then
+    soc_hwid=`cat /sys/devices/system/soc/soc1/id`
+elif [ -f /sys/devices/soc0/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc0/soc_id`
 else
     soc_hwid=`cat /sys/devices/system/soc/soc0/id`
@@ -118,7 +122,7 @@ case "$target" in
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 1
         if [ "$soc_hwid" -ne 635 ] && [ "$soc_hwid" -ne 555 ]; then
-           setprop vendor.display.enable_inline_writeback 1
+           setprop vendor.display.enable_inline_writeback 1
         else
            setprop vendor.display.disable_cwb_idle_fallback 1
         fi
