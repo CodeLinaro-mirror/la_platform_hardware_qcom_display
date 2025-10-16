@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -109,10 +109,9 @@ binder_status_t AidlComposer::dump(int fd, const char ** /*args*/, uint32_t /*nu
   sideband_->Dump(&len, nullptr);
   output.resize(len + 1);
 
-  sideband_->Dump(&len, output.data());;
+  sideband_->Dump(&len, output.data());
 
-  output[len] = '\0';
-  write(fd, output.c_str(), output.size());
+  write(fd, output.c_str(), len);
 
   return STATUS_OK;
 }
