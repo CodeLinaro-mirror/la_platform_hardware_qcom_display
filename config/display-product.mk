@@ -141,15 +141,17 @@ ifneq ($(PLATFORM_VERSION), 10)
     PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 endif
 
-ifeq ($(TARGET_BOARD_PLATFORM),parrot)
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), parrot taro),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.enable_hwc_vds=false \
-    vendor.display.vds_allow_hwc=true \
+    vendor.display.vds_allow_hwc=true
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),parrot)
+PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.sf.color_mode=7
 else
 PRODUCT_PROPERTY_OVERRIDES += \
-    debug.sf.enable_hwc_vds=1 \
-    vendor.display.vds_allow_hwc=0 \
     persist.sys.sf.color_mode=9
 endif
 
