@@ -101,7 +101,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.treat_170m_as_sRGB=1 \
     debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.enable_display_extensions=1 \
-    vendor.gralloc.enable_snapalloc=1
+    vendor.gralloc.enable_snapalloc=1 \
+    vendor.display.disable_virtual_display=1 \
+    vendor.display.disable_set_display_brightness=1
+
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)

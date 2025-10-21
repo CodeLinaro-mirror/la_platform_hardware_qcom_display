@@ -401,6 +401,7 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
     void executeSetFrameIntervalNsInternal(int64_t display, int32_t frameIntervalNs);
+    void executeSetLayerLuts(int64_t display, int64_t layer, const Luts &luts);
 
     // Commands from extensions (QtiComposer3Client)
     void executeSetClientTarget_3_1(int64_t display, const ClientTarget &command);
