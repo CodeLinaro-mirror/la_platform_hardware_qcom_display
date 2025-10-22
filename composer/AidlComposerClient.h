@@ -437,12 +437,13 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetDisplayElapseTime(int64_t display, uint64_t time);
     void executeSetLayerType(int64_t display, int64_t layer, sdm::LayerType type);
     void executeSetLayerFlag(int64_t display, int64_t layer, sdm::LayerFlag flag);
+#ifdef COMPOSER3_V4
     void executeSetLayerPrivacyRegions(
         int64_t display, int64_t layer,
         const std::vector<std::optional<QtiPrivacyRegion>> &privacyRegions);
     void executeSetLayerCornerRadius(int64_t display, int64_t layer,
                                      const std::optional<QtiCornerRadius> cornerRadius);
-
+#endif
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
     FRect readFRect();
