@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -242,6 +242,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                         SnapPixelFormat *snap_format);
   uint64_t GetGrallocUsage(SnapUsage snap_usage);
   SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
+  uint64_t GetPixelFormatModifierValue(std::vector<ExtendableType> additional_options,
+                                       uint64_t modifier);
   SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
   SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
 
@@ -500,6 +502,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::YCbCr_420_SP,
             .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            HAL_PIXEL_FORMAT_NV12_UBWC_FLEX_8_BATCH},
+          {{.format = SnapPixelFormat::C_8, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::C_8},
           // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
           // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
           {{.format = SnapPixelFormat::YCbCr_420_SP,
@@ -1594,6 +1598,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_RGBA_4444},
           {{.format = SnapPixelFormat::Y16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            static_cast<int>(PixelFormat::Y16)},
+          {{.format = SnapPixelFormat::C_8, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::C_8},
           // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
           // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
           {{.format = SnapPixelFormat::YCbCr_420_SP,
