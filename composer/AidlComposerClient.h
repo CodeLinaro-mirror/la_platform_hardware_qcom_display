@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -391,6 +391,8 @@ class AidlComposerClient : public BnComposerClient,
 
 #ifdef COMPOSER3_V3
     void executeSetLayerLifecycleBatchCommandType(int64_t display, const LayerCommand &layerCmd);
+    void executeSetLayerBufferSlotsToClear(int64_t display, int64_t layer,
+                                           const std::vector<int32_t> &slotsToClear);
 #endif
     void executeSetLayerCursorPosition(int64_t display, int64_t layer, const Point &cursorPosition);
     void executeSetLayerBuffer(int64_t display, int64_t layer, const Buffer &buffer);
@@ -428,8 +430,6 @@ class AidlComposerClient : public BnComposerClient,
         int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
-    void executeSetLayerBufferSlotsToClear(int64_t display, int64_t layer,
-                                           const std::vector<int32_t> &slotsToClear);
     void executeSetFrameIntervalNsInternal(int64_t display, int32_t frameIntervalNs);
 
     // Commands from extensions (QtiComposer3Client)
@@ -437,7 +437,13 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetDisplayElapseTime(int64_t display, uint64_t time);
     void executeSetLayerType(int64_t display, int64_t layer, sdm::LayerType type);
     void executeSetLayerFlag(int64_t display, int64_t layer, sdm::LayerFlag flag);
-
+#ifdef COMPOSER3_V4
+    void executeSetLayerPrivacyRegions(
+        int64_t display, int64_t layer,
+        const std::vector<std::optional<QtiPrivacyRegion>> &privacyRegions);
+    void executeSetLayerCornerRadius(int64_t display, int64_t layer,
+                                     const std::optional<QtiCornerRadius> cornerRadius);
+#endif
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
     FRect readFRect();
