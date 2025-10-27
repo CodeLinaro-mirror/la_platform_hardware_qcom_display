@@ -161,7 +161,6 @@ case "$target" in
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
@@ -468,7 +467,6 @@ case "$target" in
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
@@ -502,7 +500,6 @@ case "$target" in
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.gralloc.use_uncached_heap 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
