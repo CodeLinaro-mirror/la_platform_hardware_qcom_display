@@ -44,6 +44,11 @@ composer_lib_defaults {
                "android.hardware.graphics.common-V6-ndk",
            ]
        },
+      version_7: {
+           shared_libs: [
+               "android.hardware.graphics.common-V7-ndk",
+           ]
+       },
     }
   },
 }
