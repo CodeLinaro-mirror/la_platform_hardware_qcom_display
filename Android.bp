@@ -12,7 +12,8 @@ soong_config_module_type {
         "llvmcov",
         "smmu_proxy",
         "ubwcp_headers",
-        "neo"
+        "neo",
+        "lsr_target",
     ],
     properties: [
         "cflags",
@@ -138,6 +139,9 @@ qtidisplay_cc_defaults {
         },
         neo: {
             cflags: ["-DTARGET_INCLUDES_NEO"],
+        },
+        lsr_target: {
+            cflags: ["-DTARGET_USES_LSR"],
         },
         var3 : {
             enabled: false,
