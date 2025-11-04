@@ -76,15 +76,6 @@ fi
 # Enable camera smooth for all targets
 setprop vendor.display.enable_camera_smooth 1
 
-case "$soc_hwid" in
-    497|498)
-        setprop vendor.display.allow_secure_cam_gpu_comp 1
-        ;;
-    *)
-        setprop vendor.display.allow_secure_cam_gpu_comp 0
-        ;;
-esac
-
 case "$target" in
     "lahaina")
     #Set property to differentiate Lahaina & Shima
@@ -113,7 +104,8 @@ case "$target" in
         ;;
         # SOC ID for Yupik is 475, Yupik P is 499, Faroe is 515
         # SOC ID for Kodiak IOT 497, Kodiak IOT with modem 498
-        475|497|498|499|515)
+	# SOC ID for Katmai IOT 576
+        475|497|498|499|515|575|576)
         # Set property for Yupik
         setprop vendor.display.target.version 2
         setprop vendor.display.enable_posted_start_dyn 2
