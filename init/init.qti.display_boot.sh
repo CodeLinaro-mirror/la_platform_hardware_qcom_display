@@ -396,6 +396,10 @@ case "$target" in
         setprop vendor.display.force_gpu_composition 1
         setprop vendor.display.allow_tonemap_native 1
         ;;
+        # Set property for Aliso
+        740)
+        setprop vendor.display.enable_rounded_corner 0
+        ;;
     esac
     ;;
     "holi")
