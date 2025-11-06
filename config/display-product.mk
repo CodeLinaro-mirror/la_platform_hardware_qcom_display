@@ -184,6 +184,7 @@ $(call soong_config_set, qtidisplay, smmu_proxy, false )
 $(call soong_config_set, qtidisplay, ubwcp_headers, true )
 $(call soong_config_set, qtidisplay, composer_version, v3_4 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
+$(call soong_config_set, qtidisplay, lsr_target, false )
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.

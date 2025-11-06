@@ -1359,6 +1359,24 @@ Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplay
       ExecuteCommand(layerCmd.qtiCornerRadius, &CommandEngine::executeSetLayerCornerRadius,
                      displayCmd.display, layerCmd.layer, layerCmd.qtiCornerRadius);
 #endif
+#ifdef TARGET_USES_LSR
+      ExecuteCommand(layerCmd.qtiRenderLayerReferenceSpaceType,
+                     &CommandEngine::executeSetRenderLayerReferenceSpaceType, displayCmd.display,
+                     layerCmd.layer, *layerCmd.qtiRenderLayerReferenceSpaceType);
+      ExecuteCommand(layerCmd.qtiCompositionLayerType,
+                     &CommandEngine::executeSetCompositionLayerType, displayCmd.display,
+                     layerCmd.layer, *layerCmd.qtiCompositionLayerType);
+      ExecuteCommand(layerCmd.qtiLayerPose, &CommandEngine::executeSetLayerPose, displayCmd.display,
+                     layerCmd.layer, *layerCmd.qtiLayerPose);
+      ExecuteCommand(layerCmd.qtiLayerQuadSize, &CommandEngine::executeSetLayerQuadSize,
+                     displayCmd.display, layerCmd.layer, *layerCmd.qtiLayerQuadSize);
+      ExecuteCommand(layerCmd.qtiLayerFrustum, &CommandEngine::executeSetLayerFrustum,
+                     displayCmd.display, layerCmd.layer, *layerCmd.qtiLayerFrustum);
+      ExecuteCommand(layerCmd.qtiLayerPlaneEquation, &CommandEngine::executeSetLayerPlaneEquation,
+                     displayCmd.display, layerCmd.layer, *layerCmd.qtiLayerPlaneEquation);
+      ExecuteCommand(layerCmd.qtiLayerVisibilityType, &CommandEngine::executeSetLayerVisibilityType,
+                     displayCmd.display, layerCmd.layer, *layerCmd.qtiLayerVisibilityType);
+#endif
     }
     ExecuteCommand(displayCmd.clientTarget_3_1, &CommandEngine::executeSetClientTarget_3_1,
                    displayCmd.display, *displayCmd.clientTarget_3_1);
@@ -2382,6 +2400,81 @@ void AidlComposerClient::CommandEngine::executeSetLayerCornerRadius(
   auto err = mClient.layer_builder_->SetLayerCornerRadius(display, layer, radius);
   if (err != sdm::kErrorNone) {
     ALOGW("%s: Failed to set layer's %lu corner radius", __func__, layer);
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+#endif
+
+#ifdef TARGET_USES_LSR
+void AidlComposerClient::CommandEngine::executeSetRenderLayerReferenceSpaceType(
+    int64_t display, int64_t layer,
+    sdm::QtiParcelableRenderLayerReferenceSpaceType reference_layer_space_type) {
+  auto err = mClient.layer_builder_->SetRenderLayerReferenceSpaceType(
+      display, layer,
+      static_cast<sdm::SDMRenderLayerReferenceSpaceType>(
+          reference_layer_space_type.renderLayerReferenceSpaceType));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetCompositionLayerType(
+    int64_t display, int64_t layer, sdm::QtiParcelableCompositionLayerType comp_layer_type) {
+  auto err = mClient.layer_builder_->SetCompositionLayerType(
+      display, layer,
+      static_cast<sdm::SDMCompositionLayerType>(comp_layer_type.compositionLayerType));
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerPose(int64_t display, int64_t layer,
+                                                            const sdm::QtiLayerPose &layer_pose) {
+  sdm::SDMLayerPose sdm_layer_pose;
+  GetSDMLayerPose(layer_pose, sdm_layer_pose);
+  auto err = mClient.layer_builder_->SetLayerPose(display, layer, sdm_layer_pose);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerQuadSize(
+    int64_t display, int64_t layer, sdm::QtiLayerQuadSize layer_quad_size) {
+  sdm::SDMLayerQuadSize sdm_layer_quad_size;
+  GetSDMLayerQuadSize(layer_quad_size, sdm_layer_quad_size);
+  auto err = mClient.layer_builder_->SetLayerQuadSize(display, layer, sdm_layer_quad_size);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerFrustum(int64_t display, int64_t layer,
+                                                               sdm::QtiLayerFrustum layer_frustum) {
+  sdm::SDMLayerFrustum sdm_layer_frustum;
+  GetSDMLayerFrustum(layer_frustum, sdm_layer_frustum);
+  auto err = mClient.layer_builder_->SetLayerFrustum(display, layer, sdm_layer_frustum);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerPlaneEquation(
+    int64_t display, int64_t layer, sdm::QtiLayerPlaneEquation plane_equation) {
+  sdm::SDMLayerPlaneEquation sdm_layer_plane_equation;
+  GetSDMLayerPlaneEquation(plane_equation, sdm_layer_plane_equation);
+  auto err =
+      mClient.layer_builder_->SetLayerPlaneEquation(display, layer, sdm_layer_plane_equation);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerVisibilityType(
+    int64_t display, int64_t layer, sdm::QtiParcelableLayerVisibilityType layer_visibility_type) {
+  auto err = mClient.layer_builder_->SetLayerVisibilityType(
+      display, layer,
+      static_cast<sdm::SDMLayerVisibilityType>(layer_visibility_type.layerVisibilityType));
+  if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
