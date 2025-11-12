@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *  Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <QtiGralloc.h>
@@ -785,6 +785,38 @@ int HWCBufferAllocator::MapBuffer(const native_handle_t *handle, shared_ptr<Fenc
 
   return kErrorNone;
 }
+
+const native_handle_t* HWCBufferAllocator::ImportBuffer(buffer_handle_t &handle) {
+  const native_handle_t* buf = nullptr;
+  mapper_ = IMapper::getService();
+  if (mapper_ == nullptr) {
+    DLOGE("Unable to get mapper");
+    return buf;
+  }
+  if (!handle) {
+    return buf;
+  }
+
+  if (!handle->numFds && !handle->numInts) {
+    handle = nullptr;
+    return buf;
+  }
+
+  auto hidl_err = Error::NONE;
+
+  mapper_->importBuffer(handle, [&](const auto &_error, const auto &_buffer) {
+    hidl_err = _error;
+    buf = static_cast<const native_handle_t *>(_buffer);
+  });
+
+  if (hidl_err != Error::NONE) {
+    DLOGE("Failed to import buffer into HWC");
+    return buf;
+  }
+
+  return buf;
+}
+
 
 int HWCBufferAllocator::UnmapBuffer(const native_handle_t *handle, int *release_fence) {
   int err = kErrorNone;
