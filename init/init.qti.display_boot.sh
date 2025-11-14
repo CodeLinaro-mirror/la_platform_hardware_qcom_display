@@ -453,4 +453,16 @@ case "$target" in
         ;;
     esac
     ;;
+    "monaco")
+    setprop vendor.gralloc.use_dma_buf_heaps 1
+    setprop vendor.gralloc.enable_snapalloc 1
+    setprop vendor.gralloc.disable_ubwc 1
+    setprop vendor.display.enable_optimize_refresh 1
+    setprop vendor.display.target.version 2
+    setprop vendor.display.enable_allow_idle_fallback 1
+    setprop vendor.display.enable_hdr10_gpu_target 0
+    setprop vendor.display.enable_rc_support 0
+    setprop vendor.display.enable_async_vds_creation 0
+    setprop vendor.display.enable_rounded_corner 0
+    ;;
 esac

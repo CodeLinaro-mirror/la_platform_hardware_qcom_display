@@ -113,14 +113,27 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.late.sf.duration=10500000
 endif
 
-# Enable offline rotator for Bengal, Khaje
-ifneq ($(filter bengal khaje, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+# Enable offline rotator for Bengal, Khaje and Monaco
+ifneq ($(filter bengal khaje monaco, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_offline_rotator=1
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1 \
     debug.sf.enable_hwc_vds=0
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),monaco)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_layer_stitch=1 \
+    vendor.display.secure_preview_buffer_format=420_sp \
+    vendor.gralloc.secure_preview_buffer_format=420_sp \
+    vendor.display.disable_idle_time_hdr=1 \
+    vendor.display.disable_idle_time_video=1 \
+    vendor.display.enable_camera_smooth=1 \
+    vendor.display.enable_posted_start_dyn=1 \
+    vendor.display.enhance_idle_time=1 \
+    vendor.display.lcd_density=160
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),holi)
