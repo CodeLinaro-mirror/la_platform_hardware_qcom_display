@@ -23,11 +23,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -2039,6 +2039,7 @@ std::string DisplayBuiltIn::Dump() {
 
 DppsInterface* DppsInfo::dpps_intf_ = NULL;
 std::vector<int32_t> DppsInfo::display_id_ = {};
+std::mutex DppsInfo::display_id_lock_;
 
 void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
                     DisplayInterface *display_intf) {
@@ -2057,9 +2058,12 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
     return;
   }
 
-  if (std::find(display_id_.begin(), display_id_.end(), info_payload.display_id)
-    != display_id_.end()) {
-    return;
+  {
+    std::lock_guard<std::mutex> display_id_guard(display_id_lock_);
+    if (std::find(display_id_.begin(), display_id_.end(), info_payload.display_id)
+      != display_id_.end()) {
+      return;
+    }
   }
   DLOGI("Ready to register display %d-%d ", info_payload.display_id,
         info_payload.display_type);
@@ -2087,7 +2091,10 @@ void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name,
     goto exit;
   }
 
-  display_id_.push_back(info_payload.display_id);
+  {
+    std::lock_guard<std::mutex> display_id_guard(display_id_lock_);
+    display_id_.push_back(info_payload.display_id);
+  }
   DLOGI("Registered display %d-%d successfully", info_payload.display_id,
         info_payload.display_type);
   return;
