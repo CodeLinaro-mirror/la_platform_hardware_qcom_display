@@ -1680,6 +1680,13 @@ HWC3::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
       if (swap_interval_zero_ || layer->flags.single_buffer) {
         close(layer_buffer->release_fence_fd);
       } else {
+        // When a layer is skipped during a commit, remove its release fence from the cache
+        // since repeated buffer commits are observed. This helps prevent UBWC errors caused
+        // by overwriting on the same buffer when waiting on an incorrect fence .
+        // TODO: Implement proper handling of release fences when buffers are repeated in commits.
+        if (skip_commit_) {
+          hwc_layer->PopFrontReleaseFence();
+        }
         // It may so happen that layer gets marked to GPU & app layer gets queued
         // to MDP for composition. In those scenarios, release fence of buffer should
         // have mdp and gpu sync points merged.
