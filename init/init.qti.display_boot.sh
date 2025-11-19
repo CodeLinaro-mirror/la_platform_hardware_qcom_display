@@ -422,8 +422,9 @@ case "$target" in
     ;;
     "chora")
     case "$soc_hwid" in
-      724)
+      724|744)
         # SOC ID for Chora is 724
+        # SOC ID for Chora APQ variant is 744
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 5
@@ -431,15 +432,53 @@ case "$target" in
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.perf.version 3
+        setprop vendor.display.cpu_cluster_boost_mask 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_privacy_layers 1
+        ;;
+    esac
+    ;;
+    "malabar")
+    #SOC ID for Malabar is 733
+    #SOC ID for Malabar APQ variant is 757
+    case "$soc_hwid" in
+      733|757)
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.target.version 5
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.thermal.version 1
         setprop vendor.display.enable_rc_support 1
-        setprop vendor.display.enable_latch_media_content 1
-        setprop vendor.display.enable_inline_writeback 1
-        setprop vendor.display.timed_render_enable 1
-        setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.disable_gpu_color_convert 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_offline_rotator 0
         setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.disable_rotator_ubwc 1
+        setprop vendor.display.allow_tonemap_native 1
+        setprop vendor.gralloc.allow_camera_preview_write 1
+        setprop vendor.display.perf.version 4
+        setprop vendor.display.cpu_cluster_boost_mask 6
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.gralloc.use_uncached_heap 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
