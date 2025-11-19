@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __GR_BUF_DESCRIPTOR_H__
@@ -36,6 +40,7 @@
 #include "gr_utils.h"
 
 namespace gralloc {
+using aidl::android::hardware::graphics::common::ExtendableType;
 using android::hardware::hidl_vec;
 const uint32_t kBufferDescriptorSize = 7;
 const uint32_t kBufferDescriptorSizeV4 = 42;
@@ -61,6 +66,10 @@ class BufferDescriptor {
 
   void SetReservedSize(uint64_t reserved_size) { reserved_size_ = reserved_size; }
 
+  void SetAdditionalOptions(std::vector<ExtendableType> additional_options) {
+    additional_options_ = additional_options;
+  }
+
   uint64_t GetUsage() const { return usage_; }
 
   int GetWidth() const { return width_; }
@@ -74,6 +83,7 @@ class BufferDescriptor {
   uint64_t GetId() const { return id_; }
 
   uint64_t GetReservedSize() const { return reserved_size_; }
+  std::vector<ExtendableType> GetAdditionalOptions() const { return additional_options_; }
 
   std::string GetName() const { return name_; }
 
@@ -86,6 +96,7 @@ class BufferDescriptor {
   uint64_t usage_ = 0;
   const uint64_t id_ = 0;
   uint64_t reserved_size_ = 0;
+  std::vector<ExtendableType> additional_options_;
 };
 };      // namespace gralloc
 #endif  // __GR_BUF_DESCRIPTOR_H__

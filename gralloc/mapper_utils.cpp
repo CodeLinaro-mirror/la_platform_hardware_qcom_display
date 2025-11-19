@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -57,6 +57,7 @@ gralloc::BufferDescriptor ConvertAidlToGrallocDescriptor(const BufferDescriptorI
   desc.SetColorFormat(static_cast<int>(info.format));
   desc.SetUsage(static_cast<uint64_t>(info.usage));
   desc.SetReservedSize(static_cast<uint64_t>(info.reservedSize));
+  desc.SetAdditionalOptions(info.additionalOptions);
 
   return desc;
 }

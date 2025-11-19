@@ -119,7 +119,8 @@ int SDMCompBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   BufferPermission buf_perm[BUFFER_CLIENT_MAX];
   int format;
   uint64_t alloc_flags = 0;
-  int error = SetBufferInfo(buffer_config.format, &format, &alloc_flags);
+  uint64_t pixel_format_modifier = 0;
+  int error = SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier);
   if (error != 0) {
     return -EINVAL;
   }
@@ -722,7 +723,8 @@ uint32_t SDMCompBufferAllocator::GetBufferSize(BufferInfo *buffer_info) {
     alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
   }
 
-  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags) < 0) {
+  uint64_t pixel_format_modifier = 0;
+  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier) < 0) {
     return 0;
   }
 
@@ -737,7 +739,8 @@ uint32_t SDMCompBufferAllocator::GetBufferSize(BufferInfo *buffer_info) {
   return 0;
 }
 
-int SDMCompBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags) {
+int SDMCompBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags,
+                                          uint64_t *pixel_format_modifier) {
   switch (format) {
     case kFormatRGBA8888:
       *target = static_cast<int>(PixelFormat::RGBA_8888);
@@ -900,7 +903,8 @@ int SDMCompBufferAllocator::GetAllocatedBufferInfo(
     alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
   }
 
-  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags) < 0) {
+  uint64_t pixel_format_modifier = 0;
+  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier) < 0) {
     return -EINVAL;
   }
 
@@ -933,8 +937,9 @@ int SDMCompBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
   int plane_count = 0;
   uint64_t flags = 0;
   uint32_t size = 0;
+  uint64_t pixel_format_modifier = 0;
   gralloc::PlaneLayoutInfo *plane_layout_info_ptr;
-  SetBufferInfo(buf_info.format, &format, &flags);
+  SetBufferInfo(buf_info.format, &format, &flags, &pixel_format_modifier);
   // Setup only the required stuff, skip rest
   if (flags & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) {
     flags = qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
