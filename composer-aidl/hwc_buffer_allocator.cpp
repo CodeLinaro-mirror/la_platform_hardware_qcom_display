@@ -266,6 +266,13 @@ cleanup:
 
 DisplayError HWCBufferAllocator::FreeBuffer(BufferInfo *buffer_info) {
   DisplayError err = kErrorNone;
+
+  int init = GetGrallocInstance();
+  if (init != 0) {
+    DLOGE("Failed to retrieve gralloc instance");
+    return kErrorParameters;
+  }
+
   auto hnd = reinterpret_cast<buffer_handle_t>(buffer_info->private_data);
   STABLEMAPPER(mapper_).freeBuffer(hnd);
 
@@ -280,6 +287,13 @@ DisplayError HWCBufferAllocator::FreeBuffer(BufferInfo *buffer_info) {
 
 DisplayError HWCBufferAllocator::GetHeight(void *buf, uint32_t &height) {
   uint32_t tmp_height;
+
+  int init = GetGrallocInstance();
+  if (init != 0) {
+    DLOGE("Failed to retrieve gralloc instance");
+    return kErrorParameters;
+  }
+
   auto err = STABLEMAPPER(mapper_).getMetadata(
       static_cast<buffer_handle_t>(buf),
       VENDOR_QTI_METADATA(SnapMetadataType::ALIGNED_HEIGHT_IN_PIXELS), &tmp_height,
@@ -326,6 +340,13 @@ int HWCBufferAllocator::GetUnalignedWidth(void *buf, uint32_t &width) {
 
 DisplayError HWCBufferAllocator::GetFd(void *buf, int &fd) {
   int tmp_fd;
+
+  int init = GetGrallocInstance();
+  if (init != 0) {
+    DLOGE("Failed to retrieve gralloc instance");
+    return kErrorParameters;
+  }
+
   auto err = STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
                                                VENDOR_QTI_METADATA(SnapMetadataType::FD), &tmp_fd,
                                                sizeof(tmp_fd));
@@ -374,6 +395,13 @@ int HWCBufferAllocator::GetFormat(void *buf, int32_t &format) {
 
 int HWCBufferAllocator::GetPrivateFlags(void *buf, int32_t &flags) {
   int64_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
+
+  int init = GetGrallocInstance();
+  if (init != 0) {
+    DLOGE("Failed to retrieve gralloc instance");
+    return kErrorParameters;
+  }
+
   auto err = STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
                                                VENDOR_QTI_METADATA(SnapMetadataType::IS_UBWC),
                                                &is_ubwc, sizeof(is_ubwc));
@@ -425,6 +453,13 @@ DisplayError HWCBufferAllocator::GetSDMFormat(void *buf, LayerBufferFormat &sdm_
 
 int HWCBufferAllocator::GetBufferType(void *buf, uint32_t &buffer_type) {
   int32_t tmp_buffer_type;
+
+  int init = GetGrallocInstance();
+  if (init != 0) {
+    DLOGE("Failed to retrieve gralloc instance");
+    return kErrorParameters;
+  }
+
   auto err = STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
                                                VENDOR_QTI_METADATA(SnapMetadataType::BUFFER_TYPE),
                                                &tmp_buffer_type, sizeof(tmp_buffer_type));
@@ -847,6 +882,13 @@ int HWCBufferAllocator::MapBuffer(const native_handle_t *handle, int acquire_fen
 DisplayError HWCBufferAllocator::UnmapBuffer(const native_handle_t *handle, int *release_fence) {
   DisplayError err = kErrorNone;
   *release_fence = -1;
+
+  int init = GetGrallocInstance();
+  if (init != 0) {
+    DLOGE("Failed to retrieve gralloc instance");
+    return kErrorParameters;
+  }
+
   auto hnd = static_cast<buffer_handle_t>(const_cast<native_handle_t *>(handle));
   auto error = STABLEMAPPER(mapper_).unlock(hnd, release_fence);
 

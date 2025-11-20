@@ -57,6 +57,10 @@ ifneq (,$(filter aconfig_value_set-platform_build_release-bp1a, $(RELEASE_ACONFI
 $(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version_6)
 endif
 
+ifneq (,$(filter aconfig_value_set-platform_build_release-bp4a, $(RELEASE_ACONFIG_VALUE_SETS)))
+$(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version_7)
+endif
+
 ifneq ($(TARGET_IS_HEADLESS),true)
 ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \

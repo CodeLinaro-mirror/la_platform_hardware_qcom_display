@@ -224,7 +224,7 @@ soong_config_module_type {
 
 soong_config_string_variable {
      name: "graphics_common_ndk",
-     values: ["version_5", "version_6"],
+     values: ["version_5", "version_6", "version_7"],
 }
 
 
