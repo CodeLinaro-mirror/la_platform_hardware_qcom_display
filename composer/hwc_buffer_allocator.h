@@ -81,7 +81,8 @@ class HWCBufferAllocator : public BufferAllocator {
                              AllocatedBufferInfo *allocated_buffer_info);
   int GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4], uint32_t offset[4],
                       uint32_t *num_planes);
-  int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
+  int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags,
+                    uint64_t *pixel_format_modifier);
   int MapBuffer(void *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
   int UnmapBuffer(void *handle, int *release_fence);
   int GetHeight(void *buf, uint32_t &height);
@@ -92,6 +93,7 @@ class HWCBufferAllocator : public BufferAllocator {
   int GetAllocationSize(void *buf, uint32_t &alloc_size);
   int GetBufferId(void *buf, uint64_t &id);
   int GetFormat(void *buf, int32_t &format);
+  int GetFormatModifier(void *buf, uint64_t &pixel_format_modifier);
   int GetPrivateFlags(void *buf, int32_t &flags);
   int GetSDMFormat(void *buf, LayerBufferFormat &sdm_format);
   int GetBufferType(void *buf, uint32_t &buffer_type);
@@ -103,7 +105,7 @@ class HWCBufferAllocator : public BufferAllocator {
   // callbacks from sdmclient
   bool GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace);
   LayerBufferFormat GetSDMFormat(const int32_t &source, const int32_t flags,
-                                         const int64_t compression_type);
+                                 const int64_t compression_type, uint64_t pixel_format_modifier);
   DisplayError ColorMetadataToDataspace(Dataspace ds, uint32_t *int_dataspace);
   int32_t TranslateFromLegacyDataspace(const int32_t &legacy_ds);
 

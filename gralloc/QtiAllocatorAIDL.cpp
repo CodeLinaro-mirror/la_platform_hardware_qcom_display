@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -428,6 +428,7 @@ static gralloc::BufferDescriptor convertAidlToGrallocDescriptor(const BufferDesc
   desc.SetColorFormat(static_cast<int>(info.format));
   desc.SetUsage(static_cast<uint64_t>(info.usage));
   desc.SetReservedSize(static_cast<uint64_t>(info.reservedSize));
+  desc.SetAdditionalOptions(static_cast<std::vector<ExtendableType>>(info.additionalOptions));
 
   return desc;
 }
@@ -435,10 +436,6 @@ static gralloc::BufferDescriptor convertAidlToGrallocDescriptor(const BufferDesc
 ndk::ScopedAStatus QtiAllocatorAIDL::allocate2(const BufferDescriptorInfo &in_descriptor,
                                                int32_t in_count, AllocationResult *_aidl_return) {
   ALOGD_IF(enable_logs_, "Allocating buffers count: %d", in_count);
-  if (!in_descriptor.additionalOptions.empty()) {
-    return ToBinderStatus(Error::UNSUPPORTED);
-  }
-
   gralloc::BufferDescriptor desc = convertAidlToGrallocDescriptor(in_descriptor);
 
   return AllocateBuffer(desc, in_count, _aidl_return);

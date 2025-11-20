@@ -56,6 +56,7 @@ using android::hardware::hidl_handle;
 using android::hardware::hidl_vec;
 using APixelFormat = aidl::android::hardware::graphics::common::PixelFormat;
 using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
+using aidl::android::hardware::graphics::common::ExtendableType;
 using aidl::android::hardware::graphics::common::Rect;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using ABufferUsage = aidl::android::hardware::graphics::common::BufferUsage;
@@ -64,6 +65,7 @@ using SnapAllocationResult = vendor::qti::hardware::display::snapalloc::Allocati
 using SnapBufferDescriptor = vendor::qti::hardware::display::snapalloc::BufferDescriptor;
 using SnapError = vendor::qti::hardware::display::snapalloc::Error;
 using SnapHandle = vendor::qti::hardware::display::snapalloc::SnapHandle;
+using SnapKeyValuePair = vendor_qti_hardware_display_common_KeyValuePair;
 
 using SnapBufferUsage = vendor_qti_hardware_display_common_BufferUsage;
 using SnapMetadataType = vendor_qti_hardware_display_common_MetadataType;
@@ -141,14 +143,17 @@ int HWCBufferAllocator::GetSnapInstance() {
   return 0;
 }
 
-static SnapBufferDescriptor CreateDescriptor(std::string name, uint32_t width, uint32_t height,
-                                             int format, uint32_t layer_count, uint64_t usage) {
+static SnapBufferDescriptor CreateDescriptor(
+    std::string name, uint32_t width, uint32_t height, int format, uint32_t layer_count,
+    uint64_t usage,
+    std::vector<vendor_qti_hardware_display_common_KeyValuePair> additional_options) {
   SnapBufferDescriptor descriptorInfo{
       .width = static_cast<int32_t>(width),
       .height = static_cast<int32_t>(height),
       .layerCount = static_cast<int32_t>(layer_count),
       .format = static_cast<SnapPixelFormat>(format),
       .usage = static_cast<SnapBufferUsage>(usage),
+      .additionalOptions = additional_options,
   };
   auto nameLength = std::min(name.length(), static_cast<size_t>(MAX_NAME_LEN - 1));
   memcpy(descriptorInfo.name, name.data(), nameLength);
@@ -165,7 +170,8 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   BufferPermission buf_perm[BUFFER_CLIENT_MAX];
   int format;
   uint64_t alloc_flags = 0;
-  int error = SetBufferInfo(buffer_config.format, &format, &alloc_flags);
+  uint64_t pixel_format_modifier = PIXEL_FORMAT_MODIFIER_NONE;
+  int error = SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier);
   if (error != 0) {
     return -EINVAL;
   }
@@ -223,8 +229,13 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
     }
   }
 
-  SnapBufferDescriptor descriptor_info = CreateDescriptor(
-      std::string("HWC_Buffer"), buffer_config.width, buffer_config.height, format, 1, alloc_flags);
+  std::vector<SnapKeyValuePair> additional_options;
+  SnapKeyValuePair modifier = {.key = "pixel_format_modifier",
+                               .value = static_cast<uint64_t>(pixel_format_modifier)};
+  additional_options.push_back(modifier);
+  SnapBufferDescriptor descriptor_info =
+      CreateDescriptor(std::string("HWC_Buffer"), buffer_config.width, buffer_config.height, format,
+                       1, alloc_flags, additional_options);
 
   SnapAllocationResult result;
   auto status = snapallocator_->Allocate(descriptor_info, 1, &result);
@@ -235,6 +246,7 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   SnapHandle *handle = result.handles[0];
 
   uint32_t tmp_width;
+  uint64_t out_format_modifier = PIXEL_FORMAT_MODIFIER_NONE;
 
   if (!buffer_config.access_control.empty()) {
     status = snapmapper_->SetMetadata(*handle, SnapMetadataType::BUFFER_PERMISSION, buf_perm);
@@ -279,10 +291,12 @@ int HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   snapmapper_->GetMetadata(*handle, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &tmp_format);
   snapmapper_->GetMetadata(*handle, SnapMetadataType::IS_UBWC, &is_ubwc);
   snapmapper_->GetMetadata(*handle, SnapMetadataType::COMPRESSION, &compression_type);
+  snapmapper_->GetMetadata(*handle, SnapMetadataType::FORMAT_MODIFIER, &out_format_modifier);
 
   int32_t flag;
   flag = INT32(is_ubwc ? SnapMetadataType::IS_UBWC : 0);
-  alloc_buffer_info->format = GetSDMFormat(tmp_format, flag, compression_type);
+  alloc_buffer_info->format = GetSDMFormat(tmp_format, flag, compression_type, out_format_modifier);
+  alloc_buffer_info->usage = alloc_flags;
 
   buffer_info->private_data = (void *)handle;
   return 0;
@@ -401,6 +415,19 @@ int HWCBufferAllocator::GetFormat(void *buf, int32_t &format) {
   return kErrorParameters;
 }
 
+int HWCBufferAllocator::GetFormatModifier(void *buf, uint64_t &pixel_format_modifier) {
+  uint64_t ret_format_modifier;
+  int err = GetVendorMetadata(mapper_, static_cast<buffer_handle_t>(buf),
+                              SnapMetadataType::FORMAT_MODIFIER, &ret_format_modifier,
+                              sizeof(ret_format_modifier));
+
+  if (err == AIMAPPER_ERROR_NONE) {
+    pixel_format_modifier = ret_format_modifier;
+    return kErrorNone;
+  }
+  return kErrorParameters;
+}
+
 int HWCBufferAllocator::GetPrivateFlags(void *buf, int32_t &flags) {
   int64_t is_ubwc = 0, is_tile_rendered = 0, is_cached = 0;
   auto err = STABLEMAPPER(mapper_).getMetadata(static_cast<buffer_handle_t>(buf),
@@ -465,7 +492,12 @@ int HWCBufferAllocator::GetSDMFormat(void *buf, LayerBufferFormat &sdm_format) {
   if (err != kErrorNone)
     return kErrorUndefined;
 
-  GetSDMFormat(tmp_format, tmp_flags, tmp_compression_type);
+  uint64_t format_modifier = PIXEL_FORMAT_MODIFIER_NONE;
+  err = GetFormatModifier(buf, format_modifier);
+  if (err != kErrorNone)
+    return kErrorUndefined;
+
+  GetSDMFormat(tmp_format, tmp_flags, tmp_compression_type, format_modifier);
 
   return kErrorNone;
 }
@@ -606,8 +638,8 @@ uint32_t HWCBufferAllocator::GetBufferSize(BufferInfo *buffer_info) {
     // Allocate uncached buffers
     alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
   }
-
-  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags) < 0) {
+  uint64_t pixel_format_modifier = PIXEL_FORMAT_MODIFIER_NONE;
+  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier) < 0) {
     return 0;
   }
 
@@ -634,7 +666,8 @@ uint32_t HWCBufferAllocator::GetBufferSize(BufferInfo *buffer_info) {
   return 0;
 }
 
-int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags) {
+int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags,
+                                      uint64_t *pixel_format_modifier) {
   switch (format) {
     case kFormatRGBA8888:
       *target = static_cast<int>(APixelFormat::RGBA_8888);
@@ -783,10 +816,24 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
     case kFormatRAW10:
       *target = static_cast<int>(PixelFormat::RAW10);
       break;
+    case kFormatC8:
+      *target = static_cast<int>(SnapPixelFormat::C_8);
+      break;
+    case kFormatC8Ubwc:
+      *target = static_cast<int>(SnapPixelFormat::C_8);
+      *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC;
+      break;
+    case kFormatC84R4YUbwc:
+      *target = static_cast<int>(SnapPixelFormat::C_8);
+      *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC;
+      *flags |= vendor_qti_hardware_display_common_BufferUsage::QTI_ALLOC_UBWC_4R;
+      *pixel_format_modifier = PIXEL_FORMAT_MODIFIER_4Y_COMPONENT;
+      break;
     default:
       DLOGW("Unsupported format = 0x%x", format);
       return -EINVAL;
   }
+
   return 0;
 }
 
@@ -810,7 +857,8 @@ int HWCBufferAllocator::GetAllocatedBufferInfo(const BufferConfig &buffer_config
     alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
   }
 
-  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags) < 0) {
+  uint64_t pixel_format_modifier = PIXEL_FORMAT_MODIFIER_NONE;
+  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier) < 0) {
     return -EINVAL;
   }
 
@@ -844,25 +892,30 @@ int HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info, uin
   uint64_t flags = 0;
   uint32_t size = 0;
   gralloc::PlaneLayoutInfo *plane_layout_info_ptr;
-  SetBufferInfo(buf_info.format, &format, &flags);
+  uint64_t pixel_format_modifier = PIXEL_FORMAT_MODIFIER_NONE;
+  SetBufferInfo(buf_info.format, &format, &flags, &pixel_format_modifier);
   // Setup only the required stuff, skip rest
   if (flags & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) {
     flags = qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
   }
-
+  std::vector<ExtendableType> additional_options;
+  ExtendableType modifier;
+  modifier.name = "pixel_format_modifier";
+  modifier.value = pixel_format_modifier;
+  additional_options.push_back(modifier);
   DLOGV("%s: Input parameters - wxh: %dx%d usage: 0x%" PRIu64 " format: %d", __FUNCTION__,
         buf_info.aligned_width, buf_info.aligned_height, buf_info.usage, format);
 
   gralloc::BufferInfo info(buf_info.aligned_width, buf_info.aligned_height, format, buf_info.usage);
+  info.additional_options = additional_options;
   if (snap_helper_->IsSnapAllocEnabled()) {
     // TODO: reduce code duplication here
-    BufferDescriptorInfo info_aidl{
-        .width = static_cast<int32_t>(buf_info.aligned_width),
-        .height = static_cast<int32_t>(buf_info.aligned_height),
-        .layerCount = 1,
-        .format = static_cast<GrallocPixelFormat>(format),
-        .usage = static_cast<GrallocBufferUsage>(buf_info.usage),
-    };
+    BufferDescriptorInfo info_aidl{.width = static_cast<int32_t>(buf_info.aligned_width),
+                                   .height = static_cast<int32_t>(buf_info.aligned_height),
+                                   .layerCount = 1,
+                                   .format = static_cast<GrallocPixelFormat>(format),
+                                   .usage = static_cast<GrallocBufferUsage>(buf_info.usage),
+                                   .additionalOptions = additional_options};
     SnapBufferLayout buffer_layout = {};
     auto &plane_layout_info = buffer_layout.planes;
     if (!mapper::GetFromBufferDescriptor(info_aidl, SnapMetadataType::PLANE_LAYOUTS, &buffer_layout,
@@ -1133,7 +1186,8 @@ bool HWCBufferAllocator::GetSDMColorSpace(const int int_dataspace, QtiDataspace 
 }
 
 LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const int32_t flags,
-                                         const int64_t compression_type) {
+                                                   const int64_t compression_type,
+                                                   uint64_t pixel_format_modifier) {
   LayerBufferFormat format = kFormatInvalid;
   if (flags & SnapMetadataType::IS_UBWC) {
     switch (source) {
@@ -1180,6 +1234,13 @@ LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const 
         break;
       case HAL_PIXEL_FORMAT_YCbCr_422_P210:
         format = kFormatYCbCr422P210Ubwc;
+        break;
+      case static_cast<int>(SnapPixelFormat::C_8):
+        if (pixel_format_modifier == PIXEL_FORMAT_MODIFIER_4Y_COMPONENT) {
+          format = kFormatC84R4YUbwc;
+        } else {
+          format = kFormatC8Ubwc;
+        }
         break;
       default:
         DLOGW("Unsupported format type for UBWC: %d", source);
@@ -1297,6 +1358,9 @@ LayerBufferFormat HWCBufferAllocator::GetSDMFormat(const int32_t &source, const 
       break;
     case static_cast<int>(PixelFormat::RAW10):
       format = kFormatRAW10;
+      break;
+    case static_cast<int>(SnapPixelFormat::C_8):
+      format = kFormatC8;
       break;
     default:
       DLOGW("Unsupported format type = %d", source);

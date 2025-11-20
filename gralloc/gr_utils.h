@@ -29,9 +29,8 @@
  */
 
 /*
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -72,9 +71,10 @@ inline size_t roundUpToPageSize(size_t x) {
   return (x + (getpagesize() - 1)) & ~(getpagesize() - 1);
 }
 
+using aidl::android::hardware::graphics::common::ExtendableType;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
-using android::hardware::graphics::common::V1_2::PixelFormat;
 using android::hardware::graphics::common::V1_1::BufferUsage;
+using android::hardware::graphics::common::V1_2::PixelFormat;
 using private_handle_t = qtigralloc::private_handle_t;
 
 namespace gralloc {
@@ -86,6 +86,7 @@ struct BufferInfo {
   int format;
   int layer_count;
   uint64_t usage;
+  std::vector<ExtendableType> additional_options;
 };
 
 struct GrallocProperties {

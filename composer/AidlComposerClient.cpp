@@ -1270,8 +1270,10 @@ void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayComma
                    layerCmd.layer, *layerCmd.perFrameMetadataBlob);
     ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
                    displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
+#ifdef COMPOSER3_V3
     ExecuteCommand(layerCmd.bufferSlotsToClear, &CommandEngine::executeSetLayerBufferSlotsToClear,
                    displayCmd.display, layerCmd.layer, *layerCmd.bufferSlotsToClear);
+#endif
   }
 }
 
@@ -1351,6 +1353,12 @@ Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplay
                      layerCmd.layer, layerCmd.qtiLayerType);
       ExecuteCommand(layerCmd.qtiLayerFlags, &CommandEngine::executeSetLayerFlag,
                      displayCmd.display, layerCmd.layer, layerCmd.qtiLayerFlags);
+#ifdef COMPOSER3_V4
+      ExecuteCommand(layerCmd.qtiPrivacyRegions, &CommandEngine::executeSetLayerPrivacyRegions,
+                     displayCmd.display, layerCmd.layer, *layerCmd.qtiPrivacyRegions);
+      ExecuteCommand(layerCmd.qtiCornerRadius, &CommandEngine::executeSetLayerCornerRadius,
+                     displayCmd.display, layerCmd.layer, layerCmd.qtiCornerRadius);
+#endif
     }
     ExecuteCommand(displayCmd.clientTarget_3_1, &CommandEngine::executeSetClientTarget_3_1,
                    displayCmd.display, *displayCmd.clientTarget_3_1);
@@ -1930,6 +1938,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   // writeError(__FUNCTION__, Error::Unsupported);
 }
 
+#ifdef COMPOSER3_V3
 void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
   auto error = Error::None;
@@ -1942,6 +1951,11 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
       continue;
     }
 
+    auto err = mClient.drawcycle_->ClearBuffersMappedToLayer(display, layer, layerBuffer);
+    if (err != sdm::kErrorNone) {
+      error = Error::BadConfig;
+    }
+
     auto clearErr = updateBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, false, nullptr);
     if (error == Error::None) {
       error = clearErr;
@@ -1952,6 +1966,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     writeError(__FUNCTION__, error);
   }
 }
+#endif
 
 Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
   bool validate_only = true;
@@ -2316,6 +2331,61 @@ void AidlComposerClient::CommandEngine::executeSetLayerFlag(int64_t display, int
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
+
+#ifdef COMPOSER3_V4
+void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
+    int64_t display, int64_t layer,
+    const std::vector<std::optional<QtiPrivacyRegion>> &privacyRegions) {
+  uint32_t size = privacyRegions.size();
+  if (size == 0) {
+    ALOGW("%s: Provided empty privacy regions for layer %lu", __func__, layer);
+    writeError(__FUNCTION__, Error::BadConfig);
+    return;
+  }
+
+  std::vector<sdm::PrivacyRegion> regions;
+  for (uint32_t i = 0; i < size; i++) {
+    if (!privacyRegions[i].has_value()) {
+      ALOGW("%s: Invalid privacy region at index %u for layer %lu", __func__, i, layer);
+      continue;
+    }
+
+    sdm::PrivacyRegion pr{};
+    sdm::SDMRect rect{};
+    rect.left = privacyRegions[i]->rect.left;
+    rect.top = privacyRegions[i]->rect.top;
+    rect.right = privacyRegions[i]->rect.right;
+    rect.bottom = privacyRegions[i]->rect.bottom;
+
+    pr.corner_radius = privacyRegions[i]->cornerRadius;
+    pr.rect = rect;
+    regions.push_back(pr);
+  }
+
+  auto err = mClient.layer_builder_->SetLayerPrivacyRegions(
+      display, layer, static_cast<const std::vector<sdm::PrivacyRegion> &>(regions));
+  if (err != sdm::kErrorNone) {
+    ALOGW("%s: Failed to set layer's %lu privacy regions", __func__, layer);
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerCornerRadius(
+    int64_t display, int64_t layer, const std::optional<QtiCornerRadius> cornerRadius) {
+  if (!cornerRadius.has_value()) {
+    writeError(__FUNCTION__, Error::BadConfig);
+    return;
+  }
+
+  sdm::CornerRadius radius = {cornerRadius->x, cornerRadius->y};
+
+  auto err = mClient.layer_builder_->SetLayerCornerRadius(display, layer, radius);
+  if (err != sdm::kErrorNone) {
+    ALOGW("%s: Failed to set layer's %lu corner radius", __func__, layer);
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+#endif
 
 Error AidlComposerClient::CommandEngine::lookupBufferCacheEntryLocked(
     int64_t display, int64_t layer, BufferCache cache, uint32_t slot, BufferCacheEntry **outEntry) {
