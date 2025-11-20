@@ -513,7 +513,7 @@ DisplayError DisplayBase::CommitOrPrepare(LayerStack *layer_stack) {
     return error;
   }
 
-  if (!gpu_comp_frame_) {
+  if (!layer_stack->validate_only && !gpu_comp_frame_) {
     return Commit(layer_stack);
   }
 

@@ -2968,6 +2968,7 @@ HWC3::Error HWCDisplay::CommitOrPrepare(bool validate_only, shared_ptr<Fence> *o
     client_target_3_1_set_ = false;
     return HWC3::Error::None;
   }
+  layer_stack_.validate_only = validate_only;
   DisplayError error = display_intf_->CommitOrPrepare(&layer_stack_);
   // Mask error if needed.
   auto status = HandlePrepareError(error);
