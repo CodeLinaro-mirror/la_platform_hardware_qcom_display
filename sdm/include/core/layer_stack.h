@@ -477,6 +477,8 @@ struct LayerStack {
   uint64_t elapse_timestamp = 0;       //!< system time until which display commit needs to be held
 
   uint64_t expected_present_time = 0;  //!< Expected Present timestamp for current frame.
+
+  bool validate_only;                  //!< To avoid atomic commit at the time of validation
 };
 
 }  // namespace sdm
