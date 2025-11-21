@@ -1,6 +1,7 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
+PRODUCT_PACKAGES += modetest_drm
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
 #Clstc library config xml file
@@ -60,7 +61,6 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_CO
 PRODUCT_COPY_FILES += hardware/qcom/display/config/display_id_sample.xml:$(TARGET_COPY_OUT_VENDOR)/etc/displayconfig/display_id_4630947039571902851.xml
 
 PRODUCT_PROPERTY_OVERRIDES += \
-    persist.demo.hdmirotationlock=false \
     persist.sys.sf.color_saturation=1.0 \
     persist.sys.sf.color_mode=9 \
     debug.sf.hw=0 \
@@ -69,7 +69,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.auto_latch_unsignaled=1 \
     debug.mdpcomp.logs=0 \
     vendor.gralloc.disable_ubwc=0 \
-    vendor.display.disable_multirect=1 \
+    vendor.display.disable_multirect=0 \
     vendor.gralloc.enable_logs=0 \
     vendor.display.disable_scaler=0 \
     vendor.display.disable_excl_rect=0 \
@@ -101,7 +101,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.treat_170m_as_sRGB=1 \
     debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.enable_display_extensions=1 \
-    vendor.gralloc.enable_snapalloc=1
+    vendor.gralloc.enable_snapalloc=1 \
+    vendor.display.disable_virtual_display=1 \
+    vendor.display.disable_set_display_brightness=1
+
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)

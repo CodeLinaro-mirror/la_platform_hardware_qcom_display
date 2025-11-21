@@ -393,6 +393,18 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     return TO_BINDER_STATUS(INT32(Error::BadDisplay));
   }
 
+  sdm::DisplayConfigFixedInfo fixed_info{};
+  error = caps_->GetFixedConfig(in_display, &fixed_info);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
+  sdm::DisplayClass display_class;
+  error = caps_->GetDisplayConnectionType(in_display, &display_class);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+  }
+
   out_configs->clear();
   out_configs->reserve(info.size());
 
@@ -406,6 +418,20 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup =
         settings_->GetDisplayConfigGroup(in_display, variable_config);
+
+ #ifdef COMPOSER3_V4
+    // Display output colorspace is fixed for builtin displays regardless of HDR content.
+    // For external displays, colorspace will be changed for HDR content if display supports HDR.
+    // EOTF is checked for true HDR support because external is always marked as HDR supported
+    // if primary supports HDR to prevent SF from marking HDR layers as skip.
+    display_configuration.hdrOutputType =
+        (fixed_info.hdr_eotf & sdm::kHdrEOTFHDR10) ? OutputType::HDR10
+        : (fixed_info.hdr_eotf & sdm::kHdrEOTFSDR) ? OutputType::SDR
+                                                   : OutputType::INVALID;
+    if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+#endif
 
     ALOGI("GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, fps= %d",
           config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
@@ -505,14 +531,14 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     // capabilities, the global Capability::SKIP_CLIENT_COLOR_TRANSFORM is ignored. We need to push
     // DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM here to maintain support.
     aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    aidl_return->push_back(DisplayCapability::SUSPEND);
+    // setDisplayBrightness have not been supported yet
+    // aidl_return->push_back(DisplayCapability::BRIGHTNESS);
+
     int32_t has_doze_support = 0;
     caps_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
       aidl_return->push_back(DisplayCapability::DOZE);
-      aidl_return->push_back(DisplayCapability::SUSPEND);
-      aidl_return->push_back(DisplayCapability::BRIGHTNESS);
-    } else {
-      aidl_return->push_back(DisplayCapability::BRIGHTNESS);
     }
   }
 
@@ -956,7 +982,9 @@ ScopedAStatus AidlComposerClient::setPowerMode(int64_t in_display, PowerMode in_
   }
 
   auto error = lifecycle_->SetPowerMode(in_display, static_cast<int32_t>(in_mode));
-  if (error != sdm::kErrorNone) {
+  if (error == sdm:: kErrorNotSupported) {
+    return TO_BINDER_STATUS(INT32(Error::Unsupported));
+  } else if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
@@ -1160,6 +1188,8 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
                      layerCmd.layer, *layerCmd.perFrameMetadataBlob);
       ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
                      displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
+      ExecuteCommand(layerCmd.luts, &CommandEngine::executeSetLayerLuts,
+                     displayCmd.display, layerCmd.layer, *layerCmd.luts);
     }
     ExecuteCommand(displayCmd.colorTransformMatrix, &CommandEngine::executeSetColorTransform,
                    displayCmd.display, *displayCmd.colorTransformMatrix);
@@ -1289,7 +1319,9 @@ void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
   }
 
   auto err = mClient.settings_->SetDisplayBrightness(display, command.brightness);
-  if (err != sdm::kErrorNone) {
+  if (err == sdm::kErrorNotSupported) {
+    writeError(__FUNCTION__, Error::Unsupported);
+  } else if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
@@ -1694,6 +1726,13 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   //     writeError(__FUNCTION__, Error::BadConfig);
   //   }
   // writeError(__FUNCTION__, Error::Unsupported);
+}
+
+void AidlComposerClient::CommandEngine::executeSetLayerLuts(
+    int64_t display, int64_t layer, const Luts &luts) {
+  //  We do not support setLayerLuts now;
+
+  writeError(__FUNCTION__, Error::Unsupported);
 }
 
 Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
