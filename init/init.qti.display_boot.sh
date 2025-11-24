@@ -126,6 +126,10 @@ case "$target" in
         else
            setprop vendor.display.disable_cwb_idle_fallback 1
         fi
+        if [ "$soc_hwid" -eq 555 ]; then
+          setprop vendor.display.disable_dpps_features 1
+          setprop vendor.display.disable_hdr_lut_gen 1
+        fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
@@ -395,6 +399,10 @@ case "$target" in
         setprop vendor.display.wait_for_primary_display 1
         setprop vendor.display.force_gpu_composition 1
         setprop vendor.display.allow_tonemap_native 1
+        ;;
+        # Set property for Aliso
+        740)
+        setprop vendor.display.enable_rounded_corner 0
         ;;
     esac
     ;;
