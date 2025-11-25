@@ -1818,8 +1818,8 @@ HWC3::Error HWCDisplay::CommitOrPrepare(bool validate_only, shared_ptr<Fence> *o
   }
 
   *needs_commit = error == kErrorNeedsCommit;
-
   if (!(*needs_commit)) {
+    first_cycle_ = false;
     PostCommitLayerStack(out_retire_fence);
   }
 
