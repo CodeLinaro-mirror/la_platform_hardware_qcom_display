@@ -18,10 +18,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *  Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <cutils/properties.h>
@@ -519,6 +518,8 @@ int HWCDisplay::Init() {
     swap_interval_zero_ = true;
   }
 
+  HWCDebugHandler::Get()->GetProperty(ENABLE_TUNNELLING, &tunnelling_enable_);
+
   client_target_ = new HWCLayer(id_, buffer_allocator_);
 
   error = display_intf_->GetNumVariableInfoConfigs(&num_configs_);
@@ -640,10 +641,19 @@ HWCLayer *HWCDisplay::GetHWCLayer(hwc2_layer_t layer_id) {
   }
 }
 
+hwc2_layer_t HWCDisplay::GetHWCTunnelledLayer() {
+  return tunnelled_layer_;
+}
+
 HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
   // ToDo: Replace layer destroy with smart pointer.
   // Work around to block main thread execution until async commit finishes.
   display_intf_->DestroyLayer();
+  if (tunnelled_layer_ == layer_id) {
+    tunnelled_layer_ = -1;
+    has_tunneled_layer_ = false;
+  }
+
   const auto map_layer = layer_map_.find(layer_id);
   if (map_layer == layer_map_.end()) {
     DLOGW("[%" PRIu64 "] destroyLayer(%" PRIu64 ") failed: no such layer", id_, layer_id);
@@ -702,7 +712,7 @@ void HWCDisplay::BuildLayerStack() {
     } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::SolidColor) {
       layer->flags.solid_fill = true;
     }
-
+    
     if (!hwc_layer->IsDataSpaceSupported()) {
       layer->flags.skip = true;
     }
@@ -732,6 +742,17 @@ void HWCDisplay::BuildLayerStack() {
       // UBWC PI format
       if (handle_flags & qtigralloc::PRIV_FLAGS_UBWC_ALIGNED_PI) {
         layer->input_buffer.flags.ubwc_pi = true;
+      }
+      if (tunnelling_enable_ && (handle_flags & qtigralloc::PRIV_FLAGS_CAMERA_WRITE)) {
+        // If we already have a tunneled layer set, don't change it unless it's invalid
+        if (tunnelled_layer_== -1) {
+          tunnelled_layer_ = hwc_layer->GetId();
+          layer->flags.skip = false;
+          DLOGV_IF(kTagClient, "Set layer %d as tunneled layer", tunnelled_layer_);
+        } else if (tunnelled_layer_ == hwc_layer->GetId()) {
+          // This is our existing tunneled layer, mark it accordingly
+          layer->flags.skip = false;
+        }
       }
     }
 
@@ -877,6 +898,27 @@ HWC2::Error HWCDisplay::SetLayerType(hwc2_layer_t layer_id, IQtiComposerClient::
 
   const auto layer = map_layer->second;
   layer->SetLayerType(type);
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplay::SetLayerIsTunneled(hwc2_layer_t layer_id, bool tunneled) {
+  if (!tunnelling_enable_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  const auto map_layer = layer_map_.find(layer_id);
+  if (map_layer == layer_map_.end()) {
+    DLOGW("[%" PRIu64 "] SetLayerIsTunneled failed to find layer", layer_id);
+    return HWC2::Error::BadLayer;
+  }
+  const auto layer = map_layer->second;
+  layer->SetTunneled(tunneled);
+  this->SetTunneledLayer(tunneled);
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplay::IsTunnelledLayerPresent(bool *tunnelled_layer_present) {
+  *tunnelled_layer_present = has_tunneled_layer_;
   return HWC2::Error::None;
 }
 
@@ -1557,6 +1599,11 @@ HWC2::Error HWCDisplay::PostPrepareLayerStack(uint32_t *out_num_types, uint32_t 
     // Set SDM composition to HWC2 type in HWCLayer
     hwc_layer->SetComposition(composition);
     HWC2::Composition device_composition  = hwc_layer->GetDeviceSelectedCompositionType();
+    if (hwc_layer->IsTunneled() && has_tunneled_layer_ && (composition != kCompositionSDE)) {
+      has_tunneled_layer_ = false;
+      return HWC2::Error::BadLayer;
+    }
+
     if (device_composition == HWC2::Composition::Client) {
       has_client_composition_ = true;
     }
@@ -1631,16 +1678,26 @@ HWC2::Error HWCDisplay::GetReleaseFences(uint32_t *out_num_elements, hwc2_layer_
 
   if (out_layers != nullptr && out_fences != nullptr) {
     *out_num_elements = std::min(*out_num_elements, UINT32(layer_set_.size()));
+    if (has_tunneled_layer_) {
+      if (*out_num_elements == layer_set_.size()) {
+        (*out_num_elements)--;
+      }
+    }
     auto it = layer_set_.begin();
     for (uint32_t i = 0; i < *out_num_elements; i++, it++) {
       auto hwc_layer = *it;
+      if (hwc_layer->IsTunneled()) {
+        continue;
+      }
       out_layers[i] = hwc_layer->GetId();
-
       shared_ptr<Fence> &fence = (*out_fences)[i];
       fence = hwc_layer->GetReleaseFence();
     }
   } else {
     *out_num_elements = UINT32(layer_set_.size());
+    if (has_tunneled_layer_) {
+      (*out_num_elements)--;
+    }
   }
 
   return HWC2::Error::None;
@@ -3691,4 +3748,10 @@ void HWCDisplay::Abort() {
 void HWCDisplay::MarkClientActive(bool is_client_up) {
   is_client_up_ = is_client_up ;
 }
-}  // namespace sdm
+
+void HWCDisplay::SetTunneledLayer(bool enable) {
+  has_tunneled_layer_ = enable;
+}
+
+} //namespace sdm
+

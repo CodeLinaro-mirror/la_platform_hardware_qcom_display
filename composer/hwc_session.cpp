@@ -18,10 +18,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *  Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <QService.h>
@@ -270,7 +269,6 @@ HWCSession *HWCSession::GetInstance() {
 int HWCSession::Init() {
   SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
   DLOGI("Initializing HWCSession");
-
   int status = -EINVAL;
   const char *qservice_name = "display.qservice";
 
