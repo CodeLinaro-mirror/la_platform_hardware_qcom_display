@@ -241,7 +241,7 @@ case "$target" in
     ;;
     "neo61")
     case "$soc_hwid" in
-        554)
+        554|739)
             setprop vendor.display.enable_null_display 1
         ;;
         579|740)
