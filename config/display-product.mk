@@ -210,6 +210,7 @@ $(call soong_config_set, qtidisplay, ubwcp_headers, true )
 $(call soong_config_set, qtidisplay, composer_version, v3_4 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, lsr_target, false )
+$(call soong_config_set, qtidisplay, monaco, false )
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -255,6 +256,10 @@ endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, neo, true )
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco), $(TARGET_BOARD_PLATFORM))
+    $(call soong_config_set, qtidisplay, monaco, true )
 endif
 
 # Techpack values
