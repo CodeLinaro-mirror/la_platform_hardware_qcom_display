@@ -54,7 +54,7 @@ case "$target" in
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.disable_cwb_idle_fallback 1
-        setprop vendor.display.comp_mask 4294967263
+        setprop vendor.display.force_gpu_composition 0
         ;;
     esac
     ;;
