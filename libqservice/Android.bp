@@ -2,6 +2,7 @@ cc_library_shared {
     name: "libqservice",
     defaults: ["qtidisplay_defaults"],
     vendor: true,
+    export_include_dirs: ["."],
     shared_libs: ["libbinder"],
     cflags: [
         "-DLOG_TAG=\"qdqservice\"",

@@ -1,6 +1,9 @@
 include hardware/qcom/display/config/display-modules.mk
+
+ifneq ($(TARGET_USES_AL),true)
 include vendor/qcom/opensource/mm-drivers/mm_driver_product.mk
 include vendor/qcom/opensource/display-drivers/display_driver_product.mk
+endif
 
 -include $(QCPATH)/techpack/artifacts/display/$(TARGET_BOARD_PLATFORM)/prebuilt.mk
 

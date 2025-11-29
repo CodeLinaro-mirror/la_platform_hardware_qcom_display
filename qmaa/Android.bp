@@ -1,7 +1,4 @@
 soong_namespace {
-    imports: [
-        "hardware/qcom/display/qmaa",
-    ],
 }
 composer_srcs = ["*.cpp"]
 

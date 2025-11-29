@@ -1270,8 +1270,10 @@ void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayComma
                    layerCmd.layer, *layerCmd.perFrameMetadataBlob);
     ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
                    displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
+#ifdef COMPOSER3_V3
     ExecuteCommand(layerCmd.bufferSlotsToClear, &CommandEngine::executeSetLayerBufferSlotsToClear,
                    displayCmd.display, layerCmd.layer, *layerCmd.bufferSlotsToClear);
+#endif
   }
 }
 
@@ -1936,6 +1938,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   // writeError(__FUNCTION__, Error::Unsupported);
 }
 
+#ifdef COMPOSER3_V3
 void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
   auto error = Error::None;
@@ -1948,6 +1951,11 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
       continue;
     }
 
+    auto err = mClient.drawcycle_->ClearBuffersMappedToLayer(display, layer, layerBuffer);
+    if (err != sdm::kErrorNone) {
+      error = Error::BadConfig;
+    }
+
     auto clearErr = updateBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, false, nullptr);
     if (error == Error::None) {
       error = clearErr;
@@ -1958,6 +1966,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     writeError(__FUNCTION__, error);
   }
 }
+#endif
 
 Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
   bool validate_only = true;
