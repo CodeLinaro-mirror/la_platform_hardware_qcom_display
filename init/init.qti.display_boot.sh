@@ -184,6 +184,8 @@ case "$target" in
         setprop vendor.display.disable_multirect 1
         setprop vendor.display.disable_llcbc_support 1
         setprop vendor.display.enable_rounded_corner 0
+        setprop vendor.display.perf_version 2
+        setprop vendor.display.minimum_large_comp_fps 60
         ;;
     esac
     ;;
