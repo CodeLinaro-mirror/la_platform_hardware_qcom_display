@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -62,6 +62,7 @@ DmaManager *DmaManager::dma_manager_ = NULL;
 DmaManager *DmaManager::GetInstance() {
   if (!dma_manager_) {
     dma_manager_ = new DmaManager();
+    dma_manager_->GetCameraPreviewPerms();
     dma_manager_->enable_logs_ = property_get_bool(ENABLE_LOGS_PROP, 0);
   }
   return dma_manager_;
@@ -234,8 +235,14 @@ int DmaManager::SecureMemPerms(AllocData *data) {
 
   for (auto vm_name : data->vm_names) {
     VmHandle handle = vmmem->FindVmByName(vm_name);
-    if (vm_name == "qcom,cp_sec_display" || vm_name == "qcom,cp_camera_preview") {
+    if (vm_name == "qcom,cp_sec_display") {
       vm_perms.push_back(std::make_pair(handle, VMMEM_READ));
+    } else if (vm_name == "qcom,cp_camera_preview") {
+      if (allow_camera_preview_write_) {
+        vm_perms.push_back(std::make_pair(handle, VMMEM_READ | VMMEM_WRITE));
+      } else {
+        vm_perms.push_back(std::make_pair(handle, VMMEM_READ));
+      }
     } else if (vm_name == "qcom,cp_cdsp") {
       vm_perms.push_back(std::make_pair(handle, VMMEM_READ | VMMEM_WRITE | VMMEM_EXEC));
     } else {
@@ -409,6 +416,14 @@ int DmaManager::SetBufferPermission(int fd, BufferPermission *buf_perm, int64_t 
     ALOGI("fd %d mem_hdl %lld ret %d", fd, *mem_hdl, ret);
   }
   return ret;
+}
+void DmaManager::GetCameraPreviewPerms() {
+  char property[PROPERTY_VALUE_MAX];
+  if (property_get(ALLOW_CAMERA_PREVIEW_WRITE, property, NULL) > 0) {
+    allow_camera_preview_write_ = atoi(property);
+  } else {
+    allow_camera_preview_write_ = false;
+  }
 }
 
 }  // namespace gralloc
