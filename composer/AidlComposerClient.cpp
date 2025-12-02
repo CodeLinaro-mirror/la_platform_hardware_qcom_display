@@ -1437,8 +1437,16 @@ void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
     return;
   }
 
-  auto err =
-      mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
+  // Check if display supports brightness before calling
+  bool supportsBrightness = false;
+  auto err = mClient.settings_->GetDisplayBrightnessSupport(display, &supportsBrightness);
+  if (err != sdm::kErrorNone || !supportsBrightness) {
+    // Display doesn't support brightness - skip silently
+    ALOGV("%s: Brightness not supported for display %" PRIu64, __FUNCTION__, display);
+    return;
+  }
+
+  err = mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }
