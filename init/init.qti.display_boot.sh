@@ -32,6 +32,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
 target=`getprop ro.board.platform`
+platform_subtype_id=0
 if [ -f /sys/devices/soc1/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc1/soc_id`
 elif [ -f /sys/devices/system/soc/soc1/id ]; then
@@ -40,6 +41,12 @@ elif [ -f /sys/devices/soc0/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc0/soc_id`
 else
     soc_hwid=`cat /sys/devices/system/soc/soc0/id`
+fi
+
+if [ -f /sys/devices/soc1/platform_subtype_id ]; then
+    platform_subtype_id=`cat /sys/devices/soc1/platform_subtype_id`
+elif [ -f /sys/devices/soc0/platform_subtype_id ]; then
+    platform_subtype_id=`cat /sys/devices/soc0/platform_subtype_id`
 fi
 
 case "$target" in
@@ -125,6 +132,12 @@ case "$target" in
            setprop vendor.display.enable_inline_writeback 1
         else
            setprop vendor.display.disable_cwb_idle_fallback 1
+        fi
+        # Enable null display for Hamoa QCB and set Hamoa-specific properties
+        if [ "$soc_hwid" -eq 555 ]; then
+          if [ "$platform_subtype_id" -eq 43 ]; then
+            setprop vendor.display.enable_null_display 1
+          fi
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
