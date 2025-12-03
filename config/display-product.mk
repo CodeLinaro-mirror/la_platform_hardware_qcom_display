@@ -141,7 +141,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dim
 ifeq ($(TARGET_BOARD_PLATFORM),canoe)
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=1
 endif
-ifeq ($(TARGET_BOARD_PLATFORM),chora)
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), chora malabar), $(TARGET_BOARD_PLATFORM))
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=0
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.clear_slots_with_set_layer_buffer=false
