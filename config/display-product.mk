@@ -209,8 +209,9 @@ $(call soong_config_set, qtidisplay, smmu_proxy, false )
 $(call soong_config_set, qtidisplay, ubwcp_headers, true )
 $(call soong_config_set, qtidisplay, composer_version, v3_4 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
+$(call soong_config_set, qtidisplay, hw_fence_disabled, false)
 $(call soong_config_set, qtidisplay, lsr_target, false )
-$(call soong_config_set, qtidisplay, monaco, false )
+
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -249,7 +250,6 @@ ifneq (,$(call is-vendor-board-qcom))
     $(call soong_config_set, qtidisplay, displayconfig_enabled, true )
 endif
 
-
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), kalama niobe), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, ubwcp_headers, false )
 endif
@@ -258,8 +258,8 @@ ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, neo, true )
 endif
 
-ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco), $(TARGET_BOARD_PLATFORM))
-    $(call soong_config_set, qtidisplay, monaco, true )
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+    $(call soong_config_set, qtidisplay, hw_fence_disabled, true )
 endif
 
 # Techpack values
