@@ -16,9 +16,9 @@ endif
 # This will allow to generate test, FEAT, and EXT modules only when
 # sources are available.
 
-.PHONY: display_tp display_tp_hal display_tp_dlkm display_tp_tests display_tp_feat display_tp_ext
+.PHONY: display_tp display_tp_hal display_tp_dlkm display_tp_tests display_tp_feat display_tp_ext dprx_tp_dlkm
 
-display_tp: display_tp_hal display_tp_dlkm display_tp_tests display_tp_feat display_tp_ext
+display_tp: display_tp_hal display_tp_dlkm display_tp_tests display_tp_feat display_tp_ext dprx_tp_dlkm
 
 display_tp_hal: $(DISPLAY_MODULES_HARDWARE) $(DISPLAY_MODULES_VENDOR)
 
@@ -29,6 +29,8 @@ display_tp_tests: $(DISPLAY_MODULES_TEST)
 display_tp_feat: $(DISPLAY_MODULES_FEAT)
 
 display_tp_ext: $(DISPLAY_MODULES_EXT)
+
+dprx_tp_dlkm: $(DPRX_MODULES_DRIVER)
 
 $(warning "Display Techpack configuration TARGET_USES_QMAA  = $(TARGET_USES_QMAA)")
 $(warning "Display Techpack configuration TARGET_USES_QMAA_OVERRIDE_DISPLAY  = $(TARGET_USES_QMAA_OVERRIDE_DISPLAY)")
