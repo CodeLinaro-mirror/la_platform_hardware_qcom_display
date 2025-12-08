@@ -141,7 +141,7 @@ qtidisplay_cc_defaults {
             cflags: ["-DTARGET_INCLUDES_NEO"],
         },
         lsr_target: {
-            cflags: ["-DTARGET_USES_LSR"],
+            cflags: ["-DTARGET_USES_LSR", "-DLSR_API"],
         },
         var3 : {
             enabled: false,

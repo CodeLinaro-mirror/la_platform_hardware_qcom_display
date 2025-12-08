@@ -1,7 +1,7 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
+
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
-PRODUCT_PACKAGES += $(DISPLAY_FW_PREBUILTS)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
 #Clstc library config xml file
@@ -87,9 +87,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.late.app.duration=13666666 \
     debug.sf.early.app.duration=13666666 \
     debug.sf.earlyGl.app.duration=13666666 \
-    debug.sf.early.sf.duration=10500000 \
-    debug.sf.earlyGl.sf.duration=10500000 \
-    debug.sf.late.sf.duration=10500000 \
     vendor.display.enable_async_vds_creation=1 \
     vendor.display.enable_rounded_corner=1 \
     vendor.display.disable_3d_adaptive_tm=1 \
@@ -104,14 +101,39 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.gralloc.enable_snapalloc=1 \
     vendor.display.disable_fp16_support=1
 
-# Enable offline rotator for Bengal, Khaje
-ifneq ($(filter bengal khaje, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.early.sf.duration=15555555 \
+    debug.sf.earlyGl.sf.duration=15555555 \
+    debug.sf.late.sf.duration=15555555
+else
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.early.sf.duration=10500000 \
+    debug.sf.earlyGl.sf.duration=10500000 \
+    debug.sf.late.sf.duration=10500000
+endif
+
+# Enable offline rotator for Bengal, Khaje and Monaco
+ifneq ($(filter bengal khaje monaco, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_offline_rotator=1
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1 \
     debug.sf.enable_hwc_vds=0
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),monaco)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_layer_stitch=1 \
+    vendor.display.secure_preview_buffer_format=420_sp \
+    vendor.gralloc.secure_preview_buffer_format=420_sp \
+    vendor.display.disable_idle_time_hdr=1 \
+    vendor.display.disable_idle_time_video=1 \
+    vendor.display.enable_camera_smooth=1 \
+    vendor.display.enable_posted_start_dyn=1 \
+    vendor.display.enhance_idle_time=1 \
+    vendor.display.lcd_density=160
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),holi)
@@ -140,6 +162,9 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_frame_buffer_acquir
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dimension=4096
 ifeq ($(TARGET_BOARD_PLATFORM),canoe)
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=1
+endif
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), chora malabar), $(TARGET_BOARD_PLATFORM))
+  PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=0
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.clear_slots_with_set_layer_buffer=false
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate_override=60
@@ -185,6 +210,7 @@ $(call soong_config_set, qtidisplay, ubwcp_headers, true )
 $(call soong_config_set, qtidisplay, composer_version, v3_4 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, lsr_target, false )
+$(call soong_config_set, qtidisplay, monaco, false )
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -230,6 +256,10 @@ endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, neo, true )
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco), $(TARGET_BOARD_PLATFORM))
+    $(call soong_config_set, qtidisplay, monaco, true )
 endif
 
 # Techpack values

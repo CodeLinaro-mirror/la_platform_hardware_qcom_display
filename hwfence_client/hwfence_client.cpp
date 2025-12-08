@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -183,6 +183,36 @@ int HwFenceClient::GetSynxFd(int32_t fd, uint32_t synx_obj) {
 
   delete info;
   return fence_fd;
+}
+
+int HwFenceClient::SynxSignal(int32_t fd, uint32_t synx_obj, uint32_t synx_state) {
+  int32_t result;
+  struct synx_private_ioctl_arg synx_ioctl;
+  struct synx_signal_v2 *info = new struct synx_signal_v2;
+
+  if (!info) {
+    DLOGE("Invalid synx_signal_v2!");
+    return -1;
+  }
+  info->synx_obj = synx_obj;
+  info->synx_state = synx_state;
+
+  std::memset(&synx_ioctl, 0, sizeof(synx_ioctl));
+  synx_ioctl.id = SYNX_SIGNAL;
+  synx_ioctl.size = sizeof(struct synx_signal_v2);
+  synx_ioctl.ioctl_ptr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(info));
+
+  result = ioctl(fd, SYNX_PRIVATE_IOCTL_CMD, &synx_ioctl);
+  if (result < 0) {
+    DLOGE("SYNX_PRIVATE_IOCTL_CMD ioctl failed with error %d", result);
+    delete info;
+    return result;
+  }
+
+  DLOGV("SynxSignal synxobj:%d state:%d", synx_obj, synx_state);
+
+  delete info;
+  return result;
 }
 
 }  // namespace hwfence
