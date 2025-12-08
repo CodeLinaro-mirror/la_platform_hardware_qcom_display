@@ -176,7 +176,8 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
                            ubwcp_headers hwasan mapper_ext \
-                           hy11 hy22 hy33 neo
+                           hy11 hy22 hy33 neo \
+                           hw_fence_disabled
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_neo := false
@@ -198,6 +199,7 @@ SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
 SOONG_CONFIG_qtidisplay_composer_version := v3_4
 SOONG_CONFIG_qtidisplay_mapper_ext := true
+SOONG_CONFIG_qtidisplay_hw_fence_disabled := false
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -243,6 +245,10 @@ endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_neo := true
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+    SOONG_CONFIG_qtidisplay_hw_fence_disabled := true
 endif
 
 # Techpack values
