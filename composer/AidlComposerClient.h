@@ -305,7 +305,7 @@ class AidlComposerClient : public BnComposerClient,
                                                           bool in_enabled) override;
 
   // Methods for ConcurrentWriteBack
-  Error getDisplayReadbackBuffer(int64_t display, const SnapHandle *rawHandle);
+  Error getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle);
 
   // Methods for extensions (QtiComposer3Client)
   ScopedAStatus executeQtiExtendedCommands(const std::vector<DisplayCommand> &in_commands,
@@ -333,6 +333,7 @@ class AidlComposerClient : public BnComposerClient,
     std::vector<BufferCacheEntry> OutputBuffers;
 
     std::unordered_map<sdm::LayerId, LayerBuffers> Layers;
+    SnapHandle *mReadBackHandle = nullptr;
 
     explicit DisplayData(bool isVirtual) : IsVirtual(isVirtual) {}
   };

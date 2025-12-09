@@ -840,6 +840,14 @@ ScopedAStatus AidlComposerClient::getReadbackBufferFence(int64_t in_display,
                                                          ::ndk::ScopedFileDescriptor *aidl_return) {
   shared_ptr<Fence> fence = nullptr;
   auto error = settings_->GetReadbackBufferFence(in_display, &fence);
+
+  std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+  auto iter = mDisplayData.find(in_display);
+  if (iter != mDisplayData.end() && (iter->second.mReadBackHandle != nullptr)) {
+    mHandleImporter.freeBuffer(iter->second.mReadBackHandle);
+    iter->second.mReadBackHandle = nullptr;
+  }
+
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::Unsupported));
   }
@@ -1046,7 +1054,7 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
     int64_t in_display, const NativeHandle &in_buffer,
     const ::ndk::ScopedFileDescriptor &in_release_fence) {
   shared_ptr<Fence> fence = nullptr;
-  const SnapHandle *buffer = sdm::ConvertToSnapHandle(in_buffer);
+  SnapHandle *buffer = sdm::ConvertToSnapHandle(in_buffer);
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(in_release_fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
@@ -1067,6 +1075,12 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
 
   auto err = settings_->SetReadbackBuffer(in_display, (void *)buffer, fence);
   if (err != sdm::kErrorNone) {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto iter = mDisplayData.find(in_display);
+    if (iter != mDisplayData.end() && (iter->second.mReadBackHandle != nullptr)) {
+      mHandleImporter.freeBuffer(iter->second.mReadBackHandle);
+      iter->second.mReadBackHandle = nullptr;
+    }
     return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
@@ -1165,8 +1179,7 @@ void AidlComposerClient::OnVsyncIdle(uint64_t in_display) {
   callback_->onVsyncIdle(in_display);
 }
 
-Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display,
-                                                   const SnapHandle *rawHandle) {
+Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle) {
   // TODO(user): revisit for caching and freeBuffer in success case.
   if (!mHandleImporter.importBuffer(rawHandle)) {
     ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
@@ -1180,6 +1193,11 @@ Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display,
     return Error::BadDisplay;
   }
 
+  if (iter->second.mReadBackHandle != nullptr) {
+    mHandleImporter.freeBuffer(iter->second.mReadBackHandle);
+  }
+
+  iter->second.mReadBackHandle = rawHandle;
   return Error::None;
 }
 
