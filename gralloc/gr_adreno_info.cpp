@@ -43,6 +43,7 @@
 
 #include "gr_adreno_info.h"
 #include "gr_utils.h"
+#include "display_properties.h"
 #include <QtiGrallocPriv.h>
 #include <QtiGrallocDefs.h>
 

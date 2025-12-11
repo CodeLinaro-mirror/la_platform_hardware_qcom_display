@@ -33,7 +33,8 @@
 
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
 #include "QtiMapper4.h"
-
+#include "display_properties.h"
+#include <inttypes.h>
 #include <cutils/properties.h>
 #include <cutils/trace.h>
 #include <sync/sync.h>
@@ -238,7 +239,7 @@ Return<void> QtiMapper::lock(void *buffer, uint64_t cpu_usage, const IMapper::Re
       ALOGE("Snap failed to lock buffer");
       hidl_cb(static_cast<Error>(ret_val), nullptr);
     } else {
-      ALOGD_IF(enable_logs, "QtiMapper::lock address %lu", snap_base);
+      ALOGD_IF(enable_logs, "QtiMapper::lock address %" PRIu64, snap_base);
       hidl_cb(Error::NONE, reinterpret_cast<void *>(snap_base));
     }
   } else {
@@ -367,7 +368,7 @@ Return<void> QtiMapper::get(void *buffer, const MetadataType &metadataType, get_
 
 Return<Error> QtiMapper::set(void *buffer, const MetadataType &metadataType,
                              const hidl_vec<uint8_t> &metadata) {
-  ALOGD_IF(enable_logs, "%s - metadata type %lu", __FUNCTION__, metadataType.value);
+  ALOGD_IF(enable_logs, "%s - metadata type %" PRId64, __FUNCTION__, metadataType.value);
 
   auto err = Error::BAD_BUFFER;
   if (buffer != nullptr) {
@@ -654,7 +655,9 @@ Return<void> QtiMapper::isSupported(const BufferDescriptorInfo_4_0 &descriptor_i
     if (supported) {
       hidl_cb(Error::NONE, true);
     } else {
-      ALOGW("Descriptor is not supported format %d usage %lu", desc.GetFormat(), desc.GetUsage());
+      ALOGW("Descriptor is not supported format %d usage %" PRIu64,
+        desc.GetFormat(), desc.GetUsage());
+
       hidl_cb(Error::NONE, false);
     }
   } else {

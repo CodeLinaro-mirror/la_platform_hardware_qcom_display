@@ -50,6 +50,7 @@
 
 #include "gr_utils.h"
 #include "gr_dma_legacy_mgr.h"
+#include "display_properties.h"
 
 #ifndef ION_FLAG_CP_PIXEL
 #define ION_FLAG_CP_PIXEL 0

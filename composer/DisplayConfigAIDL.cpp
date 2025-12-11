@@ -428,7 +428,7 @@ ScopedAStatus DisplayConfigAIDL::getActiveBuiltinDisplayAttributes(Attributes *a
   error = settings_->GetDisplayAttributes(disp_id, config, &var_info);
 
   if (error != sdm::kErrorNone) {
-    ALOGW("%s: Invalid display = %lu", __FUNCTION__, disp_id);
+    ALOGW("%s: Invalid display = %" PRIu64, __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
@@ -736,6 +736,7 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
     }
   } else if (hdl_exists) {
       ALOGE("%s: buffer(0x%p) already being handled by display-%d", __FUNCTION__, hdl, display_type);
+
   }
 
   if (ret_status != EX_NONE) {
@@ -1121,7 +1122,7 @@ GLRect SdmRectToGlRect(sdm::SDMRect &r) {
 
 void DisplayConfigAIDL::StitchLayers(uint64_t display, sdm::LayerStitchContext *ctx) {
   if (layer_stitch_map_.find(display) == layer_stitch_map_.end()) {
-    ALOGW("GL Layer stitch not initialized for display %lu!", display);
+    ALOGW("GL Layer stitch not initialized for display %" PRIu64 "!", display);
     return;
   }
 
@@ -1149,7 +1150,7 @@ void DisplayConfigAIDL::InitLayerStitch(uint64_t display) {
 
   layer_stitch_map_.at(display) = GLLayerStitch::GetInstance(false);
   if (layer_stitch_map_.at(display) == nullptr) {
-    ALOGW("Unable to initialize layer stitch: display %lu", display);
+    ALOGW("Unable to initialize layer stitch: display %" PRIu64, display);
     layer_stitch_map_.erase(display);
   }
 }
@@ -1174,7 +1175,7 @@ void DisplayConfigAIDL::InitColorConvert(uint64_t display, bool secure) {
 
 void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlitContext *ctx) {
   if (color_convert_map_.find(display) == color_convert_map_.end()) {
-    ALOGW("Display %lu: GL Color convert is not initialized", display);
+    ALOGW("Display %" PRIu64 ": GL Color convert is not initialized", display);
     return;
   }
 
@@ -1259,7 +1260,7 @@ void DisplayConfigAIDL::CollectHistogram(uint64_t display, uint64_t max_frames, 
                                          uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS],
                                          uint64_t *numFrames) {
   if (histogram_map_.find(display) == histogram_map_.end()) {
-    ALOGW("Display %lu: Histogram not initialized!", display);
+    ALOGW("Display %" PRIu64 ": Histogram not initialized!", display);
     return;
   }
 
