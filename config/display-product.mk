@@ -218,7 +218,7 @@ $(call soong_config_set, qtidisplay, composer_version, v3_4 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
 $(call soong_config_set, qtidisplay, lsr_target, false )
-
+$(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -241,8 +241,10 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 14))
       $(call soong_config_set, qtidisplay, composer_version, v3_2 )
+      $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 15))
       $(call soong_config_set, qtidisplay, composer_version, v3_3 )
+      $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
       $(call soong_config_set, qtidisplay, composer_version, v3_4 )
     endif
