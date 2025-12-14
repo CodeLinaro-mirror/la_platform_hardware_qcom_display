@@ -30,7 +30,7 @@
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -51,19 +51,19 @@
 static int colorMetaDataToColorSpace(ColorMetaData in, ColorSpace_t *out) {
   if (in.colorPrimaries == ColorPrimaries_BT601_6_525 ||
       in.colorPrimaries == ColorPrimaries_BT601_6_625) {
-    if (in.range == Range_Full) {
+    if (in.range == Range_Full || in.range == Range_Extended) {
       *out = ITU_R_601_FR;
     } else {
       *out = ITU_R_601;
     }
   } else if (in.colorPrimaries == ColorPrimaries_BT2020) {
-    if (in.range == Range_Full) {
+    if (in.range == Range_Full || in.range == Range_Extended) {
       *out = ITU_R_2020_FR;
     } else {
       *out = ITU_R_2020;
     }
   } else if (in.colorPrimaries == ColorPrimaries_BT709_5) {
-    if (in.range == Range_Full) {
+    if (in.range == Range_Full || in.range == Range_Extended) {
       *out = ITU_R_709_FR;
     } else {
       *out = ITU_R_709;
