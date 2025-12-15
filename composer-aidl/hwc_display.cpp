@@ -1548,6 +1548,28 @@ HWC3::Error HWCDisplay::GetDisplayRequests(int32_t *out_display_requests,
   return HWC3::Error::None;
 }
 
+HWC3::Error HWCDisplay::GetDisplayLuts(
+    std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> &out_luts) {
+  if (layer_set_.empty()) {
+    return HWC3::Error::None;
+  }
+
+  if (!out_luts) {
+    return HWC3::Error::Unsupported;
+  }
+
+  if (!validated_) {
+    DLOGW("Display is not validated");
+    return HWC3::Error::NotValidated;
+  }
+
+  for (auto it = display_luts_.begin(); it != display_luts_.end(); it++) {
+    out_luts->push_back(std::make_pair(it->first, (it->second)));
+  }
+
+  return HWC3::Error::None;
+}
+
 HWC3::Error HWCDisplay::GetHdrCapabilities(uint32_t *out_num_types, int32_t *out_types,
                                            float *out_max_luminance,
                                            float *out_max_average_luminance,
