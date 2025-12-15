@@ -306,6 +306,8 @@ class AidlComposerClient : public BnComposerClient {
     void executeAcceptDisplayChanges(int64_t display);
     void executePresentDisplay(int64_t display);
 
+    Error setChangedCompositionTypes(int64_t display);
+    Error setDisplayRequests(int64_t display);
     void executeSetLayerCursorPosition(int64_t display, int64_t layer, const Point &cursorPosition);
     void executeSetLayerBuffer(int64_t display, int64_t layer, const Buffer &buffer);
     void executeSetLayerSurfaceDamage(int64_t display, int64_t layer,
@@ -342,7 +344,10 @@ class AidlComposerClient : public BnComposerClient {
         int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
-
+#ifdef COMPOSER3_V4
+    Error setDisplayLuts(int64_t display);
+    Error populateDisplayLuts(Lut3d *lut_3d, Luts *luts, int32_t *lut_fd);
+#endif
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
     FRect readFRect();

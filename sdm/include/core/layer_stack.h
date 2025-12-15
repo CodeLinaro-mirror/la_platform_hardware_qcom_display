@@ -401,7 +401,8 @@ struct Layer {
 
   LayerRequest request = {};                       //!< o/p - request on this Layer by SDM.
 
-  Lut3d lut_3d = {};                               //!< o/p - Populated by SDM when tone mapping is
+  Lut3d lut_3d = { .lutEntries = nullptr, .validLutEntries = false, .gridEntries = nullptr,
+                   .validGridEntries = false };    //!< o/p - Populated by SDM when tone mapping is
                                                    //!< needed on this layer.
   LayerSolidFill solid_fill_info = {};             //!< solid fill info along with depth.
   std::shared_ptr<LayerBufferMap> buffer_map = nullptr;  //!< Map of handle_id and fb_id.
