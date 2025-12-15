@@ -160,7 +160,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.flush_on_layer_set_empty=1 \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_color_transformation=1 \
-    vendor.gralloc.enable_logs=1 \
+    vendor.gralloc.enable_logs=0 \
     vendor.gralloc.enable_snapalloc=1
 
 ifeq ($(TARGET_USES_QMAA),true)
