@@ -1274,6 +1274,10 @@ void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayComma
     ExecuteCommand(layerCmd.bufferSlotsToClear, &CommandEngine::executeSetLayerBufferSlotsToClear,
                    displayCmd.display, layerCmd.layer, *layerCmd.bufferSlotsToClear);
 #endif
+#ifdef COMPOSER3_V4
+    ExecuteCommand(layerCmd.luts, &CommandEngine::executeSetLayerLuts, displayCmd.display,
+                   layerCmd.layer, *layerCmd.luts);
+#endif
   }
 }
 
@@ -1814,6 +1818,13 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
+
+#ifdef COMPOSER3_V4
+void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int64_t layer,
+                                                            const Luts &luts) {
+  writeError(__FUNCTION__, Error::Unsupported);
+}
+#endif
 
 void AidlComposerClient::CommandEngine::executeSetLayerSidebandStream(
     int64_t display, int64_t layer, const NativeHandle &sidebandStream) {
