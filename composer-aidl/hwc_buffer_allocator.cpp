@@ -60,32 +60,38 @@ namespace sdm {
 
 DisplayError HWCBufferAllocator::GetGrallocInstance() {
   // Lazy initialization of gralloc HALs
-  if (mapper_ != nullptr || allocator_ != nullptr) {
+  if (mapper_ != nullptr && allocator_ != nullptr && mapper_ext_ != nullptr) {
     return kErrorNone;
   }
 
-  allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
-      AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
   if (allocator_ == nullptr) {
-    DLOGE("Unable to get allocator");
-    return kErrorCriticalResource;
+    allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+        AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
+    if (allocator_ == nullptr) {
+      DLOGE("Unable to get allocator");
+      return kErrorCriticalResource;
+    }
   }
 
-  mapper_ = IMapper::getService();
   if (mapper_ == nullptr) {
-    DLOGE("Unable to get mapper");
-    return kErrorCriticalResource;
+    mapper_ = IMapper::getService();
+    if (mapper_ == nullptr) {
+      DLOGE("Unable to get mapper");
+      return kErrorCriticalResource;
+    }
   }
-
-  android::sp<IQtiMapper> qti_mapper = IQtiMapper::castFrom(mapper_);
-  qti_mapper->getMapperExtensions([&](auto _error, auto _extensions) {
-    if (_error == Error::NONE)
-      mapper_ext_ = _extensions;
-  });
 
   if (mapper_ext_ == nullptr) {
-    DLOGE("Unable to get mapper extensions");
-    return kErrorCriticalResource;
+    android::sp<IQtiMapper> qti_mapper = IQtiMapper::castFrom(mapper_);
+    qti_mapper->getMapperExtensions([&](auto _error, auto _extensions) {
+      if (_error == Error::NONE)
+        mapper_ext_ = _extensions;
+    });
+
+    if (mapper_ext_ == nullptr) {
+      DLOGE("Unable to get mapper extensions");
+      return kErrorCriticalResource;
+    }
   }
 
   return kErrorNone;
@@ -378,6 +384,7 @@ void HWCBufferAllocator::GetCustomWidthAndHeight(const native_handle_t *handle, 
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return;
   }
 
   mapper_ext_->getCustomDimensions(hnd, [&](MapperExtError _error, auto _width, auto _height) {
@@ -404,6 +411,7 @@ void HWCBufferAllocator::GetAlignedWidthAndHeight(int width, int height, int for
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGE("Failed to retrieve gralloc instance");
+    return;
   }
 
   mapper_ext_->calculateBufferAttributes(
