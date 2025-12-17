@@ -78,6 +78,10 @@ static native_handle_t *CNativeHandleFromSnapHandle(SnapHandle *snap_handle,
   native_handle_t *native_handle =
       native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
 
+  if (native_handle == nullptr) {
+    ALOGE("native_handle_create failed");
+    return nullptr;
+  }
   for (size_t i = 0; i < snap_handle->num_fds; i++) {
     int fd = snap_handle->buffer_data[i];
     native_handle->data[i] = pass_fd_ownership ? fd : fcntl(fd, F_DUPFD_CLOEXEC, 0);
@@ -3792,11 +3796,13 @@ SnapError GrallocSnapHelperLegacy::NameHelper(SnapHandle *hnd, bool hidl_bytestr
   auto error = SnapError::BAD_VALUE;
   std::string name = "";
   if (gralloc_in_set != nullptr) {
+    return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
     return error;
   }
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::NAME, &name);
-  } else if (gralloc_out_get != nullptr) {
+  } else {
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::NAME, &name);
   }
   error = CheckMetadataSet(SnapMetadataType::NAME, error, check_metadata_set);
@@ -4324,6 +4330,8 @@ SnapError GrallocSnapHelperLegacy::PlaneLayoutsHelper(SnapHandle *hnd, bool hidl
   SnapBufferLayout snap_buffer_layout = {};
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return error;
   }
   if (buf_des != nullptr) {
     error = snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::PLANE_LAYOUTS,
@@ -4340,7 +4348,7 @@ SnapError GrallocSnapHelperLegacy::PlaneLayoutsHelper(SnapHandle *hnd, bool hidl
         snap_buffer_layout.plane_count /= 2;
       }
     }
-  } else if (gralloc_out_get != nullptr) {
+  } else {
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PLANE_LAYOUTS, &snap_buffer_layout);
   }
   error = CheckMetadataSet(SnapMetadataType::PLANE_LAYOUTS, error, check_metadata_set);
@@ -4374,7 +4382,7 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
   } else if (gralloc_out_get == nullptr) {
-    return SnapError::BAD_VALUE;
+    return error;
   }
 
   error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::PLANE_LAYOUTS, &snap_buffer_layout);
@@ -4383,9 +4391,7 @@ SnapError GrallocSnapHelperLegacy::YuvPlaneInfoHelper(SnapHandle *hnd, bool hidl
   ConvertSnapBufferlayoutToGrallocPlaneLayout(hnd, buf_des, snap_buffer_layout, &gr_plane_layouts);
   android_ycbcr outYCbCr[2];
   uint64_t base_addr = 0;
-  if (hnd != nullptr) {
-    auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
-  }
+  auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::BASE_ADDRESS, &base_addr);
   ConvertGrallocPlaneLayoutToAndroidYCbCr(base_addr, gr_plane_layouts, outYCbCr);
   qti_ycbcr layout[2];
   for (int i = 0; i < 2; i++) {
@@ -5872,10 +5878,10 @@ SnapError GrallocSnapHelperLegacy::HeapNameHelper(SnapHandle *hnd, bool hidl_byt
   std::string heap_name = "";
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
+  } else if (gralloc_out_get == nullptr) {
+    return error;
   }
-  if (gralloc_out_get != nullptr) {
-    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::HEAP_NAME, &heap_name);
-  }
+  error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::HEAP_NAME, &heap_name);
   error = CheckMetadataSet(SnapMetadataType::HEAP_NAME, error, check_metadata_set);
   if (hidl_bytestream) {
     if (android::gralloc4::encodeString(qtigralloc::MetadataType_HeapName, heap_name,
