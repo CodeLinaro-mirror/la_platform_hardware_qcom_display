@@ -36,7 +36,7 @@
 #include <utility>
 #include <map>
 #include <string>
-
+#include <memory>
 #include "hwc_callbacks.h"
 #include "hwc_common.h"
 #include "hwc_layers.h"
@@ -175,6 +175,8 @@ class HWCSession : HWCUEventListener, public qClient::BnQClient,
   HWC3::Error SetColorModeWithRenderIntent(Display display, int32_t /*ColorMode*/ int_mode,
                                        int32_t /*RenderIntent*/ int_render_intent);
   HWC3::Error SetColorTransform(Display display, const std::vector<float> &matrix);
+  HWC3::Error GetDisplayLuts(Display display,
+    std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> &out_luts);
   HWC3::Error GetReadbackBufferAttributes(Display display,
                                       int32_t *format, int32_t *dataspace);
   HWC3::Error SetReadbackBuffer(Display display, const native_handle_t *buffer,
