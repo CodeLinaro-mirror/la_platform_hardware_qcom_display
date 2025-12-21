@@ -32,6 +32,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
 target=`getprop ro.board.platform`
+platform_subtype_id=0
 if [ -f /sys/devices/soc1/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc1/soc_id`
 elif [ -f /sys/devices/system/soc/soc1/id ]; then
@@ -42,7 +43,28 @@ else
     soc_hwid=`cat /sys/devices/system/soc/soc0/id`
 fi
 
+if [ -f /sys/devices/soc1/platform_subtype_id ]; then
+    platform_subtype_id=`cat /sys/devices/soc1/platform_subtype_id`
+elif [ -f /sys/devices/soc0/platform_subtype_id ]; then
+    platform_subtype_id=`cat /sys/devices/soc0/platform_subtype_id`
+fi
+
 case "$target" in
+    "art")
+    # SOC ID for Art is 707
+    # SOC ID for Art P is 708
+    case "$soc_hwid" in
+      707|708)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.force_gpu_composition 0
+        ;;
+    esac
+    ;;
     "vienna")
     #SOC ID for Vienna is 669, Vienna P is 670
     case "$soc_hwid" in
@@ -83,6 +105,7 @@ case "$target" in
     setprop vendor.display.enable_hdr10_gpu_target 0
     setprop vendor.display.enable_dpps_dynamic_fps 0
     setprop vendor.display.vds_allow_hwc 1
+    setprop vendor.gralloc.use_uncached_heap 1
     # Set property to differentiate bengal and khaje
     # Soc Id for khaje is 518
     # Soc Id for khaje APQ is 561
@@ -126,7 +149,11 @@ case "$target" in
         else
            setprop vendor.display.disable_cwb_idle_fallback 1
         fi
+        # Enable null display for Hamoa QCB and set Hamoa-specific properties
         if [ "$soc_hwid" -eq 555 ]; then
+          if [ "$platform_subtype_id" -eq 43 ]; then
+            setprop vendor.display.enable_null_display 1
+          fi
           setprop vendor.display.disable_dpps_features 1
           setprop vendor.display.disable_hdr_lut_gen 1
         fi
@@ -158,6 +185,8 @@ case "$target" in
         setprop vendor.display.disable_multirect 1
         setprop vendor.display.disable_llcbc_support 1
         setprop vendor.display.enable_rounded_corner 0
+        setprop vendor.display.perf_version 2
+        setprop vendor.display.minimum_large_comp_fps 60
         ;;
     esac
     ;;
@@ -414,5 +443,79 @@ case "$target" in
     setprop vendor.display.enable_perf_hint_large_comp_cycle 0
     setprop vendor.display.enable_posted_start_dyn 1
     setprop vendor.display.enable_allow_idle_fallback 1
+    ;;
+    "chora")
+    case "$soc_hwid" in
+      724|744)
+        # SOC ID for Chora is 724
+        # SOC ID for Chora APQ variant is 744
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.target.version 5
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.perf.version 3
+        setprop vendor.display.cpu_cluster_boost_mask 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_privacy_layers 1
+        ;;
+    esac
+    ;;
+    "malabar")
+    #SOC ID for Malabar is 733
+    #SOC ID for Malabar APQ variant is 757
+    case "$soc_hwid" in
+      733|757)
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.target.version 5
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.disable_gpu_color_convert 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_offline_rotator 0
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.disable_rotator_ubwc 1
+        setprop vendor.display.allow_tonemap_native 1
+        setprop vendor.gralloc.allow_camera_preview_write 1
+        setprop vendor.display.perf.version 4
+        setprop vendor.display.cpu_cluster_boost_mask 6
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.gralloc.use_uncached_heap 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_privacy_layers 1
+        ;;
+    esac
+    ;;
+    "monaco")
+    setprop vendor.gralloc.use_dma_buf_heaps 1
+    setprop vendor.gralloc.enable_snapalloc 1
+    setprop vendor.gralloc.disable_ubwc 1
+    setprop vendor.display.enable_optimize_refresh 1
+    setprop vendor.display.target.version 2
+    setprop vendor.display.enable_allow_idle_fallback 1
+    setprop vendor.display.enable_hdr10_gpu_target 0
+    setprop vendor.display.enable_rc_support 0
+    setprop vendor.display.enable_async_vds_creation 0
+    setprop vendor.display.enable_rounded_corner 0
     ;;
 esac

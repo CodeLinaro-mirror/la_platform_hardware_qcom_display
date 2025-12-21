@@ -72,6 +72,13 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
   layer_builder_ = sdm_factory->CreateLayerBuilderIntf();
 }
 
+DisplayConfigAIDL::~DisplayConfigAIDL() {
+  if (pose_handle_) {
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
+    pose_handle_ = nullptr;
+  }
+}
+
 int MapDisplayType(DisplayType dpy) {
   switch (dpy) {
     case DisplayType::PRIMARY:
@@ -783,12 +790,62 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
                                     static_cast<int32_t>(post_processed), buffer);
 }
 
-#ifdef COMPOSER3_V4
+#ifdef IDISPLAYCONFIG_13
 ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferV2(
     const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &roi_rect,
     const Rect &downscale_rect, int32_t cwb_control_flag, const NativeHandle &buffer) {
   return setCWBOutputBufferInternal(callback, disp_id, roi_rect, downscale_rect, cwb_control_flag,
                                     buffer);
+}
+#endif
+
+#ifdef IDISPLAYCONFIG_14
+ScopedAStatus DisplayConfigAIDL::queueTunnelledBuffer(
+    const ::aidl::android::hardware::common::NativeHandle &buffer,
+    const ::aidl::android::hardware::common::NativeHandle &acquire_fence, int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::dequeueTunnelledBuffer(
+    const ::aidl::android::hardware::common::NativeHandle &buffer,
+    ::aidl::android::hardware::common::NativeHandle *release_fence_handle, int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::tunnellingInit(int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::tunnellingDeinit(int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+#endif
+
+#ifdef IDISPLAYCONFIG_15
+ScopedAStatus DisplayConfigAIDL::setPoseConfig(
+    int disp_id, const ::aidl::android::hardware::common::NativeHandle &buffer,
+    ::aidl::vendor::qti::hardware::display::config::PoseConfigType config_type) {
+  if (pose_handle_) {
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
+    pose_handle_ = nullptr;
+  }
+
+  pose_handle_ = sdm::ConvertToSnapHandle(buffer);
+  if (!pose_handle_ ||
+      !handle_importer_.importBuffer(static_cast<const SnapHandle *>(pose_handle_))) {
+    ALOGE("%s: Either retrieving snaphandle or importing buffer failed.", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  auto ret = sideband_->SetPoseConfig(disp_id, pose_handle_);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: SetPoseConfig failed with %d", __FUNCTION__, ret);
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
+    pose_handle_ = nullptr;
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_TRANSACTION_FAILED));
+  }
+
+  return ScopedAStatus::ok();
 }
 #endif
 
@@ -835,7 +892,7 @@ ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t 
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
-#ifdef COMPOSER3_V3
+#ifdef IDISPLAYCONFIG_12
 ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t fps) {
   int ret = -1;
 

@@ -59,6 +59,11 @@ class QtiAllocatorAIDL : public BnAllocator {
   ndk::ScopedAStatus isSupported(const BufferDescriptorInfo &in_descriptor,
                                  bool *_aidl_return) override;
 
+  std::vector<std::string> supported_options_ = {
+      "pixel_format_modifier",
+      "interlaced",
+  };
+
  protected:
   ndk::SpAIBinder createBinder() override;
 
