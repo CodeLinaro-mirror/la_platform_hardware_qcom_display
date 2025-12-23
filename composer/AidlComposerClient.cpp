@@ -1274,6 +1274,10 @@ void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayComma
     ExecuteCommand(layerCmd.bufferSlotsToClear, &CommandEngine::executeSetLayerBufferSlotsToClear,
                    displayCmd.display, layerCmd.layer, *layerCmd.bufferSlotsToClear);
 #endif
+#ifdef COMPOSER3_V4
+    ExecuteCommand(layerCmd.luts, &CommandEngine::executeSetLayerLuts, displayCmd.display,
+                   layerCmd.layer, *layerCmd.luts);
+#endif
   }
 }
 
@@ -1437,8 +1441,16 @@ void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
     return;
   }
 
-  auto err =
-      mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
+  // Check if display supports brightness before calling
+  bool supportsBrightness = false;
+  auto err = mClient.settings_->GetDisplayBrightnessSupport(display, &supportsBrightness);
+  if (err != sdm::kErrorNone || !supportsBrightness) {
+    // Display doesn't support brightness - skip silently
+    ALOGV("%s: Brightness not supported for display %" PRIu64, __FUNCTION__, display);
+    return;
+  }
+
+  err = mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
   }
@@ -1788,6 +1800,13 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
+
+#ifdef COMPOSER3_V4
+void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int64_t layer,
+                                                            const Luts &luts) {
+  writeError(__FUNCTION__, Error::Unsupported);
+}
+#endif
 
 void AidlComposerClient::CommandEngine::executeSetLayerSidebandStream(
     int64_t display, int64_t layer, const NativeHandle &sidebandStream) {
