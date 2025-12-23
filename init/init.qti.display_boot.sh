@@ -53,8 +53,12 @@ case "$target" in
     "art")
     # SOC ID for Art is 707
     # SOC ID for Art P is 708
+    # SOC ID for Art L is 755
+    # SOC ID for Art H is 760
+    # SOC ID for Pebble is 735
+    # SOC ID for Pebble APQ is 741
     case "$soc_hwid" in
-      707|708)
+      707|708|755|760|735|741)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
