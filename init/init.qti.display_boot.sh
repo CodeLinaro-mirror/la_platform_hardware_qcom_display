@@ -153,6 +153,7 @@ case "$target" in
     # SOC ID for KaM is 704
     # SOC ID for Alor is 685
     # SOC ID for Alor APQ is 727
+    # SOC ID for Alor IoT APQ is 764
     # SOC ID for Purwa is 635
     # SOC ID for CanoeS is 722
     # SOC ID for CanoeS APQ is 723
@@ -160,7 +161,7 @@ case "$target" in
     # SOC ID for Canoe Compute SKU and APQ SKU is 743
     # SOC ID for Hamoa is 555
     case "$soc_hwid" in
-      660|661|704|685|727|635|743|722|723|730|555)
+      660|661|704|685|727|635|743|722|723|730|555|764)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
