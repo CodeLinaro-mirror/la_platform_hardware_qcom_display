@@ -196,6 +196,8 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
   static int32_t GetReadbackBufferFence(hwc2_device_t *device, hwc2_display_t display,
                                         int32_t *release_fence);
   static uint32_t GetMaxVirtualDisplayCount(hwc2_device_t *device);
+  static int32_t GetDisplayLuts(
+    std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> &out_luts);
   static int32_t GetDisplayIdentificationData(hwc2_device_t *device, hwc2_display_t display,
                                               uint8_t *outPort, uint32_t *outDataSize,
                                               uint8_t *outData);

@@ -788,6 +788,12 @@ static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display,
                                          out_max_average_luminance, out_min_luminance);
 }
 
+static int32_t GetDisplayLuts(std::unique_ptr<std::vector<std::pair<LayerId,
+                              Lut3d *>>> out_luts) {
+  return HWCSession::CallDisplayFunction(device, display, &HWCDisplay::GetDisplayLuts,
+                                         out_luts);
+}
+
 
 static int32_t GetReleaseFences(hwc2_device_t *device, hwc2_display_t display,
                                 uint32_t *out_num_elements, hwc2_layer_t *out_layers,
