@@ -7,6 +7,7 @@
 #include <cutils/trace.h>
 
 #include "QtiMapperExtensions2.h"
+#include "display_properties.h"
 
 static bool enable_logs = true;
 

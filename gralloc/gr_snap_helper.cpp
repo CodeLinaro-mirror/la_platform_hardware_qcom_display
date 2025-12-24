@@ -194,13 +194,14 @@ int GrallocSnapHelper::Allocate(
   }
 
   if (result == nullptr) {
-    ALOGE("%s: Invalid AllocationResult pointer passed in");
+    ALOGE("%s: Invalid AllocationResult pointer passed in", __FUNCTION__);
     return SnapError::BAD_VALUE;
   }
 
   SnapDescriptor snap_desc = {};
   auto err = GetSnapDescriptor(gr_desc, snap_desc);
   if (err) {
+    ALOGE("%s: Failed to get Snap Descriptor", __FUNCTION__);
     return err;
   }
   SnapAllocationResult snap_result;
@@ -573,7 +574,7 @@ int32_t Mapper5Encode(const typename StandardMetadata<T>::value_type &value, voi
   auto size_required = Value::encode(value, nullptr, 0);
   if (size_required < 0) {
     ALOGW_IF(-AIMAPPER_ERROR_UNSUPPORTED != size_required,
-             "%s: Unexpected error %d during size calculation for encode (%ld) call", __FUNCTION__,
+             "%s: Unexpected error %d during size calculation for encode (%" PRId64 ") call", __FUNCTION__,
              -size_required, static_cast<int64_t>(T));
     return -AIMAPPER_ERROR_UNSUPPORTED;
   }
@@ -581,7 +582,7 @@ int32_t Mapper5Encode(const typename StandardMetadata<T>::value_type &value, voi
   if (out_buffer != nullptr && size_required <= out_size) {
     size_required = Value::encode(value, out_buffer, out_size);
     if (size_required < 0 || (size_t)size_required > out_size) {
-      ALOGW("Mapper5Encode (%ld) failed, calculated size %d with buffer size %zd",
+      ALOGW("Mapper5Encode (%" PRId64 ") failed, calculated size %d with buffer size %zd",
             static_cast<int64_t>(T), size_required, out_size);
     }
   }
@@ -1927,7 +1928,7 @@ int GrallocSnapHelper::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
       auto error = ((this->*metadata_helper_func)(hnd, aidl_size, nullptr, out, nullptr,
                                                   check_metadata_set, mapper_return));
       if (error == SnapError::METADATA_NOT_SET && !check_metadata_set) {
-        ALOGI("Metadata type %lu is not set.Returning default values as check_metadata_set is %d",
+        ALOGI("Metadata type %" PRIu64 " is not set.Returning default values as check_metadata_set is %d",
               gr_metadata_type, check_metadata_set);
         return SnapError::NONE;
       }
@@ -1936,8 +1937,7 @@ int GrallocSnapHelper::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_metadata
       return SnapError::UNSUPPORTED;
     }
   } else {
-    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p id %d", __FUNCTION__, gr_hnd,
-          gr_hnd->data[13]);
+    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
     return SnapError::BAD_BUFFER;
   }
 
@@ -2496,9 +2496,9 @@ int GrallocSnapHelper::ConvertSnapBufferlayoutToGrallocPlaneLayout(
 
     ALOGD_IF(
         enable_logs_,
-        "Plane No: %d, sampleIncrementInBits %ld, strideInBytes %ld, totalSizeInBytes %ld, "
-        "horizontalSubsampling %ld, verticalSubsampling %ld, widthInSamples %ld,  heightInSamples %ld, "
-        "offsetInBytes %ld",
+        "Plane No: %d, sampleIncrementInBits %" PRId64 ", strideInBytes %" PRId64 ", totalSizeInBytes %" PRId64 ", "
+        "horizontalSubsampling %" PRId64 ", verticalSubsampling %" PRId64 ", widthInSamples %" PRId64 ",  heightInSamples %" PRId64 ", "
+        "offsetInBytes %" PRId64,
         i, (*gr_plane_layouts)[i].sampleIncrementInBits, (*gr_plane_layouts)[i].strideInBytes,
         (*gr_plane_layouts)[i].totalSizeInBytes, (*gr_plane_layouts)[i].horizontalSubsampling,
         (*gr_plane_layouts)[i].verticalSubsampling, (*gr_plane_layouts)[i].widthInSamples,
@@ -2577,7 +2577,7 @@ int GrallocSnapHelper::ConvertGrallocPlaneLayoutToAndroidYCbCr(
   }
   ALOGD_IF(
       enable_logs_,
-      "%s: base_addr %lu, outYCbCr->y %p, outYCbCr->cb %p, outYCbCr->cr %p, outYCbCr->ystride %zu, "
+      "%s: base_addr %" PRIu64 ", outYCbCr->y %p, outYCbCr->cb %p, outYCbCr->cr %p, outYCbCr->ystride %zu, "
       "outYCbCr->cstride %zu, outYCbCr->chroma_step %zu",
       __FUNCTION__, base_addr, outYCbCr->y, outYCbCr->cb, outYCbCr->cr, outYCbCr->ystride,
       outYCbCr->cstride, outYCbCr->chroma_step);
@@ -2943,10 +2943,6 @@ int GrallocSnapHelper::ConvertGrallocDataspaceToSnapDataspace(GrallocDataspace g
 SnapError GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
                                            SnapFormatDescriptor *snap_fmt_desc) {
   if (gralloc_ubwc_to_snap_format_.find(hal_format) != gralloc_ubwc_to_snap_format_.end()) {
-    ALOGW(
-        "%s: Explicit UBWC formats such as %d are no longer supported, please switch to using base "
-        "/ linear formats + UBWC usage bits",
-        __FUNCTION__, static_cast<int>(hal_format));
     *snap_fmt_desc = gralloc_ubwc_to_snap_format_.at(hal_format);
   } else if (gralloc_to_snap_format_.find(hal_format) != gralloc_to_snap_format_.end()) {
     *snap_fmt_desc = gralloc_to_snap_format_.at(hal_format);
@@ -2955,12 +2951,12 @@ SnapError GrallocSnapHelper::GetSnapFormat(int hal_format, uint64_t usage,
     ALOGW("%s:: Unsupported format - %d", __FUNCTION__, hal_format);
     return SnapError::UNSUPPORTED;
   } else {
-    ALOGE("No map for gralloc format to snap format");
+    ALOGW("%s: No map for gralloc format %d to snap format", __FUNCTION__, hal_format);
     return SnapError::BAD_VALUE;
   }
 
-  ALOGD_IF(enable_logs_, "GetSnapFormat gralloc format %d snap format %d modifier %d", hal_format,
-           snap_fmt_desc->format, snap_fmt_desc->modifier);
+  ALOGD_IF(enable_logs_, "%s gralloc format %d snap format %d modifier %d", __FUNCTION__,
+           hal_format, snap_fmt_desc->format, snap_fmt_desc->modifier);
   return SnapError::NONE;
 }
 
@@ -3026,7 +3022,8 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
   SnapFormatDescriptor snap_fmt_desc;
   auto err = GetSnapFormat(gr_desc.GetFormat(), gr_desc.GetUsage(), &snap_fmt_desc);
   if (err) {
-    ALOGW("Error while getting snap descriptor - gr_format - %d", gr_desc.GetFormat());
+    ALOGW("%s: Error while getting snap descriptor - gr_format - %d", __FUNCTION__,
+          gr_desc.GetFormat());
     return err;
   } else {
     auto name_length = std::min(gr_desc.GetName().size(), static_cast<size_t>(MAX_NAME_LEN - 1));
@@ -3034,7 +3031,7 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
     snap_desc.format = snap_fmt_desc.format;
     err = ValidateGrallocUsage(gr_desc.GetUsage());
     if (err) {
-      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu",
+      ALOGW("%s: Error while getting snap descriptor - Unknown Usage bit set - %" PRIu64, __FUNCTION__,
             gr_desc.GetUsage());
       return err;
     }
@@ -3047,12 +3044,11 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
                                  .value = static_cast<uint64_t>(snap_fmt_desc.modifier)};
     snap_desc.additionalOptions.emplace_back(modifier);
     ALOGD_IF(enable_logs_,
-             "GetSnapDescriptor gr format %d gr usage %lu snap format %d snap modifier %d snap "
-             "usage %lu",
-             gr_desc.GetFormat(), gr_desc.GetUsage(), snap_fmt_desc.format, snap_fmt_desc.modifier,
-             snap_desc.usage);
-    ALOGD_IF(enable_logs_, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
-             gr_desc.GetName().c_str(), snap_desc.name);
+             "%s gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
+             "usage %" PRIu64 " name from gralloc descriptor %s snap_desc %s",
+             __FUNCTION__, gr_desc.GetFormat(), gr_desc.GetUsage(), snap_fmt_desc.format,
+             snap_fmt_desc.modifier, snap_desc.usage, gr_desc.GetName().c_str(), snap_desc.name);
+    return SnapError::NONE;
   }
   return SnapError::NONE;
 }
@@ -3068,7 +3064,8 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
     snap_desc.format = snap_fmt_desc.format;
     err = ValidateGrallocUsage(gr_desc.usage);
     if (err) {
-      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu", gr_desc.usage);
+      ALOGW("%s: Error while getting snap descriptor - Unknown Usage bit set - %" PRIu64, __FUNCTION__,
+            gr_desc.usage);
       return err;
     }
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
@@ -3080,10 +3077,10 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
     snap_desc.additionalOptions.emplace_back(modifier);
 
     ALOGD_IF(enable_logs_,
-             "GetSnapDescriptor gr format %d gr usage %lu snap format %d snap modifier %d snap "
-             "usage %lu",
-             gr_desc.format, gr_desc.usage, snap_fmt_desc.format, snap_fmt_desc.modifier,
-             snap_desc.usage);
+             "%s gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
+             "usage %" PRIu64,
+             __FUNCTION__, gr_desc.format, gr_desc.usage, snap_fmt_desc.format,
+             snap_fmt_desc.modifier, snap_desc.usage);
   }
   return SnapError::NONE;
 }
@@ -5924,7 +5921,7 @@ int GrallocSnapHelperLegacy::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
         return ((this->*metadata_helper_func)(hnd, convert_bytestream, 0, nullptr, out, nullptr,
                                               check_metadata_set, mapper_return));
       } else {
-        ALOGW("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
+        ALOGW("%s: No map for metadata_type: %" PRIu64, __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
       }
     }
@@ -5936,8 +5933,9 @@ int GrallocSnapHelperLegacy::GetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
       auto error = ((this->*metadata_helper_func)(hnd, convert_bytestream, aidl_size, nullptr, out,
                                                   nullptr, check_metadata_set, mapper_return));
       if (error == SnapError::METADATA_NOT_SET && !check_metadata_set) {
-        ALOGI("Metadata type %lu is not set.Returning default values as check_metadata_set is %d",
-              gr_metadata_type, check_metadata_set);
+        ALOGI(
+            "%s: Metadata type %" PRIu64 " is not set.Returning default values as check_metadata_set is %d",
+            __FUNCTION__, gr_metadata_type, check_metadata_set);
         return SnapError::NONE;
       }
       return error;
@@ -6012,7 +6010,7 @@ int GrallocSnapHelperLegacy::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
             deprecated_metadata_conversion_helper_function_map_[gr_metadata_type];
         return ((this->*metadata_helper_func)(hnd, true, 0, &in, nullptr, nullptr, false, nullptr));
       } else {
-        ALOGW("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
+        ALOGW("%s: No map for metadata_type: %" PRIu64, __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
       }
     }
@@ -6065,7 +6063,7 @@ int GrallocSnapHelperLegacy::SetMetadata(native_handle_t *gr_hnd, uint64_t gr_me
         return ((this->*metadata_helper_func)(hnd, false, aidl_size, in, nullptr, nullptr, false,
                                               nullptr));
       } else {
-        ALOGW("%s: No map for metadata_type: %lu", __FUNCTION__, gr_metadata_type);
+        ALOGW("%s: No map for metadata_type: %" PRIu64, __FUNCTION__, gr_metadata_type);
         return SnapError::UNSUPPORTED;
       }
     }
@@ -6642,13 +6640,14 @@ int GrallocSnapHelperLegacy::ConvertSnapBufferlayoutToGrallocPlaneLayout(
 
     ALOGD_IF(
         enable_logs_,
-        "Plane No: %d, sampleIncrementInBits %ld, strideInBytes %ld, totalSizeInBytes %ld, "
-        "horizontalSubsampling %ld, verticalSubsampling %ld, widthInSamples %ld,  heightInSamples %ld, "
-        "offsetInBytes %ld",
-        i, (*gr_plane_layouts)[i].sampleIncrementInBits, (*gr_plane_layouts)[i].strideInBytes,
-        (*gr_plane_layouts)[i].totalSizeInBytes, (*gr_plane_layouts)[i].horizontalSubsampling,
-        (*gr_plane_layouts)[i].verticalSubsampling, (*gr_plane_layouts)[i].widthInSamples,
-        (*gr_plane_layouts)[i].heightInSamples, (*gr_plane_layouts)[i].offsetInBytes);
+        "%s: Plane No: %d, sampleIncrementInBits %" PRId64 ", strideInBytes %" PRId64 ", totalSizeInBytes %" PRId64 ", "
+        "horizontalSubsampling %" PRId64 ", verticalSubsampling %" PRId64 ", widthInSamples %" PRId64 ",  heightInSamples %" PRId64 ", "
+        "offsetInBytes %" PRId64,
+        __FUNCTION__, i, (*gr_plane_layouts)[i].sampleIncrementInBits,
+        (*gr_plane_layouts)[i].strideInBytes, (*gr_plane_layouts)[i].totalSizeInBytes,
+        (*gr_plane_layouts)[i].horizontalSubsampling, (*gr_plane_layouts)[i].verticalSubsampling,
+        (*gr_plane_layouts)[i].widthInSamples, (*gr_plane_layouts)[i].heightInSamples,
+        (*gr_plane_layouts)[i].offsetInBytes);
 
     std::vector<GrallocPlaneLayoutComponent> gr_plane_layout_components;
     int snap_component_count = snap_plane_layout[i].component_count;
@@ -6724,7 +6723,7 @@ int GrallocSnapHelperLegacy::ConvertGrallocPlaneLayoutToAndroidYCbCr(
 
   ALOGD_IF(
       enable_logs_,
-      "%s: base_addr %lu, outYCbCr->y %p, outYCbCr->cb %p, outYCbCr->cr %p, outYCbCr->ystride %zu, "
+      "%s: base_addr %" PRIu64 ", outYCbCr->y %p, outYCbCr->cb %p, outYCbCr->cr %p, outYCbCr->ystride %zu, "
       "outYCbCr->cstride %zu, outYCbCr->chroma_step %zu",
       __FUNCTION__, base_addr, outYCbCr->y, outYCbCr->cb, outYCbCr->cr, outYCbCr->ystride,
       outYCbCr->cstride, outYCbCr->chroma_step);
@@ -7166,7 +7165,7 @@ SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor g
     snap_desc.format = snap_fmt_desc.format;
     err = ValidateGrallocUsage(gr_desc.GetUsage());
     if (err) {
-      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu",
+      ALOGW("%s: Error while getting snap descriptor - Unknown Usage bit set - %" PRIu64, __FUNCTION__,
             gr_desc.GetUsage());
       return err;
     }
@@ -7179,11 +7178,11 @@ SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferDescriptor g
                                  .value = static_cast<uint64_t>(snap_fmt_desc.modifier)};
     snap_desc.additionalOptions.emplace_back(modifier);
     ALOGD_IF(enable_logs_,
-             "GetSnapDescriptor gr format %d gr usage %lu snap format %d snap modifier %d snap "
-             "usage %lu",
-             gr_desc.GetFormat(), gr_desc.GetUsage(), snap_fmt_desc.format, snap_fmt_desc.modifier,
-             snap_desc.usage);
-    ALOGD_IF(enable_logs_, "GetSnapDescriptor name from gralloc descriptor %s snap_desc %s",
+             "%s: gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
+             "usage %" PRIu64,
+             __FUNCTION__, gr_desc.GetFormat(), gr_desc.GetUsage(), snap_fmt_desc.format,
+             snap_fmt_desc.modifier, snap_desc.usage);
+    ALOGD_IF(enable_logs_, "%s: name from gralloc descriptor %s snap_desc %s", __FUNCTION__,
              gr_desc.GetName().c_str(), snap_desc.name);
   }
   return SnapError::NONE;
@@ -7209,7 +7208,8 @@ SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc
     snap_desc.format = snap_fmt_desc.format;
     err = ValidateGrallocUsage(gr_desc.usage);
     if (err) {
-      ALOGW("Error while getting snap descriptor - Unknown Usage bit set - %lu", gr_desc.usage);
+      ALOGW("%s: Error while getting snap descriptor - Unknown Usage bit set - %" PRIu64, __FUNCTION__,
+            gr_desc.usage);
       return err;
     }
     snap_desc.usage = GetSnapUsage(gr_desc.usage, gr_desc.format);
@@ -7221,10 +7221,10 @@ SnapError GrallocSnapHelperLegacy::GetSnapDescriptor(gralloc::BufferInfo gr_desc
     snap_desc.additionalOptions.emplace_back(modifier);
 
     ALOGD_IF(enable_logs_,
-             "GetSnapDescriptor gr format %d gr usage %lu snap format %d snap modifier %d snap "
-             "usage %lu",
-             gr_desc.format, gr_desc.usage, snap_fmt_desc.format, snap_fmt_desc.modifier,
-             snap_desc.usage);
+             "%s: gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
+             "usage %" PRIu64,
+             __FUNCTION__, gr_desc.format, gr_desc.usage, snap_fmt_desc.format,
+             snap_fmt_desc.modifier, snap_desc.usage);
   }
   return SnapError::NONE;
 }
