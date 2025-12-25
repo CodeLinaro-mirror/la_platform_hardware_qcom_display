@@ -19,7 +19,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -44,6 +44,9 @@ DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_met
                     &csc) == 0) {
       if (csc == ITU_R_601_FR || csc == ITU_R_709_FR || csc == ITU_R_2020_FR) {
         color_metadata->range = Range_Full;
+      }
+      else {
+        color_metadata->range = Range_Limited;
       }
       color_metadata->transfer = Transfer_sRGB;
 
@@ -153,7 +156,7 @@ bool GetRange(const int32_t &dataspace, ColorRange *color_range) {
       break;
     case HAL_DATASPACE_RANGE_EXTENDED:
       *color_range = Range_Extended;
-      return false;
+      break;
     default:
       DLOGW_IF(kTagClient, "Unsupported Range Request = %d", range);
       return false;

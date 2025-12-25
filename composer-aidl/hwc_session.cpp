@@ -703,6 +703,15 @@ HWC3::Error HWCSession::GetDisplayType(Display display, int32_t *out_type) {
   return CallDisplayFunction(display, &HWCDisplay::GetDisplayType, out_type);
 }
 
+HWC3::Error HWCSession::GetDisplayLuts(Display display,
+      std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> &out_luts) {
+  return CallDisplayFunction<
+    std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> &
+    >(
+    display,
+    &HWCDisplay::GetDisplayLuts,
+    out_luts);
+}
 
 HWC3::Error HWCSession::GetHdrCapabilities(Display display, uint32_t* out_num_types,
                                        int32_t* out_types, float* out_max_luminance,
