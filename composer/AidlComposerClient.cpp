@@ -2393,7 +2393,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
     const std::vector<std::optional<QtiPrivacyRegion>> &privacyRegions) {
   uint32_t size = privacyRegions.size();
   if (size == 0) {
-    ALOGW("%s: Provided empty privacy regions for layer %lld", __func__, layer);
+    ALOGW("%s: Provided empty privacy regions for layer %" PRId64, __func__, layer);
     writeError(__FUNCTION__, Error::BadConfig);
     return;
   }
@@ -2401,7 +2401,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
   std::vector<sdm::PrivacyRegion> regions;
   for (uint32_t i = 0; i < size; i++) {
     if (!privacyRegions[i].has_value()) {
-      ALOGW("%s: Invalid privacy region at index %u for layer %lld", __func__, i, layer);
+      ALOGW("%s: Invalid privacy region at index %u for layer %" PRId64, __func__, i, layer);
       continue;
     }
 
@@ -2420,7 +2420,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
   auto err = mClient.layer_builder_->SetLayerPrivacyRegions(
       display, layer, static_cast<const std::vector<sdm::PrivacyRegion> &>(regions));
   if (err != sdm::kErrorNone) {
-    ALOGW("%s: Failed to set layer's %lld privacy regions", __func__, layer);
+    ALOGW("%s: Failed to set layer's %" PRId64 " privacy regions", __func__, layer);
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
@@ -2436,7 +2436,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerCornerRadius(
 
   auto err = mClient.layer_builder_->SetLayerCornerRadius(display, layer, radius);
   if (err != sdm::kErrorNone) {
-    ALOGW("%s: Failed to set layer's %lld corner radius", __func__, layer);
+    ALOGW("%s: Failed to set layer's %" PRId64 " corner radius", __func__, layer);
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
