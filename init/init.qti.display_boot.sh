@@ -105,6 +105,7 @@ case "$target" in
     setprop vendor.display.enable_hdr10_gpu_target 0
     setprop vendor.display.enable_dpps_dynamic_fps 0
     setprop vendor.display.vds_allow_hwc 1
+    setprop vendor.gralloc.use_uncached_heap 1
     # Set property to differentiate bengal and khaje
     # Soc Id for khaje is 518
     # Soc Id for khaje APQ is 561

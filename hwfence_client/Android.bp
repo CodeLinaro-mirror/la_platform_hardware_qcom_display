@@ -2,7 +2,7 @@ soong_config_module_type {
     name: "conditional_cc_library_shared",
     module_type: "cc_library_shared",
     config_namespace: "qtidisplay",
-    bool_variables: ["neo", "monaco"],
+    bool_variables: ["hw_fence_disabled"],
     properties: ["enabled"],
 }
 
@@ -45,10 +45,7 @@ conditional_cc_library_shared {
     ],
 
     soong_config_variables: {
-        neo: {
-            enabled: false,
-        },
-        monaco: {
+        hw_fence_disabled: {
             enabled: false,
         },
     },

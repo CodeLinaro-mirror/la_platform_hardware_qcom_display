@@ -35,6 +35,10 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             libfilefinder \
                             vendor.qti.hardware.display.demura-service \
                             modetest \
-                            libdisplayconfig.qti \
-                            libhwfenceclient
+                            libdisplayconfig.qti
+
+    ifneq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+        DISPLAY_MODULES_HARDWARE += libhwfenceclient
+    endif
+
 endif
