@@ -1,7 +1,7 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
+
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
-PRODUCT_PACKAGES += $(DISPLAY_FW_PREBUILTS)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
 #Clstc library config xml file
@@ -141,7 +141,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dim
 ifeq ($(TARGET_BOARD_PLATFORM),canoe)
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=1
 endif
-ifeq ($(TARGET_BOARD_PLATFORM),chora)
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), chora malabar), $(TARGET_BOARD_PLATFORM))
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=0
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.clear_slots_with_set_layer_buffer=false
@@ -176,7 +176,8 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
                            ubwcp_headers hwasan mapper_ext \
-                           hy11 hy22 hy33 neo
+                           hy11 hy22 hy33 neo \
+                           hw_fence_disabled
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_neo := false
@@ -198,6 +199,7 @@ SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
 SOONG_CONFIG_qtidisplay_composer_version := v3_4
 SOONG_CONFIG_qtidisplay_mapper_ext := true
+SOONG_CONFIG_qtidisplay_hw_fence_disabled := false
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -243,6 +245,10 @@ endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_neo := true
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+    SOONG_CONFIG_qtidisplay_hw_fence_disabled := true
 endif
 
 # Techpack values

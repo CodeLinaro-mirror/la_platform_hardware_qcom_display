@@ -1395,6 +1395,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {PLANE_LAYOUTS, &GrallocSnapHelper::PlaneLayoutsHelper},
           {ALIGNED_WIDTH_IN_PIXELS, &GrallocSnapHelper::AlignedWidthInPixelsHelper},
           {ALIGNED_HEIGHT_IN_PIXELS, &GrallocSnapHelper::AlignedHeightInPixelsHelper},
+          {IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
       };
 
   SnapError ColorMetadataHelper(SnapHandle *hnd, uint32_t aidl_size, void *gralloc_in_set,
