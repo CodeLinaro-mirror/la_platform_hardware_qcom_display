@@ -2547,8 +2547,8 @@ void HWCSession::UEventHandler(const char *uevent_data, int length) {
       Locker::ScopeLock lock_a(locker_[active_builtin_disp_id]);
       hwc_display_[active_builtin_disp_id]->GetActiveSecureSession(&secure_sessions);
     }
-    if (secure_sessions[kSecureDisplay] ||
-        ((virtual_display_index != -1) && (hwc_display_[virtual_display_index]))) {
+    if (secure_sessions != 0 && (secure_sessions[kSecureDisplay] ||
+        ((virtual_display_index != -1) && (hwc_display_[virtual_display_index])))) {
       // Defer hotplug handling.
       SCOPE_LOCK(pluggable_handler_lock_);
       DLOGI("Marking hotplug pending...");
