@@ -71,6 +71,10 @@ namespace composer3 {
   x == 0 ? ndk::ScopedAStatus::ok() : ndk::ScopedAStatus::fromServiceSpecificError(x)
 
 using aidl::android::hardware::common::NativeHandle;
+#ifdef COMPOSER3_V4
+using aidl::android::hardware::drm::HdcpLevel;
+using aidl::android::hardware::drm::HdcpLevels;
+#endif
 using aidl::android::hardware::graphics::common::AlphaInterpretation;
 using aidl::android::hardware::graphics::common::Dataspace;
 using aidl::android::hardware::graphics::common::DisplayDecorationSupport;
@@ -204,6 +208,9 @@ class AidlComposerClient : public BnComposerClient,
   void OnVsyncIdle(uint64_t in_display) override;
   void OnVsyncPeriodTimingChanged(uint64_t in_display,
                                   const SDMVsyncPeriodChangeTimeline &in_updated_timeline);
+#ifdef COMPOSER3_V4
+  void onHdcpLevelsChanged(uint64_t display, int32_t min_enc_level);
+#endif
 
   void setOnClientDestroyed(std::function<void()> onClientDestroyed) {
     mOnClientDestroyed = onClientDestroyed;
@@ -329,6 +336,7 @@ class AidlComposerClient : public BnComposerClient,
   bool disable_fp16_support_ = false;
   bool disable_query_luts_ = false;
   bool disable_luts_overlay_support_ = false;
+  bool composer_driven_hdcp_ = false;
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;
