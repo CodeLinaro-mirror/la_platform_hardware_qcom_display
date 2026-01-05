@@ -1,7 +1,8 @@
 /*
-* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #ifndef __DPU_CORE_MUX_H__
 #define __DPU_CORE_MUX_H__
@@ -65,6 +66,7 @@ class DPUCoreMux {
   DisplayError SetVSyncState(bool enable);
   void SetIdleTimeoutMs(uint32_t timeout_ms);
   DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);
+  DisplayError SetExtColorFormat(uint32_t color_format);
   DisplayError SetRefreshRate(uint32_t refresh_rate);
   DisplayError SetPanelBrightness(int level);
   DisplayError GetHWScanInfo(HWScanInfo *scan_info);

@@ -23,10 +23,10 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 /*! @file display_interface.h
   @brief Interface file for display device which represents a physical panel or an output buffer
@@ -731,6 +731,14 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError SetDisplayMode(uint32_t mode) = 0;
+
+  /*! @brief Method to set the color format of the external display.
+
+    @param[in] color format.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetExtColorFormat(uint32_t color_format) = 0;
 
   /*! @brief Method to get the min and max refresh rate of a display.
 

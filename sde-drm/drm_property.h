@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __DRM_PROPERTY_H__
 #define __DRM_PROPERTY_H__
 
@@ -190,6 +196,7 @@ enum struct DRMProperty {
   DST_RECT_EXT,
   BG_ALPHA,
   IMG_SIZE_RECT,
+  EXT_COLOR_FORMAT,
 
   // Insert above
   MAX

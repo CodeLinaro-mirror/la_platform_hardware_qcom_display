@@ -1,7 +1,8 @@
 /*
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <string>
 #include <vector>
@@ -521,6 +522,17 @@ void DPUCoreMux::SetIdleTimeoutMs(uint32_t timeout_ms) {
 DisplayError DPUCoreMux::SetDisplayMode(const HWDisplayMode hw_display_mode) {
   for (auto hw_intf : hw_intf_) {
      DisplayError error = hw_intf.second->SetDisplayMode(hw_display_mode);
+     if (error != kErrorNone) {
+       return error;
+     }
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DPUCoreMux::SetExtColorFormat(uint32_t color_format) {
+  for (auto hw_intf : hw_intf_) {
+     DisplayError error = hw_intf.second->SetExtColorFormat(color_format);
      if (error != kErrorNone) {
        return error;
      }
