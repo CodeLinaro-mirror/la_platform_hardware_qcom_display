@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -397,6 +403,13 @@ HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
   geometry_changes_ |= GeometryChanges::kColorTransform;
   callbacks_->Refresh(id_);
 
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayPluggable::SetExtColorFormat(uint32_t color_format) {
+  if (display_intf_) {
+    display_intf_->SetExtColorFormat(color_format);
+  }
   return HWC2::Error::None;
 }
 

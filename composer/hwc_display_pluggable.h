@@ -27,6 +27,12 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_PLUGGABLE_H__
 #define __HWC_DISPLAY_PLUGGABLE_H__
 
@@ -57,6 +63,7 @@ class HWCDisplayPluggable : public HWCDisplay {
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
   virtual HWC2::Error PreValidateDisplay(bool *exit_validate);
   virtual HWC2::Error PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC2::Error SetExtColorFormat(uint32_t color_format);
 
  private:
   HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,

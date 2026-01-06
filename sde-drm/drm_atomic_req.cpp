@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <drm_logger.h>
 
 #include "drm_atomic_req.h"
@@ -133,9 +139,10 @@ int DRMAtomicReq::Perform(DRMOps opcode, uint32_t obj_id, ...) {
     case DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL:
     case DRMOps::CONNECTOR_SET_FRAME_TRIGGER:
     case DRMOps::CONNECTOR_SET_COLORSPACE:
-    case DRMOps::CONNECTOR_SET_PANEL_MODE: 
+    case DRMOps::CONNECTOR_SET_PANEL_MODE:
     case DRMOps::CONNECTOR_SET_DYN_BIT_CLK:
-    case DRMOps::CONNECTOR_SET_DSC_MODE: {
+    case DRMOps::CONNECTOR_SET_DSC_MODE:
+    case DRMOps::CONNECTOR_SET_EXT_COLOR_FORMAT: {
       drm_mgr_->GetConnectorMgr()->Perform(opcode, obj_id, drm_atomic_req_, args);
     } break;
     case DRMOps::DPPS_CACHE_FEATURE: {
