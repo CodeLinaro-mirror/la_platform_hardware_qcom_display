@@ -54,6 +54,7 @@
 #include <ISnapAlloc.h>
 #include <ThreeDimensionalRefInfo.h>
 #include <CWBMetadata.h>
+#include <ROIRectMetadata.h>
 
 #include <aidl/android/hardware/common/NativeHandle.h>
 #include <aidl/android/hardware/graphics/common/Dataspace.h>
@@ -124,6 +125,7 @@ using SnapCustomContentMetadata = vendor_qti_hardware_display_common_CustomConte
 using SnapAnamorphicMetadata = vendor_qti_hardware_display_common_QtiAnamorphicMetadata;
 using SnapThreeDimensionalRefInfo = vendor_qti_hardware_display_common_ThreeDimensionalRefInfo;
 using SnapCWBMetadata = vendor_qti_hardware_display_common_cwb_metadata;
+using SnapROIRectMetadata = vendor_qti_hardware_display_common_ROIRectMetadata;
 
 using ::android::hardware::hidl_vec;
 using GrallocError = android::hardware::graphics::mapper::V4_0::Error;
@@ -1417,6 +1419,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   SnapError DisparityPhaseHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
                                  void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
                                  bool check_metadata_set = true, int32_t *mapper_return = nullptr);
+  SnapError ROIRectMetadataHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                                  void *gralloc_out_get = nullptr,
+                                  SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
+                                  int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1496,7 +1502,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {THREE_DIMENSIONAL_REF_INFO, &GrallocSnapHelper::ThreeDimensionalRefInfoHelper},
           {VIEW_ID, &GrallocSnapHelper::ViewIdHelper},
           {CWB_METADATA, &GrallocSnapHelper::CWBMetadataHelper},
-          {DISPARITY_PHASE, &GrallocSnapHelper::DisparityPhaseHelper}};
+          {DISPARITY_PHASE, &GrallocSnapHelper::DisparityPhaseHelper},
+          {ROI_RECT_METADATA, &GrallocSnapHelper::ROIRectMetadataHelper},
+      };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       bufferdescription_conversion_helper_function_map = {
