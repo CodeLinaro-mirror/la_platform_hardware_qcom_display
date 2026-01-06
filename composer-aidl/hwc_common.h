@@ -27,7 +27,7 @@
 #pragma once
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
-#ifdef ENABLE_COMPOSER3_V3
+#if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 #include <aidl/android/hardware/graphics/composer3/DisplayConfiguration.h>
 #endif
 #include <aidl/android/hardware/graphics/composer3/Capability.h>
