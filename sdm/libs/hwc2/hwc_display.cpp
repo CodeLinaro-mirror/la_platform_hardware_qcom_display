@@ -1313,9 +1313,14 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
   return kErrorNone;
 }
 
-HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests) {
+void SDMDisplay::ClearRequestMaps() {
   layer_changes_.clear();
   layer_requests_.clear();
+  display_luts_.clear();
+}
+
+HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  ClearRequestMaps();
   has_client_composition_ = false;
   has_force_client_composition_ = false;
 
@@ -1326,7 +1331,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
   }
 
   if (CanSkipSdmPrepare(out_num_types, out_num_requests)) {
-    return ((*out_num_types > 0) ? HWC2::Error::HasChanges : HWC2::Error::None);
+    return (layer_changes_.size()) ? kErrorNeedsCommit : kErrorNone;
   }
 
   UpdateRefreshRate();
@@ -1377,6 +1382,18 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
       has_force_client_composition_ = true;
     }
 
+    if (layer->lut_3d.validLutEntries) {
+      display_luts_[hwc_layer->GetId()] = &layer->lut_3d;
+    }
+
+    // map handle ids to luts so client can retrieve it through getLuts call
+    // used in screenshot layer during rotation, suspend resume, etc.
+    if (layer->lut_3d.lutEntries != nullptr) {
+      buffer_luts_[layer->input_buffer.handle_id] = &layer->lut_3d;
+    } else if (buffer_luts_.find(layer->input_buffer.handle_id) != buffer_luts_.end()) {
+      buffer_luts_.erase(layer->input_buffer.handle_id);
+    }
+
     // Update the changes list only if the requested composition is different from SDM comp type
     // TODO(user): Take Care of other comptypes(BLIT)
     if (requested_composition != device_composition) {
@@ -1396,7 +1413,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
   validated_ = true;
   layer_stack_invalid_ = false;
 
-  return ((*out_num_types > 0) ? HWC2::Error::HasChanges : HWC2::Error::None);
+  return (layer_changes_.size() || display_luts_.size()) ? kErrorNeedsCommit : kErrorNone;
 }
 
 HWC2::Error HWCDisplay::AcceptDisplayChanges() {
@@ -1426,6 +1443,10 @@ HWC2::Error HWCDisplay::GetChangedCompositionTypes(uint32_t *out_num_elements,
     return HWC2::Error::None;
   }
 
+  if (out_num_elements == nullptr) {
+    return kErrorNotSupported;
+  }
+
   if (!validated_) {
     DLOGW("Display is not validated");
     return HWC2::Error::NotValidated;
@@ -1445,20 +1466,21 @@ HWC2::Error HWCDisplay::GetChangedCompositionTypes(uint32_t *out_num_elements,
 
 HWC2::Error HWCDisplay::GetReleaseFences(uint32_t *out_num_elements, hwc2_layer_t *out_layers,
                                          int32_t *out_fences) {
+  if (layer_set_.empty()) {
+    return HWC2::Error::None;
+  }
   if (out_num_elements == nullptr) {
     return HWC2::Error::BadParameter;
   }
 
+  *out_num_elements = UINT32(layer_set_.size());
   if (out_layers != nullptr && out_fences != nullptr) {
-    *out_num_elements = std::min(*out_num_elements, UINT32(layer_set_.size()));
     auto it = layer_set_.begin();
     for (uint32_t i = 0; i < *out_num_elements; i++, it++) {
       auto hwc_layer = *it;
       out_layers[i] = hwc_layer->GetId();
       out_fences[i] = hwc_layer->PopFrontReleaseFence();
     }
-  } else {
-    *out_num_elements = UINT32(layer_set_.size());
   }
 
   return HWC2::Error::None;
@@ -1485,20 +1507,70 @@ HWC2::Error HWCDisplay::GetDisplayRequests(int32_t *out_display_requests,
   }
 
   *out_display_requests = 0;
+  *out_num_elements = UINT32(layer_set_.size());
   if (out_layers != nullptr && out_layer_requests != nullptr) {
-    *out_num_elements = std::min(*out_num_elements, UINT32(layer_requests_.size()));
     auto it = layer_requests_.begin();
     for (uint32_t i = 0; i < *out_num_elements; i++, it++) {
       out_layers[i] = it->first;
       out_layer_requests[i] = INT32(it->second);
     }
-  } else {
-    *out_num_elements = UINT32(layer_requests_.size());
   }
 
   auto client_target_layer = client_target_->GetSDMLayer();
   if (client_target_layer->request.flags.flip_buffer) {
     *out_display_requests = INT32(HWC2::DisplayRequest::FlipClientTarget);
+  }
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplay::GetDisplayLuts(
+    std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> &out_luts) {
+  if (layer_set_.empty()) {
+    return HWC2::Error::None;
+  }
+
+  if (!out_luts) {
+    return HWC2::Error::Unsupported;
+  }
+
+  if (!validated_) {
+    DLOGW("Display is not validated");
+    return HWC2::Error::NotValidated;
+  }
+
+  for (auto it = display_luts_.begin(); it != display_luts_.end(); it++) {
+    out_luts->push_back(std::make_pair(it->first, it->second));
+  }
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error SDMDisplay::GetBufferLuts(const std::vector<SnapHandle *> &buffers,
+                                       std::unique_ptr<std::vector<Lut3d *>> &out_luts) {
+  if (sdm_layer_stack_->layer_set_.empty()) {
+    return HWC2::Error::None;
+  }
+
+  if (out_luts == nullptr) {
+    return HWC2::Error::Unsupported;
+  }
+
+  if (!validate_done_) {
+    DLOGW("Display is not validated");
+    return HWC2::Error::NotValidated;
+  }
+
+  uint32_t num_elements = buffers.size();
+  for (uint32_t i = 0; i < num_elements; i++) {
+    uint64_t handle_id = 0;
+    GetMetadata(buffers.at(i), MetadataType::BUFFER_ID, &handle_id, snapmapper_);
+    auto it = buffer_luts_.find(handle_id);
+    if (it != buffer_luts_.end()) {
+      out_luts->push_back(it->second);
+    } else {
+      out_luts->push_back(nullptr);
+    }
   }
 
   return HWC2::Error::None;
@@ -2363,8 +2435,8 @@ bool HWCDisplay::CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests) 
   for (auto hwc_layer : layer_set_) {
     if (!hwc_layer->GetSDMLayer()->flags.skip ||
         (hwc_layer->GetDeviceSelectedCompositionType() != HWC2::Composition::Client)) {
-      skip_prepare = false;
-      layer_changes_.clear();
+        skip_prepare = false;
+        ClearRequestMaps();
       break;
     }
     if (hwc_layer->GetClientRequestedCompositionType() != HWC2::Composition::Client) {

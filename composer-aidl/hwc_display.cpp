@@ -1093,6 +1093,9 @@ HWC3::Error HWCDisplay::GetDisplayAttribute(Config config, HwcAttribute attribut
 HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguration> *out_configs) {
   out_configs->clear();
   out_configs->reserve(variable_config_map_.size());
+  DisplayConfigFixedInfo fixed_info = {};
+  display_intf_->GetConfig(&fixed_info);
+  sdm::DisplayClass display_class = GetDisplayClass();
   for (const auto &[config_id, variable_config] : variable_config_map_) {
     DisplayConfiguration display_configuration;
     display_configuration.configId = config_id;
@@ -1102,6 +1105,16 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup = GetDisplayConfigGroupId(variable_config);
+#ifdef ENABLE_COMPOSER3_V4
+    if (fixed_info.hdr_supported) {
+      display_configuration.hdrOutputType = OutputType::HDR10;
+    } else {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+    if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
+      display_configuration.hdrOutputType = OutputType::SYSTEM;
+    }
+#endif
     display_configuration.vrrConfig = {
         static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
     DLOGI(
@@ -1535,6 +1548,28 @@ HWC3::Error HWCDisplay::GetDisplayRequests(int32_t *out_display_requests,
   return HWC3::Error::None;
 }
 
+HWC3::Error HWCDisplay::GetDisplayLuts(
+    std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> &out_luts) {
+  if (layer_set_.empty()) {
+    return HWC3::Error::None;
+  }
+
+  if (!out_luts) {
+    return HWC3::Error::Unsupported;
+  }
+
+  if (!validated_) {
+    DLOGW("Display is not validated");
+    return HWC3::Error::NotValidated;
+  }
+
+  for (auto it = display_luts_.begin(); it != display_luts_.end(); it++) {
+    out_luts->push_back(std::make_pair(it->first, (it->second)));
+  }
+
+  return HWC3::Error::None;
+}
+
 HWC3::Error HWCDisplay::GetHdrCapabilities(uint32_t *out_num_types, int32_t *out_types,
                                            float *out_max_luminance,
                                            float *out_max_average_luminance,
@@ -1667,6 +1702,13 @@ HWC3::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
       if (swap_interval_zero_ || layer->flags.single_buffer) {
         close(layer_buffer->release_fence_fd);
       } else {
+        // When a layer is skipped during a commit, remove its release fence from the cache
+        // since repeated buffer commits are observed. This helps prevent UBWC errors caused
+        // by overwriting on the same buffer when waiting on an incorrect fence .
+        // TODO: Implement proper handling of release fences when buffers are repeated in commits.
+        if (skip_commit_) {
+          hwc_layer->PopFrontReleaseFence();
+        }
         // It may so happen that layer gets marked to GPU & app layer gets queued
         // to MDP for composition. In those scenarios, release fence of buffer should
         // have mdp and gpu sync points merged.

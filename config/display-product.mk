@@ -57,6 +57,10 @@ ifneq (,$(filter aconfig_value_set-platform_build_release-bp1a, $(RELEASE_ACONFI
 $(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version_6)
 endif
 
+ifneq (,$(filter aconfig_value_set-platform_build_release-bp4a, $(RELEASE_ACONFIG_VALUE_SETS)))
+$(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version_7)
+endif
+
 ifneq ($(TARGET_IS_HEADLESS),true)
 ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
@@ -156,7 +160,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.flush_on_layer_set_empty=1 \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_color_transformation=1 \
-    vendor.gralloc.enable_logs=1 \
+    vendor.gralloc.enable_logs=0 \
     vendor.gralloc.enable_snapalloc=1
 
 ifeq ($(TARGET_USES_QMAA),true)

@@ -69,6 +69,9 @@ using ClientTargetProperty = composer_V3::ClientTargetProperty;
 #if defined (ENABLE_COMPOSER3_V3) || defined(ENABLE_COMPOSER3_V4)
 using DisplayConfiguration = composer_V3::DisplayConfiguration;
 #endif
+#ifdef ENABLE_COMPOSER3_V4
+using OutputType = composer_V3::OutputType;
+#endif
 using PixelFormat_V3 = aidl::android::hardware::graphics::common::PixelFormat;
 
 typedef uint32_t VsyncPeriodNanos;
@@ -364,6 +367,8 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC3::Error GetDisplayRequests(int32_t *out_display_requests, uint32_t *out_num_elements,
                                          LayerId *out_layers, int32_t *out_layer_requests);
   virtual HWC3::Error GetDisplayName(uint32_t *out_size, char *out_name);
+  virtual HWC3::Error GetDisplayLuts(std::unique_ptr<std::vector<std::pair<LayerId,
+                           Lut3d *>>> &out_luts);
   virtual HWC3::Error GetDisplayType(int32_t *out_type);
   virtual HWC3::Error SetCursorPosition(LayerId layer, int x, int y);
   virtual HWC3::Error SetVsyncEnabled(bool enabled);
@@ -478,6 +483,7 @@ class HWCDisplay : public DisplayEventHandler {
   std::multiset<HWCLayer *, SortLayersByZ> layer_set_;  // Maintain a set sorted by Z
   std::map<LayerId, Composition> layer_changes_;
   std::map<LayerId, int32_t> layer_requests_;
+  std::map<LayerId, Lut3d *> display_luts_;
   bool flush_on_error_ = false;
   bool flush_ = false;
   uint32_t dump_frame_count_ = 0;
@@ -524,6 +530,7 @@ class HWCDisplay : public DisplayEventHandler {
   int flush_on_layerset_empty_ = 0;
 
  private:
+  void ClearRequestMaps();
   void DumpInputBuffers(void);
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
   void UpdateRefreshRate();

@@ -347,6 +347,10 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error GetReleaseFences(uint32_t *out_num_elements, hwc2_layer_t *out_layers,
                                        int32_t *out_fences);
   virtual HWC2::Error Present(int32_t *out_retire_fence) = 0;
+  virtual HWC2::Error GetDisplayLuts
+        (std::unique_ptr<std::vector<std::pair<LayerId,Lut3d *>>> &out_luts);
+  virtual HWC2::Error GetBufferLuts(const std::vector<SnapHandle *> &buffers,
+                                     std::unique_ptr<std::vector<Lut3d *>> &out_luts);
   virtual HWC2::Error GetHdrCapabilities(uint32_t *out_num_types, int32_t* out_types,
                                          float* out_max_luminance,
                                          float* out_max_average_luminance,
@@ -445,6 +449,8 @@ class HWCDisplay : public DisplayEventHandler {
   std::multiset<HWCLayer *, SortLayersByZ> layer_set_;  // Maintain a set sorted by Z
   std::map<hwc2_layer_t, HWC2::Composition> layer_changes_;
   std::map<hwc2_layer_t, HWC2::LayerRequest> layer_requests_;
+  std::map<LayerId, Lut3d *> display_luts_;
+  std::map<uint64_t, Lut3d *> buffer_luts_;
   bool flush_on_error_ = false;
   bool flush_ = false;
   uint32_t dump_frame_count_ = 0;
@@ -511,6 +517,7 @@ class HWCDisplay : public DisplayEventHandler {
   int release_fence_ = -1;
   hwc2_config_t pending_config_index_ = 0;
   int async_power_mode_ = 0;
+  void ClearRequestMaps();
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {

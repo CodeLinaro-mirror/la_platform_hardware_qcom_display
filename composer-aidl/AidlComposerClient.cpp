@@ -21,6 +21,7 @@
  */
 
 #include "AidlComposerClient.h"
+#include <cutils/ashmem.h>
 #include "android/binder_auto_utils.h"
 #include <android/binder_ibinder_platform.h>
 namespace aidl {
@@ -1117,6 +1118,63 @@ Error AidlComposerClient::CommandEngine::presentDisplay(int64_t display,int32_t 
   return static_cast<Error>(err);
 }
 
+Error AidlComposerClient::CommandEngine::setChangedCompositionTypes(int64_t display) {
+  std::vector<sdm::LayerId> requestedLayers;
+  std::vector<Composition> compositionTypes;
+  uint32_t num_elements = 0;
+
+  auto err =
+      mClient.hwc_session_->GetChangedCompositionTypes(display, &num_elements,
+                                     nullptr, nullptr);
+  if (err != Error::None) {
+    return Error::BadConfig;
+  }
+
+  requestedLayers.resize(num_elements);
+  compositionTypes.resize(num_elements);
+
+  err = mClient.hwc_session_->GetChangedCompositionTypes(
+      display, &num_elements, requestedLayers.data(),
+      reinterpret_cast<std::underlying_type<Composition>::type *>
+      (compositionTypes.data()));
+  if (err != Error::None) {
+    return static_cast<Error>(err);
+  }
+
+  mWriter->setChangedCompositionTypes(display,
+    static_cast<std::vector<int64_t>>(requestedLayers),
+                                      compositionTypes);
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayRequests(int64_t display) {
+  std::vector<sdm::LayerId> requestedLayers;
+  std::vector<int32_t> requestMasks;
+  int32_t display_reqs = 0;
+  uint32_t num_elements = 0;
+
+  auto err = mClient.hwc_session_->GetDisplayRequests(display,
+                      &display_reqs, &num_elements, nullptr, nullptr);
+  if (err != Error::None) {
+    return Error::BadConfig;
+  }
+
+  requestedLayers.resize(num_elements);
+  requestMasks.resize(num_elements);
+
+  err = mClient.hwc_session_->GetDisplayRequests(display, &display_reqs, &num_elements,
+                                               requestedLayers.data(), requestMasks.data());
+  if (err != Error::None) {
+    return Error::BadConfig;
+  }
+
+  mWriter->setDisplayRequests(display, display_reqs,
+                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
+
+  return Error::None;
+}
+
 void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
   int32_t presentFence = -1;
   std::vector<sdm::LayerId> layers;
@@ -1433,6 +1491,160 @@ Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display,
 
   return static_cast<Error>(err);
 }
+
+#ifdef COMPOSER3_V4
+Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, 
+                            bool reset_luts, Luts *luts, int32_t *lut_fd) {
+  if (!lut_3d) {
+    return Error::BadConfig;
+  }
+
+  // reset luts on client
+  if (lut_3d->lutEntries == nullptr) {
+    return Error::None;
+  }
+
+  // initialize optional vector
+  luts->offsets.emplace();
+  // a single zero offset is set since only one lut is present
+  // TODO(user): modify when multiple luts need to be supported for a single layer, eg: gridEntries
+  luts->offsets->emplace_back(INT32(0));
+
+  uint32_t num_offsets = luts->offsets->size();
+  for (auto count = 0; count < num_offsets; count++) {
+    LutProperties lutProperties = {};
+    // only 3d lut is currently supported
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.dimension = LutProperties::Dimension::THREE_D;
+    lutProperties.size = INT32(lut_3d->dim);
+    // although sampling_keys is a vector, framework only supports taking the first value
+    // RGB sampling is fixed for 3d lut
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+    luts->lutProperties.emplace_back(lutProperties);
+  }
+
+  // calculate size of buffer
+  uint32_t final_size = 0;
+  for (auto count = 0; count < num_offsets - 1; count++) {
+    // size of lut is equal to offset of next lut
+    final_size += luts->offsets->at(count + 1);
+  }
+
+  // calculate the size of last lut
+  uint32_t exponent =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t channels =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t lut_size = std::pow(luts->lutProperties[num_offsets - 1].size, exponent);
+  final_size += lut_size * channels;
+  size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
+
+  // use `ashmem_create_region` to create a shared memory segment
+  int32_t fd = ashmem_create_region("display_luts", buffer_size);
+  if (fd < 0 || !ashmem_valid(fd)) {
+    ALOGE("Couldn't create ashmem region: fd %d", fd);
+    if (fd >= 0) close(fd);
+    return Error::BadConfig;
+  }
+
+  void *data = mmap(nullptr, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (data == MAP_FAILED) {
+    ALOGE("MAP_FAILED: fd %d", fd);
+    close(fd);
+    return Error::BadConfig;
+  }
+
+  // convert 3d lut entries to 1d normalized float buffer
+  std::vector<float> buffer;
+  buffer.reserve(final_size);
+  // TODO(user): take correct lut_size when multiple luts will be supported
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].G) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].B) / 1023.f);
+  }
+
+  if (data) {
+    std::memcpy((float *)data, buffer.data(), buffer_size);
+  }
+
+  munmap(data, buffer_size);
+  buffer.clear();
+  if (reset_luts) {
+    lut_3d->validLutEntries = false;
+    lut_3d->validGridEntries = false;
+  }
+
+  if (lut_3d->lutEntries != nullptr) {
+    delete[] lut_3d->lutEntries;
+    lut_3d->lutEntries = nullptr;
+  }
+
+  if (lut_3d->gridEntries != nullptr) {
+    delete[] lut_3d->gridEntries;
+    lut_3d->gridEntries = nullptr;
+  }
+
+  *lut_fd = fd;
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
+  auto requested_luts = std::make_unique<std::vector<std::pair<sdm::LayerId, Lut3d *>>>();
+  std::vector<::ndk::ScopedFileDescriptor> requestedFds;
+  std::vector<int64_t> requestedLayers;
+  std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> requestedLuts;
+
+  auto err = mClient.drawcycle_->GetDisplayLuts(display, requested_luts);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
+  }
+
+  uint32_t num_elements = requested_luts->size();
+  if (!num_elements) {
+    return Error::None;
+  }
+
+  requestedLuts.resize(num_elements);
+  auto it = requested_luts->begin();
+  for (uint32_t i = 0; i < num_elements; i++, it++) {
+    int32_t fd = -1;
+    requestedLayers.emplace_back(static_cast<int64_t>(it->first));
+    if (it != requested_luts->end()) {
+      // populateDisplayLuts will return error if the lut pointer we pass is nullptr
+      // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
+      if (*it != nullptr) {
+        auto error = populateDisplayLuts(it->second, true, &requestedLuts[i], &fd);
+        if (error != Error::None) {
+          return error;
+        }
+      }
+    }
+    it++;
+
+    if (fd == -1) {
+      ALOGI("%s: Resetting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(fd));
+    } else {
+      ALOGI("%s: Setting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(dup(fd)));
+      close(fd);
+    }
+  }
+
+  mWriter->setDisplayLuts(display, requestedLayers, requestedLuts, std::move(requestedFds));
+
+  return Error::None;
+}
+#endif
 
 Error AidlComposerClient::CommandEngine::lookupBufferCacheEntryLocked(
     int64_t display, int64_t layer, BufferCache cache, uint32_t slot, BufferCacheEntry **outEntry) {

@@ -248,6 +248,13 @@ HWCLayer::~HWCLayer() {
     if (buffer_fd_ >= 0) {
       ::close(buffer_fd_);
     }
+    // Delete luts if they are still valid
+    if (layer_->lut_3d.lutEntries != nullptr) {
+      delete[] layer_->lut_3d.lutEntries;
+    }
+    if (layer_->lut_3d.gridEntries != nullptr) {
+      delete[] layer_->lut_3d.gridEntries;
+    }
     delete layer_;
   }
 }
@@ -286,7 +293,7 @@ HWC3::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   buffer_allocator_->GetMetadataValue((void *)handle, SnapMetadataType::PIXEL_FORMAT_ALLOCATED, &fmt,
                                       sizeof(fmt));
   buffer_allocator_->GetPrivateFlags((void *)handle, flag);
-  ALOGW("%s: format: %d, flags: %d", __FUNCTION__, fmt, flag);
+  DLOGV_IF(kTagClient, "%s: format: %d, flags: %d", __FUNCTION__, fmt, flag);
   LayerBufferFormat format = GetSDMFormat(fmt, flag);
   if ((format != layer_buffer->format) || (UINT32(aligned_width) != layer_buffer->width) ||
       (UINT32(aligned_height) != layer_buffer->height)) {
@@ -798,10 +805,10 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       format = kFormatBGR888;
       break;
     case HAL_PIXEL_FORMAT_RGB_565:
-      format = kFormatBGR565;
+      format = kFormatRGB565;
       break;
     case HAL_PIXEL_FORMAT_BGR_565:
-      format = kFormatRGB565;
+      format = kFormatBGR565;
       break;
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
