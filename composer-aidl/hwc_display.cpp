@@ -1787,7 +1787,9 @@ void HWCDisplay::DumpInputBuffers() {
     char dump_file_name[PATH_MAX];
     size_t result = 0;
 
-    uint32_t width, height, alloc_size = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint32_t alloc_size = 0;
     int32_t format = 0;
 
     buffer_allocator_->GetWidth((void *)handle, width);
