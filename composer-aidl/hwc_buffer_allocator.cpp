@@ -64,11 +64,13 @@ DisplayError HWCBufferAllocator::GetGrallocInstance() {
     return kErrorNone;
   }
 
-  allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
-      AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
   if (allocator_ == nullptr) {
-    DLOGE("Unable to get allocator");
-    return kErrorCriticalResource;
+    allocator_ = IAllocator::fromBinder(ndk::SpAIBinder(
+        AServiceManager_checkService("android.hardware.graphics.allocator.IAllocator/default")));
+    if (allocator_ == nullptr) {
+      DLOGE("Unable to get allocator");
+      return kErrorCriticalResource;
+    }
   }
 
   mapper_ = IMapper::getService();
@@ -459,10 +461,10 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uin
       *target = HAL_PIXEL_FORMAT_RGB_888;
       break;
     case kFormatRGB565:
-      *target = HAL_PIXEL_FORMAT_BGR_565;
+      *target = HAL_PIXEL_FORMAT_RGB_565;
       break;
     case kFormatBGR565:
-      *target = HAL_PIXEL_FORMAT_RGB_565;
+      *target = HAL_PIXEL_FORMAT_BGR_565;
       break;
     case kFormatBGR888:
       *target = HAL_PIXEL_FORMAT_BGR_888;
