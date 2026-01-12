@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -641,6 +641,20 @@ DisplayError HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_
         buf_info.aligned_width, buf_info.aligned_height, flags, format);
 
   gralloc::BufferInfo info(buf_info.aligned_width, buf_info.aligned_height, format, flags);
+  uint64_t usage = 0;
+  qtigralloc::private_handle_t *handle =
+                         reinterpret_cast<qtigralloc::private_handle_t *>(buf_info.id);
+  if (!handle) {
+    DLOGE("%s: Invalid buffer handle", __FUNCTION__);
+    return kErrorParameters;
+  }
+
+  int error = GetMetadataValue(handle, SnapMetadataType::USAGE, &usage, sizeof(usage));
+  if(error != kErrorNone) {
+    DLOGE("Failed to get usage from handle");
+    return kErrorParameters;
+  }
+
   if (snap_helper_->IsSnapAllocEnabled()) {
     // TODO: reduce code duplication here
     BufferDescriptorInfo info_aidl{
@@ -648,6 +662,7 @@ DisplayError HWCBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_
         .height = static_cast<int32_t>(buf_info.aligned_height),
         .layerCount = 1,
         .format = static_cast<GrallocPixelFormat>(format),
+        .usage = static_cast<GrallocBufferUsage>(usage),
     };
     SnapBufferLayout buffer_layout = {};
     auto &plane_layout_info = buffer_layout.planes;
