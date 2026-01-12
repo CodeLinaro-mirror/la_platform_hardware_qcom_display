@@ -153,7 +153,9 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate
 
 #BG blur support
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), pitti volcano), $(TARGET_BOARD_PLATFORM))
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.update_device_product_info_on_hotplug_reconnect=1
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=0
+PRODUCT_PROPERTY_OVERRIDES += vendor.display.display_reboot_strategy=3
 else
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=1
 endif

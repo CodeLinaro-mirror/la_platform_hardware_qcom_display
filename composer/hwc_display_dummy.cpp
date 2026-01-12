@@ -28,7 +28,7 @@
 
 * Changes from Qualcomm Technologies, Inc. are provided under the following license:
 * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
-* SPDX-License-Identifier: BSD-3-Clause-Clear 
+* SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 
 #include "hwc_display_dummy.h"
@@ -37,6 +37,18 @@
 #define __CLASS__ "HWCDisplayDummy"
 
 namespace sdm {
+
+struct DummyMode {
+  int32_t id = 0;
+  int32_t width = 1920;
+  int32_t height = 1080;
+  int32_t x_dpi = 300.0f;
+  int32_t y_dpi = 300.0f;
+  int32_t fps = 60;
+  int64_t vsync_period_ns = 16666666;  // 60Hz
+  int32_t configGroup = 0;
+};
+static DummyMode kDummyMode;
 
 int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                             HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
@@ -76,12 +88,12 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
     : HWCDisplay(core_intf, buffer_allocator, callbacks, event_handler, qservice, kBuiltIn, id,
                  sdm_id, DISPLAY_CLASS_BUILTIN) {
   DisplayConfigVariableInfo config;
-  config.x_pixels = 720;
-  config.y_pixels = 1280;
-  config.x_dpi = 200.0f;
-  config.y_dpi = 200.0f;
-  config.fps = 60;
-  config.vsync_period_ns = 16600000;
+  config.x_pixels = kDummyMode.height;
+  config.y_pixels = kDummyMode.width;
+  config.x_dpi = kDummyMode.x_dpi;
+  config.y_dpi = kDummyMode.y_dpi;
+  config.fps = kDummyMode.fps;
+  config.vsync_period_ns = kDummyMode.vsync_period_ns;
   display_null_.SetFrameBufferConfig(config);
   num_configs_ = 1;
   display_intf_ = &display_null_;
@@ -93,6 +105,12 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   hwc_config_map_.resize(num_configs_);
   variable_config_map_[0] = config;
   hwc_config_map_.at(0) = 0;
+  display_null_.Init();
+  int status = SetFrameBufferResolution(config.x_pixels, config.y_pixels);
+  if (status) {
+    DLOGW("Set frame buffer config failed. Error = %d", status);
+    return;
+  }
 }
 
 HWC3::Error HWCDisplayDummy::GetActiveConfig(hwc2_config_t *out_config) {
@@ -139,6 +157,24 @@ HWC3::Error HWCDisplayDummy::SetActiveConfigWithConstraints(
     VsyncPeriodChangeTimeline *out_timeline) {
   ALOGI("Config change not allowed in async power mode transition");
   return HWC3::Error::Unsupported;
+}
+
+int HWCDisplayDummy::GetDisplayAttributesForConfig(int config,
+                                                   DisplayConfigVariableInfo *display_attributes) {
+  HWC3::Error status = HWC3::Error::BadConfig;
+
+  ALOGI("GetDisplayAttributesForConfig for null display with  config id %d", config);
+
+  if (config == kDummyMode.id && display_attributes != NULL) {
+    display_attributes->x_pixels = kDummyMode.width;
+    display_attributes->y_pixels = kDummyMode.height;
+    display_attributes->x_dpi = kDummyMode.x_dpi;
+    display_attributes->y_dpi = kDummyMode.y_dpi;
+    display_attributes->fps = kDummyMode.fps;
+    display_attributes->vsync_period_ns = kDummyMode.vsync_period_ns;
+    status = HWC3::Error::None;
+  }
+  return (int)(status);
 }
 
 }  // namespace sdm
