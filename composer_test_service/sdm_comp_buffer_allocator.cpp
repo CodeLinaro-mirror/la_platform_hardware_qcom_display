@@ -646,7 +646,7 @@ int SDMCompBufferAllocator::GetAlignedWidthAndHeight(int width, int height, int 
                                                  uint32_t alloc_type, int *aligned_width,
                                                  int *aligned_height) {
   uint64_t usage = 0;
-  unsigned int alignedw, alignedh;
+  unsigned int alignedw = 0, alignedh = 0;
   if (alloc_type & GRALLOC_USAGE_HW_FB) {
     usage |= static_cast<uint64_t>(ABufferUsage::COMPOSER_CLIENT_TARGET);
   }

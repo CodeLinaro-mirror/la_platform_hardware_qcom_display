@@ -22,6 +22,7 @@
  */
 
 #include "hwc_common.h"
+#include <log/log.h>
 
 #define __CLASS__ "HWCCommon"
 
@@ -123,7 +124,15 @@ NativeHandle AIDLNativeHandleFromSnapHandle(SnapHandle *snap_buffer_handle,
 }
 
 native_handle_t *SnapHandleToLegacyHandle(const SnapHandle *snap_handle) {
+  if (snap_handle == nullptr) {
+    ALOGE("snap_handle is nullptr");
+    return nullptr;
+  }
   native_handle_t *handle = native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
+  if (handle == nullptr) {
+    ALOGE("handle is nullptr");
+    return handle;
+  }
   for (size_t i = 0; i < snap_handle->num_fds; ++i) {
     handle->data[i] = fcntl(snap_handle->buffer_data[i], F_DUPFD_CLOEXEC, 0);
   }

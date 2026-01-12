@@ -43,6 +43,7 @@
 #include "gr_utils.h"
 #include "qd_utils.h"
 #include "color_extensions.h"
+#include "display_properties.h"
 
 static bool enable_logs = false;
 

@@ -43,6 +43,7 @@
 #include <cutils/properties.h>
 #include <errno.h>
 #include <utils/Trace.h>
+#include <inttypes.h>
 #include <dlfcn.h>
 #include <string>
 #include <utility>
@@ -52,6 +53,7 @@
 #include <QtiGrallocPriv.h>
 #include <QtiGrallocDefs.h>
 #include "gr_dma_mgr.h"
+#include "display_properties.h"
 
 #define SIZE_2MB 0x200000
 
@@ -406,7 +408,7 @@ int DmaManager::SetBufferPermission(int fd, BufferPermission *buf_perm, int64_t 
   }
   if (!vm_params.empty()) {
     ret = mem_buf_->Export(fd, vm_params, shared, mem_hdl);
-    ALOGI("fd %d mem_hdl %lld ret %d", fd, *mem_hdl, ret);
+    ALOGI("fd %d mem_hdl %" PRId64 " ret %d", fd, *mem_hdl, ret);
   }
   return ret;
 }
