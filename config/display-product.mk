@@ -216,7 +216,7 @@ $(call soong_config_set, qtidisplay, hy33, false )
 $(call soong_config_set, qtidisplay, llvmcov, false )
 $(call soong_config_set, qtidisplay, smmu_proxy, false )
 $(call soong_config_set, qtidisplay, ubwcp_headers, true )
-$(call soong_config_set, qtidisplay, composer_version, v3_4 )
+$(call soong_config_set, qtidisplay, composer_version, v3_5 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
 $(call soong_config_set, qtidisplay, lsr_target, false )
@@ -237,7 +237,7 @@ $(call soong_config_set, qtidisplay, lsr_target, false )
 # BEFORE FRC
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
-      $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
 # AFTER FRC
 else
@@ -247,6 +247,8 @@ else
       $(call soong_config_set, qtidisplay, composer_version, v3_3 )
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
       $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
 endif
 
