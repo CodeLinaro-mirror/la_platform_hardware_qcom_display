@@ -3291,6 +3291,11 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
         .value = GetPixelFormatModifierValue(gr_desc.GetAdditionalOptions(),
                                              static_cast<uint64_t>(snap_fmt_desc.modifier))};
     snap_desc.additionalOptions.emplace_back(modifier);
+    auto heap_type_opt = GetHeapNameOptValue(gr_desc.GetAdditionalOptions());
+    if (heap_type_opt != -1) {
+      SnapKeyValuePair heap_opt = {.key = "heap_type", .value = heap_type_opt};
+      snap_desc.additionalOptions.emplace_back(heap_opt);
+    }
     ALOGD_IF(enable_logs_,
              "%s gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
              "usage %" PRIu64 " name from gralloc descriptor %s snap_desc %s",
@@ -3341,6 +3346,11 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
         .value = GetPixelFormatModifierValue(gr_desc.additional_options,
                                              static_cast<uint64_t>(snap_fmt_desc.modifier))};
     snap_desc.additionalOptions.emplace_back(modifier);
+    auto heap_type_opt = GetHeapNameOptValue(gr_desc.additional_options);
+    if (heap_type_opt != -1) {
+      SnapKeyValuePair heap_opt = {.key = "heap_type", .value = heap_type_opt};
+      snap_desc.additionalOptions.emplace_back(heap_opt);
+    }
 
     ALOGD_IF(enable_logs_,
              "%s gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
@@ -3408,6 +3418,19 @@ uint64_t GrallocSnapHelper::GetGrallocUsage(SnapUsage snap_usage) {
   }
 
   return gralloc_usage;
+}
+
+uint64_t GrallocSnapHelper::GetHeapNameOptValue(std::vector<ExtendableType> additional_options) {
+  for (auto opt : additional_options) {
+    if (std::strcmp(opt.name.c_str(), "heap_type") == 0) {
+      uint64_t heap_type = opt.value;
+      if (heap_type > SnapHeapType::HEAP_NONE && heap_type < SnapHeapType::HEAP_MAX) {
+        return heap_type;
+      }
+    }
+  }
+
+  return -1;
 }
 
 // LEGACY (MAPPER4 COMPATIBLE) IMPLEMENTATION

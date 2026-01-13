@@ -56,6 +56,7 @@
 #include <CWBMetadata.h>
 #include <ROIRectMetadata.h>
 #include <CustomTuningMetadata.h>
+#include <HeapType.h>
 
 #include <aidl/android/hardware/common/NativeHandle.h>
 #include <aidl/android/hardware/graphics/common/Dataspace.h>
@@ -128,6 +129,7 @@ using SnapThreeDimensionalRefInfo = vendor_qti_hardware_display_common_ThreeDime
 using SnapCWBMetadata = vendor_qti_hardware_display_common_cwb_metadata;
 using SnapROIRectMetadata = vendor_qti_hardware_display_common_ROIRectMetadata;
 using SnapCustomTuningMetadata = vendor_qti_hardware_display_common_CustomTuningMetadata;
+using SnapHeapType = vendor_qti_hardware_display_common_HeapType;
 
 using ::android::hardware::hidl_vec;
 using GrallocError = android::hardware::graphics::mapper::V4_0::Error;
@@ -251,6 +253,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   SnapError ValidateGrallocUsage(uint64_t gralloc_usage);
   uint64_t GetPixelFormatModifierValue(std::vector<ExtendableType> additional_options,
                                        uint64_t modifier);
+  uint64_t GetHeapNameOptValue(std::vector<ExtendableType> additional_options);
   SnapError GetSnapDescriptor(gralloc::BufferDescriptor gr_desc, SnapDescriptor &snap_desc);
   SnapError GetSnapDescriptor(gralloc::BufferInfo gr_desc, SnapDescriptor &snap_desc);
 

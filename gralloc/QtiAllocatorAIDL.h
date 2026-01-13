@@ -62,6 +62,7 @@ class QtiAllocatorAIDL : public BnAllocator {
   std::vector<std::string> supported_options_ = {
       "pixel_format_modifier",
       "interlaced",
+      "heap_type",
   };
 
  protected:
