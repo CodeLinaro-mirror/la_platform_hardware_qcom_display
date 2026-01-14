@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -62,6 +62,40 @@ ScopedAStatus QtiComposer3Client::qtiTryDrawMethod(int64_t in_display,
   }
   return ScopedAStatus::ok();
 }
+
+#ifdef TARGET_USES_LSR
+ScopedAStatus QtiComposer3Client::qtiSetDisplayDeviceConfig(
+    int64_t in_display, const QtiDisplayDeviceConfig &in_displayDeviceConfig) {
+  if (lifecycle_) {
+    sdm::SDMDisplayDeviceConfig display_device_config;
+    GetSDMDisplayDeviceConfig(in_displayDeviceConfig, display_device_config);
+
+    auto error = lifecycle_->SetDisplayDeviceConfig(in_display, display_device_config);
+    return TO_BINDER_STATUS(INT32(error));
+  }
+  return ScopedAStatus::ok();
+}
+
+void QtiComposer3Client::GetSDMDisplayDeviceConfig(const QtiDisplayDeviceConfig &qti_device_config,
+                                                   sdm::SDMDisplayDeviceConfig &sdm_device_config) {
+  for (int i = 0; i < qti_device_config.projectionMatrix.size(); i++) {
+    for (int row = 0; row < qti_device_config.projectionMatrix[i].prjMatrix.size(); row++) {
+      std::copy(qti_device_config.projectionMatrix[i].prjMatrix[row].begin(),
+                qti_device_config.projectionMatrix[i].prjMatrix[row].end(),
+                sdm_device_config.projectionMatrix[i].prjMatrix[row]);
+    }
+    sdm::SDMLayerOrientation sdm_orientation{
+        qti_device_config.rotation[i].x, qti_device_config.rotation[i].y,
+        qti_device_config.rotation[i].z, qti_device_config.rotation[i].w};
+    sdm_device_config.rotation[i] = sdm_orientation;
+  }
+  std::copy(qti_device_config.gamma.begin(), qti_device_config.gamma.end(),
+            sdm_device_config.gamma);
+  std::copy(std::begin(qti_device_config.calibrationFileStr),
+            std::end(qti_device_config.calibrationFileStr),
+            std::begin(sdm_device_config.calibrationFileStr));
+}
+#endif
 
 SpAIBinder QtiComposer3Client::createBinder() {
   auto binder = BnQtiComposer3Client::createBinder();

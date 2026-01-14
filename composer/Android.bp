@@ -215,13 +215,24 @@ qticomposer3_cc_defaults {
                 cflags: [
                       "-DCOMPOSER3_V4",
                       "-DCOMPOSER3_V3",
+                      "-DIDISPLAYCONFIG_13",
+                      "-DIDISPLAYCONFIG_12",
                 ],
             },
             v3_3: {
-                cflags: ["-DCOMPOSER3_V3"],
+                cflags: [
+                      "-DCOMPOSER3_V3",
+                      "-DIDISPLAYCONFIG_12",
+                ],
             },
             conditions_default: {
-                cflags: ["-DCOMPOSER3_V2"],
+                cflags: [
+                      "-DCOMPOSER3_V2",
+                      "-DIDISPLAYCONFIG_12",
+                      "-DIDISPLAYCONFIG_13",
+                      "-DIDISPLAYCONFIG_14",
+                      "-DIDISPLAYCONFIG_15",
+                ],
             },
         },
     },
@@ -243,7 +254,7 @@ qticomposer3_cc_defaults {
             },
             conditions_default: {
                 shared_libs: [
-                     "vendor.qti.hardware.display.config-V11-ndk",
+                     "vendor.qti.hardware.display.config-V15-ndk",
                 ],
             },
         },

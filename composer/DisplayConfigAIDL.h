@@ -28,8 +28,8 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -150,6 +150,7 @@ class DisplayConfigCallback : public BnDisplayConfigCallback {
 class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCbIntf {
  public:
   DisplayConfigAIDL();
+  ~DisplayConfigAIDL();
   int IsPowerModeOverrideSupported(uint32_t disp_id, bool *supported);
   int GetDispTypeFromPhysicalId(uint64_t physical_disp_id, DisplayType *disp_type);
   ScopedAStatus isDisplayConnected(DisplayType dpy, bool *connected) override;
@@ -208,11 +209,28 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
       const std::shared_ptr<IDisplayConfigCallback> &in_callback, int32_t in_disp_id,
       const Rect &in_rect, bool in_post_processed,
       const ::aidl::android::hardware::common::NativeHandle &in_buffer) override;
-#ifdef COMPOSER3_V4
+#ifdef IDISPLAYCONFIG_13
   ScopedAStatus setCWBOutputBufferV2(
       const std::shared_ptr<IDisplayConfigCallback> &in_callback, int32_t in_disp_id,
       const Rect &in_roi_rect, const Rect &in_downscale_rect, int32_t in_cwb_control_flag,
       const ::aidl::android::hardware::common::NativeHandle &in_buffer) override;
+#endif
+#ifdef IDISPLAYCONFIG_14
+  ScopedAStatus queueTunnelledBuffer(
+      const ::aidl::android::hardware::common::NativeHandle &buffer,
+      const ::aidl::android::hardware::common::NativeHandle &acquire_fence,
+      int32_t *_aidl_return) override;
+  ScopedAStatus dequeueTunnelledBuffer(
+      const ::aidl::android::hardware::common::NativeHandle &buffer,
+      ::aidl::android::hardware::common::NativeHandle *release_fence_handle,
+      int32_t *_aidl_return) override;
+  ScopedAStatus tunnellingInit(int32_t *_aidl_return) override;
+  ScopedAStatus tunnellingDeinit(int32_t *_aidl_return) override;
+#endif
+#ifdef IDISPLAYCONFIG_15
+  ScopedAStatus setPoseConfig(
+      int disp_id, const ::aidl::android::hardware::common::NativeHandle &buffer,
+      ::aidl::vendor::qti::hardware::display::config::PoseConfigType config_type) override;
 #endif
   ScopedAStatus setCameraSmoothInfo(CameraSmoothOp in_op, int32_t in_fps);
   ScopedAStatus registerCallback(const std::shared_ptr<IDisplayConfigCallback> &in_callback,
@@ -231,7 +249,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
                                         const CacV2ConfigExt &in_rightConfig,
                                         bool in_enable) override;
   ScopedAStatus allowIdleFallback() { return ScopedAStatus::ok(); }
-#ifdef COMPOSER3_V3
+#ifdef IDISPLAYCONFIG_12
   ScopedAStatus setContentFps(const std::string &in_name, int32_t in_fps) override;
 #endif
 
@@ -306,6 +324,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   std::unordered_map<uint64_t, GLColorConvert *> color_convert_map_;
   std::unordered_map<uint64_t, histogram::HistogramCollector *> histogram_map_;
   std::unordered_map<uint64_t, GLLayerStitch *> layer_stitch_map_;
+  void *pose_handle_ = nullptr;
 };
 
 }  // namespace config

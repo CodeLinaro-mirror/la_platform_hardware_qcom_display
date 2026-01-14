@@ -26,6 +26,7 @@
 #include <unordered_set>
 #include <vector>
 #include <string>
+#include <iterator>
 #include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #ifdef COMPOSER3_V4
@@ -305,7 +306,7 @@ class AidlComposerClient : public BnComposerClient,
                                                           bool in_enabled) override;
 
   // Methods for ConcurrentWriteBack
-  Error getDisplayReadbackBuffer(int64_t display, const SnapHandle *rawHandle);
+  Error getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle);
 
   // Methods for extensions (QtiComposer3Client)
   ScopedAStatus executeQtiExtendedCommands(const std::vector<DisplayCommand> &in_commands,
@@ -333,6 +334,7 @@ class AidlComposerClient : public BnComposerClient,
     std::vector<BufferCacheEntry> OutputBuffers;
 
     std::unordered_map<sdm::LayerId, LayerBuffers> Layers;
+    SnapHandle *mReadBackHandle = nullptr;
 
     explicit DisplayData(bool isVirtual) : IsVirtual(isVirtual) {}
   };
@@ -431,6 +433,9 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
     void executeSetFrameIntervalNsInternal(int64_t display, int32_t frameIntervalNs);
+#ifdef COMPOSER3_V4
+    void executeSetLayerLuts(int64_t display, int64_t layer, const Luts &luts);
+#endif
 
     // Commands from extensions (QtiComposer3Client)
     void executeSetClientTarget_3_1(int64_t display, const ClientTarget &command);
@@ -444,6 +449,22 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetLayerCornerRadius(int64_t display, int64_t layer,
                                      const std::optional<QtiCornerRadius> cornerRadius);
 #endif
+#ifdef TARGET_USES_LSR
+    void executeSetLayerPlaneEquation(int64_t display, int64_t layer,
+                                      sdm::QtiLayerPlaneEquation plane_equation);
+    void executeSetRenderLayerReferenceSpaceType(
+        int64_t display, int64_t layer,
+        sdm::QtiParcelableRenderLayerReferenceSpaceType reference_layer_space_type);
+    void executeSetCompositionLayerType(int64_t display, int64_t layer,
+                                        sdm::QtiParcelableCompositionLayerType comp_layer_type);
+    void executeSetLayerPose(int64_t display, int64_t layer, const sdm::QtiLayerPose &layer_pose);
+    void executeSetLayerQuadSize(int64_t display, int64_t layer,
+                                 sdm::QtiLayerQuadSize layer_quad_size);
+    void executeSetLayerFrustum(int64_t display, int64_t layer, sdm::QtiLayerFrustum layer_frustum);
+    void executeSetLayerVisibilityType(int64_t display, int64_t layer,
+                                       sdm::QtiParcelableLayerVisibilityType layer_visibility_type);
+#endif
+
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
     FRect readFRect();
@@ -487,6 +508,38 @@ class AidlComposerClient : public BnComposerClient,
         region->rects.push_back(new_rec);
       }
     }
+
+#ifdef TARGET_USES_LSR
+    void GetSDMLayerPose(const sdm::QtiLayerPose &layer_pose, sdm::SDMLayerPose &sdm_layer_pose) {
+      sdm::SDMLayerPosition sdm_pos{layer_pose.pos.x, layer_pose.pos.y, layer_pose.pos.z};
+      sdm::SDMLayerOrientation sdm_orientation{layer_pose.orientation.x, layer_pose.orientation.y,
+                                               layer_pose.orientation.z, layer_pose.orientation.w};
+      sdm_layer_pose.pos = sdm_pos;
+      sdm_layer_pose.orientation = sdm_orientation;
+    }
+
+    void GetSDMLayerQuadSize(const sdm::QtiLayerQuadSize &layer_quad_size,
+                             sdm::SDMLayerQuadSize &sdm_layer_quad_size) {
+      sdm_layer_quad_size.width = layer_quad_size.width;
+      sdm_layer_quad_size.height = layer_quad_size.height;
+    }
+
+    void GetSDMLayerFrustum(const sdm::QtiLayerFrustum &layer_frustum,
+                            sdm::SDMLayerFrustum &sdm_layer_frustum) {
+      sdm_layer_frustum.angleLeft = layer_frustum.angleLeft;
+      sdm_layer_frustum.angleRight = layer_frustum.angleRight;
+      sdm_layer_frustum.angleUp = layer_frustum.angleUp;
+      sdm_layer_frustum.angleDown = layer_frustum.angleDown;
+    }
+
+    void GetSDMLayerPlaneEquation(const sdm::QtiLayerPlaneEquation &plane_equation,
+                                  sdm::SDMLayerPlaneEquation &sdm_layer_plane_equation) {
+      sdm_layer_plane_equation.a = plane_equation.a;
+      sdm_layer_plane_equation.b = plane_equation.b;
+      sdm_layer_plane_equation.c = plane_equation.c;
+      sdm_layer_plane_equation.d = plane_equation.d;
+    }
+#endif
   };
 
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
