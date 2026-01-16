@@ -26,8 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -184,10 +183,22 @@ Error QtiMapper5::rereadLockedBuffer(buffer_handle_t _Nonnull buffer) {
   return err;
 }
 
-size_t QtiMapper5::GetExpectedSize(uint64_t metadata_type) {
-  if (type_to_size_.find(metadata_type) != type_to_size_.end()) {
-    return type_to_size_.at(metadata_type);
+size_t QtiMapper5::GetExpectedSize(native_handle_t *bufferHandle, uint64_t metadata_type) {
+  int batch_size = 1;
+  if (std::find(batch_mode_metadata_types_.begin(), batch_mode_metadata_types_.end(),
+                metadata_type) != batch_mode_metadata_types_.end()) {
+    auto error = snap_helper_->GetBatchSize(bufferHandle, &batch_size);
+    if (error != 0) {
+      ALOGW("Failed to get batch size for metadata type: %" PRIu64, metadata_type);
+      batch_size = 1;
+    }
   }
+
+  if (type_to_size_.find(metadata_type) != type_to_size_.end()) {
+    size_t size_of_type = type_to_size_.at(metadata_type);
+    return size_of_type * batch_size;
+  }
+
   ALOGW("Can't find expected metadata size, invalid metadata type: %" PRIu64, metadata_type);
   return 0;
 }
@@ -219,7 +230,7 @@ int32_t QtiMapper5::getMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metada
   if (isStandardMetadata(metadataType)) {
     return getStandardMetadata(buffer, metadataType.value, outData, outDataSize);
   } else if (isVendorMetadata(metadataType)) {
-    auto expected_size = GetExpectedSize(metadataType.value);
+    auto expected_size = GetExpectedSize(const_cast<native_handle_t *>(buffer), metadataType.value);
     if (expected_size == 0) {
       return -AIMAPPER_ERROR_UNSUPPORTED;
     }
@@ -230,7 +241,8 @@ int32_t QtiMapper5::getMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metada
           outDataSize, expected_size, metadataType.value);
       return expected_size;
     }
-    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " ExpectedSize: %" PRIu32,
+    ALOGD_IF(enable_logs,
+             "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " ExpectedSize: %" PRIu32,
              __FUNCTION__, (uint64_t)buffer, metadataType.value, expected_size);
     return (GetMetadataPrivate(buffer, metadataType.value, outData, outDataSize, false));
   }
@@ -270,7 +282,7 @@ Error QtiMapper5::setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metadata
   if (isStandardMetadata(metadataType)) {
     return setStandardMetadata(buffer, metadataType.value, metadata, metadataSize);
   } else if (metadataType.name == qtigralloc::VENDOR_QTI) {
-    auto expected_size = GetExpectedSize(metadataType.value);
+    auto expected_size = GetExpectedSize(const_cast<native_handle_t *>(buffer), metadataType.value);
     if (expected_size == 0) {
       return AIMAPPER_ERROR_UNSUPPORTED;
     }
@@ -281,7 +293,8 @@ Error QtiMapper5::setMetadata(buffer_handle_t _Nonnull buffer, AIMapper_Metadata
           metadataSize, expected_size, metadataType.value);
       return AIMAPPER_ERROR_BAD_VALUE;
     }
-    ALOGD_IF(enable_logs, "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " MetadataSize: %" PRIu32,
+    ALOGD_IF(enable_logs,
+             "%s: Buffer: %" PRIu64 " MetadataType(vendor): %" PRId64 " MetadataSize: %" PRIu32,
              __FUNCTION__, (uint64_t)buffer, metadataType.value, metadataSize);
     return (SetMetadataPrivate(buffer, metadataType.value, metadata, metadataSize, false));
   }
