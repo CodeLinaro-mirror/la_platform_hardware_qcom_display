@@ -539,6 +539,14 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::YCBCR_P010_HEIF},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_1K_ALIGNED},
            SnapPixelFormat::YCBCR_P010_1024},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX},
+           TP10_UBWC_FLEX},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH},
+           TP10_UBWC_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH},
+           TP10_UBWC_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
+           TP10_UBWC_FLEX_8_BATCH},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -794,6 +802,14 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::NV12_UBWC_MIPMAP},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
            SnapPixelFormat::TP10_UBWC_MIPMAP},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX},
+           TP10_UBWC_FLEX},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH},
+           TP10_UBWC_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH},
+           TP10_UBWC_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
+           TP10_UBWC_FLEX_8_BATCH},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -834,6 +850,14 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            static_cast<int>(SnapPixelFormat::NV12_UBWC_MIPMAP)},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
            static_cast<int>(SnapPixelFormat::TP10_UBWC_MIPMAP)},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX},
+           TP10_UBWC_FLEX},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH},
+           TP10_UBWC_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH},
+           TP10_UBWC_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
+           TP10_UBWC_FLEX_8_BATCH},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_ubwc_to_snap_format_;
