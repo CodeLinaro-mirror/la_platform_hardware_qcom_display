@@ -508,10 +508,14 @@ HWC3::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
                                                  int32_t acquire_fence,
                                                  bool post_processed_output) {
   const native_handle_t *handle = reinterpret_cast<const native_handle_t *>(buffer);
-  int fd;
+  int fd = -1;
   buffer_allocator_->GetFd((void *)handle, fd);
-  uint32_t width, height, unaligned_width, unaligned_height = 0;
-  int32_t format, flags = 0;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  uint32_t unaligned_width = 0;
+  uint32_t unaligned_height = 0;
+  int32_t format = 0;
+  int32_t flags = 0;
   uint64_t id = 0;
   buffer_allocator_->GetWidth((void *)handle, width);
   buffer_allocator_->GetHeight((void *)handle, height);
