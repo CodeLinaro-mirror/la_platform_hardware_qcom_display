@@ -30,6 +30,7 @@ PRODUCT_PACKAGES += \
     mapper.qti \
     libmapperutils \
     modetest \
+    modetest_drm \
     vendor.qti.hardware.display.snapalloc-impl
 
 ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16 CinnamonBun 17, $(PLATFORM_VERSION)))
