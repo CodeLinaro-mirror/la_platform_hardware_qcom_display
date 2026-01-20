@@ -28,9 +28,9 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 #
-# Changes from Qualcomm Innovation Center are provided under the following license:
+# Changes from Qualcomm Technologies, Inc. are provided under the following license:
 #
-# Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
 
@@ -265,6 +265,7 @@ case "$target" in
         setprop vendor.display.supports_background_blur 0
 	setprop vendor.gralloc.hw_supports_ubwcp 0
         setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
         if [ "$soc_hwid" -eq 653 ] || [ "$soc_hwid" -eq 654 ]; then
             setprop vendor.display.enable_latch_media_content 1
         fi
