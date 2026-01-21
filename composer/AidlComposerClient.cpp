@@ -793,6 +793,13 @@ ScopedAStatus AidlComposerClient::setRefreshRateChangedCallbackDebugEnabled(int6
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
 }
 
+#ifdef COMPOSER3_V5
+ScopedAStatus AidlComposerClient::getDisplayKnownVsyncSample(
+    int64_t in_display, aidl::android::hardware::graphics::composer3::VsyncSample *aidl_return) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+#endif
+
 ScopedAStatus AidlComposerClient::getPerFrameMetadataKeys(
     int64_t in_display, std::vector<PerFrameMetadataKey> *aidl_return) {
   uint32_t count = 0;
@@ -1227,6 +1234,10 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                  displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
 #else
+#ifdef COMPOSER3_V5
+  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
+                 displayCmd.display, *displayCmd.activeConfig);
+#endif
   int32_t frameIntervalNs = -1;
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
@@ -2019,6 +2030,25 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
 
   if (error != Error::None) {
     writeError(__FUNCTION__, error);
+  }
+}
+#endif
+
+#ifdef COMPOSER3_V5
+void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
+    int64_t display, const ActiveConfigCommand &config) {
+  sdm::SDMVsyncPeriodChangeConstraints constraints = {0, config.seamlessRequired};
+  sdm::SDMVsyncPeriodChangeTimeline timeline{};
+
+  auto error = mClient.settings_->SetActiveConfigWithConstraints(display, config.configId,
+                                                                 &constraints, &timeline);
+  if (error == sdm::kSeamlessNotAllowed) {
+    writeError(__FUNCTION__, Error::SeamlessNotAllowed);
+    return;
+  }
+
+  if (error != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
   }
 }
 #endif
