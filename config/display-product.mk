@@ -32,7 +32,7 @@ PRODUCT_PACKAGES += \
     modetest \
     vendor.qti.hardware.display.snapalloc-impl
 
-ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16 CinnamonBun 17, $(PLATFORM_VERSION)))
 $(warning "Android-U compiling AIDL")
 $(call soong_config_set, display_config_idl,target_aidl_or_hidl,target_aidl)
 else
@@ -62,7 +62,7 @@ $(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version
 endif
 
 ifneq ($(TARGET_IS_HEADLESS),true)
-ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16 CinnamonBun 17, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.composer-service
 PRODUCT_PROPERTY_OVERRIDES += \
