@@ -41,7 +41,7 @@ $(call soong_config_set, display_config_idl,target_aidl_or_hidl,target_hidl)
 endif
 
 
-ifneq ( ,$(filter Baklava 16, $(PLATFORM_VERSION)))
+ifneq ( ,$(filter Baklava 16 CinnamonBun 17, $(PLATFORM_VERSION)))
 $(warning "Android-16 compiling AIDL composer3 V4")
 $(call soong_config_set,display_config_composer3,vndk, version_4)
 $(warning "Android-16 using graphics common ndk V6")
