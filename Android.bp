@@ -12,6 +12,7 @@ soong_config_module_type {
         "llvmcov",
         "smmu_proxy",
         "ubwcp_headers",
+        "snapallocext_enabled",
         "neo",
         "lsr_target",
     ],
@@ -23,6 +24,7 @@ soong_config_module_type {
         "host_ldlibs",
         "ldflags",
         "native_coverage",
+        "shared_libs",
 	"vendor",
     ],
 }
@@ -75,6 +77,18 @@ qtidisplay_prebuilt_defaults {
 			},
 		},
 	},
+}
+
+qtidisplay_cc_defaults {
+    name: "displaysnapallocext_defaults",
+    soong_config_variables: {
+        snapallocext_enabled: {
+            shared_libs: [
+                "libbinder_ndk",
+                "vendor.qti.hardware.display.snapallocext-V1-ndk",
+            ],
+        },
+    },
 }
 
 qtidisplay_cc_defaults {

@@ -793,6 +793,13 @@ ScopedAStatus AidlComposerClient::setRefreshRateChangedCallbackDebugEnabled(int6
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
 }
 
+#ifdef COMPOSER3_V5
+ScopedAStatus AidlComposerClient::getDisplayKnownVsyncSample(
+    int64_t in_display, aidl::android::hardware::graphics::composer3::VsyncSample *aidl_return) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+#endif
+
 ScopedAStatus AidlComposerClient::getPerFrameMetadataKeys(
     int64_t in_display, std::vector<PerFrameMetadataKey> *aidl_return) {
   uint32_t count = 0;
@@ -840,6 +847,14 @@ ScopedAStatus AidlComposerClient::getReadbackBufferFence(int64_t in_display,
                                                          ::ndk::ScopedFileDescriptor *aidl_return) {
   shared_ptr<Fence> fence = nullptr;
   auto error = settings_->GetReadbackBufferFence(in_display, &fence);
+
+  std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+  auto iter = mDisplayData.find(in_display);
+  if (iter != mDisplayData.end() && (iter->second.mReadBackHandle != nullptr)) {
+    mHandleImporter.freeBuffer(iter->second.mReadBackHandle);
+    iter->second.mReadBackHandle = nullptr;
+  }
+
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::Unsupported));
   }
@@ -1046,7 +1061,7 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
     int64_t in_display, const NativeHandle &in_buffer,
     const ::ndk::ScopedFileDescriptor &in_release_fence) {
   shared_ptr<Fence> fence = nullptr;
-  const SnapHandle *buffer = sdm::ConvertToSnapHandle(in_buffer);
+  SnapHandle *buffer = sdm::ConvertToSnapHandle(in_buffer);
   auto &sfd = const_cast<::ndk::ScopedFileDescriptor &>(in_release_fence);
   auto fd = sfd.get();
   *sfd.getR() = -1;
@@ -1067,6 +1082,12 @@ ScopedAStatus AidlComposerClient::setReadbackBuffer(
 
   auto err = settings_->SetReadbackBuffer(in_display, (void *)buffer, fence);
   if (err != sdm::kErrorNone) {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto iter = mDisplayData.find(in_display);
+    if (iter != mDisplayData.end() && (iter->second.mReadBackHandle != nullptr)) {
+      mHandleImporter.freeBuffer(iter->second.mReadBackHandle);
+      iter->second.mReadBackHandle = nullptr;
+    }
     return TO_BINDER_STATUS(INT32(Error::BadParameter));
   }
 
@@ -1165,8 +1186,7 @@ void AidlComposerClient::OnVsyncIdle(uint64_t in_display) {
   callback_->onVsyncIdle(in_display);
 }
 
-Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display,
-                                                   const SnapHandle *rawHandle) {
+Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle) {
   // TODO(user): revisit for caching and freeBuffer in success case.
   if (!mHandleImporter.importBuffer(rawHandle)) {
     ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
@@ -1180,6 +1200,11 @@ Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display,
     return Error::BadDisplay;
   }
 
+  if (iter->second.mReadBackHandle != nullptr) {
+    mHandleImporter.freeBuffer(iter->second.mReadBackHandle);
+  }
+
+  iter->second.mReadBackHandle = rawHandle;
   return Error::None;
 }
 
@@ -1209,6 +1234,10 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                  displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
 #else
+#ifdef COMPOSER3_V5
+  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
+                 displayCmd.display, *displayCmd.activeConfig);
+#endif
   int32_t frameIntervalNs = -1;
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
@@ -2005,6 +2034,25 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
 }
 #endif
 
+#ifdef COMPOSER3_V5
+void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
+    int64_t display, const ActiveConfigCommand &config) {
+  sdm::SDMVsyncPeriodChangeConstraints constraints = {0, config.seamlessRequired};
+  sdm::SDMVsyncPeriodChangeTimeline timeline{};
+
+  auto error = mClient.settings_->SetActiveConfigWithConstraints(display, config.configId,
+                                                                 &constraints, &timeline);
+  if (error == sdm::kSeamlessNotAllowed) {
+    writeError(__FUNCTION__, Error::SeamlessNotAllowed);
+    return;
+  }
+
+  if (error != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
+}
+#endif
+
 Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
   bool validate_only = true;
   bool needsCommit = false;
@@ -2375,7 +2423,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
     const std::vector<std::optional<QtiPrivacyRegion>> &privacyRegions) {
   uint32_t size = privacyRegions.size();
   if (size == 0) {
-    ALOGW("%s: Provided empty privacy regions for layer %lld", __func__, layer);
+    ALOGW("%s: Provided empty privacy regions for layer %" PRId64, __func__, layer);
     writeError(__FUNCTION__, Error::BadConfig);
     return;
   }
@@ -2383,7 +2431,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
   std::vector<sdm::PrivacyRegion> regions;
   for (uint32_t i = 0; i < size; i++) {
     if (!privacyRegions[i].has_value()) {
-      ALOGW("%s: Invalid privacy region at index %u for layer %lld", __func__, i, layer);
+      ALOGW("%s: Invalid privacy region at index %u for layer %" PRId64, __func__, i, layer);
       continue;
     }
 
@@ -2402,7 +2450,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
   auto err = mClient.layer_builder_->SetLayerPrivacyRegions(
       display, layer, static_cast<const std::vector<sdm::PrivacyRegion> &>(regions));
   if (err != sdm::kErrorNone) {
-    ALOGW("%s: Failed to set layer's %lld privacy regions", __func__, layer);
+    ALOGW("%s: Failed to set layer's %" PRId64 " privacy regions", __func__, layer);
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
@@ -2418,7 +2466,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerCornerRadius(
 
   auto err = mClient.layer_builder_->SetLayerCornerRadius(display, layer, radius);
   if (err != sdm::kErrorNone) {
-    ALOGW("%s: Failed to set layer's %lld corner radius", __func__, layer);
+    ALOGW("%s: Failed to set layer's %" PRId64 " corner radius", __func__, layer);
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }

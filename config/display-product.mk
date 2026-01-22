@@ -1,6 +1,8 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
 
+BUILD_DISPLAY_TECHPACK_SOURCE := true
+BUILD_DISPLAY_TECHPACK_SOURCE_VARIANT := true
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
@@ -180,6 +182,13 @@ else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_hw_recovery_dump=1
 endif
+
+ifeq ($(TARGET_HAS_QTI_OPTIMIZATIONS), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_cache_manager=1 \
+    ro.surface_flinger.max_frame_buffer_acquired_buffers=2
+endif
+
 TARGET_IS_HEADLESS := false
 
 ifeq ($(TARGET_USES_QMAA),true)
@@ -207,11 +216,11 @@ $(call soong_config_set, qtidisplay, hy33, false )
 $(call soong_config_set, qtidisplay, llvmcov, false )
 $(call soong_config_set, qtidisplay, smmu_proxy, false )
 $(call soong_config_set, qtidisplay, ubwcp_headers, true )
-$(call soong_config_set, qtidisplay, composer_version, v3_4 )
+$(call soong_config_set, qtidisplay, composer_version, v3_5 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
 $(call soong_config_set, qtidisplay, lsr_target, false )
-
+$(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -228,16 +237,20 @@ $(call soong_config_set, qtidisplay, lsr_target, false )
 # BEFORE FRC
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
-      $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
 # AFTER FRC
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 14))
       $(call soong_config_set, qtidisplay, composer_version, v3_2 )
+      $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 15))
       $(call soong_config_set, qtidisplay, composer_version, v3_3 )
+      $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
       $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
 endif
 
