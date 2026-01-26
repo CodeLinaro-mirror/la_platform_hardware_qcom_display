@@ -238,6 +238,8 @@ $(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
 # AFTER FRC
 else
