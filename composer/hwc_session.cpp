@@ -479,7 +479,7 @@ void HWCSession::InitSupportedDisplaySlots() {
   std::copy(map_info_builtin_.begin(), map_info_builtin_.end(), std::back_inserter(map_info));
   std::copy(map_info_pluggable_.begin(), map_info_pluggable_.end(), std::back_inserter(map_info));
   for (auto &map : map_info) {
-    DLOGE("Display Pairs: map.client_id: %d, start_index: %d", INT32(map.client_id),
+    DLOGI("Display Pairs: map.client_id: %d, start_index: %d", INT32(map.client_id),
           INT32(start_index));
     map_hwc_display_.insert(std::make_pair(map.client_id, start_index++));
   }
@@ -3003,7 +3003,7 @@ int HWCSession::CreatePrimaryDisplay() {
           map_info_primary_.disp_type = info.display_type;
           map_info_primary_.sdm_id = info.display_id;
           primary_pending_ = false;
-          DLOGE("Created dummy display type = %d, sdm id = %d, client id = %d", info.display_type,
+          DLOGI("Created dummy display type = %d, sdm id = %d, client id = %d", info.display_type,
                 info.display_id, UINT32(client_id));
         } else {
           DLOGE("Dummy display creation failed status = %d ", status);
@@ -3014,14 +3014,14 @@ int HWCSession::CreatePrimaryDisplay() {
       if (info.display_type == kBuiltIn) {
         status = HWCDisplayBuiltIn::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
                                            qservice_, client_id, info.display_id, hwc_display);
-        DLOGE("Created primary display as builtin display type = %d, sdm id = %d, client id = %d",
+        DLOGI("Created primary display as builtin display type = %d, sdm id = %d, client id = %d",
               info.display_type, info.display_id, UINT32(client_id));
       } else if (info.display_type == kPluggable) {
         status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
                                              qservice_, client_id, info.display_id, 0, 0, false,
                                              hwc_display);
         pluggable_primary_connected_ = true;
-        DLOGE("Created primary display as pluggable display type = %d, sdm id = %d, client id = %d",
+        DLOGI("Created primary display as pluggable display type = %d, sdm id = %d, client id = %d",
               info.display_type, info.display_id, UINT32(client_id));
       } else {
         DLOGE("Spurious primary display type = %d", info.display_type);
@@ -3298,7 +3298,7 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
           if (hwc_display->GetDisplayAttributesForConfig(active_config_index, &new_config)) {
             DLOGE("Failed to check connected display's attributes.");
           } else {
-            DLOGE("GetDisplayAttributesForConfig success");
+            DLOGI("GetDisplayAttributesForConfig success");
           }
           if (fw_reboot_pending) {
             DLOGD("Previous display's resolution: %d x %d @ %d fps.", primary_config_.x_pixels,
@@ -3321,8 +3321,8 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
           if (send_primary_hotplug_to_sf_) {
             status =
                 hwc_display->UpdateFBResolution(primary_config_.x_pixels, primary_config_.y_pixels);
-            DLOGE(
-                "Ppdated FB resolution primary_config_.x_pixels = %d , primary_config_.y_pixels = "
+            DLOGI(
+                "Updated FB resolution primary_config_.x_pixels = %d , primary_config_.y_pixels = "
                 "%d ",
                 primary_config_.x_pixels, primary_config_.y_pixels);
             if (status) {
@@ -3341,7 +3341,7 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
           map_info.disp_type = info.display_type;
           map_info.sdm_id = info.display_id;
           if (send_primary_hotplug_to_sf_) {
-            DLOGE("send_primary_hotplug_to_sf_ client_id = %d ", client_id);
+            DLOGI("send_primary_hotplug_to_sf_ client_id = %d ", client_id);
             pending_hotplugs.push_back((hwc2_display_t)client_id);
           }
         }
