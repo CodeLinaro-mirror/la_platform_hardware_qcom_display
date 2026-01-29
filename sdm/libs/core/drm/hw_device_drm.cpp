@@ -138,9 +138,7 @@ static inline uint32_t ConvertTopology2Splits(enum HWTopology topology) {
     1, // kPPSplit
   };
 
-  if (topology >= 0 && topology < COUNT_OF(topoloty2splits_table))
-    return topoloty2splits_table[topology];
-  return 1;
+  return topoloty2splits_table[topology];
 }
 
 /* Converting number of splits to split type */
