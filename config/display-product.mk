@@ -186,6 +186,7 @@ endif
 ifeq ($(TARGET_QCOM_IOT_LOW_RAM), true)
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_cache_manager=1 \
+    vendor.display.disable_layer_stitch=1 \
     ro.surface_flinger.max_frame_buffer_acquired_buffers=2
 endif
 
