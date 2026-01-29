@@ -148,6 +148,7 @@ class CompManager : public CwbCallback {
   static const int kSafeModeThreshold = 4;
 
   void PrepareStrategyConstraints(Handle display_ctx, DispLayerStack *disp_layer_stack);
+  bool IsFeedbackEmpty(LayerFeedback *feedback);
   void UpdateStrategyConstraints(bool is_primary, bool disabled);
   std::string StringDisplayList(const std::set<int32_t> &displays);
 
