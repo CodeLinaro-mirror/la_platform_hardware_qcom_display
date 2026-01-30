@@ -29,4 +29,9 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
          <version>3</version>
         <fqname>IDisplayAiqe/default</fqname>
     </hal>
+    <hal format="aidl">
+        <name>vendor.qti.hardware.qacs.ambientdatacapture</name>
+         <version>1</version>
+        <fqname>IAmbientDataCapture/default</fqname>
+    </hal>
 </manifest>
