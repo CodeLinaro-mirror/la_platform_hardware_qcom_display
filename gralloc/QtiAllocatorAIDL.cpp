@@ -435,8 +435,11 @@ static gralloc::BufferDescriptor convertAidlToGrallocDescriptor(const BufferDesc
 ndk::ScopedAStatus QtiAllocatorAIDL::allocate2(const BufferDescriptorInfo &in_descriptor,
                                                int32_t in_count, AllocationResult *_aidl_return) {
   ALOGD_IF(enable_logs_, "Allocating buffers count: %d", in_count);
-  if (!in_descriptor.additionalOptions.empty()) {
-    return ToBinderStatus(Error::UNSUPPORTED);
+  for (auto add_opt : in_descriptor.additionalOptions) {
+    if (std::find(supported_options_.begin(), supported_options_.end(), add_opt.name) ==
+        supported_options_.end()) {
+      return ToBinderStatus(Error::UNSUPPORTED);
+    }
   }
 
   gralloc::BufferDescriptor desc = convertAidlToGrallocDescriptor(in_descriptor);
@@ -451,9 +454,12 @@ ndk::ScopedAStatus QtiAllocatorAIDL::getIMapperLibrarySuffix(std::string *_aidl_
 
 ndk::ScopedAStatus QtiAllocatorAIDL::isSupported(const BufferDescriptorInfo &in_descriptor,
                                                  bool *_aidl_return) {
-  if (!in_descriptor.additionalOptions.empty()) {
-    *_aidl_return = false;
-    return ndk::ScopedAStatus::ok();
+  for (auto add_opt : in_descriptor.additionalOptions) {
+    if (std::find(supported_options_.begin(), supported_options_.end(), add_opt.name) ==
+        supported_options_.end()) {
+      *_aidl_return = false;
+      return ndk::ScopedAStatus::ok();
+    }
   }
 
   gralloc::BufferDescriptor desc = convertAidlToGrallocDescriptor(in_descriptor);
