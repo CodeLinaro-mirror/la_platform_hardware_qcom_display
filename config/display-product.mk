@@ -183,9 +183,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_hw_recovery_dump=1
 endif
 
-ifeq ($(TARGET_HAS_QTI_OPTIMIZATIONS), true)
+ifeq ($(TARGET_QCOM_IOT_LOW_RAM), true)
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_cache_manager=1 \
+    vendor.display.disable_layer_stitch=1 \
     ro.surface_flinger.max_frame_buffer_acquired_buffers=2
 endif
 
@@ -237,6 +238,8 @@ $(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 # BEFORE FRC
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
 # AFTER FRC

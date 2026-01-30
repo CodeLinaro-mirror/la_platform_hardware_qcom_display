@@ -140,6 +140,7 @@ public:
       SET_PANEL_FEATURE_CONFIG = 64,           // Common function, Set cfg for panel features
       GET_PANEL_RESOLUTION = 65,               // Get Panel resolution
       SET_STANDBY_MODE = 66,                   // Set standby mode
+      SET_PRIVACY_REGIONS = 67,                // Set PrivacyRegions on given layers in frame
       COMMAND_LIST_END = 400,
     };
 
