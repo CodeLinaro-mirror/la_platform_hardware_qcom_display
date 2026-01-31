@@ -16,6 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <utils/Log.h>
 
 #include "EGLImageWrapper.h"
@@ -123,8 +131,8 @@ int Tonemapper::blit(const void *dst, const void *src, int srcFenceFd)
   engine_bind(engineContext);
 
   // create eglimages if required
-  EGLImageBuffer *dst_buffer = eglImageWrapper->wrap(dst);
-  EGLImageBuffer *src_buffer = eglImageWrapper->wrap(src);
+  EGLImageBuffer *dst_buffer = eglImageWrapper->wrap(reinterpret_cast<const SnapHandle *>(dst));
+  EGLImageBuffer *src_buffer = eglImageWrapper->wrap(reinterpret_cast<const SnapHandle *>(src));
 
   // bind the program
   engine_setProgram(programID);
