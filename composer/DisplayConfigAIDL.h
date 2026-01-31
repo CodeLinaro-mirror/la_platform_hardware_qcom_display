@@ -66,6 +66,7 @@
 #include <core/display_interface.h>
 #include "hwc_common.h"
 #include "AidlComposerHandleImporter.h"
+#include "gr_snap_helper.h"
 
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
@@ -272,6 +273,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   void DestroyLayerStitch(uint64_t display);
 
   sdm::nsecs_t SystemTime(int clock);
+  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
 
  private:
   ScopedAStatus setCWBOutputBufferInternal(

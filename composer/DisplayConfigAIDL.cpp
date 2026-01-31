@@ -70,6 +70,11 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
       (sdm_factory->CreateDrawCycleIntf());
   sideband_ = sdm_factory->CreateSideBandIntf();
   layer_builder_ = sdm_factory->CreateLayerBuilderIntf();
+
+  snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+  if(snap_helper_ == nullptr) {
+    ALOGE("Failed to get snap helper instance");
+  }
 }
 
 int MapDisplayType(DisplayType dpy) {
@@ -1227,10 +1232,18 @@ void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlit
                      FLOAT(ctx->src_rect.right), FLOAT(ctx->src_rect.bottom)};
   GLRect dst_rect = {FLOAT(ctx->dst_rect.left), FLOAT(ctx->dst_rect.top),
                      FLOAT(ctx->dst_rect.right), FLOAT(ctx->dst_rect.bottom)};
-  native_handle_t *legacy_src_handle =
-      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->src_hnd));
-  native_handle_t *legacy_dst_handle =
-      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->dst_hnd));
+
+  native_handle_t *legacy_src_handle = nullptr;
+  native_handle_t *legacy_dst_handle = nullptr;
+
+  snap_helper_->GetGrallocHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(ctx->src_hnd),
+                                               &legacy_src_handle);
+  snap_helper_->GetGrallocHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(ctx->dst_hnd),
+                                               &legacy_dst_handle);
+  if(legacy_src_handle == nullptr || legacy_dst_handle == nullptr) {
+    ALOGE("Unable to get gralloc handle from snapalloc handle");
+    return;
+  }
 
   color_convert_map_.at(display)->Blit(legacy_src_handle, legacy_dst_handle, src_rect, dst_rect,
                                        ctx->src_acquire_fence, ctx->dst_acquire_fence,
