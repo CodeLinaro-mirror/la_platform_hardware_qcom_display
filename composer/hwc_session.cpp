@@ -2958,6 +2958,9 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
                 "client id = %d", info.display_id, UINT32(client_id));
           map_info.disp_type = info.display_type;
           map_info.sdm_id = info.display_id;
+          if (send_primary_hotplug_to_sf_) {
+            pending_hotplugs.push_back((hwc2_display_t)client_id);
+          }
         }
       }
       {
@@ -3070,10 +3073,6 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
       // Display is created for this sdm id, move to next connected display.
       break;
     }
-  }
-
-  if (send_primary_hotplug_to_sf_) {
-   callbacks_.Hotplug(client_id, HWC2::Connection::Connected);
   }
 
   // No display was created.
@@ -3883,7 +3882,13 @@ void HWCSession::WaitForResources(bool wait_for_resources, hwc2_display_t active
       }
       {
         std::unique_lock<std::mutex> caller_lock(hotplug_mutex_);
-        hotplug_cv_.wait(caller_lock);
+
+        const uint32_t min_vsync_period_ms = 100;
+        auto timeout = std::chrono::system_clock::now() +
+                         std::chrono::milliseconds(min_vsync_period_ms);
+        if (hotplug_cv_.wait_until(caller_lock, timeout) == std::cv_status::timeout) {
+          DLOGW("hotplug timeout");
+        }
       }
       res_wait = hwc_display_[display_id]->CheckResourceState();
     } while (res_wait);
