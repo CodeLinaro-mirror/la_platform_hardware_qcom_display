@@ -82,6 +82,9 @@ using aidl::android::hardware::graphics::common::PixelFormat;
 using aidl::android::hardware::graphics::common::Point;
 using aidl::android::hardware::graphics::common::Rect;
 using aidl::android::hardware::graphics::common::Transform;
+#ifdef COMPOSER3_V5
+using aidl::android::hardware::graphics::composer3::ActiveConfigCommand;
+#endif
 using aidl::android::hardware::graphics::composer3::BnComposerClient;
 using aidl::android::hardware::graphics::composer3::Buffer;
 using aidl::android::hardware::graphics::composer3::ClientTarget;
@@ -304,6 +307,11 @@ class AidlComposerClient : public BnComposerClient,
                                          Hdr *_aidl_return) override;
   ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t in_display,
                                                           bool in_enabled) override;
+#ifdef COMPOSER3_V5
+  ScopedAStatus getDisplayKnownVsyncSample(
+      int64_t in_display,
+      aidl::android::hardware::graphics::composer3::VsyncSample *aidl_return) override;
+#endif
 
   // Methods for ConcurrentWriteBack
   Error getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle);
@@ -435,6 +443,10 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetFrameIntervalNsInternal(int64_t display, int32_t frameIntervalNs);
 #ifdef COMPOSER3_V4
     void executeSetLayerLuts(int64_t display, int64_t layer, const Luts &luts);
+#endif
+
+#ifdef COMPOSER3_V5
+    void executeSetActiveConfigWithSeamless(int64_t display, const ActiveConfigCommand &config);
 #endif
 
     // Commands from extensions (QtiComposer3Client)
