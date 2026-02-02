@@ -48,6 +48,7 @@ AC_SUBST([CFLAGS])
 AC_SUBST([CC])
 AC_CONFIG_FILES([ \
         Makefile \
-        libqservice/Makefile
+        libqservice/Makefile \
+        libqdutils/Makefile
         ])
 AC_OUTPUT
