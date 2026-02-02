@@ -18,10 +18,10 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #ifndef __HWC_DISPLAY_H__
 #define __HWC_DISPLAY_H__
@@ -475,6 +475,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error PerformCacConfig(CacConfig config, bool enable) {
     return HWC2::Error::Unsupported;
   }
+  virtual HWC2::Error SetExtColorFormat(uint32_t color_format) {
+    return HWC2::Error::Unsupported;
+  }
   virtual bool IsCacV2Supported() {
     return false;
   }
@@ -659,6 +662,7 @@ class HWCDisplay : public DisplayEventHandler {
   shared_ptr<Fence> client_acquire_fence_ = nullptr;
   int32_t client_dataspace_ = 0;
   hwc_region_t client_damage_region_ = {};
+  DisplayNullExternal display_null_;
 
  private:
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);

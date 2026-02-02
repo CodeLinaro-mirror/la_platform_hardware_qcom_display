@@ -27,11 +27,16 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __HWC_DISPLAY_PLUGGABLE_H__
 #define __HWC_DISPLAY_PLUGGABLE_H__
 
 #include "hwc_display.h"
-#include "display_null.h"
 #include "hwc_display_event_handler.h"
 
 namespace sdm {
@@ -58,6 +63,7 @@ class HWCDisplayPluggable : public HWCDisplay {
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
   virtual HWC2::Error PreValidateDisplay(bool *exit_validate);
   virtual HWC2::Error PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC2::Error SetExtColorFormat(uint32_t color_format);
 
  private:
   HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
@@ -68,7 +74,6 @@ class HWCDisplayPluggable : public HWCDisplay {
   static void GetDownscaleResolution(uint32_t primary_width, uint32_t primary_height,
                                      uint32_t *virtual_width, uint32_t *virtual_height);
 
-  DisplayNullExternal display_null_;
   int underscan_width_ = 0;
   int underscan_height_ = 0;
   bool has_color_tranform_ = false;

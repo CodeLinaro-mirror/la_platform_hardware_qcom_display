@@ -23,8 +23,8 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -52,6 +52,7 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
   DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate,
                                    uint32_t *max_refresh_rate) override;
   DisplayError SetRefreshRate(uint32_t refresh_rate, bool final_rate, bool idle_screen) override;
+  DisplayError SetExtColorFormat(uint32_t color_format) override;
   bool IsUnderscanSupported() override;
   DisplayError InitializeColorModes() override;
   DisplayError SetColorMode(const std::string &color_mode) override;

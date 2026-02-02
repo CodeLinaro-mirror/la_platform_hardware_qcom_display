@@ -23,10 +23,10 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-  SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -211,6 +211,20 @@ DisplayError DisplayPluggable::SetRefreshRate(uint32_t refresh_rate, bool final_
 
   current_refresh_rate_ = refresh_rate;
   return DisplayBase::ReconfigureDisplay();
+}
+
+DisplayError DisplayPluggable::SetExtColorFormat(uint32_t color_format) {
+  ClientLock lock(disp_mutex_);
+
+  DisplayError error = dpu_core_mux_->SetExtColorFormat(color_format);
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  DisplayBase::ReconfigureDisplay();
+  event_handler_->Refresh();
+
+  return kErrorNone;
 }
 
 bool DisplayPluggable::IsUnderscanSupported() {

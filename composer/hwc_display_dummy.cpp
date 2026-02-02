@@ -52,13 +52,16 @@ int HWCDisplayDummy::Create(CoreInterface *core_intf, BufferAllocator *buffer_al
 
 void HWCDisplayDummy::Destroy(HWCDisplay *hwc_display) {
   delete hwc_display;
+  hwc_display = NULL;
 }
 
 HWC2::Error HWCDisplayDummy::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
+  PrepareLayerStack(out_num_types, out_num_requests);
   return HWC2::Error::None;
 }
 
 HWC2::Error HWCDisplayDummy::Present(shared_ptr<Fence> *out_retire_fence) {
+  PostCommitLayerStack(out_retire_fence);
   for (auto hwc_layer : layer_set_) {
     hwc_layer->SetReleaseFence(nullptr);
   }
@@ -85,6 +88,18 @@ HWCDisplayDummy::HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buff
   display_null_.SetFrameBufferConfig(config);
   num_configs_ = 1;
   display_intf_ = &display_null_;
+  client_target_ = new HWCLayer(id_, buffer_allocator_);
+  current_refresh_rate_ = max_refresh_rate_ = 60;
+  hwc_config_map_.resize(num_configs_);
+  variable_config_map_[0] = config;
+  hwc_config_map_.at(0) = 0;
+}
+
+HWC2::Error HWCDisplayDummy::GetDisplayRequests(int32_t *out_display_requests,
+                                                uint32_t *out_num_elements,
+                                                hwc2_layer_t *out_layers,
+                                                int32_t *out_layer_requests) {
+  return HWC2::Error::None;
 }
 
 HWC2::Error HWCDisplayDummy::GetActiveConfig(bool get_real_config, hwc2_config_t *out_config) {
