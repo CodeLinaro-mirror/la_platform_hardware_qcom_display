@@ -231,6 +231,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
                        buffer_handle_t *out_buffer_handle);
   int GetBaseView(native_handle_t *gr_hnd, uint32_t *view);
+  int GetBatchSize(native_handle_t *gr_hnd, int *batch_size);
 
  private:
   GrallocSnapHelper();
@@ -1076,6 +1077,13 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
   };
 
+  const std::unordered_map<vendor_qti_hardware_display_common_PixelFormatModifier, int> kBatchSize_{
+      {PIXEL_FORMAT_MODIFIER_UBWC_FLEX, 16},
+      {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH, 2},
+      {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH, 4},
+      {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH, 8},
+  };
+
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(
       SnapHandle *, uint32_t aidl_size, void *gralloc_in_set, void *gralloc_out_get,
       SnapDescriptor *buf_des, bool check_metadata_set, int32_t *mapper_return);
@@ -1416,8 +1424,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {BASE_VIEW, &GrallocSnapHelper::BaseViewHelper},
           {MULTI_VIEW_INFO, &GrallocSnapHelper::MultiViewHelper},
           {THREE_DIMENSIONAL_REF_INFO, &GrallocSnapHelper::ThreeDimensionalRefInfoHelper},
-          {VIEW_ID, &GrallocSnapHelper::ViewIdHelper},
-      };
+          {VIEW_ID, &GrallocSnapHelper::ViewIdHelper}};
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       bufferdescription_conversion_helper_function_map = {
