@@ -1708,7 +1708,18 @@ int GetImplDefinedFormat(uint64_t usage, int format) {
         if ((usage & BufferUsage::PROTECTED) && (!CanAllocateZSLForSecureCamera())) {
           gr_format = static_cast<int>(PixelFormat::YCRCB_420_SP);  // NV21
         } else {
-          gr_format = HAL_PIXEL_FORMAT_NV21_ZSL;  // NV21
+          if (!AdrenoMemInfo::IsGpuNodePresent()) {
+            /*
+            On No-GPU SKUs, SwiftShader cannot resolve HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED
+            to an actual GPU format. GraphicBuffer’s constructor translates
+            IMPLEMENTATION_DEFINED with GRALLOC_USAGE_HW_CAMERA_WRITE into YCBCR_420_888 format
+            when no GPU is present.
+            For such cases, keep the format as NV12 preview.
+            */
+            gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS;  // NV12 preview
+          } else {
+            gr_format = HAL_PIXEL_FORMAT_NV21_ZSL;  // NV21
+          }
         }
       } else {
         gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS;  // NV12 preview
