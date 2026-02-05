@@ -512,7 +512,6 @@ case "$target" in
         setprop vendor.display.disable_offline_rotator 0
         setprop vendor.display.enable_qsync_idle 1
         setprop vendor.display.disable_rotator_ubwc 1
-        setprop vendor.display.allow_tonemap_native 1
         setprop vendor.gralloc.allow_camera_preview_write 1
         setprop vendor.display.perf.version 4
         setprop vendor.display.cpu_cluster_boost_mask 6
