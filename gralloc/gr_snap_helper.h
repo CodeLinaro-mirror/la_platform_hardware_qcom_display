@@ -559,6 +559,17 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            TP10_UBWC_FLEX_4_BATCH},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            TP10_UBWC_FLEX_8_BATCH},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX},
+           static_cast<int>(SnapPixelFormat::P210_UBWC_FLEX)},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH},
+           static_cast<int>(SnapPixelFormat::P210_UBWC_FLEX_2_BATCH)},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH},
+           static_cast<int>(SnapPixelFormat::P210_UBWC_FLEX_4_BATCH)},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
+           static_cast<int>(SnapPixelFormat::P210_UBWC_FLEX_8_BATCH)},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -801,6 +812,17 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::YCbCr_420_SP,
             .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            SnapPixelFormat::NV12_UBWC_FLEX_8_BATCH},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX},
+           SnapPixelFormat::P210_UBWC_FLEX},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH},
+           SnapPixelFormat::P210_UBWC_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH},
+           SnapPixelFormat::P210_UBWC_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
+           SnapPixelFormat::P210_UBWC_FLEX_8_BATCH},
           // Remove entries with PIXEL_FORMAT_MODIFIER_EXPLICIT_UBWC when support for
           // explicit UBWC formats get deprecated with SNAP_SUPPORTS_EXPLICIT_UBWC_FORMATS
           {{.format = SnapPixelFormat::YCbCr_420_SP,
@@ -892,6 +914,17 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            TP10_UBWC_FLEX_4_BATCH},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            TP10_UBWC_FLEX_8_BATCH},
+          {{.format = SnapPixelFormat::YCBCR_P210, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX},
+           SnapPixelFormat::P210_UBWC_FLEX},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH},
+           SnapPixelFormat::P210_UBWC_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH},
+           SnapPixelFormat::P210_UBWC_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::YCBCR_P210,
+            .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
+           SnapPixelFormat::P210_UBWC_FLEX_8_BATCH},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_ubwc_to_snap_format_;
