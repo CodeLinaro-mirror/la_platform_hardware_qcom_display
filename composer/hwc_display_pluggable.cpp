@@ -34,6 +34,12 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <cutils/properties.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -284,8 +290,19 @@ int HWCDisplayPluggable::SetState(bool connected) {
       display_null_.GetFrameBufferConfig(&fb_config);
       int status = SetFrameBufferResolution(fb_config.x_pixels, fb_config.y_pixels);
       if (status) {
-        DLOGW("Set frame buffer config failed. Error = %d", error);
-        return -1;
+        DLOGW("Set config (%ux%u) failed, set active config",
+               fb_config.x_pixels, fb_config.y_pixels);
+        uint32_t active_config_index = UINT32_MAX;
+        display_intf_->GetActiveConfig(&active_config_index);
+        DisplayConfigVariableInfo active_config = {};
+        display_intf_->GetConfig(active_config_index, &active_config);
+        status = SetFrameBufferConfig(active_config.x_pixels, active_config.y_pixels);
+        if (status) {
+          DLOGW("Set frame buffer config failed. Error = %d", error);
+          return -1;
+        }
+        fb_config.x_pixels = active_config.x_pixels;
+        fb_config.y_pixels = active_config.y_pixels;
       }
       shared_ptr<Fence> release_fence = nullptr;
       display_null_.GetDisplayState(&state);
