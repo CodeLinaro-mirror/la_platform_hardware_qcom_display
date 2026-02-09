@@ -958,6 +958,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {(uint64_t)SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO, SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO},
       {(uint64_t)SnapUsage::QTI_PRIVATE_CLONED_MULTI_VIEW_INFO,
        SnapUsage::QTI_PRIVATE_CLONED_MULTI_VIEW_INFO},
+      {(uint64_t)SnapUsage::GPU_SUBSAMPLE_ENABLED, SnapUsage::GPU_SUBSAMPLE_ENABLED},
+      {(uint64_t)SnapUsage::GPU_SUBSAMPLE_OFFSET_ENABLED, SnapUsage::GPU_SUBSAMPLE_OFFSET_ENABLED},
+      {(uint64_t)SnapUsage::QTI_PRIVATE_BATCH_COMMIT, SnapUsage::QTI_PRIVATE_BATCH_COMMIT},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
