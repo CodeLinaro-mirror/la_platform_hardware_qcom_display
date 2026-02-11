@@ -143,6 +143,7 @@ class CoreImpl : public CoreInterface {
   char *raw_mapped_buffer_ = nullptr;
   std::vector<uint32_t> demura_display_ids_;
   bool enable_null_display_ = false;
+  bool drm_node_unavailable_ = false;
 };
 
 }  // namespace sdm
