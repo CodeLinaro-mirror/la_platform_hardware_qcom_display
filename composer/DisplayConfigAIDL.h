@@ -105,12 +105,14 @@ using DisplayConfiguration = composer3::DisplayConfiguration;
 using HwcDisplayCapability = composer3::DisplayCapability;
 using HwcDisplayConnectionType = composer3::DisplayConnectionType;
 using HwcClientTargetProperty = composer3::ClientTargetProperty;
+using ::aidl::android::hardware::graphics::common::Hdr;
 using ::aidl::vendor::qti::hardware::display::composer3::ComposerHandleImporter;
 using ::aidl::vendor::qti::hardware::display::config::Attributes;
 using ::aidl::vendor::qti::hardware::display::config::CacV2Config;
 using ::aidl::vendor::qti::hardware::display::config::CacV2ConfigExt;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
+using ::aidl::vendor::qti::hardware::display::config::HDRCapsParams;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfig;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
 using ::aidl::vendor::qti::hardware::display::config::TUIEventType;
@@ -251,6 +253,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   ScopedAStatus allowIdleFallback() { return ScopedAStatus::ok(); }
 #ifdef IDISPLAYCONFIG_12
   ScopedAStatus setContentFps(const std::string &in_name, int32_t in_fps) override;
+#endif
+#ifdef IDISPLAYCONFIG_16
+  ScopedAStatus setHDRCapabilities(DisplayType dpy, const HDRCapsParams &caps) override;
 #endif
 
   void NotifyQsyncChange(uint64_t display_id, bool qsync_enabled, uint32_t refresh_rate,

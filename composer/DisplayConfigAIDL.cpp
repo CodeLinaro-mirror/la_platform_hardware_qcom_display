@@ -325,6 +325,57 @@ ScopedAStatus DisplayConfigAIDL::getHDRCapabilities(DisplayType dpy, HDRCapsPara
   return ScopedAStatus::ok();
 }
 
+#ifdef IDISPLAYCONFIG_16
+ScopedAStatus DisplayConfigAIDL::setHDRCapabilities(DisplayType dpy, const HDRCapsParams &caps) {
+  int disp_id = MapDisplayType(dpy);
+
+  // HDR capabilities are only set for virtual display
+  if (disp_id != qdutils::DISPLAY_VIRTUAL) {
+    ALOGW("%s: Setting hdr capabilities on non virtual display is not supported", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
+  }
+
+  // Validate luminance values
+  if (caps.minLuminance < 0.0f || caps.minLuminance > 1.0f) {
+    ALOGW("%s: Invalid minLuminance value: %.2f", __FUNCTION__, caps.minLuminance);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  if (caps.maxAvgLuminance < 100.0f || caps.maxAvgLuminance > 10000.0f) {
+    ALOGW("%s: Invalid maxAvgLuminance value: %.2f", __FUNCTION__, caps.maxAvgLuminance);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  std::vector<sdm::Hdr> hdr_types;
+  for (auto it = caps.supportedHdrTypes.begin(); it != caps.supportedHdrTypes.end(); it++) {
+    switch (*it) {
+      case static_cast<int>(Hdr::DOLBY_VISION):
+        hdr_types.emplace_back(sdm::Hdr::DOLBY_VISION);
+        break;
+
+      case static_cast<int>(Hdr::HDR10):
+        hdr_types.emplace_back(sdm::Hdr::HDR10);
+        break;
+
+      case static_cast<int>(Hdr::HLG):
+        hdr_types.emplace_back(sdm::Hdr::HLG);
+        break;
+
+      case static_cast<int>(Hdr::HDR10_PLUS):
+        hdr_types.emplace_back(sdm::Hdr::HDR10_PLUS);
+        break;
+      default:
+        ALOGW("Unsupported hdr type %d", *it);
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+  }
+
+  settings_->SetHdrCapabilities(disp_id, hdr_types, caps.maxAvgLuminance, caps.minLuminance);
+
+  return ScopedAStatus::ok();
+}
+#endif
+
 ScopedAStatus DisplayConfigAIDL::setCameraLaunchStatus(int on) {
   sideband_->SetCameraLaunchStatus(on);
   return ScopedAStatus::ok();
