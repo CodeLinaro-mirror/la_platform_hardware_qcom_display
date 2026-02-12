@@ -78,6 +78,11 @@ void QtiAllocatorAIDL::LoadQtiMapper5() {
     }
 
     auto loadIMapper = (AIMapper_loadIMapperFn)dlsym(so, "AIMapper_loadIMapper");
+    if (!loadIMapper) {
+      ALOGE("AIMapper_loadIMapper not found");
+      return;
+    }
+
     AIMapper_Error error = loadIMapper(&mapper_);
     if (error != AIMAPPER_ERROR_NONE) {
       ALOGW("AIMapper_loadIMapper failed %d", error);
@@ -158,6 +163,11 @@ int QtiAllocatorAIDL::dumpAllocationData(std::vector<buffer_handle_t> buffers,
     }
 
     auto loadIMapper = (AIMapper_loadIMapperFn)dlsym(so, "AIMapper_loadIMapper");
+    if (!loadIMapper) {
+      ALOGE("AIMapper_loadIMapper not found");
+      return AIMAPPER_ERROR_BAD_VALUE;
+    }
+
     AIMapper_Error error = loadIMapper(&mapper_);
     if (error != AIMAPPER_ERROR_NONE) {
       ALOGE("AIMapper_loadIMapper failed %d", error);
