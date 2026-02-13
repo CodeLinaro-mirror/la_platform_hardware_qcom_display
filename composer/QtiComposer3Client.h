@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -25,6 +25,10 @@ using aidl::android::hardware::graphics::composer3::CommandResultPayload;
 using aidl::android::hardware::graphics::composer3::DisplayCommand;
 using aidl::vendor::qti::hardware::display::composer3::AidlComposerClient;
 using aidl::vendor::qti::hardware::display::composer3::QtiDisplayCommand;
+#ifdef TARGET_USES_LSR
+using aidl::vendor::qti::hardware::display::composer3::QtiDisplayDeviceConfig;
+using aidl::vendor::qti::hardware::display::composer3::QtiDisplayProjectionMatrix;
+#endif
 using aidl::vendor::qti::hardware::display::composer3::QtiDrawMethod;
 using ::android::binder::Status;
 using ndk::ScopedAStatus;
@@ -42,12 +46,20 @@ class QtiComposer3Client : public BnQtiComposer3Client {
                                    const std::vector<QtiDisplayCommand> &in_qtiCommands,
                                    std::vector<CommandResultPayload> *_aidl_return);
   ScopedAStatus qtiTryDrawMethod(int64_t in_display, QtiDrawMethod in_drawMethod);
+#ifdef TARGET_USES_LSR
+  ScopedAStatus qtiSetDisplayDeviceConfig(int64_t in_display,
+                                          const QtiDisplayDeviceConfig &in_displayDeviceConfig);
+#endif
   ScopedAStatus init(const std::weak_ptr<AidlComposerClient> &composer_client);
 
  protected:
   SpAIBinder createBinder() override;
 
  private:
+#ifdef TARGET_USES_LSR
+  void GetSDMDisplayDeviceConfig(const QtiDisplayDeviceConfig &qti_device_config,
+                                 sdm::SDMDisplayDeviceConfig &sdm_device_config);
+#endif
   std::weak_ptr<AidlComposerClient> composer_client_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
 };

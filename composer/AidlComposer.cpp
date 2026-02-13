@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -43,7 +43,11 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
   caps_ = sdm_factory->CreateCapsIntf();
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
-  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
+  drawcycle_ =
+#ifdef COMPOSER3_V3
+      reinterpret_pointer_cast<SDMDisplayDrawCycleIntfV>
+#endif
+      (sdm_factory->CreateDrawCycleIntf());
   layers_ = sdm_factory->CreateLayerBuilderIntf();
   sideband_ = sdm_factory->CreateSideBandIntf();
 
@@ -52,12 +56,23 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
   qservice_->Init();
 
   // initialize SDMClient
-  lifecycle_->Init(&buffer_allocator_, &socket_handler_, &hwc_debugger_);
-
-  ALOGI("Created AidlComposer");
+  auto error = lifecycle_->Init(&buffer_allocator_, &socket_handler_, &hwc_debugger_);
+  if (error) {
+    ALOGE("Failed to initialize SDMClient!");
+    caps_ = nullptr;
+    settings_ = nullptr;
+    lifecycle_ = nullptr;
+    drawcycle_ = nullptr;
+    layers_ = nullptr;
+    sideband_ = nullptr;
+  } else {
+    ALOGI("Created AidlComposer");
+  }
 }
 
-AidlComposer::~AidlComposer() {}
+AidlComposer::~AidlComposer() {
+  lifecycle_->Deinit();
+}
 
 ScopedAStatus AidlComposer::createClient(std::shared_ptr<IComposerClient> *aidl_return) {
   std::unique_lock<std::mutex> lock(mClientMutex);
@@ -94,17 +109,20 @@ binder_status_t AidlComposer::dump(int fd, const char ** /*args*/, uint32_t /*nu
   sideband_->Dump(&len, nullptr);
   output.resize(len + 1);
 
-  sideband_->Dump(&len, output.data());;
+  sideband_->Dump(&len, output.data());
 
-  output[len] = '\0';
-  write(fd, output.c_str(), output.size());
+  write(fd, output.c_str(), len);
 
   return STATUS_OK;
 }
 
 ScopedAStatus AidlComposer::getCapabilities(std::vector<Capability> *aidl_return) {
-  const std::array<Capability, 2> all_caps = {{
+  const std::array<Capability, 3> all_caps = {{
       Capability::SIDEBAND_STREAM,
+#ifdef COMPOSER3_V3
+      Capability::LAYER_LIFECYCLE_BATCH_COMMAND,
+#endif
+      Capability::PRESENT_FENCE_IS_NOT_RELIABLE,
   }};
 
   uint32_t count = 0;

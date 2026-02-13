@@ -1,5 +1,8 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
+
+BUILD_DISPLAY_TECHPACK_SOURCE := true
+BUILD_DISPLAY_TECHPACK_SOURCE_VARIANT := true
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
@@ -42,6 +45,9 @@ ifeq ($(TARGET_BOARD_PLATFORM),niobe)
     #TBD: derived from qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_right.json
+
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_left.json
+    PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC_right.json
 endif
 
 #Backlight calibration xml file for vtdr6130 amoled panels
@@ -83,9 +89,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.late.app.duration=13666666 \
     debug.sf.early.app.duration=13666666 \
     debug.sf.earlyGl.app.duration=13666666 \
-    debug.sf.early.sf.duration=10500000 \
-    debug.sf.earlyGl.sf.duration=10500000 \
-    debug.sf.late.sf.duration=10500000 \
     vendor.display.enable_async_vds_creation=1 \
     vendor.display.enable_rounded_corner=1 \
     vendor.display.disable_3d_adaptive_tm=1 \
@@ -97,16 +100,42 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.treat_170m_as_sRGB=1 \
     debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.enable_display_extensions=1 \
-    vendor.gralloc.enable_snapalloc=1
+    vendor.gralloc.enable_snapalloc=1 \
+    vendor.display.disable_fp16_support=1
 
-# Enable offline rotator for Bengal.
-ifneq ($(TARGET_BOARD_PLATFORM),bengal)
+ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.early.sf.duration=15555555 \
+    debug.sf.earlyGl.sf.duration=15555555 \
+    debug.sf.late.sf.duration=15555555
+else
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.early.sf.duration=10500000 \
+    debug.sf.earlyGl.sf.duration=10500000 \
+    debug.sf.late.sf.duration=10500000
+endif
+
+# Enable offline rotator for Bengal, Khaje and Monaco
+ifneq ($(filter bengal khaje monaco, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_offline_rotator=1
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1 \
-    vendor.display.disable_layer_stitch=0
+    debug.sf.enable_hwc_vds=0
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),monaco)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_layer_stitch=1 \
+    vendor.display.secure_preview_buffer_format=420_sp \
+    vendor.gralloc.secure_preview_buffer_format=420_sp \
+    vendor.display.disable_idle_time_hdr=1 \
+    vendor.display.disable_idle_time_video=1 \
+    vendor.display.enable_camera_smooth=1 \
+    vendor.display.enable_posted_start_dyn=1 \
+    vendor.display.enhance_idle_time=1 \
+    vendor.display.lcd_density=160
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),holi)
@@ -128,13 +157,22 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_HDR_display=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.use_color_management=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.wcg_composition_dataspace=143261696
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
-PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.use_content_detection_for_refresh_rate=true
+ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+  PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
+      ro.surface_flinger.use_content_detection_for_refresh_rate=false
+else
+  PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
+      ro.surface_flinger.use_content_detection_for_refresh_rate=true
+endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.set_touch_timer_ms=200
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_frame_buffer_acquired_buffers=3
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dimension=4096
 ifeq ($(TARGET_BOARD_PLATFORM),canoe)
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=1
+endif
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), chora malabar), $(TARGET_BOARD_PLATFORM))
+  PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=0
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.clear_slots_with_set_layer_buffer=false
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate_override=60
@@ -150,6 +188,14 @@ else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_hw_recovery_dump=1
 endif
+
+ifeq ($(TARGET_QCOM_IOT_LOW_RAM), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_cache_manager=1 \
+    vendor.display.disable_layer_stitch=1 \
+    ro.surface_flinger.max_frame_buffer_acquired_buffers=2
+endif
+
 TARGET_IS_HEADLESS := false
 
 ifeq ($(TARGET_USES_QMAA),true)
@@ -159,72 +205,91 @@ ifeq ($(TARGET_USES_QMAA),true)
     endif
 endif
 
-# Soong Namespace
-SOONG_CONFIG_NAMESPACES += qtidisplay
+# Soong Namespace Keys Values
+$(call soong_config_set, qtidisplay, neo, false )
+$(call soong_config_set, qtidisplay, drmpp, true )
+$(call soong_config_set, qtidisplay, headless, false )
+$(call soong_config_set, qtidisplay, llvmsa, false )
+$(call soong_config_set, qtidisplay, gralloc4, true )
+$(call soong_config_set, qtidisplay, displayconfig_enabled, false )
+$(call soong_config_set, qtidisplay, default, true )
+$(call soong_config_set, qtidisplay, var1, false )
+$(call soong_config_set, qtidisplay, var2, false )
+$(call soong_config_set, qtidisplay, var3, false )
+$(call soong_config_set, qtidisplay, hwasan, false )
+$(call soong_config_set, qtidisplay, hy11, false )
+$(call soong_config_set, qtidisplay, hy22, false )
+$(call soong_config_set, qtidisplay, hy33, false )
+$(call soong_config_set, qtidisplay, llvmcov, false )
+$(call soong_config_set, qtidisplay, smmu_proxy, false )
+$(call soong_config_set, qtidisplay, ubwcp_headers, true )
+$(call soong_config_set, qtidisplay, composer_version, v3_5 )
+$(call soong_config_set, qtidisplay, mapper_ext, true )
+$(call soong_config_set, qtidisplay, hw_fence_disabled, false)
+$(call soong_config_set, qtidisplay, lsr_target, false )
+$(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 
-# Soong Keys
-SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
-                           gralloc4 displayconfig_enabled \
-                           default var1 var2 var3 llvmcov  \
-                           composer_version smmu_proxy \
-                           ubwcp_headers hwasan mapper_ext \
-                           neo
+# Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
+# PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
+# PLATFORM_VERSION contains the version number of the current Android version.
+# Before FRC, PLATFORM_VERSION matches with PLATFORM_VERSION_CODENAME.
+# Example:
+# Android V (After FRC)
+#   PLATFORM_VERSION_CODENAME = VanillaIceCream, PLATFORM_VERSION = 15
+# Android W (Before FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = W
+# Android W (After FRC)
+#   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = 16
 
-# Soong Values
-SOONG_CONFIG_qtidisplay_neo := false
-SOONG_CONFIG_qtidisplay_drmpp := true
-SOONG_CONFIG_qtidisplay_headless := false
-SOONG_CONFIG_qtidisplay_llvmsa := false
-SOONG_CONFIG_qtidisplay_gralloc4 := true
-SOONG_CONFIG_qtidisplay_displayconfig_enabled := false
-SOONG_CONFIG_qtidisplay_default := true
-SOONG_CONFIG_qtidisplay_var1 := false
-SOONG_CONFIG_qtidisplay_var2 := false
-SOONG_CONFIG_qtidisplay_var3 := false
-SOONG_CONFIG_qtidisplay_hwasan := false
-SOONG_CONFIG_qtidisplay_llvmcov := false
-SOONG_CONFIG_qtidisplay_smmu_proxy := false
-SOONG_CONFIG_qtidisplay_ubwcp_headers := true
-SOONG_CONFIG_qtidisplay_composer_version := v3
-SOONG_CONFIG_qtidisplay_mapper_ext := true
-
-ifeq ($(PLATFORM_VERSION), 14)
-    SOONG_CONFIG_qtidisplay_mapper_ext := false
-endif
-
-ifeq ($(PLATFORM_VERSION), 15)
-    SOONG_CONFIG_qtidisplay_composer_version := v3_3
-endif
-
-ifeq ($(PLATFORM_VERSION), VanillaIceCream)
-    SOONG_CONFIG_qtidisplay_composer_version := v3_3
+# BEFORE FRC
+ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+    endif
+# AFTER FRC
+else
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 14))
+      $(call soong_config_set, qtidisplay, composer_version, v3_2 )
+      $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 15))
+      $(call soong_config_set, qtidisplay, composer_version, v3_3 )
+      $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
+      $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
+      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+    endif
 endif
 
 ifeq ($(TARGET_USES_SMMU_PROXY),true)
-    SOONG_CONFIG_qtidisplay_smmu_proxy := true
+    $(call soong_config_set, qtidisplay, smmu_proxy, true )
     $(warning "Using smmu proxy")
 endif
 
-ifeq ($(call is-vendor-board-platform,QCOM),true)
-    SOONG_CONFIG_qtidisplay_displayconfig_enabled := true
+ifneq (,$(call is-vendor-board-qcom))
+    $(call soong_config_set, qtidisplay, displayconfig_enabled, true )
 endif
 
-
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), kalama niobe), $(TARGET_BOARD_PLATFORM))
-    SOONG_CONFIG_qtidisplay_ubwcp_headers := false
+    $(call soong_config_set, qtidisplay, ubwcp_headers, false )
 endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
-    SOONG_CONFIG_qtidisplay_neo := true
+    $(call soong_config_set, qtidisplay, neo, true )
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+    $(call soong_config_set, qtidisplay, hw_fence_disabled, true )
 endif
 
 # Techpack values
 ifeq ($(TARGET_IS_HEADLESS), true)
     # TODO: QMAA prebuilts
     PRODUCT_SOONG_NAMESPACES += hardware/qcom/display/qmaa
-    SOONG_CONFIG_qtidisplay_headless := true
-    SOONG_CONFIG_qtidisplay_default := false
-    SOONG_CONFIG_qtidisplay_composer_version := qmaa
+    $(call soong_config_set, qtidisplay, headless, true )
+    $(call soong_config_set, qtidisplay, default, false )
 else
     #Packages that should not be installed in QMAA are enabled here.
     PRODUCT_PACKAGES += libdrmutils
@@ -234,30 +299,33 @@ else
     PRODUCT_PROPERTY_OVERRIDES += \
         vendor.display.enable_early_wakeup=1
     ifneq ($(BUILD_DISPLAY_TECHPACK_SOURCE), true)
-        SOONG_CONFIG_qtidisplay_var1 := true
-        SOONG_CONFIG_qtidisplay_var2 := true
-        SOONG_CONFIG_qtidisplay_var3 := true
+        $(call soong_config_set, qtidisplay, var1, true )
+        $(call soong_config_set, qtidisplay, var2, true )
+        $(call soong_config_set, qtidisplay, var3, true )
+        $(call soong_config_set, qtidisplay, hy11, true )
+        $(call soong_config_set, qtidisplay, hy22, true )
+        $(call soong_config_set, qtidisplay, hy33, true )
     endif
     ifneq ($(BUILD_DISPLAY_TECHPACK_SOURCE_VARIANT), true)
-        SOONG_CONFIG_qtidisplay_var1 := true
-        SOONG_CONFIG_qtidisplay_var2 := true
+        $(call soong_config_set, qtidisplay, var1, true )
+        $(call soong_config_set, qtidisplay, var2, true )
+        $(call soong_config_set, qtidisplay, hy11, true )
+        $(call soong_config_set, qtidisplay, hy22, true )
     endif
 
     ifeq ($(PROFILE_COVERAGE_DATA), true)
-        SOONG_CONFIG_qtidisplay_llvmcov := true
+        $(call soong_config_set, qtidisplay, llvmcov, true )
     endif
 
     ifneq ($(filter hwaddress,$(SANITIZE_TARGET)),)
-        SOONG_CONFIG_qtidisplay_hwasan := true
-        $(warning "using SOONG_CONFIG_qtidisplay_hwasan")
+        $(call soong_config_set, qtidisplay, hwasan, true )
     endif
 
     ifeq (,$(wildcard $(QCPATH)/display-noship))
-        SOONG_CONFIG_qtidisplay_var1 := true
-    endif
-
-    ifeq (,$(wildcard $(QCPATH)/display))
-        SOONG_CONFIG_qtidisplay_var2 := true
+        $(call soong_config_set, qtidisplay, var1, true )
+        $(call soong_config_set, qtidisplay, var2, true )
+        $(call soong_config_set, qtidisplay, hy11, true )
+        $(call soong_config_set, qtidisplay, hy22, true )
     endif
 endif
 

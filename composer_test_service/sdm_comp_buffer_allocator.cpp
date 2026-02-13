@@ -119,7 +119,8 @@ int SDMCompBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   BufferPermission buf_perm[BUFFER_CLIENT_MAX];
   int format;
   uint64_t alloc_flags = 0;
-  int error = SetBufferInfo(buffer_config.format, &format, &alloc_flags);
+  uint64_t pixel_format_modifier = 0;
+  int error = SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier);
   if (error != 0) {
     return -EINVAL;
   }
@@ -470,6 +471,10 @@ LayerBufferFormat SDMCompBufferAllocator::GetFormatSDM(const int32_t &source, co
       case HAL_PIXEL_FORMAT_RGBA_FP16:
         format = kFormatRGBA16161616FUbwc;
         break;
+      case HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC:
+      case HAL_PIXEL_FORMAT_YCbCr_422_P210:
+        format = kFormatYCbCr422P210Ubwc;
+        break;
       default:
         DLOGW("Unsupported format type for UBWC %s", qdutils::GetHALPixelFormatString(source));
         return kFormatInvalid;
@@ -577,6 +582,12 @@ LayerBufferFormat SDMCompBufferAllocator::GetFormatSDM(const int32_t &source, co
       break;
     case static_cast<int>(APixelFormat::R_8):
       format = kFormatA8;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC:
+      format = kFormatYCbCr422P210Ubwc;
+      break;
+    case HAL_PIXEL_FORMAT_YCbCr_422_P210:
+      format = kFormatYCbCr422P210;
       break;
     default:
       DLOGW("Unsupported format type = %s", qdutils::GetHALPixelFormatString(source));
@@ -712,7 +723,8 @@ uint32_t SDMCompBufferAllocator::GetBufferSize(BufferInfo *buffer_info) {
     alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
   }
 
-  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags) < 0) {
+  uint64_t pixel_format_modifier = 0;
+  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier) < 0) {
     return 0;
   }
 
@@ -727,7 +739,8 @@ uint32_t SDMCompBufferAllocator::GetBufferSize(BufferInfo *buffer_info) {
   return 0;
 }
 
-int SDMCompBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags) {
+int SDMCompBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags,
+                                          uint64_t *pixel_format_modifier) {
   switch (format) {
     case kFormatRGBA8888:
       *target = static_cast<int>(PixelFormat::RGBA_8888);
@@ -856,6 +869,13 @@ int SDMCompBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target,
       *target = HAL_PIXEL_FORMAT_RGBA_FP16;
       *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
       break;
+    case kFormatYCbCr422P210:
+      *target = HAL_PIXEL_FORMAT_YCbCr_422_P210;
+      break;
+    case kFormatYCbCr422P210Ubwc:
+      *target = HAL_PIXEL_FORMAT_YCbCr_422_P210_UBWC;
+      *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+      break;
     default:
       DLOGW("Unsupported format = 0x%x", format);
       return -EINVAL;
@@ -883,7 +903,8 @@ int SDMCompBufferAllocator::GetAllocatedBufferInfo(
     alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
   }
 
-  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags) < 0) {
+  uint64_t pixel_format_modifier = 0;
+  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags, &pixel_format_modifier) < 0) {
     return -EINVAL;
   }
 
@@ -916,8 +937,9 @@ int SDMCompBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
   int plane_count = 0;
   uint64_t flags = 0;
   uint32_t size = 0;
+  uint64_t pixel_format_modifier = 0;
   gralloc::PlaneLayoutInfo *plane_layout_info_ptr;
-  SetBufferInfo(buf_info.format, &format, &flags);
+  SetBufferInfo(buf_info.format, &format, &flags, &pixel_format_modifier);
   // Setup only the required stuff, skip rest
   if (flags & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC) {
     flags = qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
@@ -977,6 +999,10 @@ int SDMCompBufferAllocator::GetBufferLayout(const AllocatedBufferInfo &buf_info,
 
 int SDMCompBufferAllocator::MapBuffer(void *handle, shared_ptr<Fence> acquire_fence,
                                       void **base_ptr) {
+  if (handle == nullptr) {
+    DLOGE("Failed to Map buffer Invalid handle");
+    return kErrorUndefined;
+  }
   auto err = GetGrallocInstance();
   if (err != 0) {
     DLOGW("Could not get gralloc instance");

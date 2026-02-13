@@ -16,7 +16,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -74,7 +74,7 @@ class AidlComposer : public BnComposer {
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
   std::shared_ptr<SDMDisplaySettingsIntf> settings_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
-  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle_;
   std::shared_ptr<SDMDisplayLayerBuilderIntf> layers_;
   std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
 

@@ -7,6 +7,7 @@ cc_library_shared {
         enabled: true,
     },
     header_libs: [
+        "display_intf_headers",
         "libhardware_headers",
         "libutils_headers",
     ],

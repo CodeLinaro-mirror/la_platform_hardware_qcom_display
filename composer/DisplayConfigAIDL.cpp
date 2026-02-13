@@ -28,11 +28,10 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-
 
 #include <QtiGralloc.h>
 #include <aidl/vendor/qti/hardware/display/demura/IDemuraFileFinder.h>
@@ -64,9 +63,20 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
   lifecycle_->RegisterSideBandCallback(this, true);
-  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
+  drawcycle_ =
+#ifdef COMPOSER3_V3
+      reinterpret_pointer_cast<SDMDisplayDrawCycleIntfV>
+#endif
+      (sdm_factory->CreateDrawCycleIntf());
   sideband_ = sdm_factory->CreateSideBandIntf();
   layer_builder_ = sdm_factory->CreateLayerBuilderIntf();
+}
+
+DisplayConfigAIDL::~DisplayConfigAIDL() {
+  if (pose_handle_) {
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
+    pose_handle_ = nullptr;
+  }
 }
 
 int MapDisplayType(DisplayType dpy) {
@@ -235,9 +245,10 @@ ScopedAStatus DisplayConfigAIDL::setPanelBrightness(int level) {
   }
 
   if (level == 0) {
-    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, -1.0f, false);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, -1.0f, /*apply_immediately*/ true);
   } else {
-    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f, false);
+    settings_->SetDisplayBrightness(sdm::HWC_DISPLAY_PRIMARY, (level - 1) / 254.0f,
+                                    /*apply_immediately*/ true);
   }
   return ScopedAStatus::ok();
 }
@@ -314,6 +325,57 @@ ScopedAStatus DisplayConfigAIDL::getHDRCapabilities(DisplayType dpy, HDRCapsPara
   return ScopedAStatus::ok();
 }
 
+#ifdef IDISPLAYCONFIG_16
+ScopedAStatus DisplayConfigAIDL::setHDRCapabilities(DisplayType dpy, const HDRCapsParams &caps) {
+  int disp_id = MapDisplayType(dpy);
+
+  // HDR capabilities are only set for virtual display
+  if (disp_id != qdutils::DISPLAY_VIRTUAL) {
+    ALOGW("%s: Setting hdr capabilities on non virtual display is not supported", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
+  }
+
+  // Validate luminance values
+  if (caps.minLuminance < 0.0f || caps.minLuminance > 1.0f) {
+    ALOGW("%s: Invalid minLuminance value: %.2f", __FUNCTION__, caps.minLuminance);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  if (caps.maxAvgLuminance < 100.0f || caps.maxAvgLuminance > 10000.0f) {
+    ALOGW("%s: Invalid maxAvgLuminance value: %.2f", __FUNCTION__, caps.maxAvgLuminance);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  std::vector<sdm::Hdr> hdr_types;
+  for (auto it = caps.supportedHdrTypes.begin(); it != caps.supportedHdrTypes.end(); it++) {
+    switch (*it) {
+      case static_cast<int>(Hdr::DOLBY_VISION):
+        hdr_types.emplace_back(sdm::Hdr::DOLBY_VISION);
+        break;
+
+      case static_cast<int>(Hdr::HDR10):
+        hdr_types.emplace_back(sdm::Hdr::HDR10);
+        break;
+
+      case static_cast<int>(Hdr::HLG):
+        hdr_types.emplace_back(sdm::Hdr::HLG);
+        break;
+
+      case static_cast<int>(Hdr::HDR10_PLUS):
+        hdr_types.emplace_back(sdm::Hdr::HDR10_PLUS);
+        break;
+      default:
+        ALOGW("Unsupported hdr type %d", *it);
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+  }
+
+  settings_->SetHdrCapabilities(disp_id, hdr_types, caps.maxAvgLuminance, caps.minLuminance);
+
+  return ScopedAStatus::ok();
+}
+#endif
+
 ScopedAStatus DisplayConfigAIDL::setCameraLaunchStatus(int on) {
   sideband_->SetCameraLaunchStatus(on);
   return ScopedAStatus::ok();
@@ -324,7 +386,7 @@ ScopedAStatus DisplayConfigAIDL::displayBWTransactionPending(bool *status) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setDisplayAnimating(long display_id, bool animating) {
+ScopedAStatus DisplayConfigAIDL::setDisplayAnimating(int64_t display_id, bool animating) {
   sideband_->SetDisplayAnimating(display_id, animating);
   return ScopedAStatus::ok();
 }
@@ -382,7 +444,7 @@ ScopedAStatus DisplayConfigAIDL::isWCGSupported(int disp_id, bool *supported) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setLayerAsMask(int disp_id, long layer_id) {
+ScopedAStatus DisplayConfigAIDL::setLayerAsMask(int32_t disp_id, int64_t layer_id) {
   auto err = layer_builder_->SetLayerAsMask(disp_id, layer_id);
   if (err != sdm::kErrorNone) {
     return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
@@ -429,7 +491,7 @@ ScopedAStatus DisplayConfigAIDL::getActiveBuiltinDisplayAttributes(Attributes *a
   error = settings_->GetDisplayAttributes(disp_id, config, &var_info);
 
   if (error != sdm::kErrorNone) {
-    ALOGW("%s: Invalid display = %d", __FUNCTION__, disp_id);
+    ALOGW("%s: Invalid display = %llu", __FUNCTION__, disp_id);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
@@ -485,7 +547,8 @@ ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector<long> *bit_clks) {
+ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int32_t disp_id,
+                                                        std::vector<int64_t> *bit_clks) {
   auto ret = caps_->GetSupportedDSIClock(disp_id, bit_clks);
   if (ret == sdm::kErrorResources) {
     ALOGW("%s: Display: %d is not connected", __FUNCTION__, disp_id);
@@ -495,7 +558,7 @@ ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int disp_id, std::vector
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
+ScopedAStatus DisplayConfigAIDL::getDSIClk(int32_t disp_id, int64_t *bit_clk) {
   auto ret = settings_->GetDSIClk(disp_id, (uint64_t *)bit_clk);
   if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
@@ -505,7 +568,7 @@ ScopedAStatus DisplayConfigAIDL::getDSIClk(int disp_id, long *bit_clk) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setDSIClk(int disp_id, long bit_clk) {
+ScopedAStatus DisplayConfigAIDL::setDSIClk(int32_t disp_id, int64_t bit_clk) {
   auto ret = settings_->SetDSIClk(disp_id, (uint64_t)bit_clk);
   if (ret == sdm::kErrorResources) {
     ALOGW("%s: Invalid display: %d", __FUNCTION__, disp_id);
@@ -664,7 +727,8 @@ int DisplayConfigAIDL::GetDispTypeFromPhysicalId(uint64_t physical_disp_id,
   return -ENODEV;
 }
 
-ScopedAStatus DisplayConfigAIDL::getDisplayType(long physical_disp_id, DisplayType *display_type) {
+ScopedAStatus DisplayConfigAIDL::getDisplayType(int64_t physical_disp_id,
+                                                DisplayType *display_type) {
   if (!display_type) {
     ALOGW("%s: Display type provided is invalid.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
@@ -674,11 +738,11 @@ ScopedAStatus DisplayConfigAIDL::getDisplayType(long physical_disp_id, DisplayTy
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
-    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &rect,
-    bool post_processed, const NativeHandle &buffer) {
+ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferInternal(
+    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &roi_rect,
+    const Rect &downscale_rect, int32_t cwb_control_flag, const NativeHandle &buffer) {
   if (!callback) {
-    ALOGE("%s: Callback provided is invalid.", __FUNCTION__);
+    ALOGW("%s: Callback provided is invalid.", __FUNCTION__);
     return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
   }
 
@@ -703,22 +767,8 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   }
 
   int32_t display_type = disp_type_map[disp_id];
-
-  sdm::CwbConfig cwb_config = {};
-  cwb_config.tap_point = static_cast<sdm::CwbTapPoint>(post_processed);
-  sdm::LayerRect &roi = cwb_config.cwb_roi;
-  roi.left = FLOAT(rect.left);
-  roi.top = FLOAT(rect.top);
-  roi.right = FLOAT(rect.right);
-  roi.bottom = FLOAT(rect.bottom);
-
-  ALOGI("CWB config passed by cwb_client : tappoint %d  CWB_ROI : (%f %f %f %f) for display-%d",
-        cwb_config.tap_point, roi.left, roi.top, roi.right, roi.bottom, display_type);
-
   auto ret_status = EX_NONE;
-
   void *hdl = sdm::ConvertToSnapHandle(buffer);
-
   if (!hdl || !handle_importer_.importBuffer(static_cast<const SnapHandle *>(hdl))) {
     ALOGE("%s: Either retrieving snaphandle or importing buffer failed.", __FUNCTION__);
     ret_status = EX_ILLEGAL_ARGUMENT;
@@ -732,6 +782,37 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   }
 
   if (ret_status == EX_NONE) {
+    sdm::CwbConfig cwb_config = {};
+    // Load CWB ROI configuration
+    auto &roi = cwb_config.cwb_roi;
+    roi.left = FLOAT(roi_rect.left);
+    roi.top = FLOAT(roi_rect.top);
+    roi.right = FLOAT(roi_rect.right);
+    roi.bottom = FLOAT(roi_rect.bottom);
+    // Load Downscaled Output Rectangle
+    auto &ds_rect = cwb_config.cwb_downscaled_rect;
+    ds_rect.left = FLOAT(downscale_rect.left);
+    ds_rect.top = FLOAT(downscale_rect.top);
+    ds_rect.right = FLOAT(downscale_rect.right);
+    ds_rect.bottom = FLOAT(downscale_rect.bottom);
+    ALOGI(
+        "CWB config passed by cwb_client: Tap_Point/Control_Flag: 0x%x CWB_ROI : (%f %f %f %f) "
+        "CWB_downscale_rect: (%f %f %f %f) for display-%d",
+        cwb_control_flag, roi.left, roi.top, roi.right, roi.bottom, ds_rect.left, ds_rect.top,
+        ds_rect.right, ds_rect.bottom, display_type);
+#define CFLAG_DUALBIT_TAP_POINT 2
+#define CFLAG_PU_AS_CWB_ROI_OFFSET 4
+#define CFLAG_AVOID_REFRESH_OFFSET 5
+    auto &cflag = cwb_control_flag;
+    // Load CWB control operations
+    cwb_config.tap_point = static_cast<sdm::CwbTapPoint>(cflag & LSB_MASK(CFLAG_DUALBIT_TAP_POINT));
+    cwb_config.pu_as_cwb_roi = BIT_TO_BOOL(cflag, CFLAG_PU_AS_CWB_ROI_OFFSET);
+    cwb_config.avoid_refresh = BIT_TO_BOOL(cflag, CFLAG_AVOID_REFRESH_OFFSET);
+    // Load input control flag to CWB config control flags.
+    cwb_config.cwb_control_params.value = cflag;
+    // Reset internal control flags
+    cwb_config.cwb_control_params.internal_control_flags = 0;
+    // Submit the CWB request with output buffer.
     sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
     if (ret != sdm::kErrorNone) {
       ret_status = EX_TRANSACTION_FAILED;
@@ -740,7 +821,7 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
       cwb_callbacks_.insert({hdl, {display_type, callback}});
     }
   } else if (hdl_exists) {
-    ALOGE("%s: buffer(0x%x) already being handled by display-%d", __FUNCTION__, hdl, display_type);
+    ALOGE("%s: buffer(%p) already being handled by display-%d", __FUNCTION__, hdl, display_type);
   }
 
   if (ret_status != EX_NONE) {
@@ -751,6 +832,73 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
   return (ret_status == EX_NONE) ? ScopedAStatus::ok()
                                  : ScopedAStatus(AStatus_fromExceptionCode(ret_status));
 }
+
+ScopedAStatus DisplayConfigAIDL::setCWBOutputBuffer(
+    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &rect,
+    bool post_processed, const NativeHandle &buffer) {
+  const Rect ds_rect = {};
+  return setCWBOutputBufferInternal(callback, disp_id, rect, ds_rect,
+                                    static_cast<int32_t>(post_processed), buffer);
+}
+
+#ifdef IDISPLAYCONFIG_13
+ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferV2(
+    const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id, const Rect &roi_rect,
+    const Rect &downscale_rect, int32_t cwb_control_flag, const NativeHandle &buffer) {
+  return setCWBOutputBufferInternal(callback, disp_id, roi_rect, downscale_rect, cwb_control_flag,
+                                    buffer);
+}
+#endif
+
+#ifdef IDISPLAYCONFIG_14
+ScopedAStatus DisplayConfigAIDL::queueTunnelledBuffer(
+    const ::aidl::android::hardware::common::NativeHandle &buffer,
+    const ::aidl::android::hardware::common::NativeHandle &acquire_fence, int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::dequeueTunnelledBuffer(
+    const ::aidl::android::hardware::common::NativeHandle &buffer,
+    ::aidl::android::hardware::common::NativeHandle *release_fence_handle, int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::tunnellingInit(int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+
+ScopedAStatus DisplayConfigAIDL::tunnellingDeinit(int32_t *_aidl_return) {
+  return ScopedAStatus::ok();
+}
+#endif
+
+#ifdef IDISPLAYCONFIG_15
+ScopedAStatus DisplayConfigAIDL::setPoseConfig(
+    int disp_id, const ::aidl::android::hardware::common::NativeHandle &buffer,
+    ::aidl::vendor::qti::hardware::display::config::PoseConfigType config_type) {
+  if (pose_handle_) {
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
+    pose_handle_ = nullptr;
+  }
+
+  pose_handle_ = sdm::ConvertToSnapHandle(buffer);
+  if (!pose_handle_ ||
+      !handle_importer_.importBuffer(static_cast<const SnapHandle *>(pose_handle_))) {
+    ALOGE("%s: Either retrieving snaphandle or importing buffer failed.", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  auto ret = sideband_->SetPoseConfig(disp_id, pose_handle_);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: SetPoseConfig failed with %d", __FUNCTION__, ret);
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
+    pose_handle_ = nullptr;
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_TRANSACTION_FAILED));
+  }
+
+  return ScopedAStatus::ok();
+}
+#endif
 
 void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
   std::shared_ptr<IDisplayConfigCallback> callback = nullptr;
@@ -769,11 +917,11 @@ void DisplayConfigAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
   }
 
   if (!callback) {
-    ALOGE("%s: buffer handle(0x%x) not found", __FUNCTION__, hdl);
+    ALOGE("%s: buffer handle(%p) not found", __FUNCTION__, hdl);
   } else {
     NativeHandle buffer =
         sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
-    ALOGI("%s: Notify the client about buffer (0x%x) status %d for display-%d.", __FUNCTION__, hdl,
+    ALOGI("%s: Notify the client about buffer (%p) status %d for display-%d.", __FUNCTION__, hdl,
           status, display_type);
 
     callback->notifyCWBBufferDone(status, buffer);
@@ -795,6 +943,7 @@ ScopedAStatus DisplayConfigAIDL::setCameraSmoothInfo(CameraSmoothOp op, int32_t 
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
 
+#ifdef IDISPLAYCONFIG_12
 ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t fps) {
   int ret = -1;
 
@@ -807,6 +956,7 @@ ScopedAStatus DisplayConfigAIDL::setContentFps(const std::string &name, int32_t 
   return ret == sdm::kErrorNone ? ScopedAStatus::ok()
                                 : ScopedAStatus::fromExceptionCode(EX_TRANSACTION_FAILED);
 }
+#endif
 
 ScopedAStatus DisplayConfigAIDL::registerCallback(
     const std::shared_ptr<IDisplayConfigCallback> &callback, int64_t *client_handle) {
@@ -1053,11 +1203,13 @@ void DisplayConfigAIDL::NotifyIdleStatus(bool status) {
 void DisplayConfigAIDL::NotifyContentFps(const std::string &name, int32_t fps) {
   std::lock_guard<decltype(callbacks_lock_)> lock_guard(callbacks_lock_);
 
+#ifdef COMPOSER3_V3
   for (auto const &[id, callback] : callback_clients_) {
     if (callback) {
       callback->notifyContentFps(name, fps);
     }
   }
+#endif
 }
 
 void DisplayConfigAIDL::OnHdmiHotplug(bool connected) {
@@ -1122,7 +1274,7 @@ GLRect SdmRectToGlRect(sdm::SDMRect &r) {
 
 void DisplayConfigAIDL::StitchLayers(uint64_t display, sdm::LayerStitchContext *ctx) {
   if (layer_stitch_map_.find(display) == layer_stitch_map_.end()) {
-    ALOGW("GL Layer stitch not initialized for display %lu!", display);
+    ALOGW("GL Layer stitch not initialized for display %" PRIu64 "!", display);
     return;
   }
 
@@ -1150,7 +1302,7 @@ void DisplayConfigAIDL::InitLayerStitch(uint64_t display) {
 
   layer_stitch_map_.at(display) = GLLayerStitch::GetInstance(false);
   if (layer_stitch_map_.at(display) == nullptr) {
-    ALOGW("Unable to initialize layer stitch: display %lu", display);
+    ALOGW("Unable to initialize layer stitch: display %" PRIu64, display);
     layer_stitch_map_.erase(display);
   }
 }
@@ -1175,7 +1327,7 @@ void DisplayConfigAIDL::InitColorConvert(uint64_t display, bool secure) {
 
 void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlitContext *ctx) {
   if (color_convert_map_.find(display) == color_convert_map_.end()) {
-    ALOGW("Display %lu: GL Color convert is not initialized", display);
+    ALOGW("Display %" PRIu64 ": GL Color convert is not initialized", display);
     return;
   }
 
@@ -1260,7 +1412,7 @@ void DisplayConfigAIDL::CollectHistogram(uint64_t display, uint64_t max_frames, 
                                          uint64_t *samples[NUM_HISTOGRAM_COLOR_COMPONENTS],
                                          uint64_t *numFrames) {
   if (histogram_map_.find(display) == histogram_map_.end()) {
-    ALOGW("Display %lu: Histogram not initialized!", display);
+    ALOGW("Display %" PRIu64 ": Histogram not initialized!", display);
     return;
   }
 

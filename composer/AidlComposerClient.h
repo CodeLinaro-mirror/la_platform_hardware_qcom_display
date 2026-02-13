@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -26,8 +26,12 @@
 #include <unordered_set>
 #include <vector>
 #include <string>
+#include <iterator>
 #include <aidl/vendor/qti/hardware/display/composer3/BnQtiComposer3Client.h>
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
+#ifdef COMPOSER3_V4
+#include <aidl/android/hardware/graphics/composer3/Luts.h>
+#endif
 #include <aidl/vendor/qti/hardware/display/config/BnDisplayConfig.h>
 #include <aidl/vendor/qti/hardware/display/config/BnDisplayConfigCallback.h>
 #include <aidlcommonsupport/NativeHandle.h>
@@ -48,7 +52,7 @@
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
 #include "sdm_display_intf_lifecycle.h"
-#include "sdm_display_intf_drawcycle.h"
+#include "sdm_display_intf_drawcycle_v2.h"
 #include "sdm_display_intf_layer_builder.h"
 #include "sdm_display_intf_sideband.h"
 
@@ -78,6 +82,9 @@ using aidl::android::hardware::graphics::common::PixelFormat;
 using aidl::android::hardware::graphics::common::Point;
 using aidl::android::hardware::graphics::common::Rect;
 using aidl::android::hardware::graphics::common::Transform;
+#ifdef COMPOSER3_V5
+using aidl::android::hardware::graphics::composer3::ActiveConfigCommand;
+#endif
 using aidl::android::hardware::graphics::composer3::BnComposerClient;
 using aidl::android::hardware::graphics::composer3::Buffer;
 using aidl::android::hardware::graphics::composer3::ClientTarget;
@@ -91,8 +98,10 @@ using aidl::android::hardware::graphics::composer3::DisplayAttribute;
 using aidl::android::hardware::graphics::composer3::DisplayBrightness;
 using aidl::android::hardware::graphics::composer3::DisplayCapability;
 using aidl::android::hardware::graphics::composer3::DisplayCommand;
+using aidl::android::hardware::graphics::composer3::LayerCommand;
 #ifdef COMPOSER3_V3
 using aidl::android::hardware::graphics::composer3::DisplayConfiguration;
+using aidl::android::hardware::graphics::composer3::LayerLifecycleBatchCommandType;
 #endif
 using aidl::android::hardware::graphics::composer3::DisplayConnectionType;
 using aidl::android::hardware::graphics::composer3::DisplayContentSample;
@@ -102,6 +111,9 @@ using aidl::android::hardware::graphics::composer3::FormatColorComponent;
 using aidl::android::hardware::graphics::composer3::HdrCapabilities;
 using aidl::android::hardware::graphics::composer3::IComposerCallback;
 using aidl::android::hardware::graphics::composer3::LayerBrightness;
+#ifdef COMPOSER3_V4
+using aidl::android::hardware::graphics::composer3::OutputType;
+#endif
 using aidl::android::hardware::graphics::composer3::OverlayProperties;
 using aidl::android::hardware::graphics::composer3::ParcelableBlendMode;
 using aidl::android::hardware::graphics::composer3::ParcelableComposition;
@@ -128,15 +140,23 @@ using sdm::Fence;
 using sdm::HWC3::Error;
 using std::shared_ptr;
 
+using sdm::QServiceBackend;
 using sdm::SDMCompositorCbIntf;
 using sdm::SDMDisplayCapsIntf;
-using sdm::SDMDisplayDrawCycleIntf;
 using sdm::SDMDisplayLifeCycleIntf;
 using sdm::SDMDisplaySettingsIntf;
 using sdm::SDMDisplaySideBandIntf;
 using sdm::SDMInterfaceFactory;
 using sdm::SDMVsyncPeriodChangeTimeline;
-using sdm::QServiceBackend;
+
+// interface support for shared pointers is only present from composer3_v3
+#ifdef COMPOSER3_V3
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntfV2
+#else
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntf
+#endif
+
+using sdm::SDMDisplayDrawCycleIntfV;
 
 using sdm::DisplayConfigVariableInfo;
 using sdm::SDMDisplayLayerBuilderIntf;
@@ -172,7 +192,7 @@ class AidlComposerClient : public BnComposerClient,
   bool init(std::shared_ptr<SDMDisplayCapsIntf> caps,
             std::shared_ptr<SDMDisplaySettingsIntf> settings,
             std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-            std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+            std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
             std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
             std::shared_ptr<SDMDisplaySideBandIntf> sideband);
 
@@ -216,6 +236,16 @@ class AidlComposerClient : public BnComposerClient,
   ScopedAStatus notifyExpectedPresent(int64_t displayId,
                                       const ClockMonotonicTimestamp &expectedPresentTime,
                                       int32_t frameIntervalNs) override;
+#endif
+
+#ifdef COMPOSER3_V4
+  ScopedAStatus getMaxLayerPictureProfiles(int64_t in_display, int32_t *_aidl_return);
+
+  ScopedAStatus startHdcpNegotiation(
+      int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) override;
+
+  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &buffers,
+                        std::vector<Luts> *aidl_return) override;
 #endif
 
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
@@ -277,19 +307,27 @@ class AidlComposerClient : public BnComposerClient,
                                          Hdr *_aidl_return) override;
   ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t in_display,
                                                           bool in_enabled) override;
+#ifdef COMPOSER3_V5
+  ScopedAStatus getDisplayKnownVsyncSample(
+      int64_t in_display,
+      aidl::android::hardware::graphics::composer3::VsyncSample *aidl_return) override;
+#endif
 
   // Methods for ConcurrentWriteBack
-  Error getDisplayReadbackBuffer(int64_t display, const SnapHandle *rawHandle);
+  Error getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle);
 
   // Methods for extensions (QtiComposer3Client)
-  ScopedAStatus executeQtiCommands(const std::vector<QtiDisplayCommand> &in_commands,
-                                   std::vector<CommandResultPayload> *aidl_return);
+  ScopedAStatus executeQtiExtendedCommands(const std::vector<DisplayCommand> &in_commands,
+                                           const std::vector<QtiDisplayCommand> &in_qti_commands,
+                                           std::vector<CommandResultPayload> *aidl_return);
 
  protected:
   SpAIBinder createBinder() override;
 
  private:
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
+  bool disable_fp16_support_ = false;
+  bool disable_query_luts_ = false;
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;
@@ -304,6 +342,7 @@ class AidlComposerClient : public BnComposerClient,
     std::vector<BufferCacheEntry> OutputBuffers;
 
     std::unordered_map<sdm::LayerId, LayerBuffers> Layers;
+    SnapHandle *mReadBackHandle = nullptr;
 
     explicit DisplayData(bool isVirtual) : IsVirtual(isVirtual) {}
   };
@@ -316,8 +355,16 @@ class AidlComposerClient : public BnComposerClient,
                   std::vector<CommandResultPayload> *aidl_return);
     Error qtiExecute(const std::vector<QtiDisplayCommand> &in_commands,
                      std::vector<CommandResultPayload> *aidl_return);
+    Error qtiExtendedExecute(const std::vector<DisplayCommand> &in_commands,
+                             const std::vector<QtiDisplayCommand> &in_qti_commands,
+                             std::vector<CommandResultPayload> *aidl_return);
     Error validateDisplay(int64_t display);
     Error presentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
+#ifdef COMPOSER3_V4
+    Error populateDisplayLuts(Lut3d *lut_3d, bool reset_luts, Luts *luts, int32_t *lut_fd);
+    Error getBufferLuts(uint64_t display, const std::vector<SnapHandle *> &buffers,
+                        std::unique_ptr<std::vector<Lut3d *>> &out_luts);
+#endif
 
     void reset() { mWriter->reset(); }
 
@@ -334,10 +381,14 @@ class AidlComposerClient : public BnComposerClient,
       mWriter->setError(mCommandIndex, INT32(err));
     }
 
+    void executeDisplayCommmands(const DisplayCommand &displayCmd);
+    void executeLayerCommmands(const DisplayCommand &displayCmd);
+
     // Commands from aidl::android::hardware::graphics::composer3::IComposerClient follow.
     void executeSetColorTransform(int64_t display, const std::vector<float> &matrix);
     void executeSetClientTarget(int64_t display, const ClientTarget &command);
-    void executeSetDisplayBrightness(uint64_t display, const DisplayBrightness &command);
+    void executeSetDisplayBrightness(uint64_t display, const DisplayBrightness &command,
+                                     bool performing_commit);
     void executeSetOutputBuffer(uint64_t display, const Buffer &buffer);
     void executeValidateDisplay(int64_t display,
                                 const std::optional<ClockMonotonicTimestamp> expectedPresentTime,
@@ -348,6 +399,11 @@ class AidlComposerClient : public BnComposerClient,
     void executeAcceptDisplayChanges(int64_t display);
     void executePresentDisplay(int64_t display);
 
+#ifdef COMPOSER3_V3
+    void executeSetLayerLifecycleBatchCommandType(int64_t display, const LayerCommand &layerCmd);
+    void executeSetLayerBufferSlotsToClear(int64_t display, int64_t layer,
+                                           const std::vector<int32_t> &slotsToClear);
+#endif
     void executeSetLayerCursorPosition(int64_t display, int64_t layer, const Point &cursorPosition);
     void executeSetLayerBuffer(int64_t display, int64_t layer, const Buffer &buffer);
     void executeSetLayerSurfaceDamage(int64_t display, int64_t layer,
@@ -385,12 +441,41 @@ class AidlComposerClient : public BnComposerClient,
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
     void executeSetFrameIntervalNsInternal(int64_t display, int32_t frameIntervalNs);
+#ifdef COMPOSER3_V4
+    void executeSetLayerLuts(int64_t display, int64_t layer, const Luts &luts);
+#endif
+
+#ifdef COMPOSER3_V5
+    void executeSetActiveConfigWithSeamless(int64_t display, const ActiveConfigCommand &config);
+#endif
 
     // Commands from extensions (QtiComposer3Client)
     void executeSetClientTarget_3_1(int64_t display, const ClientTarget &command);
     void executeSetDisplayElapseTime(int64_t display, uint64_t time);
     void executeSetLayerType(int64_t display, int64_t layer, sdm::LayerType type);
     void executeSetLayerFlag(int64_t display, int64_t layer, sdm::LayerFlag flag);
+#ifdef COMPOSER3_V4
+    void executeSetLayerPrivacyRegions(
+        int64_t display, int64_t layer,
+        const std::vector<std::optional<QtiPrivacyRegion>> &privacyRegions);
+    void executeSetLayerCornerRadius(int64_t display, int64_t layer,
+                                     const std::optional<QtiCornerRadius> cornerRadius);
+#endif
+#ifdef TARGET_USES_LSR
+    void executeSetLayerPlaneEquation(int64_t display, int64_t layer,
+                                      sdm::QtiLayerPlaneEquation plane_equation);
+    void executeSetRenderLayerReferenceSpaceType(
+        int64_t display, int64_t layer,
+        sdm::QtiParcelableRenderLayerReferenceSpaceType reference_layer_space_type);
+    void executeSetCompositionLayerType(int64_t display, int64_t layer,
+                                        sdm::QtiParcelableCompositionLayerType comp_layer_type);
+    void executeSetLayerPose(int64_t display, int64_t layer, const sdm::QtiLayerPose &layer_pose);
+    void executeSetLayerQuadSize(int64_t display, int64_t layer,
+                                 sdm::QtiLayerQuadSize layer_quad_size);
+    void executeSetLayerFrustum(int64_t display, int64_t layer, sdm::QtiLayerFrustum layer_frustum);
+    void executeSetLayerVisibilityType(int64_t display, int64_t layer,
+                                       sdm::QtiParcelableLayerVisibilityType layer_visibility_type);
+#endif
 
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
@@ -421,7 +506,13 @@ class AidlComposerClient : public BnComposerClient,
       return updateBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle);
     }
     Error postPresentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
-    Error postValidateDisplay(int64_t display, uint32_t &types_count, uint32_t &reqs_count);
+    Error postValidateDisplay(int64_t display);
+    Error setChangedCompositionTypes(int64_t display);
+    Error setDisplayRequests(int64_t display);
+    Error setClientTargetProperty(int64_t display);
+#ifdef COMPOSER3_V4
+    Error setDisplayLuts(int64_t display);
+#endif
 
     void GetSDMRectFromRect(const Rect *rect, sdm::SDMRegion *region) {
       for (int i = 0; i < region->num_rects; i++) {
@@ -429,12 +520,44 @@ class AidlComposerClient : public BnComposerClient,
         region->rects.push_back(new_rec);
       }
     }
+
+#ifdef TARGET_USES_LSR
+    void GetSDMLayerPose(const sdm::QtiLayerPose &layer_pose, sdm::SDMLayerPose &sdm_layer_pose) {
+      sdm::SDMLayerPosition sdm_pos{layer_pose.pos.x, layer_pose.pos.y, layer_pose.pos.z};
+      sdm::SDMLayerOrientation sdm_orientation{layer_pose.orientation.x, layer_pose.orientation.y,
+                                               layer_pose.orientation.z, layer_pose.orientation.w};
+      sdm_layer_pose.pos = sdm_pos;
+      sdm_layer_pose.orientation = sdm_orientation;
+    }
+
+    void GetSDMLayerQuadSize(const sdm::QtiLayerQuadSize &layer_quad_size,
+                             sdm::SDMLayerQuadSize &sdm_layer_quad_size) {
+      sdm_layer_quad_size.width = layer_quad_size.width;
+      sdm_layer_quad_size.height = layer_quad_size.height;
+    }
+
+    void GetSDMLayerFrustum(const sdm::QtiLayerFrustum &layer_frustum,
+                            sdm::SDMLayerFrustum &sdm_layer_frustum) {
+      sdm_layer_frustum.angleLeft = layer_frustum.angleLeft;
+      sdm_layer_frustum.angleRight = layer_frustum.angleRight;
+      sdm_layer_frustum.angleUp = layer_frustum.angleUp;
+      sdm_layer_frustum.angleDown = layer_frustum.angleDown;
+    }
+
+    void GetSDMLayerPlaneEquation(const sdm::QtiLayerPlaneEquation &plane_equation,
+                                  sdm::SDMLayerPlaneEquation &sdm_layer_plane_equation) {
+      sdm_layer_plane_equation.a = plane_equation.a;
+      sdm_layer_plane_equation.b = plane_equation.b;
+      sdm_layer_plane_equation.c = plane_equation.c;
+      sdm_layer_plane_equation.d = plane_equation.d;
+    }
+#endif
   };
 
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
   std::shared_ptr<SDMDisplaySettingsIntf> settings_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
-  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle_;
   std::shared_ptr<SDMDisplayLayerBuilderIntf> layer_builder_;
   std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
 

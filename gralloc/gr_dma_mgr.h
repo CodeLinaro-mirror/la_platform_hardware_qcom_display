@@ -1,8 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -27,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef __GR_DMA_MGR_H__
@@ -95,9 +97,10 @@ class DmaManager : public AllocInterface {
   MemBuf *mem_buf_ = nullptr;
   void *mem_utils_lib_ = {};
   CreateMemBufInterface CreateMemBuf_ = nullptr;
+  void GetCameraPreviewPerms();
+  bool allow_camera_preview_write_ = false;
   DestroyMemBufInterface DestroyMemBuf_ = nullptr;
   bool movable_heap_system_available_ = false;
-  bool movable_heap_ubwcp_available_ = false;
 };
 
 }  // namespace gralloc

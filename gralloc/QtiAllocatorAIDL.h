@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -30,6 +30,7 @@ namespace allocator {
 namespace impl {
 
 using ::aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
+using ::aidl::android::hardware::graphics::common::ExtendableType;
 using ::android::sp;
 using ::android::hardware::hidl_array;
 using ::android::hardware::hidl_memory;
@@ -57,6 +58,11 @@ class QtiAllocatorAIDL : public BnAllocator {
   ndk::ScopedAStatus getIMapperLibrarySuffix(std::string *_aidl_return) override;
   ndk::ScopedAStatus isSupported(const BufferDescriptorInfo &in_descriptor,
                                  bool *_aidl_return) override;
+
+  std::vector<std::string> supported_options_ = {
+      "pixel_format_modifier",
+      "interlaced",
+  };
 
  protected:
   ndk::SpAIBinder createBinder() override;
