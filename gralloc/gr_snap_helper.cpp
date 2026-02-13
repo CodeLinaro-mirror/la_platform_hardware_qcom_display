@@ -2402,7 +2402,10 @@ SnapError GrallocSnapHelper::IsUBWCHelper(SnapHandle *hnd, uint32_t aidl_size, v
   if (gralloc_in_set != nullptr) {
     return SnapError::UNSUPPORTED;
   }
-  if (gralloc_out_get != nullptr) {
+  if (buf_des != nullptr) {
+    error =
+        snapmapper_->GetFromBufferDescriptor(*buf_des, SnapMetadataType::IS_UBWC, gralloc_out_get);
+  } else if (gralloc_out_get != nullptr) {
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::IS_UBWC, gralloc_out_get);
   }
 
