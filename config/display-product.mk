@@ -231,7 +231,6 @@ $(call soong_config_set, qtidisplay, ubwcp_headers, true )
 $(call soong_config_set, qtidisplay, composer_version, v3_5 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
-$(call soong_config_set, qtidisplay, lsr_target, false )
 $(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 $(call soong_config_set, qtidisplay, enable_demura, true )
 
@@ -263,7 +262,11 @@ else
       $(call soong_config_set, qtidisplay, composer_version, v3_3 )
       $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
-      $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+      ifeq ($(filter $(TARGET_BOARD_PLATFORM), seraph), $(TARGET_BOARD_PLATFORM))
+        $(call soong_config_set, qtidisplay, composer_version, v3_4_lsr )
+      else
+        $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+      endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
