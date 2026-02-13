@@ -106,6 +106,9 @@ case "$target" in
         # Set property for bengal
         setprop vendor.display.disable_layer_stitch 0
         ;;
+        473|474)
+        setprop vendor.gralloc.disable_ubwc 1
+        ;;
     esac
     ;;
     "canoe"|"hamoa")
