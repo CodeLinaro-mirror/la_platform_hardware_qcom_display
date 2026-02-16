@@ -169,7 +169,8 @@ bool ToneMapSession::IsSameToneMapConfig(Layer *layer, PrimariesTransfer blend_c
   native_handle_t *handle = static_cast<native_handle_t *>(buffer_info_[0].private_data);
   int tonemap_type = buffer.flags.hdr ? TONEMAP_FORWARD : TONEMAP_INVERSE;
 
-  uint32_t handle_unaligned_width, handle_unaligned_height = 0;
+  uint32_t handle_unaligned_width = 0;
+  uint32_t handle_unaligned_height = 0;
   buffer_allocator_->GetUnalignedWidth(handle, handle_unaligned_width);
   buffer_allocator_->GetUnalignedHeight(handle, handle_unaligned_height);
   return ((tonemap_type == tone_map_config_.type) && (blend_cs == tone_map_config_.blend_cs) &&
@@ -329,7 +330,9 @@ void HWCToneMapper::DumpToneMapOutput(ToneMapSession *session, int *acquire_fd) 
 
   size_t result = 0;
   char dump_file_name[PATH_MAX];
-  uint32_t width, height, size = 0;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  uint32_t size = 0;
   buffer_allocator_->GetWidth((void *)target_buffer, width);
   buffer_allocator_->GetHeight((void *)target_buffer, height);
   buffer_allocator_->GetAllocationSize((void *)target_buffer, size);
