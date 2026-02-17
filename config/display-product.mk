@@ -250,7 +250,11 @@ $(call soong_config_set, qtidisplay, enable_demura, true )
 # BEFORE FRC
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
-      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+        ifeq ($(TARGET_DEFINES_MXR_CONFIG),true)
+            $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+        else
+            $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+        endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
