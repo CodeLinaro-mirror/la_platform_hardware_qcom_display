@@ -511,6 +511,46 @@ int GrallocSnapHelper::FlushLockedBuffer(native_handle_t *gr_hnd) {
   return SnapError::BAD_BUFFER;
 }
 
+int GrallocSnapHelper::GetBatchSize(native_handle_t *gr_hnd, int *batch_size) {
+  if (gr_hnd == nullptr) {
+    ALOGE("Invalid gralloc handle");
+    return SnapError::BAD_BUFFER;
+  }
+  if (!IsSnapAllocEnabled()) {
+    ALOGW("SnapAlloc is disabled");
+    return SnapError::UNSUPPORTED;
+  }
+
+  std::lock_guard<std::mutex> lock(map_lock_);
+
+  SnapHandle *hnd = nullptr;
+  if (handles_map_.find(gr_hnd) != handles_map_.end()) {
+    hnd = handles_map_.at(gr_hnd);
+  }
+
+  if (hnd != nullptr) {
+    uint64_t modifier = 0;
+    auto status = snapmapper_->GetMetadata(*hnd, SnapMetadataType::FORMAT_MODIFIER, &modifier);
+
+    if (status != SnapError::NONE) {
+      ALOGE("%s: Failed to get format modifier. Error code: %d", __FUNCTION__, status);
+    }
+
+    *batch_size = 1;
+    if (auto it =
+            kBatchSize_.find((vendor_qti_hardware_display_common_PixelFormatModifier)modifier);
+        it != kBatchSize_.end()) {
+      *batch_size = it->second;
+    }
+
+    return status;
+  } else {
+    ALOGE("%s: Failed to get SnapHandle for gralloc handle %p", __FUNCTION__, gr_hnd);
+  }
+
+  return SnapError::BAD_BUFFER;
+}
+
 int GrallocSnapHelper::RereadLockedBuffer(native_handle_t *gr_hnd) {
   if (gr_hnd == nullptr) {
     ALOGE("Invalid gralloc handle");

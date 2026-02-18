@@ -64,8 +64,11 @@ case "$target" in
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.refresh_rate_changeable 1
-        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_cwb_idle_fallback 0
         setprop vendor.display.force_gpu_composition 0
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_inline_writeback 1
         ;;
     esac
     ;;
@@ -80,6 +83,22 @@ case "$target" in
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        ;;
+    esac
+    ;;
+    "shikra")
+    #SOC ID for shikra varaints
+    case "$soc_hwid" in
+      759 | 758 | 756)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         ;;
@@ -164,7 +183,6 @@ case "$target" in
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
@@ -471,7 +489,6 @@ case "$target" in
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
@@ -505,7 +522,6 @@ case "$target" in
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.gralloc.use_uncached_heap 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
