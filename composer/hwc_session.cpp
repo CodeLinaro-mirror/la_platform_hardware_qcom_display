@@ -1370,22 +1370,80 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
 }
 
 HWC3::Error HWCSession::SetVsyncEnabled(Display display, bool enabled) {
-  //  avoid undefined behavior in cast to Vsync
+  DLOGV("Enable vsync : display = %d, enable = %d",(int)(display), enabled);
   if (enabled) {
-    callbacks_.UpdateVsyncSource(display);
-  }
-  if (null_display_active_) {
+  /* To avoid the race conditions for hotplugs of all displays,
+     before enabling vsyncs on any displays, disable vsyncs on
+     all connected displays.
+  */
     for (auto& map_info : map_info_pluggable_) {
       if (hwc_display_[map_info.client_id]) {
-        callbacks_.UpdateVsyncSource(map_info.client_id);
-        DLOGI("Updating vsync source to secondary display %d",(int)map_info.client_id);
-        return CallDisplayFunction(static_cast<Display>(map_info.client_id),
-               &HWCDisplay::SetVsyncEnabled, enabled);
+        CallDisplayFunction(static_cast<Display>(map_info.client_id),
+                            &HWCDisplay::SetVsyncEnabled, false);
+      }
+    }
+    CallDisplayFunction(static_cast<Display>(HWC_DISPLAY_PRIMARY),
+                        &HWCDisplay::SetVsyncEnabled, false);
+    if (pluggable_primary_connected_ || display != HWC_DISPLAY_PRIMARY) {
+      // Do as SurfaceFlinger says us to do.
+      callbacks_.UpdateVsyncSource(display);
+      DLOGV("Updating vsync source to display %d",(int)display);
+      return CallDisplayFunction(display,
+                                 &HWCDisplay::SetVsyncEnabled, enabled);
+    }
+    /* Primary display not connected, but SurfaceFlinger does
+       not know it.
+       We should search for secondary displays which have
+       fps equal to primary display and use that display's
+       HW Vsync to drive SurfaceFlinger
+    */
+    uint32_t primary_vsync_period = 0;
+    GetVsyncPeriod(HWC_DISPLAY_PRIMARY, &primary_vsync_period);
+    DLOGV("Primary display vsync = %d",primary_vsync_period);
+    int min_vsync_period = INT_MAX;
+    Display min_vsync_period_client_id = HWCCallbacks::kNumDisplays;
+    for (auto& map_info : map_info_pluggable_) {
+      if (hwc_display_[map_info.client_id]) {
+        uint32_t vsync_period = 0;
+        GetVsyncPeriod(map_info.client_id, &vsync_period);
+        DLOGV("vsync_period of display %d = %d",(int)map_info.client_id,
+              vsync_period);
+        if (vsync_period == primary_vsync_period) {
+          min_vsync_period_client_id = map_info.client_id;
+          min_vsync_period = vsync_period;
+          break;
+        } else if (vsync_period < min_vsync_period) {
+          min_vsync_period_client_id = map_info.client_id;
+          min_vsync_period = vsync_period;
+          DLOGV("min_vsync_period = %d, display = %d",min_vsync_period,
+                (int)min_vsync_period_client_id);
+        }
+      }
+    }
+    if (min_vsync_period == INT_MAX) {
+      // there is no display connected.
+      return HWC3::Error::None;
+    }
+
+    callbacks_.UpdateVsyncSource(min_vsync_period_client_id);
+    DLOGV("Updating vsync source to display %d",(int)min_vsync_period_client_id);
+    DLOGV("Min vsync period = %d",min_vsync_period);
+    return CallDisplayFunction(static_cast<Display>(min_vsync_period_client_id),
+                               &HWCDisplay::SetVsyncEnabled, enabled);
+
+  } else {
+    CallDisplayFunction(static_cast<Display>(HWC_DISPLAY_PRIMARY),
+                        &HWCDisplay::SetVsyncEnabled, enabled);
+    for (auto& map_info : map_info_pluggable_) {
+      if (hwc_display_[map_info.client_id]) {
+        CallDisplayFunction(static_cast<Display>(map_info.client_id),
+                            &HWCDisplay::SetVsyncEnabled, enabled);
       }
     }
   }
 
-  return CallDisplayFunction(display, &HWCDisplay::SetVsyncEnabled, enabled);
+  return HWC3::Error::None;
+
 }
 
 HWC3::Error HWCSession::SetDimmingEnable(Display display, int32_t int_enabled) {
@@ -2956,7 +3014,7 @@ int HWCSession::CreatePrimaryDisplay() {
         status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
                                              qservice_, client_id, info.display_id, 0, 0, false,
                                              hwc_display);
-        (*hwc_display)->SetVsyncEnabled(true);
+        pluggable_primary_connected_ = true;
       } else {
         DLOGE("Spurious primary display type = %d", info.display_type);
         break;
@@ -3221,13 +3279,7 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
             DLOGE("Pluggable display creation failed.");
             return status;
           }
-          callbacks_.UpdateVsyncSource(HWC_DISPLAY_PRIMARY);
-          DLOGI("Updating vsync source to primary display");
-          for (auto& map_info : map_info_pluggable_) {
-            if (hwc_display_[map_info.client_id]) {
-              hwc_display_[map_info.client_id]->SetVsyncEnabled(false);
-            }
-          }
+          pluggable_primary_connected_ = true;
           is_hdr_display_[UINT32(client_id)] = HasHDRSupport(hwc_display);
           DLOGI("Created primary pluggable display successfully: sdm id = %d,"
                 "client id = %d", info.display_id, UINT32(client_id));
@@ -3315,10 +3367,6 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
           // Attempt creating remaining pluggable displays.
           break;
         }
-        // TODO : Fix this. Multiple vsync source can be active.
-        if (pluggable_is_primary_) {
-          hwc_display->SetVsyncEnabled(true);
-        }
 
         {
           SCOPE_LOCK(hdr_locker_[client_id]);
@@ -3397,20 +3445,7 @@ int HWCSession::HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info) {
       // Primary pluggable display got disconnected.
       SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
       hwc_display_[HWC_DISPLAY_PRIMARY]->SetState(false);
-      for (auto &map_info : map_info_pluggable_) {
-        for (auto &iter : *hw_displays_info) {
-          auto &info = iter.second;
-          if (info.display_id != map_info.sdm_id) {
-            continue;
-          }
-          if (info.is_connected && !info.is_primary && info.display_type == kPluggable) {
-            callbacks_.UpdateVsyncSource(map_info.client_id);
-            DLOGI("Updating vsync source to secondary display %d",(int)map_info.client_id);
-            hwc_display_[map_info.client_id]->SetVsyncEnabled(true);
-            break;
-          }
-        }
-      }
+      pluggable_primary_connected_ = false;
     }
   }
 
@@ -3511,7 +3546,6 @@ void HWCSession::DestroyPluggableDisplayLocked(DisplayMapInfo *map_info) {
     }
     DLOGI("Destroy display %d-%d, client id = %d", map_info->sdm_id, map_info->disp_type,
           UINT32(client_id));
-    hwc_display->SetVsyncEnabled(false);
     {
       SCOPE_LOCK(hdr_locker_[client_id]);
       is_hdr_display_[UINT32(client_id)] = false;
