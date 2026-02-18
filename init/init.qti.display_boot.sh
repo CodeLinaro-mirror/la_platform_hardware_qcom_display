@@ -237,7 +237,7 @@ case "$target" in
             setprop vendor.display.enable_latch_media_content 1
         fi
         ;;
-        568|602|653|654|581|582)
+        568|602|653|654|581|582|734)
         # Set property for Ravelin
         # SOC ID for Ravelin is 568
         # SOC ID for Ravelin APQ is 602
@@ -245,6 +245,7 @@ case "$target" in
         # SOC ID for SG_RAVELIN is 653
         # SOC ID for Ravelin_iot is 581
         # SOC ID for Ravelin_iot is 582
+	# SOC ID for RAVELIN IOT is 734
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
