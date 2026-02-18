@@ -152,6 +152,8 @@ class HWCSession : public HWCUEvent,
     kRebootStrategyDefault,
     kRebootStrategyOnceDSI = kRebootStrategyDefault,
     kRebootStrategyAlwaysDSI,
+    kRebootStrategyAnyOnce,
+    kRebootStrategyNoReboot,
   };
 
   enum ComposerSetupMode {
@@ -469,6 +471,7 @@ class HWCSession : public HWCUEvent,
   int HandlePluggableDisplays(bool delay_hotplug);
   int HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool delay_hotplug);
   int HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info);
+  int RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info);
   void DestroyDisplay(DisplayMapInfo *map_info);
   void DestroyDisplayLocked(DisplayMapInfo *map_info);
   void DestroyPluggableDisplay(DisplayMapInfo *map_info);
@@ -668,6 +671,7 @@ class HWCSession : public HWCUEvent,
   int composer_setup_mode_ = kCompSetupModeDefault;
   int display_reboot_strategy_ = kRebootStrategyDefault;
   bool null_display_active_ = false;
+  int send_primary_hotplug_to_sf_ = 0;
 };
 
 }  // namespace sdm

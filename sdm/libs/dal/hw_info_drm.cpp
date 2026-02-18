@@ -28,39 +28,10 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- * * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *
- * * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following
- * disclaimer in the documentation and/or other materials provided
- * with the distribution.
- *
- * * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- * contributors may be used to endorse or promote products derived
- * from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <dlfcn.h>
@@ -995,6 +966,10 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
     hw_info.is_reserved = iter.second.is_reserved;
     hw_info.max_linewidth = iter.second.max_linewidth;
 
+    if (iter.second.ext_bridge_hpd) {
+      hw_info.display_type = kPluggable;
+    }
+
     if (iter.second.type == DRM_MODE_CONNECTOR_VIRTUAL) {
       if (!max_cwb_) {
         auto &conn_mode = iter.second.modes[0];
@@ -1019,6 +994,7 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
 
 DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t *max_displays) {
   static DebugTag log_once = kTagNone;
+  bool dsi_bridge_pluggable = false;
 
   if (!max_displays) {
     DLOGE("No output parameter provided!");
@@ -1060,12 +1036,31 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
     }
   }
 
+  sde_drm::DRMConnectorsInfo conns_info = {};
+  drm_err = drm_mgr_intf_->GetConnectorsInfo(&conns_info);
+  if (drm_err) {
+    DLOGE("DRM Driver get connector error %d while getting max displays supported!", drm_err);
+    return kErrorUndefined;
+  }
+
+  for (auto &iter : conns_info) {
+    if (iter.second.ext_bridge_hpd) {
+      max_displays_builtin--;
+      max_displays_tmds++;
+      dsi_bridge_pluggable = true;
+    }
+  }
+
   switch (type) {
     case kBuiltIn:
       *max_displays = max_displays_builtin;
       break;
     case kPluggable:
-      *max_displays = std::max(max_displays_tmds, max_displays_dpmst);
+      if (dsi_bridge_pluggable) {
+        *max_displays = max_displays_tmds + max_displays_dpmst;
+      } else {
+        *max_displays = std::max(max_displays_tmds, max_displays_dpmst);
+      }
       break;
     case kVirtual:
       *max_displays = max_displays_virtual;
@@ -1079,13 +1074,24 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
       return kErrorParameters;
   }
 
-  DLOGI_IF(log_once, "Max %d concurrent displays.",
-           max_displays_builtin + std::max(max_displays_tmds, max_displays_dpmst) +
-               max_displays_virtual);
+  if (dsi_bridge_pluggable) {
+    DLOGI_IF(log_once, "Max %d concurrent displays.",
+             max_displays_builtin + (max_displays_tmds + max_displays_dpmst) +
+             max_displays_virtual);
+  } else {
+    DLOGI_IF(log_once, "Max %d concurrent displays.",
+             max_displays_builtin + std::max(max_displays_tmds, max_displays_dpmst) +
+             max_displays_virtual);
+  }
   DLOGI_IF(log_once, "Max %d concurrent displays of type %d (BuiltIn).", max_displays_builtin,
            kBuiltIn);
-  DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Pluggable).",
-           std::max(max_displays_tmds, max_displays_dpmst), kPluggable);
+  if (dsi_bridge_pluggable) {
+    DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Pluggable).",
+             (max_displays_tmds + max_displays_dpmst), kPluggable);
+  } else {
+    DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Pluggable).",
+             std::max(max_displays_tmds, max_displays_dpmst), kPluggable);
+  }
   DLOGI_IF(log_once, "Max %d concurrent displays of type %d (Virtual).", max_displays_virtual,
            kVirtual);
 
