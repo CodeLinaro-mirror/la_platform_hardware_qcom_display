@@ -495,7 +495,6 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<B
 ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     int64_t in_display, std::vector<DisplayCapability> *aidl_return) {
   // Client queries per display capabilities which gets populated here
-
   std::lock_guard<std::mutex> lock(m_display_data_mutex_);
   if (mDisplayData.find(in_display) == mDisplayData.end()) {
     return TO_BINDER_STATUS(INT32(Error::BadDisplay));
@@ -516,10 +515,12 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
   sdm::HWDisplaysInfo hw_displays_info = {};
   ret = caps_->GetDisplaysStatus(&hw_displays_info);
   if (sdm::kErrorNone == ret) {
+    int32_t sdm_id = -1;
     auto iter = hw_displays_info.begin();
     std::advance(iter, in_display);
     auto &info = iter->second;
-    if (info.is_primary) {
+    caps_->GetDisplayHwId(in_display, &sdm_id);
+    if (info.display_id == sdm_id && info.is_primary) {
       display_conn_type = HwcDisplayConnectionType::INTERNAL;
     }
   }
@@ -571,10 +572,12 @@ ScopedAStatus AidlComposerClient::getDisplayConnectionType(int64_t in_display,
   sdm::HWDisplaysInfo hw_displays_info = {};
   ret = caps_->GetDisplaysStatus(&hw_displays_info);
   if (sdm::kErrorNone == ret) {
+    int32_t sdm_id = -1;
     auto iter = hw_displays_info.begin();
     std::advance(iter, in_display);
     auto &info = iter->second;
-    if (info.is_primary) {
+    caps_->GetDisplayHwId(in_display, &sdm_id);
+    if (info.display_id == sdm_id && info.is_primary) {
       *aidl_return = HwcDisplayConnectionType::INTERNAL;
     }
   }
