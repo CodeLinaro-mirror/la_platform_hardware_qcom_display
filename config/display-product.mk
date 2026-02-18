@@ -166,6 +166,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_rounded_corner_thread=0
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),lahaina)
+PRODUCT_PROPERTY_OVERRIDES += vendor.display.display_reboot_strategy=3
+endif
+
 ifeq ($(TARGET_BOARD_PLATFORM),blair)
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.allow_tonemap_native=1

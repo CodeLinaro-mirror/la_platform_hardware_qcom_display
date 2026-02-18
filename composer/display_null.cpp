@@ -28,9 +28,9 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -71,6 +71,12 @@ DisplayError DisplayNull::GetFrameBufferConfig(DisplayConfigVariableInfo *variab
   }
 
   *variable_info = default_variable_config_;
+  return kErrorNone;
+}
+
+DisplayError DisplayNull::SetFrameBufferConfig(const DisplayConfigVariableInfo
+                                               &variable_info) {
+  default_variable_config_ = variable_info;
   return kErrorNone;
 }
 

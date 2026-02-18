@@ -265,6 +265,7 @@ int HWCSession::Init() {
 
   HWCDebugHandler::Get()->GetProperty(ENABLE_NULL_DISPLAY_PROP, &null_display_mode_);
   DLOGI("null_display_mode_: %d", null_display_mode_);
+  HWCDebugHandler::Get()->GetProperty(DISPLAY_REBOOT_STRATEGY, &display_reboot_strategy_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_HOTPLUG_BWCHECK, &disable_hotplug_bwcheck_);
   DLOGI("disable_hotplug_bwcheck_: %d", disable_hotplug_bwcheck_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_MASK_LAYER_HINT, &disable_mask_layer_hint_);
@@ -312,6 +313,12 @@ int HWCSession::Init() {
     return status;
   } else {
     DLOGI("Creating the Primary display...done!");
+  }
+
+  // Precondition: CreatePrimaryDisplay called
+  status = SetBestNullDisplayResolution();
+  if (status) {
+    DLOGE("Failed to update NULL display's resolution. Using default resolution.");
   }
 
   is_composer_up_ = true;
@@ -2960,6 +2967,90 @@ android::status_t HWCSession::GetVisibleDisplayRect(const android::Parcel *input
   return android::NO_ERROR;
 }
 
+bool HWCSession::IsFrameworkRebootRequired(bool is_primary) {
+  DLOGD("selected reboot strategy: %d, composer setup mode: %d",
+        display_reboot_strategy_, composer_setup_mode_);
+  switch (display_reboot_strategy_) {
+    case kRebootStrategyAlwaysDSI:
+      return is_primary && !pluggable_primary_connected_;
+    case kRebootStrategyOnceDSI: // Default Case
+    default:
+      return is_primary && composer_setup_mode_ != kCompSetupModePrimary;
+  }
+}
+
+int HWCSession::SetBestNullDisplayResolution() {
+  int status = 0;
+
+  if (!null_display_active_) {
+    return status;
+  }
+
+  HWDisplaysInfo hw_displays_info = {};
+  status = core_intf_->GetDisplaysStatus(&hw_displays_info);
+  if (status != kErrorNone) {
+    DLOGE("Failed to get connected display list. Error = %d", status);
+    return -EINVAL;
+  }
+
+  auto best_fb_width = 0u;
+  auto best_fb_height = 0u;
+
+  for (auto &iter : hw_displays_info) {
+    auto &info = iter.second;
+    if (info.display_type != kPluggable || !info.is_connected){
+      continue;
+    }
+    HWCDisplay *hwc_display = nullptr;
+    Display client_id = 0;
+    for (auto &map_info : map_info_pluggable_) {
+      if (info.display_id != map_info.sdm_id) {
+        continue;
+      }
+      client_id = map_info.client_id;
+    }
+
+    DLOGI("Temporarily creating display (%d) for resolution identification.", info.display_id);
+    status = HWCDisplayPluggable::Create(core_intf_, &buffer_allocator_, &callbacks_, this,
+                                         qservice_, client_id, info.display_id, 0, 0, false,
+                                         &hwc_display);
+
+    if (status) {
+      DLOGE("Failed to create display %d. Error = %d. Try other display.", info.display_id, status);
+      status = 0;
+      continue;
+    }
+
+    auto fb_width = 0u;
+    auto fb_height = 0u;
+    hwc_display->GetFrameBufferResolution(&fb_width, &fb_height);
+    DLOGI("Temporary display %d resolution: %d x %d", info.display_id, fb_width, fb_height);
+
+    DLOGI("Destroying temporarily created display.");
+    HWCDisplayPluggable::Destroy(hwc_display);
+    hwc_display = NULL;
+
+    if ((fb_width * fb_height) > (best_fb_width * best_fb_height)) {
+      best_fb_width = fb_width;
+      best_fb_height = fb_height;
+    }
+
+  }
+  DLOGI("Best w x h for null display: %d x %d", best_fb_width, best_fb_height);
+
+  if (best_fb_width > 0 && best_fb_height > 0) {
+    auto hwc_display_dummy = &hwc_display_[HWC_DISPLAY_PRIMARY];
+    if (*hwc_display_dummy) {
+      DLOGI("Destroying current null display.");
+      HWCDisplayDummy::Destroy(*hwc_display_dummy);
+    }
+    HWCDisplayDummy::Create(core_intf_, &buffer_allocator_, &callbacks_, this, qservice_,
+                            0, 0, best_fb_width, best_fb_height, hwc_display_dummy);
+    DLOGI("New dummy display with following res created: %d x %d", best_fb_width, best_fb_height);
+  }
+  return status;
+}
+
 int HWCSession::CreatePrimaryDisplay() {
   int status = -EINVAL;
   HWDisplaysInfo hw_displays_info = {};
@@ -2979,6 +3070,20 @@ int HWCSession::CreatePrimaryDisplay() {
       return status;
     }
   }
+
+  composer_setup_mode_ = kCompSetupModeNoDisplay;
+  for (auto &iter : hw_displays_info) {
+    auto &info = iter.second;
+    if ((info.display_type == kBuiltIn || info.display_type == kPluggable)
+        && info.is_connected) {
+      composer_setup_mode_ = kCompSetupModeNonPrimary;
+      if (info.is_primary) {
+        composer_setup_mode_ = kCompSetupModePrimary;
+        break;
+      }
+    }
+  }
+  DLOGD("composer_setup_mode_: %d", composer_setup_mode_);
 
   SCOPE_LOCK(primary_display_lock_);
 
@@ -3255,16 +3360,24 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
 
   for (auto &iter : *hw_displays_info) {
     auto &info = iter.second;
+    bool fw_reboot_pending = false;
 
-    if (info.is_primary && info.is_connected && null_display_active_) {
-      DLOGI("Pluggable display is connected. Exit!");
-      auto hwc_display_dummy = hwc_display_[HWC_DISPLAY_PRIMARY];
-      HWCDisplayDummy::Destroy(hwc_display_dummy);
-      CoreInterface::DestroyCore();
-      _exit(1);
+    if (info.display_type == kPluggable && info.is_connected &&
+        IsFrameworkRebootRequired(info.is_primary)) {
+      if (display_reboot_strategy_ == kRebootStrategyAlwaysDSI &&
+          composer_setup_mode_ == kCompSetupModePrimary) {
+        DLOGD("Android framework reboot pending.");
+        fw_reboot_pending = true;
+      } else {
+        DLOGI("Pluggable display is connected. Framework Reboot Required. Exiting!");
+        auto hwc_display_dummy = hwc_display_[HWC_DISPLAY_PRIMARY];
+        HWCDisplayDummy::Destroy(hwc_display_dummy);
+        CoreInterface::DestroyCore();
+        _exit(1);
+      }
     }
 
-    if (pluggable_is_primary_) {
+    if (pluggable_is_primary_ && info.is_primary && !pluggable_primary_connected_) {
       DisplayMapInfo map_info = map_info_primary_;
       Display client_id = map_info.client_id;
       {
@@ -3279,6 +3392,32 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
             DLOGE("Pluggable display creation failed.");
             return status;
           }
+
+          uint32_t active_config_index = 0;
+          DisplayConfigVariableInfo new_config = {};
+          hwc_display->GetActiveDisplayConfig(&active_config_index);
+          if (hwc_display->GetDisplayAttributesForConfig(active_config_index, &new_config)) {
+            DLOGE("Failed to check connected display's attributes.");
+          }
+          if (fw_reboot_pending) {
+            DLOGD("Previous display's resolution: %d x %d @ %d fps.", primary_config_.x_pixels,
+                  primary_config_.y_pixels, primary_config_.fps);
+            DLOGD("New display's resolution: %d x %d @ %d fps.", new_config.x_pixels,
+                  new_config.y_pixels, new_config.fps);
+            if (primary_config_.x_pixels != new_config.x_pixels ||
+                primary_config_.y_pixels != new_config.y_pixels ||
+                primary_config_.fps != new_config.fps) {
+              DLOGI("Pluggable primary display is connected again with different resolution. "
+                    "Framework Reboot Required. Exiting!");
+              auto hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
+              HWCDisplayPluggable::Destroy(hwc_display);
+              CoreInterface::DestroyCore();
+              _exit(1);
+            }
+          }
+          primary_config_ = new_config;
+          DLOGD("Stored config information of connected primary display: %d x %d @ %d.",
+                primary_config_.x_pixels, primary_config_.y_pixels, primary_config_.fps);
           pluggable_primary_connected_ = true;
           is_hdr_display_[UINT32(client_id)] = HasHDRSupport(hwc_display);
           DLOGI("Created primary pluggable display successfully: sdm id = %d,"
@@ -4025,7 +4164,8 @@ HWC3::Error HWCSession::GetDisplayConnectionType(Display display, HwcDisplayConn
     return HWC3::Error::BadDisplay;
   }
   *type = HwcDisplayConnectionType::EXTERNAL;
-  if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN) {
+  if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN ||
+      (display == HWC_DISPLAY_PRIMARY && pluggable_is_primary_)) {
     *type = HwcDisplayConnectionType::INTERNAL;
   }
 
