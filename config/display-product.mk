@@ -147,6 +147,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_rounded_corner_thread=0
 endif
 
+# Bypass demura license validation for art platform
+ifeq ($(TARGET_BOARD_PLATFORM),art)
+PRODUCT_PROPERTY_OVERRIDES += vendor.display.bypass_demura_license=1
+endif
+
 ifneq ($(PLATFORM_VERSION), 10)
     PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 endif
