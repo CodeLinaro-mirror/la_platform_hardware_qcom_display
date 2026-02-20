@@ -1669,7 +1669,10 @@ HWC3::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
         // by overwriting on the same buffer when waiting on an incorrect fence .
         // TODO: Implement proper handling of release fences when buffers are repeated in commits.
         if (skip_commit_) {
-          hwc_layer->PopFrontReleaseFence();
+          int popped_fence = hwc_layer->PopFrontReleaseFence();
+          if (popped_fence >= 0) {
+            close(popped_fence);
+          }
         }
         // It may so happen that layer gets marked to GPU & app layer gets queued
         // to MDP for composition. In those scenarios, release fence of buffer should
