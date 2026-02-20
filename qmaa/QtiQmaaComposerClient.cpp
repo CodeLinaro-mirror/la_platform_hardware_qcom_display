@@ -19,7 +19,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -500,6 +500,13 @@ ScopedAStatus QtiComposerClient::getLuts(int64_t displayId, const std::vector<Bu
                                          std::vector<Luts> *) {
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
 }
+
+#ifdef COMPOSER3_V5
+ScopedAStatus QtiComposerClient::getDisplayKnownVsyncSample(
+    int64_t in_display, aidl::android::hardware::graphics::composer3::VsyncSample *aidl_return) {
+  return TO_BINDER_STATUS(INT32(Error::Unsupported));
+}
+#endif
 
 void QtiComposerClient::getCapabilities() {
   uint32_t count = 2;
