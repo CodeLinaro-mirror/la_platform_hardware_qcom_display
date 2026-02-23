@@ -130,13 +130,12 @@ static EGLImageBuffer *L_wrap(const private_handle_t *src)
   uint32_t unaligned_width = src->unaligned_width;
   uint32_t unaligned_height = src->unaligned_height;
   uint32_t stride = src->width;
-  uint32_t format = src->format;
   native_handle_t *native_handle = const_cast<private_handle_t *>(src);
 
   CropRectangle_t crop;
   if (gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
                                 (int64_t)StandardMetadataType::CROP,
-                                &crop) == gralloc::Error::NONE) {
+                                &crop) != gralloc::Error::NONE) {
     unaligned_width = crop.right;
     unaligned_height = crop.bottom;
     uint32_t aligned_height = 0;
@@ -152,15 +151,8 @@ static EGLImageBuffer *L_wrap(const private_handle_t *src)
     flags |= android::GraphicBuffer::USAGE_PROTECTED;
   }
 
-  if(gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
-                               (int64_t)StandardMetadataType::PIXEL_FORMAT_REQUESTED,
-                               &format) != gralloc::Error::NONE) {
-    ALOGE("%s: Failed to get format", __func__);
-    return nullptr;
-  }
-
   android::sp<android::GraphicBuffer> graphicBuffer =
-    new android::GraphicBuffer(unaligned_width, unaligned_height, format,
+    new android::GraphicBuffer(unaligned_width, unaligned_height, src->format,
                                1,  // Layer count
                                flags, stride /*src->stride*/,
                                native_handle, false);
