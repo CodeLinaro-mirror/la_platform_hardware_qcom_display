@@ -35,7 +35,9 @@
 
 #include <QtiGralloc.h>
 #include <aidl/vendor/qti/hardware/display/demura/IDemuraFileFinder.h>
+#include <android/binder_process.h>
 #include <android/binder_manager.h>
+#include <binder/IInterface.h>
 #include <utils/Timers.h>
 #include <cutils/properties.h>
 
@@ -151,6 +153,8 @@ DisplayConfigAIDL::~DisplayConfigAIDL() {
     handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
     pose_handle_ = nullptr;
   }
+
+  featenab_client_ = nullptr;
 }
 
 int MapDisplayType(DisplayType dpy) {
@@ -1595,6 +1599,26 @@ sdm::DisplayError DisplayConfigAIDL::GetHistogramAttributes(uint64_t display, in
 
 sdm::nsecs_t DisplayConfigAIDL::SystemTime(int clock) {
   return systemTime(clock);
+}
+
+sdm::DisplayError DisplayConfigAIDL::SendFeatenablerCommand(sdm::FeatenablerCommand cmd) {
+  if (!featenab_client_) {
+    ::android::sp<::android::IServiceManager> sm = ::android::defaultServiceManager();
+    ::android::sp<::android::IBinder> binder =
+        sm->getService(::android::String16("featenab_client.service"));
+    if (binder.get() == nullptr) {
+      ALOGE("Unable to acquire featenabler client!");
+      return sdm::kErrorResources;
+    }
+    featenab_client_ = IFECService::asInterface(binder);
+  }
+
+  ::android::Parcel input_parcel, output_parcel;
+  auto ret = featenab_client_->dispatch(INT32(cmd), &input_parcel, &output_parcel);
+
+  ALOGI("Feature enabler command %d returns %d", cmd, ret);
+
+  return sdm::kErrorNone;
 }
 
 }  // namespace config
