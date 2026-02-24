@@ -49,6 +49,10 @@
 #include <core/ipc_interface.h>
 #include <core/display_interface.h>
 
+#include <debug_callback_intf.h>
+#include <ISnapMapper.h>
+#include <CWBMetadata.h>
+
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #include <aidl/android/hardware/graphics/composer3/IComposer.h>
 #include <aidl/vendor/qti/hardware/display/config/Attributes.h>
@@ -112,7 +116,12 @@ using sdm::SDMSideBandCompositorCbIntf;
 #else
 #define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntf
 #endif
+
+using ::sdm::DebugCallbackIntf;
 using sdm::SDMDisplayDrawCycleIntfV;
+using ::vendor::qti::hardware::display::snapalloc::ISnapMapper;
+
+typedef vendor_qti_hardware_display_common_cwb_metadata SnapCWBMetadata;
 
 class AmbientDataCaptureCallback : public BnAmbientDataCaptureCallback {
  public:
@@ -180,6 +189,11 @@ class AmbientDataCaptureAIDL : public BnAmbientDataCapture, public SDMSideBandCo
   std::mutex cwb_callbacks_lock_;
   std::unordered_map<void *, std::tuple<int32_t, std::shared_ptr<IAmbientDataCaptureCallback>>>
       cwb_callbacks_;
+
+  void *snap_impl_lib_ = nullptr;
+  std::shared_ptr<ISnapMapper> snapmapper_ = nullptr;
+  int GetSnapInstance();
+  int AddCWBMetadata(void *hdl, int32_t display_type);
 };
 
 }  // namespace ambientdatacapture

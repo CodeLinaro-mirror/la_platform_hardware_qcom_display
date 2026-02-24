@@ -62,7 +62,7 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
   caps_ = sdm_factory->CreateCapsIntf();
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
-  lifecycle_->RegisterSideBandCallback(this, true);
+  lifecycle_->RegisterSideBandCallbackEx(this, true, sdm::SideBandCallbackClient::kDisplayConfig);
   drawcycle_ =
 #ifdef COMPOSER3_V3
       reinterpret_pointer_cast<SDMDisplayDrawCycleIntfV>
@@ -822,7 +822,7 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferInternal(
     // Reset internal control flags
     cwb_config.cwb_control_params.internal_control_flags = 0;
     // Submit the CWB request with output buffer.
-    sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
+    sdm::DisplayError ret = sideband_->PostBufferWithOwner(cwb_config, hdl, display_type, this);
     if (ret != sdm::kErrorNone) {
       ret_status = EX_TRANSACTION_FAILED;
     } else {
