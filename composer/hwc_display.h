@@ -18,9 +18,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -296,6 +296,7 @@ class HWCDisplay : public DisplayEventHandler {
                            PPPendingParams *pending_action);
   void SolidFillPrepare();
   DisplayClass GetDisplayClass();
+  int32_t GetSdmId() { return sdm_id_; }
   int GetVisibleDisplayRect(hwc_rect_t *rect);
   void BuildLayerStack(void);
   void BuildSolidFillStack(void);

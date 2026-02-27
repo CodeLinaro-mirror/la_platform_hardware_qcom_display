@@ -3786,13 +3786,15 @@ int32_t HWCSession::GetDisplayConnectionType(hwc2_display_t display,
     *type = HwcDisplayConnectionType::INTERNAL;
   }
 
+  int32_t sdm_id = hwc_display_[display]->GetSdmId();
+
   sdm::HWDisplaysInfo hw_displays_info = {};
   if (core_intf_->GetDisplaysStatus(&hw_displays_info) == 0) {
-    auto iter = hw_displays_info.begin();
-    std::advance(iter, (size_t)display);
-    auto& info = iter->second;
-    if (info.is_primary) {
-      *type = HwcDisplayConnectionType::INTERNAL;
+    for (auto iter = hw_displays_info.begin(); iter!= hw_displays_info.end(); ++iter) {
+      auto &info = iter->second;
+      if (info.display_id == sdm_id && info.is_primary) {
+        *type = HwcDisplayConnectionType::INTERNAL;
+      }
     }
   }
 
