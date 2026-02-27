@@ -18,9 +18,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -3784,6 +3784,16 @@ int32_t HWCSession::GetDisplayConnectionType(hwc2_display_t display,
   *type = HwcDisplayConnectionType::EXTERNAL;
   if (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN) {
     *type = HwcDisplayConnectionType::INTERNAL;
+  }
+
+  sdm::HWDisplaysInfo hw_displays_info = {};
+  if (core_intf_->GetDisplaysStatus(&hw_displays_info) == 0) {
+    auto iter = hw_displays_info.begin();
+    std::advance(iter, (size_t)display);
+    auto& info = iter->second;
+    if (info.is_primary) {
+      *type = HwcDisplayConnectionType::INTERNAL;
+    }
   }
 
   return HWC2_ERROR_NONE;
