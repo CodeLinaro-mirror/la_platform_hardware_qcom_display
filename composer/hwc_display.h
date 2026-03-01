@@ -16,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
+*/
 
 #ifndef __HWC_DISPLAY_H__
 #define __HWC_DISPLAY_H__
@@ -273,8 +272,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int GetSupportedDisplayRefreshRates(std::vector<uint32_t> *supported_refresh_rates);
   bool IsModeSwitchAllowed(uint32_t config);
 
+  virtual int SetState(bool connected) { return kErrorNotSupported; }
   virtual DisplayError Flush() { return kErrorNotSupported; }
-
+  virtual int UpdateFBResolution(int width, int height) { return 0; }
   uint32_t GetMaxRefreshRate() { return max_refresh_rate_; }
   int ToggleScreenUpdates(bool enable);
   int ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload, PPDisplayAPIPayload *out_payload,
