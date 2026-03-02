@@ -1816,6 +1816,10 @@ void AidlComposerClient::CommandEngine::executeSetLayerComposition(
   auto err = mClient.layer_builder_->SetLayerCompositionType(display, layer,
                                                              INT32(composition.composition));
   if (err != sdm::kErrorNone) {
+    if (err == sdm::kErrorNotSupported) {
+      writeError(__FUNCTION__, Error::Unsupported);
+      return;
+    }
     writeError(__FUNCTION__, Error::BadConfig);
   }
 }
