@@ -64,7 +64,7 @@ case "$target" in
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.refresh_rate_changeable 1
-        setprop vendor.display.disable_cwb_idle_fallback 0
+        setprop vendor.display.disable_pu_ds 1
         setprop vendor.display.force_gpu_composition 0
         setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
@@ -513,7 +513,6 @@ case "$target" in
         setprop vendor.display.disable_offline_rotator 0
         setprop vendor.display.enable_qsync_idle 1
         setprop vendor.display.disable_rotator_ubwc 1
-        setprop vendor.display.allow_tonemap_native 1
         setprop vendor.gralloc.allow_camera_preview_write 1
         setprop vendor.display.perf.version 4
         setprop vendor.display.cpu_cluster_boost_mask 6
