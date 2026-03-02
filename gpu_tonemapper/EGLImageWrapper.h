@@ -17,6 +17,13 @@
  * limitations under the License.
  */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef __TONEMAPPER_EGLIMAGEWRAPPER_H__
 #define __TONEMAPPER_EGLIMAGEWRAPPER_H__
 
@@ -25,9 +32,16 @@
 #include <map>
 #include <gr_utils.h>
 #include "EGLImageBuffer.h"
+#include <android/hardware/graphics/mapper/IMapper.h>
+#include <SnapHandle.h>
+#include <Error.h>
+#include <ISnapMapper.h>
 
 using std::string;
 using std::map;
+using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
+using ::vendor::qti::hardware::display::snapalloc::ISnapMapper;
+using SnapError = ::vendor::qti::hardware::display::snapalloc::Error;
 
 class EGLImageWrapper {
  private:
@@ -42,12 +56,13 @@ class EGLImageWrapper {
   android::LruCache<int, EGLImageBuffer *>* eglImageBufferCache;
   map<string, int> buffStrbuffIntMap = {};
   DeleteEGLImageCallback* callback = 0;
+  std::shared_ptr<ISnapMapper> snapmapper_;
   uint64_t buffInt = 0;
 
  public:
   EGLImageWrapper();
   ~EGLImageWrapper();
-  EGLImageBuffer* wrap(const void *pvt_handle);
+  EGLImageBuffer* wrap(const SnapHandle *snap_hnd);
   void Init();
   void Deinit();
 };
