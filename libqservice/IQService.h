@@ -141,6 +141,7 @@ public:
       GET_PANEL_RESOLUTION = 65,               // Get Panel resolution
       SET_STANDBY_MODE = 66,                   // Set standby mode
       SET_PRIVACY_REGIONS = 67,                // Set PrivacyRegions on given layers in frame
+      SET_FRAME_DUMP_STREAMING_CONFIG = 69,    // Provides frame dump support in streaming mode
       COMMAND_LIST_END = 400,
     };
 

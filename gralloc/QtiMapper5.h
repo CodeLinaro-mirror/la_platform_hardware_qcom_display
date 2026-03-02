@@ -26,6 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * ​Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -227,6 +228,7 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(SnapMetadataType::THREE_DIMENSIONAL_REF_INFO),
        sizeof(SnapThreeDimensionalRefInfo)},
       {static_cast<uint64_t>(SnapMetadataType::VIEW_ID), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::CWB_METADATA), sizeof(SnapCWBMetadata)},
   };
 };
 

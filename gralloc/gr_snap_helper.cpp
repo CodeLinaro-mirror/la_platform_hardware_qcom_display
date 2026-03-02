@@ -1118,6 +1118,21 @@ SnapError GrallocSnapHelper::ViewIdHelper(SnapHandle *hnd, uint32_t aidl_size, v
   return error;
 }
 
+SnapError GrallocSnapHelper::CWBMetadataHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                               void *gralloc_in_set, void *gralloc_out_get,
+                                               SnapDescriptor *buf_des, bool check_metadata_set,
+                                               int32_t *mapper_return) {
+  (void)aidl_size;
+  auto error = SnapError::BAD_VALUE;
+  void *snap_out_get = gralloc_out_get;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::CWB_METADATA, snap_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::CWB_METADATA, gralloc_in_set);
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                     void *gralloc_in_set, void *gralloc_out_get,
                                                     SnapDescriptor *buf_des,
