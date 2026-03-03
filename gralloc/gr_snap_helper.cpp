@@ -294,6 +294,63 @@ int GrallocSnapHelper::GetBaseView(native_handle_t *gr_hnd, uint32_t *view) {
 
   return SnapError::BAD_BUFFER;
 }
+
+int GrallocSnapHelper::UpdateHandlesMap(SnapHandle* snap_hnd, bool isAdd) {
+  if (snap_hnd == nullptr) {
+    ALOGE("Invalid snapalloc handle");
+    return SnapError::BAD_BUFFER;
+  }
+
+  std::lock_guard<std::mutex> lock(map_lock_);
+
+  if (isAdd) {
+    for (const auto& pair: handles_map_ ) {
+      if (pair.second == snap_hnd) {
+        ALOGW("SnapHandle %p already exists in handles_map_", snap_hnd);
+        return SnapError::NONE;
+      }
+    }
+
+    native_handle_t *gr_hnd = CNativeHandleFromSnapHandle(const_cast<SnapHandle *>(snap_hnd),
+                                                          false);
+    if (gr_hnd == nullptr) {
+      ALOGE("Unable to get gralloc handle from Snap handle");
+      return SnapError::BAD_BUFFER;
+    }
+    handles_map_.emplace(std::make_pair(gr_hnd, const_cast<SnapHandle *>(snap_hnd)));
+    return SnapError::NONE;
+  } else {
+    for (const auto& pair: handles_map_ ) {
+      if (pair.second == snap_hnd) {
+        native_handle_t *gr_hnd = pair.first;
+        handles_map_.erase(gr_hnd);
+        native_handle_close(gr_hnd);
+        native_handle_delete(gr_hnd);
+        return SnapError::NONE;
+      }
+    }
+  }
+  return SnapError::NONE;
+}
+
+void GrallocSnapHelper::GetGrallocHandleFromSnapHandle(SnapHandle *snap_hnd,
+                                                       native_handle_t **gr_hnd) {
+  if (snap_hnd == nullptr) {
+    ALOGE("Snapalloc handle is null!");
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(map_lock_);
+
+  for (const auto& pair : handles_map_) {
+    if (pair.second == snap_hnd) {
+      *gr_hnd = pair.first;
+      return;
+    }
+  }
+  ALOGE("Gralloc handle is not available corresponding to snaphandle");
+}
+
 int GrallocSnapHelper::ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
                                         buffer_handle_t *out_buffer_handle) {
   if (meta_handle == nullptr) {

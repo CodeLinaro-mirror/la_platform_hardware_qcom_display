@@ -231,6 +231,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
                        buffer_handle_t *out_buffer_handle);
   int GetBaseView(native_handle_t *gr_hnd, uint32_t *view);
+  int UpdateHandlesMap(SnapHandle* snap_hnd, bool isAdd);
+  void GetGrallocHandleFromSnapHandle(SnapHandle *snap_hnd, native_handle_t **gr_hnd);
 
  private:
   GrallocSnapHelper();

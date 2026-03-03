@@ -18,8 +18,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -29,7 +30,6 @@
 #include <cutils/properties.h>
 #include "display_properties.h"
 #include "QtiMapper5.h"
-#include "gr_snap_helper.h"
 #include "mapper_utils.h"
 #include "debug_callback_intf.h"
 
@@ -67,6 +67,11 @@ void ComposerHandleImporter::initialize() {
     ALOGE("Failed to get snapalloc instance");
   }
 
+  snap_helper_ = gralloc::GrallocSnapHelper::GetInstance();
+  if(snap_helper_ == nullptr) {
+    ALOGE("Failed to get snap helper instance");
+  }
+
   int value = 0;  // Default value when property is not present.
   value = property_get_bool("vendor.display.enable_memory_mapping", 0);
   enable_memory_mapping_ = (value == 1);
@@ -77,6 +82,7 @@ void ComposerHandleImporter::initialize() {
 
 void ComposerHandleImporter::cleanup() {
   snapmapper_ = nullptr;
+  snap_helper_ = nullptr;
   mInitialized = false;
 }
 
@@ -147,6 +153,13 @@ bool ComposerHandleImporter::importBuffer(const SnapHandle *handle) {
     return false;
   }
 
+  // Update SnapHelper map to allow client query using IMapper interface
+  auto status = snap_helper_->UpdateHandlesMap(const_cast<SnapHandle *>(handle), true);
+  if(status != SnapError::NONE) {
+    ALOGE("%s: Failed to udpate the map with gralloc handle", __FUNCTION__);
+    return false;
+  }
+
   if (enable_memory_mapping_) {
     for (int i = 0; i < handle->num_fds; i++) {
       // handle->data is the int array of fds. run insert on all fds.
@@ -176,8 +189,12 @@ void ComposerHandleImporter::freeBuffer(const SnapHandle *handle) {
     }
   }
 
-  //auto ret = STABLEMAPPER(mMapper).freeBuffer(handle);
-  auto ret = snapmapper_->Release(*handle);
+  auto ret = snap_helper_->UpdateHandlesMap(const_cast<SnapHandle *>(handle), false);
+  if(ret != SnapError::NONE) {
+    ALOGE("%s: Failed to udpate the map with gralloc handle", __FUNCTION__);
+  }
+
+  ret = snapmapper_->Release(*handle);
   if (ret != SnapError::NONE) {
     ALOGE("%s: mapper freeBuffer failed: %d", __FUNCTION__, ret);
   }
