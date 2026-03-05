@@ -333,14 +333,15 @@ else
 
     ifeq (,$(wildcard $(QCPATH)/display-noship))
         $(call soong_config_set, qtidisplay, var1, true )
-        $(call soong_config_set, qtidisplay, var2, true )
         $(call soong_config_set, qtidisplay, hy11, true )
+    endif
+
+    ifeq (,$(wildcard $(QCPATH)/display))
+        $(call soong_config_set, qtidisplay, var2, true )
         $(call soong_config_set, qtidisplay, hy22, true )
     endif
+    
 endif
-
-
-
 
 QMAA_ENABLED_HAL_MODULES += display
 
