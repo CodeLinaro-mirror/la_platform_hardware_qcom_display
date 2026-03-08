@@ -186,6 +186,31 @@ case "$target" in
         ;;
     esac
     ;;
+    "pikachu")
+    # SOC ID for Pikachu is 736
+    # SOC ID for Pikachu is 737
+    case "$soc_hwid" in
+      736|737)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.idle_time 0
+        setprop vendor.display.idle_time_inactive 0
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.disable_multirect 1
+        setprop vendor.display.disable_llcbc_support 1
+        setprop vendor.display.enable_rounded_corner 0
+        setprop vendor.display.perf_version 2
+        setprop vendor.display.minimum_large_comp_fps 60
+        ;;
+    esac
+    ;;
     "seraph")
     # SOC ID for Seraph is 672
     # SOC ID for Seraph is 673
