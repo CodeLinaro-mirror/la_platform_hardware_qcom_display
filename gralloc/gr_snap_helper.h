@@ -1,5 +1,7 @@
 /*
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -231,8 +233,6 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   int ImportViewBuffer(native_handle_t *meta_handle, uint32_t view,
                        buffer_handle_t *out_buffer_handle);
   int GetBaseView(native_handle_t *gr_hnd, uint32_t *view);
-  int UpdateHandlesMap(SnapHandle* snap_hnd, bool isAdd);
-  void GetGrallocHandleFromSnapHandle(SnapHandle *snap_hnd, native_handle_t **gr_hnd);
 
  private:
   GrallocSnapHelper();

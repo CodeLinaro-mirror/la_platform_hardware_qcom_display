@@ -36,11 +36,16 @@
 #include <map>
 #include <utility>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <dlfcn.h>
+#include "debug_callback_intf.h"
 
-using std::string;
+using aidl::android::hardware::graphics::common::StandardMetadataType;
+using ::sdm::DebugCallbackIntf;
 using std::map;
 using std::pair;
-using aidl::android::hardware::graphics::common::StandardMetadataType;
+using std::string;
 using private_handle_t = qtigralloc::private_handle_t;
 
 static string pidString = std::to_string(getpid());
@@ -98,6 +103,21 @@ void EGLImageWrapper::Init()
   eglImageBufferCache = new android::LruCache<int, EGLImageBuffer*>(32);
   callback = new DeleteEGLImageCallback(&buffStrbuffIntMap);
   eglImageBufferCache->setOnEntryRemovedListener(callback);
+
+  const std::string snapalloc_lib_name = "vendor.qti.hardware.display.snapalloc-impl.so";
+  void *snap_impl_lib_ = ::dlopen(snapalloc_lib_name.c_str(), RTLD_NOW);
+  if (!snap_impl_lib_) {
+    ALOGE("Dlopen error for snapalloc impl: %s", dlerror());
+  }
+
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
+  *reinterpret_cast<void **>(&LINK_FETCH_ISnapMapper) =
+      ::dlsym(snap_impl_lib_, "FETCH_ISnapMapper");
+  if (LINK_FETCH_ISnapMapper) {
+    snapmapper_ = LINK_FETCH_ISnapMapper(nullptr);
+  } else {
+    ALOGE("Failed to get snapalloc instance");
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -121,49 +141,86 @@ void EGLImageWrapper::Deinit()
 
 }
 
+static native_handle_t *CNativeHandleFromSnapHandle(const SnapHandle *snap_handle,
+                                                    bool pass_fd_ownership) {
+  if (!snap_handle)
+    return nullptr;
+
+  native_handle_t *native_handle =
+      native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
+
+  if (!native_handle)
+    return nullptr;
+
+  for (size_t i = 0; i < snap_handle->num_fds; i++) {
+    int fd = snap_handle->buffer_data[i];
+    native_handle->data[i] = pass_fd_ownership ? fd : fcntl(fd, F_DUPFD_CLOEXEC, 0);
+  }
+
+  memcpy((native_handle->data + native_handle->numFds),
+         (snap_handle->buffer_data + snap_handle->num_fds), snap_handle->num_ints * sizeof(int));
+
+  return native_handle;
+}
+
 //-----------------------------------------------------------------------------
-static EGLImageBuffer *L_wrap(const private_handle_t *src)
+static EGLImageBuffer *L_wrap(const SnapHandle *snap_hnd, std::shared_ptr<ISnapMapper> snapmapper)
 //-----------------------------------------------------------------------------
 {
   EGLImageBuffer* result = 0;
 
-  uint32_t unaligned_width = src->unaligned_width;
-  uint32_t unaligned_height = src->unaligned_height;
-  uint32_t stride = src->width;
-  uint32_t format = src->format;
-  native_handle_t *native_handle = const_cast<private_handle_t *>(src);
+  uint32_t stride = 0;
+  uint32_t format = 0;
 
-  CropRectangle_t crop;
-  if (gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
-                                (int64_t)StandardMetadataType::CROP,
-                                &crop) == gralloc::Error::NONE) {
-    unaligned_width = crop.right;
-    unaligned_height = crop.bottom;
-    uint32_t aligned_height = 0;
-    gralloc::BufferInfo info(unaligned_width, unaligned_height, src->format, src->usage);
-    gralloc::GetAlignedWidthAndHeight(info, &stride, &aligned_height);
+  if (snapmapper->GetMetadata(*snap_hnd, PIXEL_FORMAT_REQUESTED, &format) != SnapError::NONE) {
+    ALOGE("Failed to get format from snapalloc");
+    return nullptr;
+  }
+
+  if (snapmapper->GetMetadata(*snap_hnd, STRIDE, &stride) != SnapError::NONE) {
+    ALOGE("Failed to get stride from snapalloc");
+    return nullptr;
+  }
+
+  uint64_t protected_content;
+  if (snapmapper->GetMetadata(*snap_hnd, PROTECTED_CONTENT, &protected_content) !=
+      SnapError::NONE) {
+    ALOGE("Failed to get protected flag");
+    return nullptr;
+  }
+
+  uint32_t height = 0;
+  if (snapmapper->GetMetadata(*snap_hnd, HEIGHT, &height) != SnapError::NONE) {
+    ALOGE("Failed to get height from snapalloc");
+    return nullptr;
+  }
+
+  uint32_t width = 0;
+  if (snapmapper->GetMetadata(*snap_hnd, WIDTH, &width) != SnapError::NONE) {
+    ALOGE("Failed to get width from snapalloc");
+    return nullptr;
+  }
+
+  native_handle_t *handle = CNativeHandleFromSnapHandle(snap_hnd, false);
+  if (handle == nullptr) {
+    ALOGE("Unable to create native handle from Snap handle");
+    return nullptr;
   }
 
   int flags = android::GraphicBuffer::USAGE_HW_TEXTURE |
               android::GraphicBuffer::USAGE_SW_READ_NEVER |
               android::GraphicBuffer::USAGE_SW_WRITE_NEVER;
 
-  if (src->flags & qtigralloc::PRIV_FLAGS_SECURE_BUFFER) {
+  if (protected_content) {
     flags |= android::GraphicBuffer::USAGE_PROTECTED;
   }
 
-  if(gralloc::GetMetaDataValue(const_cast<private_handle_t *>(src),
-                               (int64_t)StandardMetadataType::PIXEL_FORMAT_REQUESTED,
-                               &format) != gralloc::Error::NONE) {
-    ALOGE("%s: Failed to get format", __func__);
-    return nullptr;
-  }
+  android::sp<android::GraphicBuffer> graphicBuffer = new android::GraphicBuffer(
+      handle, android::GraphicBuffer::CLONE_HANDLE, width, height, format, 1, //Layer Count
+      static_cast<uint64_t>(flags), stride);
 
-  android::sp<android::GraphicBuffer> graphicBuffer =
-    new android::GraphicBuffer(unaligned_width, unaligned_height, format,
-                               1,  // Layer count
-                               flags, stride /*src->stride*/,
-                               native_handle, false);
+  native_handle_close(handle);
+  native_handle_delete(handle);
 
   result = new EGLImageBuffer(graphicBuffer);
 
@@ -171,25 +228,26 @@ static EGLImageBuffer *L_wrap(const private_handle_t *src)
 }
 
 //-----------------------------------------------------------------------------
-EGLImageBuffer *EGLImageWrapper::wrap(const void *pvt_handle)
+EGLImageBuffer *EGLImageWrapper::wrap(const SnapHandle *snap_hnd)
 //-----------------------------------------------------------------------------
 {
-  const private_handle_t *src = static_cast<const private_handle_t *>(pvt_handle);
+  uint32_t fd = 0;
 
-  string buffStr = get_ion_buff_str(src->fd);
+  snapmapper_->GetMetadata(*snap_hnd, FD, &fd);
+  string buffStr = get_ion_buff_str(fd);
   EGLImageBuffer* eglImage = nullptr;
   if (!buffStr.empty()) {
     auto it = buffStrbuffIntMap.find(buffStr);
     if (it != buffStrbuffIntMap.end()) {
       eglImage = eglImageBufferCache->get(it->second);
     } else {
-        eglImage = L_wrap(src);
-        buffStrbuffIntMap.insert(pair<string, int>(buffStr, buffInt));
-        eglImageBufferCache->put(buffInt, eglImage);
-        buffInt++;
+      eglImage = L_wrap(snap_hnd, snapmapper_);
+      buffStrbuffIntMap.insert(pair<string, int>(buffStr, buffInt));
+      eglImageBufferCache->put(buffInt, eglImage);
+      buffInt++;
     }
   } else {
-    ALOGE("Could not provide an eglImage for fd = %d, EGLImageWrapper = %p", src->fd, this);
+    ALOGE("Could not provide an eglImage for fd = %d, EGLImageWrapper = %p", fd, this);
   }
 
   return eglImage;
