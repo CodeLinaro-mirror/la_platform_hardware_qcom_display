@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -51,9 +51,8 @@ class GLColorConvert {
   static GLColorConvert *GetInstance(GLRenderTarget target, bool secure);
   static void Destroy(GLColorConvert *intf);
 
-  virtual int Blit(const native_handle_t *src_hnd, const native_handle_t *dst_hnd,
-                   const GLRect &src_rect, const GLRect &dst_rect,
-                   const shared_ptr<Fence> &src_acquire_fence,
+  virtual int Blit(const SnapHandle *src_hnd, const SnapHandle *dst_hnd, const GLRect &src_rect,
+                   const GLRect &dst_rect, const shared_ptr<Fence> &src_acquire_fence,
                    const shared_ptr<Fence> &dst_acquire_fence,
                    shared_ptr<Fence> *release_fence) = 0;
   virtual void Reset() = 0;

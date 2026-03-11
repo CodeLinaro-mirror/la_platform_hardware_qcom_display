@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -97,9 +97,9 @@ void GLCommon::DeleteProgram(uint32_t id) {
   GL(glDeleteProgram(id));
 }
 
-void GLCommon::SetSourceBuffer(const native_handle_t *src_hnd) {
+void GLCommon::SetSourceBuffer(const SnapHandle *src_hnd) {
   DTRACE_SCOPED();
-  EGLImageBuffer *src_buffer = image_wrapper_.wrap(reinterpret_cast<const void *>(src_hnd));
+  EGLImageBuffer *src_buffer = image_wrapper_.wrap(src_hnd);
 
   GL(glActiveTexture(GL_TEXTURE0));
   if (src_buffer) {
@@ -107,9 +107,9 @@ void GLCommon::SetSourceBuffer(const native_handle_t *src_hnd) {
   }
 }
 
-void GLCommon::SetDestinationBuffer(const native_handle_t *dst_hnd) {
+void GLCommon::SetDestinationBuffer(const SnapHandle *dst_hnd) {
   DTRACE_SCOPED();
-  EGLImageBuffer *dst_buffer = image_wrapper_.wrap(reinterpret_cast<const void *>(dst_hnd));
+  EGLImageBuffer *dst_buffer = image_wrapper_.wrap(dst_hnd);
 
   if (dst_buffer) {
     GL(glBindFramebuffer(GL_FRAMEBUFFER, dst_buffer->getFramebuffer()));

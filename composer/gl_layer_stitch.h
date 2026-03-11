@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -42,8 +42,8 @@
 
 namespace sdm {
 struct StitchParams {
-  const native_handle_t *src_hnd = nullptr;
-  const native_handle_t *dst_hnd = nullptr;
+  const SnapHandle *src_hnd = nullptr;
+  const SnapHandle *dst_hnd = nullptr;
   GLRect src_rect;
   GLRect dst_rect;
   GLRect scissor_rect;
