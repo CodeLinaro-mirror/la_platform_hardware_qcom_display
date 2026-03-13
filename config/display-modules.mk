@@ -33,7 +33,6 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             vendor.display.config@2.0.vendor \
                             init.qti.display_boot.sh \
                             libfilefinder \
-                            vendor.qti.hardware.display.demura-service \
                             modetest \
                             libdisplayconfig.qti \
                             libhwfenceclient
