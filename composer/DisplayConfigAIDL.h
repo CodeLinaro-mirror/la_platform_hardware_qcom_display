@@ -28,8 +28,9 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -66,7 +67,6 @@
 #include <core/display_interface.h>
 #include "hwc_common.h"
 #include "AidlComposerHandleImporter.h"
-#include "gr_snap_helper.h"
 
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
@@ -273,7 +273,6 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   void DestroyLayerStitch(uint64_t display);
 
   sdm::nsecs_t SystemTime(int clock);
-  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
 
  private:
   ScopedAStatus setCWBOutputBufferInternal(

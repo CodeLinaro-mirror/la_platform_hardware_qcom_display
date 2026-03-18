@@ -37,7 +37,6 @@
 #include <SnapHandle.h>
 #include <Error.h>
 #include <ISnapMapper.h>
-#include "gr_snap_helper.h"
 
 namespace aidl {
 namespace vendor {
@@ -74,7 +73,6 @@ class ComposerHandleImporter {
   bool enable_memory_mapping_ = false;
   std::map<uint64_t, std::vector<uint32_t>> ino_fds_map_;
   std::shared_ptr<ISnapMapper> snapmapper_;
-  gralloc::GrallocSnapHelper *snap_helper_ = nullptr;
 };
 
 }  // namespace composer3
