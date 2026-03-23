@@ -113,8 +113,8 @@ AdrenoMemInfo::AdrenoMemInfo() {
   }
   char property[PROPERTY_VALUE_MAX];
   property_get(DISABLE_UBWC_PROP, property, "0");
-  if (!(strncmp(property, "1", PROPERTY_VALUE_MAX)) ||
-      !(strncmp(property, "true", PROPERTY_VALUE_MAX))) {
+  if (!(strncmp(property, "1", sizeof("1")))||
+      !(strncmp(property, "true", sizeof("true")))) {
      gfx_ubwc_disable_ = true;
   }
 }
