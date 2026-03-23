@@ -12,7 +12,10 @@ soong_config_module_type {
         "llvmcov",
         "smmu_proxy",
         "ubwcp_headers",
-        "neo"
+        "snapallocext_enabled",
+        "neo",
+        "lsr_target",
+        "enable_demura"
     ],
     properties: [
         "cflags",
@@ -22,7 +25,8 @@ soong_config_module_type {
         "host_ldlibs",
         "ldflags",
         "native_coverage",
-	"vendor",
+        "shared_libs",
+        "vendor",
     ],
 }
 
@@ -77,22 +81,23 @@ qtidisplay_prebuilt_defaults {
 }
 
 qtidisplay_cc_defaults {
+    name: "displaysnapallocext_defaults",
+    soong_config_variables: {
+        snapallocext_enabled: {
+            shared_libs: [
+                "libbinder_ndk",
+                "vendor.qti.hardware.display.snapallocext-V1-ndk",
+            ],
+        },
+    },
+}
+
+qtidisplay_cc_defaults {
     name: "qtidisplay_smmu_header_defaults",
     soong_config_variables: {
         smmu_proxy: {
             header_libs: [
                 "smmu_proxy_uapi_header",
-            ]
-        }
-    }
-}
-
-qtidisplay_cc_defaults {
-    name: "qtidisplay_libubwcp_header_defaults",
-    soong_config_variables: {
-        ubwcp_headers: {
-            header_libs: [
-                "libubwcp_headers",
             ]
         }
     }
@@ -149,6 +154,9 @@ qtidisplay_cc_defaults {
         },
         neo: {
             cflags: ["-DTARGET_INCLUDES_NEO"],
+        },
+        lsr_target: {
+            cflags: ["-DTARGET_USES_LSR", "-DLSR_API"],
         },
         var3 : {
             enabled: false,
@@ -295,6 +303,18 @@ qtidisplay_cc_defaults {
     },
 }
 
+qtidisplay_cc_defaults {
+    name: "qtidisplay_demura_defaults",
+    soong_config_variables: {
+        enable_demura: {
+            enabled: true,
+            conditions_default: {
+                enabled: false,
+            },
+        },
+    },
+}
+
 cc_library_headers {
     name: "display_headers",
     vendor: true,
@@ -346,6 +366,7 @@ subdirs = [
     "gralloc",
     "gpu_tonemapper",
     "hdmi_cec",
+    "dp_cec",
     "sde-drm",
     "sdm/libs/utils",
     "sdm/libs/core",

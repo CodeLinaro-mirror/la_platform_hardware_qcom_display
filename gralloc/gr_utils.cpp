@@ -422,25 +422,6 @@ int GetBpp(int format) {
   }
 }
 
-// Returns the linear buffer size meant to be mapped for UBWC-P usecase
-unsigned int GetLinearSizeUBWCP(const BufferInfo &info) {
-  unsigned int alignedW;
-  unsigned int alignedH;
-  BufferInfo info_modified = info;
-  unsigned int linear_size;
-
-  // Set no UBWC-P usage in order to compute linear size
-  info_modified.usage |= GRALLOC_USAGE_PRIVATE_NO_UBWC_P;
-
-  GetAlignedWidthAndHeight(info_modified, &alignedW, &alignedH);
-  ALOGD_IF(DEBUG, "format: 0x%x alignedW: %d alignedH: %d", info.format, alignedW, alignedH);
-
-  linear_size = GetSize(info_modified, alignedW, alignedH);
-
-  ALOGD_IF(DEBUG, "Linear size: (Fixed) %d ", linear_size);
-  return linear_size;
-}
-
 // Returns the final buffer size meant to be allocated with ion
 unsigned int GetSize(const BufferInfo &info, unsigned int alignedw, unsigned int alignedh) {
   unsigned int size = 0;
@@ -948,9 +929,6 @@ bool IsUBwcPISupported(int format, uint64_t usage) {
 }
 
 bool IsUBwcEnabled(int format, uint64_t usage) {
-  if (IsUBwcPEnabled(format, usage))
-    return true;
-
   // Allow UBWC, if client is using an explicitly defined UBWC pixel format.
   if (IsUBwcFormat(format)) {
     return true;
@@ -981,60 +959,6 @@ bool IsUBwcEnabled(int format, uint64_t usage) {
   }
 
   return false;
-}
-
-bool IsUBwcPEnabled(int format, uint64_t usage) {
-  bool ubwcp_enabled = false;
-  // bail out if CPU access bits are not set
-  if (!CpuCanAccess(usage)) {
-    return ubwcp_enabled;
-  }
-  ubwcp_enabled = true;
-  if (!isTargetSupportUBwcP()) {
-    ALOGD_IF(DEBUG, "UBWCP is not supported on this target \n");
-    ubwcp_enabled = false;
-  } else if (!(usage & BufferUsage::CAMERA_OUTPUT)) {
-    ALOGD_IF(DEBUG, "UBWCP is not supported for non-camera producer \n");
-    ubwcp_enabled = false;
-  } else if (usage & GRALLOC_USAGE_PRIVATE_NO_UBWC_P) {
-    ALOGD_IF(DEBUG, "UBWCP is not supported as client specifially requested not to use UBWCP\n");
-    ubwcp_enabled = false;
-  } else if (!IsUBwcPFormat(format)) {
-    ALOGD_IF(DEBUG, "UBWCP is not supported for this format: 0x%x \n", format);
-    ubwcp_enabled = false;
-  }
-  ALOGD_IF(DEBUG, "ubwcp_enabled: %d for this format: 0x%x usage:0x%x \n", ubwcp_enabled, format,
-           usage);
-  return ubwcp_enabled;
-}
-
-bool IsUBwcPFormat(int format) {
-  // TODO(user): Need to add two more formats support: NV12 4R and P016
-  switch (format) {
-    case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-    case HAL_PIXEL_FORMAT_RGBA_8888:
-    case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-      ALOGD_IF(DEBUG, "%s: pixel format: 0x%x is UBWCP supported", __FUNCTION__, format);
-      return true;
-  }
-  return false;
-}
-
-void GetYuvUBwcPWidthAndHeight(int width, int height, int format, unsigned int *aligned_w,
-                               unsigned int *aligned_h) {
-  //TODO[User]: need to query ubwcp library to get stride alignment for a given ubwcp format.
-  unsigned int ubwcp_stride_alignment = 64;
-  switch (format) {
-    case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-    case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-      *aligned_w = ALIGN(*aligned_w, ubwcp_stride_alignment);
-      break;
-    default:
-      ALOGD_IF(DEBUG, "%s: Unsupported pixel format: 0x%x", __FUNCTION__, format);
-      break;
-  }
 }
 
 void GetYuvUBwcWidthAndHeight(int width, int height, int format, unsigned int *aligned_w,
@@ -1415,9 +1339,6 @@ int GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
 
   if (ubwc_enabled) {
     GetYuvUBwcWidthAndHeight(width, height, format, alignedw, alignedh);
-    if (IsUBwcPEnabled(format, usage)) {
-      GetYuvUBwcPWidthAndHeight(width, height, format, alignedw, alignedh);
-    }
     return 0;
   }
 
@@ -1676,7 +1597,7 @@ uint64_t GetHandleFlags(int format, uint64_t usage) {
     priv_flags |= qtigralloc::PRIV_FLAGS_NON_CPU_WRITER;
   }
 
-  if (!UseUncached(format, usage) || IsUBwcPEnabled(format, usage)) {
+  if (!UseUncached(format, usage)) {
     priv_flags |= qtigralloc::PRIV_FLAGS_CACHED;
   }
 
@@ -2555,7 +2476,7 @@ bool getGralloc4Array(MetaData_t *metadata, int64_t paramType) {
 #endif
       return true;
     default:
-      ALOGE("paramType %d not supported", paramType);
+      ALOGE("paramType %" PRId64 " not supported", paramType);
       return false;
   }
 }
@@ -3401,6 +3322,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_YUV_PLANE_INFO: {
       if (copy) {
@@ -3446,6 +3368,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_CUSTOM_DIMENSIONS_HEIGHT: {
       if (copy) {
@@ -3459,6 +3382,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_RGB_DATA_ADDRESS: {
       if (copy) {
@@ -3471,6 +3395,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
           break;
         }
       }
+      [[fallthrough]];
     }
     case QTI_BUFFER_TYPE:
       if (copy) {
@@ -3560,7 +3485,7 @@ Error GetMetaDataInternal(void *buffer, int64_t type, void *in, void **out) {
       break;
 #endif
     default:
-      ALOGD_IF(DEBUG, "Unsupported metadata type %d", type);
+      ALOGD_IF(DEBUG, "Unsupported metadata type %" PRId64, type);
       ret = Error::BAD_VALUE;
       break;
   }
@@ -3618,7 +3543,7 @@ void setGralloc4Array(MetaData_t *metadata, int64_t paramType, bool isSet) {
 #endif
       break;
     default:
-      ALOGE("paramType %d not supported in Gralloc4", paramType);
+      ALOGE("paramType %" PRId64 " not supported in Gralloc4", paramType);
   }
 }
 
@@ -3653,7 +3578,7 @@ Error SetMetaData(private_handle_t *handle, uint64_t paramType, void *param) {
         break;
 #endif
       default:
-        ALOGE("Unknown paramType %d", paramType);
+        ALOGE("Unknown paramType %" PRId64, paramType);
         break;
     }
     // param unset
@@ -3781,21 +3706,9 @@ Error SetMetaData(private_handle_t *handle, uint64_t paramType, void *param) {
       data->memHandle = *(reinterpret_cast<int64_t *>(param));
       break;
     default:
-      ALOGE("Unknown paramType %d", paramType);
+      ALOGE("Unknown paramType %" PRId64, paramType);
       break;
   }
   return Error::NONE;
-}
-bool isTargetSupportUBwcP() {
-  bool target_support_ubwcp = false;
-
-  char property[PROPERTY_VALUE_MAX];
-  property_get(HW_SUPPORTS_UBWCP, property, "0");
-  if (!(strncmp(property, "1", PROPERTY_VALUE_MAX)) ||
-      !(strncmp(property, "true", PROPERTY_VALUE_MAX))) {
-    target_support_ubwcp = true;
-  }
-
-  return target_support_ubwcp;
 }
 }  // namespace gralloc

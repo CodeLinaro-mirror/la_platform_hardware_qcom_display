@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -35,19 +35,17 @@ ScopedAStatus QtiComposer3Client::qtiExecuteCommands(
     const std::vector<DisplayCommand> &in_commands,
     const std::vector<QtiDisplayCommand> &in_qtiCommands,
     std::vector<CommandResultPayload> *_aidl_return) {
-  std::vector<CommandResultPayload> qti_results;
-
   auto composer_client = composer_client_.lock();
 
   if (composer_client) {
-    auto qti_status = composer_client->executeQtiCommands(in_qtiCommands, &qti_results);
-    auto status = composer_client->executeCommands(in_commands, _aidl_return);
-
-    for (auto &result : qti_results) {
-      _aidl_return->push_back(std::move(result));
+    auto status = ScopedAStatus::ok();
+    if (!in_qtiCommands.empty()) {
+      status =
+          composer_client->executeQtiExtendedCommands(in_commands, in_qtiCommands, _aidl_return);
+    } else if (!in_commands.empty()) {
+      status = composer_client->executeCommands(in_commands, _aidl_return);
     }
-
-    return (!qti_status.isOk() ? std::move(qti_status) : std::move(status));
+    return std::move(status);
   }
   return TO_BINDER_STATUS(INT32(Error::NoResources));
 }
@@ -64,6 +62,40 @@ ScopedAStatus QtiComposer3Client::qtiTryDrawMethod(int64_t in_display,
   }
   return ScopedAStatus::ok();
 }
+
+#ifdef TARGET_USES_LSR
+ScopedAStatus QtiComposer3Client::qtiSetDisplayDeviceConfig(
+    int64_t in_display, const QtiDisplayDeviceConfig &in_displayDeviceConfig) {
+  if (lifecycle_) {
+    sdm::SDMDisplayDeviceConfig display_device_config;
+    GetSDMDisplayDeviceConfig(in_displayDeviceConfig, display_device_config);
+
+    auto error = lifecycle_->SetDisplayDeviceConfig(in_display, display_device_config);
+    return TO_BINDER_STATUS(INT32(error));
+  }
+  return ScopedAStatus::ok();
+}
+
+void QtiComposer3Client::GetSDMDisplayDeviceConfig(const QtiDisplayDeviceConfig &qti_device_config,
+                                                   sdm::SDMDisplayDeviceConfig &sdm_device_config) {
+  for (int i = 0; i < qti_device_config.projectionMatrix.size(); i++) {
+    for (int row = 0; row < qti_device_config.projectionMatrix[i].prjMatrix.size(); row++) {
+      std::copy(qti_device_config.projectionMatrix[i].prjMatrix[row].begin(),
+                qti_device_config.projectionMatrix[i].prjMatrix[row].end(),
+                sdm_device_config.projectionMatrix[i].prjMatrix[row]);
+    }
+    sdm::SDMLayerOrientation sdm_orientation{
+        qti_device_config.rotation[i].x, qti_device_config.rotation[i].y,
+        qti_device_config.rotation[i].z, qti_device_config.rotation[i].w};
+    sdm_device_config.rotation[i] = sdm_orientation;
+  }
+  std::copy(qti_device_config.gamma.begin(), qti_device_config.gamma.end(),
+            sdm_device_config.gamma);
+  std::copy(std::begin(qti_device_config.calibrationFileStr),
+            std::end(qti_device_config.calibrationFileStr),
+            std::begin(sdm_device_config.calibrationFileStr));
+}
+#endif
 
 SpAIBinder QtiComposer3Client::createBinder() {
   auto binder = BnQtiComposer3Client::createBinder();

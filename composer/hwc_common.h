@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -24,6 +24,21 @@
 #define __HWCCOMMON_H__
 
 #include "aidl/vendor/qti/hardware/display/composer3/QtiLayerFlags.h"
+#ifdef TARGET_USES_LSR
+#include "aidl/vendor/qti/hardware/display/composer3/QtiRenderLayerReferenceSpaceType.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiCompositionLayerType.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiParcelableRenderLayerReferenceSpaceType.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiParcelableCompositionLayerType.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiDisplayProjectionMatrix.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiLayerFrustum.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiLayerOrientation.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiLayerPlaneEquation.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiLayerPose.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiLayerPosition.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiLayerQuadSize.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiParcelableLayerVisibilityType.h"
+#include "aidl/vendor/qti/hardware/display/composer3/QtiLayerVisibilityType.h"
+#endif
 #pragma once
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
@@ -68,6 +83,27 @@ using aidl::vendor::qti::hardware::display::composer3::QtiDisplayCommand;
 using DrawMethod = aidl::vendor::qti::hardware::display::composer3::QtiDrawMethod;
 using LayerFlag = aidl::vendor::qti::hardware::display::composer3::QtiLayerFlags;
 using LayerType = aidl::vendor::qti::hardware::display::composer3::QtiLayerType;
+#ifdef TARGET_USES_LSR
+using QtiRenderLayerReferenceSpaceType =
+    aidl::vendor::qti::hardware::display::composer3::QtiRenderLayerReferenceSpaceType;
+using QtiCompositionLayerType =
+    aidl::vendor::qti::hardware::display::composer3::QtiCompositionLayerType;
+using QtiParcelableRenderLayerReferenceSpaceType =
+    aidl::vendor::qti::hardware::display::composer3::QtiParcelableRenderLayerReferenceSpaceType;
+using QtiParcelableCompositionLayerType =
+    aidl::vendor::qti::hardware::display::composer3::QtiParcelableCompositionLayerType;
+using QtiLayerPose = aidl::vendor::qti::hardware::display::composer3::QtiLayerPose;
+using QtiLayerQuadSize = aidl::vendor::qti::hardware::display::composer3::QtiLayerQuadSize;
+using QtiLayerFrustum = aidl::vendor::qti::hardware::display::composer3::QtiLayerFrustum;
+using QtiLayerPlaneEquation =
+    aidl::vendor::qti::hardware::display::composer3::QtiLayerPlaneEquation;
+using QtiDisplayProjectionMatrix =
+    aidl::vendor::qti::hardware::display::composer3::QtiDisplayProjectionMatrix;
+using QtiParcelableLayerVisibilityType =
+    aidl::vendor::qti::hardware::display::composer3::QtiParcelableLayerVisibilityType;
+using QtiLayerVisibilityType =
+    aidl::vendor::qti::hardware::display::composer3::QtiLayerVisibilityType;
+#endif
 
 using FColor = aidl::android::hardware::graphics::composer3::Color;
 

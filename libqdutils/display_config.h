@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013 - 2016, 2018 - 2020 The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -30,7 +30,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -201,6 +201,18 @@ int setPanelLuminanceAttributes(int dpy, float min_lum, float max_lum);
 // Get the port id for a given display id
 int GetDisplayPortId(int dpy, int *port_id);
 
+extern "C" int getPanelResolution(int *width, int *height);
+
+// Informs HWC about TWM entry/exit based on which NULL Display is connected
+// or disconnected.
+// mode   -> 0 for exit sequence, 1 for entry sequence.
+// is_twm ->
+//      0 for regular ambient mode
+//      1 for TWM with framework shutdown mode (If display is in ON state, then
+//          this would put display in DOZE state).
+//          Using 0 for mode value and 1 for is_twm is not valid, it may lead to
+//          state inconsistency between Android Framework and HAL.
+extern "C" int setStandByMode(int mode, int is_twm);
 }; //namespace
 
 
