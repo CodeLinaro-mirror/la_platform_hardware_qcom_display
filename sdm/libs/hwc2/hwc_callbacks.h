@@ -41,14 +41,14 @@ namespace sdm {
 
 class HWCCallbacks {
  public:
-  static const int kNumBuiltIn = 4;
-  static const int kNumPluggable = 4;
-  static const int kNumVirtual = 4;
+  static constexpr int kNumBuiltIn = 4;
+  static constexpr int kNumPluggable = 4;
+  static constexpr int kNumVirtual = 4;
   // Add 1 primary display which can be either a builtin or pluggable.
   // Async powermode update requires dummy hwc displays.
   // Limit dummy displays to builtin/pluggable type for now.
-  static const int kNumRealDisplays = 1 + kNumBuiltIn + kNumPluggable + kNumVirtual;
-  static const int kNumDisplays = 1 + kNumBuiltIn + kNumPluggable + kNumVirtual +
+  static constexpr int kNumRealDisplays = 1 + kNumBuiltIn + kNumPluggable + kNumVirtual;
+  static constexpr int kNumDisplays = 1 + kNumBuiltIn + kNumPluggable + kNumVirtual +
                                     1 + kNumBuiltIn + kNumPluggable;
 
   HWC2::Error Hotplug(hwc2_display_t display, HWC2::Connection state);
