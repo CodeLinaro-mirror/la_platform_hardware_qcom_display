@@ -16,13 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
+*/
 
 #include <cutils/properties.h>
 #include <errno.h>
@@ -562,6 +560,7 @@ void HWCDisplay::UpdateConfigs() {
   // For each config store the corresponding index which client understands.
   hwc_config_map_.resize(num_configs_);
 
+  variable_config_map_.clear();
   for (uint32_t i = 0; i < num_configs_; i++) {
     DisplayConfigVariableInfo info = {};
     GetDisplayAttributesForConfig(INT(i), &info);
@@ -1089,7 +1088,9 @@ HWC3::Error HWCDisplay::GetDisplayConfigs(uint32_t *out_num_configs, Config *out
   if (out_num_configs == nullptr) {
     return HWC3::Error::BadParameter;
   }
-
+  // Refresh the internal configuration details.
+  // to ensure duplicate/redundant hardware configs are hidden from the client.
+  UpdateConfigs();
   if (out_configs == nullptr) {
     *out_num_configs = num_configs_;
     return HWC3::Error::None;
@@ -1818,8 +1819,8 @@ HWC3::Error HWCDisplay::CommitOrPrepare(bool validate_only, shared_ptr<Fence> *o
   }
 
   *needs_commit = error == kErrorNeedsCommit;
-
   if (!(*needs_commit)) {
+    first_cycle_ = false;
     PostCommitLayerStack(out_retire_fence);
   }
 

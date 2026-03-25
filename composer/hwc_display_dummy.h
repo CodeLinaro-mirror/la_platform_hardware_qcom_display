@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -25,61 +25,52 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/*
+ *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ */
 
-#ifndef __HWC_DISPLAY_PLUGGABLE_H__
-#define __HWC_DISPLAY_PLUGGABLE_H__
+#ifndef __HWC_DISPLAY_DUMMY_H__
+#define __HWC_DISPLAY_DUMMY_H__
 
 #include "hwc_display.h"
-#include "hwc_display_event_handler.h"
 #include "display_null.h"
 
 namespace sdm {
 
-class HWCDisplayPluggable : public HWCDisplay {
+class HWCDisplayDummy : public HWCDisplay {
  public:
-  static int Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
+  static int Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                    qService::QService *qservice, Display id, int32_t sdm_id,
-                    uint32_t primary_width, uint32_t primary_height, bool use_primary_res,
+                    qService::QService *qservice, hwc2_display_t id, int32_t sdm_id,
                     HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
-  virtual int Init();
   virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
   virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
-  virtual int SetState(bool connected);
-  virtual int UpdateFBResolution(int width, int height);
-  virtual DisplayError Flush();
-  virtual HWC3::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
-  virtual HWC3::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
-                                       RenderIntent *out_intents);
+  virtual HWC3::Error GetActiveConfig(hwc2_config_t *out_config);
+  virtual HWC3::Error SetPowerMode(PowerMode mode, bool teardown);
   virtual HWC3::Error SetColorMode(ColorMode mode);
-  virtual HWC3::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
-  virtual HWC3::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
-  virtual HWC3::Error PreValidateDisplay(bool *exit_validate);
-  virtual HWC3::Error PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence);
+  virtual HWC3::Error SetVsyncEnabled(bool enabled);
+  virtual bool VsyncEnablePending();
+  virtual HWC3::Error SetClientTarget(buffer_handle_t target, shared_ptr<Fence> acquire_fence,
+                                      int32_t dataspace, Region damage);
+  virtual void SetConfigInfo(std::map<uint32_t, DisplayConfigVariableInfo> &variable_config_map,
+                             int active_config_index, uint32_t num_configs);
+  virtual HWC3::Error SetActiveConfigWithConstraints(
+      hwc2_config_t config, const VsyncPeriodChangeConstraints *vsync_period_change_constraints,
+      VsyncPeriodChangeTimeline *out_timeline);
+  virtual int GetDisplayAttributesForConfig(int config,
+                                            DisplayConfigVariableInfo *display_attributes);
 
  private:
-  HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                      HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
-                      qService::QService *qservice, Display id, int32_t sdm_id);
-  void ApplyScanAdjustment(Rect *display_frame);
-  void GetUnderScanConfig();
-  static void GetDownscaleResolution(uint32_t primary_width, uint32_t primary_height,
-                                     uint32_t *virtual_width, uint32_t *virtual_height);
-
-  DisplayNullExternal display_null_;
-  int underscan_width_ = 0;
-  int underscan_height_ = 0;
-  bool has_color_tranform_ = false;
+  HWCDisplayDummy(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
+                  HWCCallbacks *callbacks, HWCDisplayEventHandler *event_handler,
+                  qService::QService *qservice, hwc2_display_t id, int32_t sdm_id);
+  DisplayNull display_null_;
+  bool vsync_enable_ = false;
 };
 
 }  // namespace sdm
 
-#endif  // __HWC_DISPLAY_PLUGGABLE_H__
+#endif  // __HWC_DISPLAY_DUMMY_H__
