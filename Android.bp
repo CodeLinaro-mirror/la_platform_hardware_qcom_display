@@ -15,6 +15,7 @@ soong_config_module_type {
         "snapallocext_enabled",
         "neo",
         "lsr_target",
+        "enable_demura"
     ],
     properties: [
         "cflags",
@@ -25,7 +26,7 @@ soong_config_module_type {
         "ldflags",
         "native_coverage",
         "shared_libs",
-	"vendor",
+        "vendor",
     ],
 }
 
@@ -298,6 +299,18 @@ qtidisplay_cc_defaults {
             vendor: true,
             host_ldlibs: ["-lgcov"],
             native_coverage: true,
+        },
+    },
+}
+
+qtidisplay_cc_defaults {
+    name: "qtidisplay_demura_defaults",
+    soong_config_variables: {
+        enable_demura: {
+            enabled: true,
+            conditions_default: {
+                enabled: false,
+            },
         },
     },
 }

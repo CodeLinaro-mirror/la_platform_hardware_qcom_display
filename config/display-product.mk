@@ -147,6 +147,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_rounded_corner_thread=0
 endif
 
+# Bypass demura license validation for art platform
+ifeq ($(TARGET_BOARD_PLATFORM),art)
+PRODUCT_PROPERTY_OVERRIDES += vendor.display.bypass_demura_license=1
+endif
+
 ifneq ($(PLATFORM_VERSION), 10)
     PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 endif
@@ -157,7 +162,13 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_HDR_display=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.use_color_management=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.wcg_composition_dataspace=143261696
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
-PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.use_content_detection_for_refresh_rate=true
+ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+  PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
+      ro.surface_flinger.use_content_detection_for_refresh_rate=false
+else
+  PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
+      ro.surface_flinger.use_content_detection_for_refresh_rate=true
+endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.set_touch_timer_ms=200
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_frame_buffer_acquired_buffers=3
@@ -222,6 +233,7 @@ $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
 $(call soong_config_set, qtidisplay, lsr_target, false )
 $(call soong_config_set, qtidisplay, snapallocext_enabled, true)
+$(call soong_config_set, qtidisplay, enable_demura, true )
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -276,6 +288,10 @@ endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, hw_fence_disabled, true )
+endif
+
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), vienna), $(TARGET_BOARD_PLATFORM))
+    $(call soong_config_set, qtidisplay, enable_demura, false )
 endif
 
 # Techpack values
