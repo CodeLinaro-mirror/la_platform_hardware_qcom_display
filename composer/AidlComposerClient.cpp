@@ -419,7 +419,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     display_configuration.configGroup =
         settings_->GetDisplayConfigGroup(in_display, variable_config);
 
- #ifdef COMPOSER3_V4
+#ifdef COMPOSER3_V4
     // Display output colorspace is fixed for builtin displays regardless of HDR content.
     // For external displays, colorspace will be changed for HDR content if display supports HDR.
     // EOTF is checked for true HDR support because external is always marked as HDR supported
@@ -531,13 +531,13 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     // capabilities, the global Capability::SKIP_CLIENT_COLOR_TRANSFORM is ignored. We need to push
     // DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM here to maintain support.
     aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
-    aidl_return->push_back(DisplayCapability::SUSPEND);
     // setDisplayBrightness have not been supported yet
     // aidl_return->push_back(DisplayCapability::BRIGHTNESS);
 
     int32_t has_doze_support = 0;
     caps_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
+      aidl_return->push_back(DisplayCapability::SUSPEND);
       aidl_return->push_back(DisplayCapability::DOZE);
     }
   }
@@ -979,6 +979,16 @@ ScopedAStatus AidlComposerClient::setPowerMode(int64_t in_display, PowerMode in_
     if (mDisplayData.find(in_display) == mDisplayData.end()) {
       return TO_BINDER_STATUS(INT32(Error::BadDisplay));
     }
+  }
+
+  int32_t has_doze_support = 0;
+  caps_->GetDozeSupport(in_display, &has_doze_support);
+  if (!has_doze_support) {
+     if(in_mode == PowerMode::DOZE ||
+        in_mode == PowerMode::DOZE_SUSPEND ||
+        in_mode == PowerMode::ON_SUSPEND) {
+       return TO_BINDER_STATUS(INT32(Error::Unsupported));
+     }
   }
 
   auto error = lifecycle_->SetPowerMode(in_display, static_cast<int32_t>(in_mode));
