@@ -124,17 +124,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
     switch (event_data.event_type) {
       case HWEvent::VSYNC: {
         poll_fds_[i].events = POLLIN | POLLPRI | POLLERR;
-        if (is_primary_) {
-          DRMMaster *master = nullptr;
-          int ret = DRMMaster::GetInstance(&master);
-          if (ret < 0) {
-            DLOGE("Failed to acquire DRMMaster instance");
-            return kErrorNotSupported;
-          }
-          master->GetHandle(&poll_fds_[i].fd);
-        } else {
-          poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
-        }
+        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
         vsync_index_ = i;
       } break;
       case HWEvent::EXIT: {
@@ -349,7 +339,7 @@ DisplayError HWEventsDRM::Deinit() {
   SetEventState(HWEvent::MMRM, false);
   SetEventState(HWEvent::POWER_EVENT, false);
   SetEventState(HWEvent::VM_RELEASE_EVENT, false);
-
+  SetEventState(HWEvent::VSYNC, false);
   Sys::pthread_cancel_(event_thread_);
   WakeUpEventThread();
   pthread_join(event_thread_, NULL);
@@ -458,9 +448,7 @@ void HWEventsDRM::CloseFds() {
   for (uint32_t i = 0; i < event_data_list_.size(); i++) {
     switch (event_data_list_[i].event_type) {
       case HWEvent::VSYNC:
-        if (!is_primary_) {
-          drmClose(poll_fds_[i].fd);
-        }
+        drmClose(poll_fds_[i].fd);
         poll_fds_[i].fd = -1;
         break;
       case HWEvent::EXIT:

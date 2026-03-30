@@ -218,6 +218,8 @@ class AdrenoMemInfo {
 
   static AdrenoMemInfo *GetInstance();
 
+  static bool IsGpuNodePresent();
+
  private:
   AdrenoMemInfo();
   ~AdrenoMemInfo();
@@ -254,7 +256,8 @@ class AdrenoMemInfo {
   bool gfx_ubwc_disable_ = false;
   bool gfx_ahardware_buffer_disable_ = false;
   void *libadreno_utils_ = NULL;
-
+  static bool gpu_node_present_;
+  static bool gpu_node_checked_;
   static AdrenoMemInfo *s_instance;
 };
 
