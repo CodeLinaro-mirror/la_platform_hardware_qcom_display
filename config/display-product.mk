@@ -103,11 +103,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.gralloc.enable_snapalloc=1 \
     vendor.display.disable_fp16_support=1
 
-ifeq ($(filter art art64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
-PRODUCT_PROPERTY_OVERRIDES += \
-    debug.disable_screen_decorations=1
-endif
-
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.early.sf.duration=15555555 \
