@@ -38,7 +38,7 @@ cc_library_shared {
 
 cc_binary {
     name: "vendor.qti.hardware.display.demura-service",
-    defaults: ["qtidisplay_defaults"],
+    defaults: ["qtidisplay_defaults", "qtidisplay_demura_defaults"],
     sanitize: {
         integer_overflow: true,
     },

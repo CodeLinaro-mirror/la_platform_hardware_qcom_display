@@ -325,6 +325,57 @@ ScopedAStatus DisplayConfigAIDL::getHDRCapabilities(DisplayType dpy, HDRCapsPara
   return ScopedAStatus::ok();
 }
 
+#ifdef IDISPLAYCONFIG_16
+ScopedAStatus DisplayConfigAIDL::setHDRCapabilities(DisplayType dpy, const HDRCapsParams &caps) {
+  int disp_id = MapDisplayType(dpy);
+
+  // HDR capabilities are only set for virtual display
+  if (disp_id != qdutils::DISPLAY_VIRTUAL) {
+    ALOGW("%s: Setting hdr capabilities on non virtual display is not supported", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
+  }
+
+  // Validate luminance values
+  if (caps.minLuminance < 0.0f || caps.minLuminance > 1.0f) {
+    ALOGW("%s: Invalid minLuminance value: %.2f", __FUNCTION__, caps.minLuminance);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  if (caps.maxAvgLuminance < 100.0f || caps.maxAvgLuminance > 10000.0f) {
+    ALOGW("%s: Invalid maxAvgLuminance value: %.2f", __FUNCTION__, caps.maxAvgLuminance);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  std::vector<sdm::Hdr> hdr_types;
+  for (auto it = caps.supportedHdrTypes.begin(); it != caps.supportedHdrTypes.end(); it++) {
+    switch (*it) {
+      case static_cast<int>(Hdr::DOLBY_VISION):
+        hdr_types.emplace_back(sdm::Hdr::DOLBY_VISION);
+        break;
+
+      case static_cast<int>(Hdr::HDR10):
+        hdr_types.emplace_back(sdm::Hdr::HDR10);
+        break;
+
+      case static_cast<int>(Hdr::HLG):
+        hdr_types.emplace_back(sdm::Hdr::HLG);
+        break;
+
+      case static_cast<int>(Hdr::HDR10_PLUS):
+        hdr_types.emplace_back(sdm::Hdr::HDR10_PLUS);
+        break;
+      default:
+        ALOGW("Unsupported hdr type %d", *it);
+        return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    }
+  }
+
+  settings_->SetHdrCapabilities(disp_id, hdr_types, caps.maxAvgLuminance, caps.minLuminance);
+
+  return ScopedAStatus::ok();
+}
+#endif
+
 ScopedAStatus DisplayConfigAIDL::setCameraLaunchStatus(int on) {
   sideband_->SetCameraLaunchStatus(on);
   return ScopedAStatus::ok();
@@ -1231,8 +1282,8 @@ void DisplayConfigAIDL::StitchLayers(uint64_t display, sdm::LayerStitchContext *
   std::vector<sdm::StitchParams> gl_params;
   for (auto p : ctx->stitch_params) {
     sdm::StitchParams param;
-    param.src_hnd = sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(p.src_hnd));
-    param.dst_hnd = sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(p.dst_hnd));
+    param.src_hnd = reinterpret_cast<SnapHandle *>(p.src_hnd);
+    param.dst_hnd = reinterpret_cast<SnapHandle *>(p.dst_hnd);
     param.src_rect = SdmRectToGlRect(p.src_rect);
     param.dst_rect = SdmRectToGlRect(p.dst_rect);
     param.scissor_rect = SdmRectToGlRect(p.scissor_rect);
@@ -1268,10 +1319,10 @@ void DisplayConfigAIDL::DestroyLayerStitch(uint64_t display) {
 
 void DisplayConfigAIDL::InitColorConvert(uint64_t display, bool secure) {
   if (color_convert_map_.find(display) == color_convert_map_.end()) {
+    ALOGI("Creating GLColorConvert instance for the display %d", display);
     color_convert_map_.insert({display, nullptr});
+    color_convert_map_.at(display) = GLColorConvert::GetInstance(sdm::kTargetYUV, secure);
   }
-
-  color_convert_map_.at(display) = GLColorConvert::GetInstance(sdm::kTargetYUV, secure);
 }
 
 void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlitContext *ctx) {
@@ -1284,14 +1335,12 @@ void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlit
                      FLOAT(ctx->src_rect.right), FLOAT(ctx->src_rect.bottom)};
   GLRect dst_rect = {FLOAT(ctx->dst_rect.left), FLOAT(ctx->dst_rect.top),
                      FLOAT(ctx->dst_rect.right), FLOAT(ctx->dst_rect.bottom)};
-  native_handle_t *legacy_src_handle =
-      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->src_hnd));
-  native_handle_t *legacy_dst_handle =
-      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->dst_hnd));
 
-  color_convert_map_.at(display)->Blit(legacy_src_handle, legacy_dst_handle, src_rect, dst_rect,
-                                       ctx->src_acquire_fence, ctx->dst_acquire_fence,
-                                       &(ctx->release_fence));
+  color_convert_map_.at(display)->Blit((const SnapHandle *)ctx->src_hnd,
+                                       (const SnapHandle *)ctx->dst_hnd,
+                                        src_rect, dst_rect, ctx->src_acquire_fence,
+                                        ctx->dst_acquire_fence,
+                                        &(ctx->release_fence));
 }
 
 void DisplayConfigAIDL::ResetColorConvert(uint64_t display) {
