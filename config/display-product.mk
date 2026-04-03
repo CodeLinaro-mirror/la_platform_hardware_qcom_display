@@ -214,13 +214,13 @@ SOONG_CONFIG_qtidisplay_mapper_ext := true
 #   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = 16
 
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
-    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16 CinnamonBun 17))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
     endif
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream 15))
       SOONG_CONFIG_qtidisplay_composer_version := v3_3
-    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16 CinnamonBun 17))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
     endif
 endif
