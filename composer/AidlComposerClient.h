@@ -328,6 +328,7 @@ class AidlComposerClient : public BnComposerClient,
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
   bool disable_fp16_support_ = false;
   bool disable_query_luts_ = false;
+  bool disable_luts_overlay_support_ = false;
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;

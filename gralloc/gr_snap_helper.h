@@ -1132,6 +1132,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
        SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA},
       {SnapMetadataType::THREE_DIMENSIONAL_REF_INFO, SnapMetadataType::THREE_DIMENSIONAL_REF_INFO},
       {SnapMetadataType::CWB_METADATA, SnapMetadataType::CWB_METADATA},
+      {SnapMetadataType::DISPARITY_PHASE, SnapMetadataType::DISPARITY_PHASE},
   };
 
   std::list<int> unsupported_formats = {
@@ -1413,6 +1414,9 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   SnapError CWBMetadataHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
                               bool check_metadata_set = true, int32_t *mapper_return = nullptr);
+  SnapError DisparityPhaseHelper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                                 void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                                 bool check_metadata_set = true, int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1491,7 +1495,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {MULTI_VIEW_INFO, &GrallocSnapHelper::MultiViewHelper},
           {THREE_DIMENSIONAL_REF_INFO, &GrallocSnapHelper::ThreeDimensionalRefInfoHelper},
           {VIEW_ID, &GrallocSnapHelper::ViewIdHelper},
-          {CWB_METADATA, &GrallocSnapHelper::CWBMetadataHelper}};
+          {CWB_METADATA, &GrallocSnapHelper::CWBMetadataHelper},
+          {DISPARITY_PHASE, &GrallocSnapHelper::DisparityPhaseHelper}};
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       bufferdescription_conversion_helper_function_map = {
