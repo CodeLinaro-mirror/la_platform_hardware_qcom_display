@@ -105,6 +105,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   disable_query_luts_ = (value == 1);
   ALOGV("disable_query_luts_: %d", disable_query_luts_);
 
+  value = 0;
+  sideband_->GetProperty(DISABLE_LUTS_OVERLAY_SUPPORT, &value);
+  disable_luts_overlay_support_ = (value == 1);
+  ALOGV("disable_luts_overlay_support_: %d", disable_luts_overlay_support_);
+
   return true;
 }
 
@@ -744,14 +749,16 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
   // All individually supported properties by hardware
+  static bool overlay_values_init = false;
   static std::vector<PixelFormat> pixel_formats{
       PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,   PixelFormat::RGB_888,
       PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
       PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
 
-  if (!disable_fp16_support_) {
+  if (!disable_fp16_support_ && !overlay_values_init) {
     pixel_formats.push_back(PixelFormat::RGBA_FP16);
   }
+  overlay_values_init = true;
 
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
@@ -774,6 +781,20 @@ ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_retu
 
   aidl_return->combinations.emplace_back(supported_combination);
   aidl_return->supportMixedColorSpaces = mixed_colorspaces_support;
+
+#ifdef COMPOSER3_V4
+  // only 3d lut is currently supported
+  LutProperties supported_lut_props;
+  supported_lut_props.dimension = LutProperties::Dimension::THREE_D;
+  supported_lut_props.size = INT32(sdm::kLutDim);
+  supported_lut_props.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+
+  if (!disable_luts_overlay_support_) {
+    // initialize optional vector
+    aidl_return->lutProperties.emplace();
+    aidl_return->lutProperties->emplace_back(supported_lut_props);
+  }
+#endif
 
   return TO_BINDER_STATUS(INT32(Error::None));
 }
@@ -1851,7 +1872,14 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
 #ifdef COMPOSER3_V4
 void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int64_t layer,
                                                             const Luts &luts) {
-  writeError(__FUNCTION__, Error::Unsupported);
+  // TODO(user): Translate Luts to Lut3d once supported, refer to populateDisplayLuts
+  // to reverse operation and AOSP LutShader.cpp to read luts from fd through mmap
+  Lut3d lut_3d;
+  lut_3d.validLutEntries = luts.pfd.get() >= 0;
+  auto err = mClient.layer_builder_->SetLayerLuts(display, layer, &lut_3d);
+  if (err != sdm::kErrorNone) {
+    writeError(__FUNCTION__, Error::BadConfig);
+  }
 }
 #endif
 
