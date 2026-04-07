@@ -102,6 +102,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.gralloc.disable_ubwc 1
         ;;
     esac
     ;;
