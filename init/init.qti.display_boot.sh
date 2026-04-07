@@ -182,7 +182,6 @@ case "$target" in
           if [ "$platform_subtype_id" -eq 43 ]; then
             setprop vendor.display.enable_null_display 1
           fi
-          setprop vendor.display.disable_dpps_features 1
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
