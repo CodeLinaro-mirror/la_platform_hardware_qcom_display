@@ -1148,6 +1148,19 @@ SnapError GrallocSnapHelper::DisparityPhaseHelper(SnapHandle *hnd, uint32_t aidl
   return error;
 }
 
+SnapError GrallocSnapHelper::ROIRectMetadataHelper(SnapHandle *hnd, uint32_t aidl_size,
+                                                   void *gralloc_in_set, void *gralloc_out_get,
+                                                   SnapDescriptor *buf_des, bool check_metadata_set,
+                                                   int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::ROI_RECT_METADATA, gralloc_out_get);
+  } else if (gralloc_in_set != nullptr) {
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::ROI_RECT_METADATA, gralloc_in_set);
+  }
+  return error;
+}
+
 SnapError GrallocSnapHelper::ProtectedContentHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                     void *gralloc_in_set, void *gralloc_out_get,
                                                     SnapDescriptor *buf_des,
