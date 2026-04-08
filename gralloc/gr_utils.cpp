@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1577,8 +1577,8 @@ int GetImplDefinedFormat(uint64_t usage, int format) {
       gr_format = static_cast<int>(PixelFormat::RGBA_8888);
     } else if (format == static_cast<int>(PixelFormat::YCBCR_420_888)) {
       // If no other usage flags are detected, default the
-      // flexible YUV format to NV21_ZSL
-      gr_format = HAL_PIXEL_FORMAT_NV21_ZSL;
+      // flexible YUV format to YUV420 semiplanar fallback
+      gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP;  // YUV420 semiplanar fallback
       ALOGD(
           "Falling back to default YUV format - no camera/video specific format defined, usage "
           "0x%" PRIx64,
