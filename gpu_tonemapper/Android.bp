@@ -6,7 +6,13 @@ cc_library_shared {
     },
     vendor: true,
 
-    header_libs: ["display_headers"],
+    header_libs: [
+        "display_headers",
+        "libimapper_stablec",
+        "libimapper_providerutils",
+        "snapalloc_interface_headers",
+        "common_interface_headers",
+    ],
     shared_libs: [
         "libEGL",
         "libGLESv2",
@@ -16,6 +22,7 @@ cc_library_shared {
         "libui",
         "libutils",
         "liblog",
+        "android.hardware.common-V2-ndk",
     ],
 
     cflags: [

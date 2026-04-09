@@ -2444,6 +2444,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
 
     pr.corner_radius = privacyRegions[i]->cornerRadius;
     pr.rect = rect;
+    pr.index = privacyRegions[i]->index;
     regions.push_back(pr);
   }
 
