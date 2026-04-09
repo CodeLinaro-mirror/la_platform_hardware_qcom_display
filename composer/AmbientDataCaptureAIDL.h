@@ -73,6 +73,8 @@
 #include "sdm_display_intf_sideband.h"
 #include "hwc_common.h"
 
+#include "image_algo_interface.h"  // imagealgointegration public API
+
 namespace aidl::vendor::qti::hardware::qacs::ambientdatacapture {
 class AmbientDataCaptureAIDL;
 }
@@ -122,6 +124,19 @@ using sdm::SDMDisplayDrawCycleIntfV;
 using ::vendor::qti::hardware::display::snapalloc::ISnapMapper;
 
 typedef vendor_qti_hardware_display_common_cwb_metadata SnapCWBMetadata;
+
+constexpr static int max_enqueue_count = 11;
+constexpr static int timeout_ms = 30000;
+
+// TODO : this struct will be translated to aidl
+#define ALGO_CONFIG_SIZE 4096
+struct ADCAlgoConfigsStructBlob {
+  /*
+   * @brief blob
+   */
+  size_t dataSize;
+  char data[ALGO_CONFIG_SIZE];
+};
 
 class AmbientDataCaptureCallback : public BnAmbientDataCaptureCallback {
  public:
@@ -192,8 +207,25 @@ class AmbientDataCaptureAIDL : public BnAmbientDataCapture, public SDMSideBandCo
 
   void *snap_impl_lib_ = nullptr;
   std::shared_ptr<ISnapMapper> snapmapper_ = nullptr;
+
+  // imagealgointegration SmartSelection adapter (optional).
+  std::shared_ptr<imagealgo::SmartSelectionIntf> imagealgo_adapter_ = nullptr;
+  std::string imagealgo_app_name_;
+  std::atomic<uint32_t> ss_enqueue_count_{0};
+  std::mutex imagealgo_lock_;
+
+  int InitImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
+  int DeInitImageAlgoAdapter();
+  int FlushAllImageAlgoAdapter();
+  int EnqueueImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
+  int CreateEnqueuePayload(SnapHandle *handle, sdm::GenericPayload &enq_payload);
+  // Emit callback invoked by SmartSelection pipeline when frames are selected/rejected.
+  static void OnImageAlgoEmit(const imagealgo::SmartSelectionEmitResult *result, void *cookie);
+  void ProcessImageAlgoResult(void *hdl, bool frame_selected);
+
   int GetSnapInstance();
-  int AddCWBMetadata(void *hdl, int32_t display_type);
+  int AddCWBMetadata(SnapHandle *handle, int32_t display_type);
+  void NotifyOutputBuffer(int32_t status, void *hdl);
 };
 
 }  // namespace ambientdatacapture
