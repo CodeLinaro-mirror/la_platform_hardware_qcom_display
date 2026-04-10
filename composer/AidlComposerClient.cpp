@@ -1447,20 +1447,34 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
 void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t display,
                                                                       int64_t layer,
                                                                       const Point &cursorPosition) {
+  sdm::DisplayError err = sdm::kErrorNone;
+  std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+  auto dpy = mClient.mDisplayData.find(display);
+
   if (mClient.layer_builder_->GetDeviceSelectedCompositionType(display, layer) !=
       sdm::SDMCompositionType::COMP_CURSOR) {
     writeError(__FUNCTION__, Error::BadConfig);
     return;
   }
 
-  auto err =
-      mClient.settings_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  if (dpy != mClient.mDisplayData.end() && dpy->second.Layers.find(layer) !=
+      dpy->second.Layers.end()) {
+    err = mClient.settings_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  } else {
+    ALOGW("Layer %ld has already been freed by destroy call", layer);
+  }
+
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
     return;
   }
-
-  mClient.layer_builder_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  if (dpy != mClient.mDisplayData.end() && dpy->second.Layers.find(layer) !=
+      dpy->second.Layers.end()) {
+    err = mClient.layer_builder_->SetCursorPosition(display, layer, cursorPosition.x,
+                                                    cursorPosition.y);
+  } else {
+    ALOGW("Layer %ld has already been freed by destroy call", layer);
+  }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, int64_t layer,
