@@ -171,7 +171,7 @@ soong_config_module_type {
 
 soong_config_string_variable {
     name: "composer_version",
-    values: ["v3_2", "v3_3", "v3_4", "v3_5"],
+    values: ["v3_2", "v3_3", "v3_4", "v3_4_lsr", "v3_5"],
 }
 
 qticomposer3_cc_defaults {
@@ -186,6 +186,15 @@ qticomposer3_cc_defaults {
                     "vendor.qti.hardware.display.aiqe-V3-ndk",
                 ],
                 vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v5.xml"],
+            },
+            v3_4_lsr: {
+                srcs: ["DisplayAiqeAIDL.cpp"],
+                shared_libs: [
+                      "android.hardware.graphics.composer3-V4-ndk",
+                      "vendor.qti.hardware.display.composer3-V5-ndk",
+                      "vendor.qti.hardware.display.aiqe-V3-ndk",
+                ],
+                vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v4_lsr.xml"],
             },
             v3_4: {
                 srcs: ["DisplayAiqeAIDL.cpp"],
@@ -225,8 +234,23 @@ qticomposer3_cc_defaults {
                     "-DCOMPOSER3_V5",
                     "-DCOMPOSER3_V4",
                     "-DCOMPOSER3_V3",
+                    "-DIDISPLAYCONFIG_16",
+                    "-DIDISPLAYCONFIG_15",
+                    "-DIDISPLAYCONFIG_14",
                     "-DIDISPLAYCONFIG_13",
                     "-DIDISPLAYCONFIG_12",
+                ],
+            },
+            v3_4_lsr: {
+                cflags: [
+                      "-DCOMPOSER3_V4",
+                      "-DCOMPOSER3_V3",
+                      "-DIDISPLAYCONFIG_12",
+                      "-DIDISPLAYCONFIG_13",
+                      "-DIDISPLAYCONFIG_14",
+                      "-DIDISPLAYCONFIG_15",
+                      "-DTARGET_USES_LSR",
+                      "-DLSR_API",
                 ],
             },
             v3_4: {
@@ -262,7 +286,12 @@ qticomposer3_cc_defaults {
         composer_version: {
             v3_5: {
                 shared_libs: [
-                    "vendor.qti.hardware.display.config-V13-ndk",
+                    "vendor.qti.hardware.display.config-V16-ndk",
+                ],
+            },
+            v3_4_lsr: {
+                shared_libs: [
+                      "vendor.qti.hardware.display.config-V15-ndk",
                 ],
             },
             v3_4: {
