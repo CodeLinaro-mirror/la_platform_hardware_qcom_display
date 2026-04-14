@@ -23,11 +23,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <stdio.h>
 #include <malloc.h>
@@ -387,8 +387,8 @@ DisplayError DisplayBase::Deinit() {
       hw_intf_->UnsetScaleLutConfig();
     }
   }
-  HWEventsInterface::Destroy(hw_events_intf_);
   HWInterface::Destroy(hw_intf_);
+  HWEventsInterface::Destroy(hw_events_intf_);
 
   {  // Scope for lock
     ClientLock lock(disp_mutex_);

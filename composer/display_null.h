@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -56,6 +56,7 @@ class DisplayNull : public DisplayInterface {
   virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
 
   virtual DisplayError GetFrameBufferConfig(DisplayConfigVariableInfo *variable_info);
+  virtual DisplayError SetFrameBufferConfig(const DisplayConfigVariableInfo &variable_info);
   virtual DisplayError GetConfig(uint32_t index, DisplayConfigVariableInfo *disp_attr);
   virtual DisplayError GetConfig(DisplayConfigFixedInfo *fixed_info);
   virtual DisplayError GetRealConfig(uint32_t index, DisplayConfigVariableInfo *disp_attr);
@@ -88,7 +89,6 @@ class DisplayNull : public DisplayInterface {
   MAKE_NO_OP(Commit(LayerStack *))
   MAKE_NO_OP(GetDisplayState(DisplayState *))
   MAKE_NO_OP(SetDisplayState(DisplayState, bool, shared_ptr<Fence> *))
-  MAKE_NO_OP(SetFrameBufferConfig(const DisplayConfigVariableInfo &))
   MAKE_NO_OP(Flush(LayerStack *))
   MAKE_NO_OP(GetVSyncState(bool *))
   MAKE_NO_OP(SetDrawMethod(DisplayDrawMethod))

@@ -576,6 +576,7 @@ void HWCDisplay::UpdateConfigs() {
   // For each config store the corresponding index which client understands.
   hwc_config_map_.resize(num_configs_);
 
+  variable_config_map_.clear();
   for (uint32_t i = 0; i < num_configs_; i++) {
     DisplayConfigVariableInfo info = {};
     GetDisplayAttributesForConfig(INT(i), &info);
@@ -1153,6 +1154,7 @@ HWC3::Error HWCDisplay::GetDisplayConfigs(uint32_t *out_num_configs, Config *out
     return HWC3::Error::BadParameter;
   }
 
+  UpdateConfigs();
   if (out_configs == nullptr) {
     *out_num_configs = num_configs_;
     return HWC3::Error::None;

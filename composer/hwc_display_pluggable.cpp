@@ -28,9 +28,9 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -263,6 +263,10 @@ void HWCDisplayPluggable::GetDownscaleResolution(uint32_t primary_width, uint32_
     }
     AdjustSourceResolution(primary_width, primary_height, non_primary_width, non_primary_height);
   }
+}
+
+int HWCDisplayPluggable::UpdateFBResolution(int width, int height) {
+   return SetFrameBufferResolution(width, height);
 }
 
 int HWCDisplayPluggable::SetState(bool connected) {

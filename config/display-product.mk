@@ -166,6 +166,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_rounded_corner_thread=0
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),lahaina)
+PRODUCT_PROPERTY_OVERRIDES += vendor.display.display_reboot_strategy=3
+endif
+
 ifeq ($(TARGET_BOARD_PLATFORM),blair)
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.allow_tonemap_native=1
@@ -200,6 +204,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virt
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_frame_buffer_acquired_buffers=3
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dimension=4096
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate_override=60
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.update_device_product_info_on_hotplug_reconnect=1
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), blair, parrot),$(TARGET_BOARD_PLATFORM))
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=0
 else
