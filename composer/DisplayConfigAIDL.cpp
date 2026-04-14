@@ -556,6 +556,31 @@ ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int
   return ScopedAStatus::ok();
 }
 
+#ifdef IDISPLAYCONFIG_18
+ScopedAStatus DisplayConfigAIDL::setVirtualDispType(VirtualDispType type) {
+  sdm::SDMVirtualDispType disp_type = sdm::kVirtualTypeMax;
+  switch (type) {
+    case VirtualDispType::DEFAULT:
+      disp_type = sdm::kVirtualTypeDefault;
+      break;
+    case VirtualDispType::WITH_PQ:
+      disp_type = sdm::kVirtualTypePQ;
+      break;
+    default:
+      ALOGW("%s: Unsupported virtual display type: %d", __FUNCTION__, static_cast<int>(type));
+      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  auto ret = sideband_->SetVirtualDispType(disp_type);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Failed to set virtual disp type: %d ret: %d", __FUNCTION__, disp_type, ret);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+#endif
+
 ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int32_t disp_id,
                                                         std::vector<int64_t> *bit_clks) {
   auto ret = caps_->GetSupportedDSIClock(disp_id, bit_clks);
