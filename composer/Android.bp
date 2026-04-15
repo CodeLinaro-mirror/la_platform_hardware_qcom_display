@@ -67,6 +67,7 @@ cc_defaults {
         "libmapperutils",
         "libvndksupport",
         "libsdmclient",
+        "libjsoncpp",
     ],
 
     static_libs: [
@@ -274,6 +275,8 @@ qticomposer3_cc_defaults {
                       "-DIDISPLAYCONFIG_13",
                       "-DIDISPLAYCONFIG_14",
                       "-DIDISPLAYCONFIG_15",
+                      "-DIDISPLAYCONFIG_16",
+                      "-DIDISPLAYCONFIG_17",
                 ],
             },
         },
@@ -306,7 +309,7 @@ qticomposer3_cc_defaults {
             },
             conditions_default: {
                 shared_libs: [
-                     "vendor.qti.hardware.display.config-V15-ndk",
+                     "vendor.qti.hardware.display.config-V17-ndk",
                 ],
             },
         },

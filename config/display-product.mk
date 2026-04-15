@@ -65,6 +65,9 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/backlight_calib_vtdr6130_amol
 #Smomo config xml file
 PRODUCT_COPY_FILES += hardware/qcom/display/config/smomo_setting.xml:$(TARGET_COPY_OUT_VENDOR)/etc/smomo_setting.xml
 
+#Dynamic Cac config file
+PRODUCT_COPY_FILES += hardware/qcom/display/config/dynamic_cac_polynomials.json:$(TARGET_COPY_OUT_VENDOR)/etc/dynamic_cac_polynomials.json
+
 #SDR Dimming config file for vtdr6130, display id is 4630947039571902851
 PRODUCT_COPY_FILES += hardware/qcom/display/config/display_id_sample.xml:$(TARGET_COPY_OUT_VENDOR)/etc/displayconfig/display_id_4630947039571902851.xml
 
