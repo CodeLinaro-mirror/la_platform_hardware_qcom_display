@@ -67,6 +67,7 @@ cc_defaults {
         "libmapperutils",
         "libvndksupport",
         "libsdmclient",
+        "libjsoncpp",
     ],
 
     static_libs: [
