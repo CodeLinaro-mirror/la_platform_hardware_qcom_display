@@ -1925,21 +1925,49 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
                                                    int32_t *mapper_return) {
   auto error = SnapError::BAD_VALUE;
   if (gralloc_out_get != nullptr) {
-    SnapDynamicMetadata snap_dynamic_metadata = {};
-    void *snap_out_get = aidl_size ? &snap_dynamic_metadata : gralloc_out_get;
+    // Determine batch size: in batch mode snapalloc writes SnapDynamicMetadata[batch_size]
+    // into the output pointer.
+    int batch_size = 1;
+    uint64_t modifier = 0;
+    snapmapper_->GetMetadata(*hnd, SnapMetadataType::FORMAT_MODIFIER, &modifier);
+    if (auto it =
+            kBatchSize_.find((vendor_qti_hardware_display_common_PixelFormatModifier)modifier);
+        it != kBatchSize_.end()) {
+      batch_size = it->second;
+    }
+    ALOGD_IF(enable_logs_, "%s batch_size %d modifier %" PRIu64, __func__, batch_size, modifier);
+
+    // Allocate array sized for batch_size to avoid overflow when snapalloc fills all entries
+    std::vector<SnapDynamicMetadata> snap_dynamic_metadata_array(batch_size);
+    void *snap_out_get = aidl_size ? snap_dynamic_metadata_array.data() : gralloc_out_get;
     error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::DYNAMIC_METADATA, snap_out_get);
     if (aidl_size) {
+      // Single frame mode: encode only the valid payload bytes
+      SnapDynamicMetadata &snap_dynamic_metadata = snap_dynamic_metadata_array[0];
       if (snap_dynamic_metadata.dynamicMetaDataValid) {
-        std::vector<uint8_t> dynamic_metadata_payload;
-        dynamic_metadata_payload.resize(sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
-        memcpy(dynamic_metadata_payload.data(), &snap_dynamic_metadata.dynamicMetaDataPayload,
-               sizeof(snap_dynamic_metadata.dynamicMetaDataPayload));
+        uint32_t payload_len = snap_dynamic_metadata.dynamicMetaDataLen;
+        if (payload_len == 0 || payload_len > QTI_HDR_DYNAMIC_META_DATA_SZ) {
+          ALOGW("%s: dynamicMetaDataLen %u is invalid (valid range: 1-%d), encoding nullopt",
+                __func__, payload_len, QTI_HDR_DYNAMIC_META_DATA_SZ);
+          *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
+              std::nullopt, gralloc_out_get, *mapper_return);
+        } else {
+          std::vector<uint8_t> dynamic_metadata_payload;
+          dynamic_metadata_payload.resize(payload_len);
+          memcpy(dynamic_metadata_payload.data(), &snap_dynamic_metadata.dynamicMetaDataPayload,
+                 payload_len);
+          *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
+              dynamic_metadata_payload, gralloc_out_get, *mapper_return);
+        }
+      } else {
+        // dynamicMetaDataValid is false: encode nullopt so the client gets the correct
+        // required size (not the stale outDataSize) and knows there is no valid metadata.
         *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_40>(
-            dynamic_metadata_payload, gralloc_out_get, *mapper_return);
+            std::nullopt, gralloc_out_get, *mapper_return);
+      }
         if (*mapper_return < 0) {
           return SnapError::BAD_VALUE;
         }
-      }
     }
   } else if (gralloc_in_set != nullptr) {
     SnapDynamicMetadata *snap_dynamic_metadata = static_cast<SnapDynamicMetadata *>(gralloc_in_set);
