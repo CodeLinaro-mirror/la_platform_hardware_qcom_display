@@ -129,6 +129,11 @@ ifneq ($(PLATFORM_VERSION), 10)
     PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),gen5)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.enable_automotive_platform=1
+endif
+
 #Set WCG properties
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_wide_color_display=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_HDR_display=true
