@@ -131,7 +131,8 @@ endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),gen5)
 PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.enable_automotive_platform=1
+    vendor.display.enable_automotive_platform=1 \
+    vendor.display.flush_on_layer_set_empty=1
 endif
 
 #Set WCG properties
