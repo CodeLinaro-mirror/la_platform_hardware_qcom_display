@@ -730,8 +730,8 @@ SnapError GrallocSnapHelper::DataspaceHelper(SnapHandle *hnd, uint32_t aidl_size
       }
       int err = ConvertGrallocDataspaceToSnapDataspace(*decoded_result, &dataspace);
       if (err != SnapError::NONE && static_cast<int>(*decoded_result) != 0) {
-        ALOGW("%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__,
-              *decoded_result);
+        ALOGW_IF(enable_logs_, "%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__,
+                 *decoded_result);
         return SnapError::UNSUPPORTED;
       }
       snap_dataspace = static_cast<SnapDataspace *>(&dataspace);
@@ -3854,7 +3854,8 @@ SnapError GrallocSnapHelperLegacy::DataspaceHelper(SnapHandle *hnd, bool hidl_by
           *static_cast<GrallocDataspace *>(gralloc_in_set), &snap_dataspace);
     }
     if (conversion_err != SnapError::NONE) {
-      ALOGW("%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__, gr_dataspace);
+      ALOGW_IF(enable_logs_, "%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__,
+               gr_dataspace);
       return SnapError::UNSUPPORTED;
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::DATASPACE, &snap_dataspace);
