@@ -41,6 +41,12 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_vtdr6130_amol
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_vtdr6130_amoled_qsync_cmd_mode_dsi_visionox_panel_with_DSC.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_vtdr6130_amoled_qsync_cmd_mode_dsi_visionox_panel_with_DSC.json
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_vtdr6130_amoled_qsync_video_mode_dsi_visionox_panel_with_DSC.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_vtdr6130_amoled_qsync_video_mode_dsi_visionox_panel_with_DSC.json
 
+#QDCM calibration json file for td4330 panel
+ifeq ($(filter bengal khaje, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_td4330_v2_video_mode_dsi_truly_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_td4330_v2_video_mode_dsi_truly_panel.json
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_td4330_v2_cmd_mode_dsi_truly_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_td4330_v2_cmd_mode_dsi_truly_panel.json
+endif
+
 ifeq ($(TARGET_BOARD_PLATFORM),niobe)
     #TBD: derived from qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json

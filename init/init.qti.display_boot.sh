@@ -102,6 +102,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.gralloc.disable_ubwc 1
         ;;
     esac
     ;;
@@ -182,11 +183,11 @@ case "$target" in
           if [ "$platform_subtype_id" -eq 43 ]; then
             setprop vendor.display.enable_null_display 1
           fi
-          setprop vendor.display.disable_dpps_features 1
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.disable_fbt_for_cwb_fallback 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         ;;
     esac
