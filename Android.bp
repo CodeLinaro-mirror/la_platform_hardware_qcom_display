@@ -14,7 +14,8 @@ soong_config_module_type {
         "ubwcp_headers",
         "snapallocext_enabled",
         "neo",
-        "enable_demura"
+        "enable_demura",
+        "idle_timeout",
     ],
     properties: [
         "cflags",
@@ -196,6 +197,9 @@ qtidisplay_cc_defaults {
             vendor: true,
             host_ldlibs: ["-lgcov"],
             native_coverage: true,
+        },
+        idle_timeout: {
+            cflags: ["-DIDLE_TIMEOUT_DEFAULT_MS=47"]
         },
     },
 }
