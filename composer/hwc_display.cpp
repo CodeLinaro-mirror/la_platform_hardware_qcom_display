@@ -1224,6 +1224,8 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
     return HWC3::Error::BadParameter;
   }
 
+  UpdateConfigs();
+
   DisplayConfigFixedInfo fixed_info = {};
   display_intf_->GetConfig(&fixed_info);
 
