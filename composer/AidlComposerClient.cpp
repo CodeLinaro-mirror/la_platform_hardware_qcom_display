@@ -110,6 +110,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   disable_luts_overlay_support_ = (value == 1);
   ALOGV("disable_luts_overlay_support_: %d", disable_luts_overlay_support_);
 
+  value = 0;
+  sideband_->GetProperty(COMPOSER_DRIVEN_HDCP, &value);
+  composer_driven_hdcp_ = (value == 1);
+  ALOGV("composer_driven_hdcp_: %d", composer_driven_hdcp_);
+
   return true;
 }
 
@@ -514,8 +519,35 @@ ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
 }
 
-ScopedAStatus AidlComposerClient::startHdcpNegotiation(
-    int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) {
+ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
+                                                       const HdcpLevels &in_levels) {
+  if (!composer_driven_hdcp_) {
+    return ScopedAStatus::ok();
+  }
+
+  int connected_level_int = 0;
+  switch (in_levels.connectedLevel) {
+    case HdcpLevel::HDCP_NONE:
+      connected_level_int = 0;
+      break;
+    case HdcpLevel::HDCP_V1:
+      connected_level_int = 2;
+      break;
+    case HdcpLevel::HDCP_V2:
+    case HdcpLevel::HDCP_V2_1:
+    case HdcpLevel::HDCP_V2_2:
+    case HdcpLevel::HDCP_V2_3:
+      connected_level_int = 3;
+      break;
+    default:
+      connected_level_int = 0;
+      break;
+  }
+  auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
@@ -1220,6 +1252,37 @@ void AidlComposerClient::OnVsyncIdle(uint64_t in_display) {
   }
   callback_->onVsyncIdle(in_display);
 }
+
+#ifdef COMPOSER3_V4
+void AidlComposerClient::onHdcpLevelsChanged(uint64_t display, int32_t min_enc_level) {
+  if (!callback_) {
+    ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
+    return;
+  }
+  HdcpLevels new_levels;
+  // TODO(user): once driver support is available to notify us of a monitor's specific
+  // HDCP capabilities, we can specify it here. For now just populate with
+  // the maximum level we currently support
+  new_levels.maxLevel = HdcpLevel::HDCP_V2_3;
+  switch (min_enc_level) {
+    case -1:
+      new_levels.connectedLevel = HdcpLevel::HDCP_UNKNOWN;
+      new_levels.maxLevel = HdcpLevel::HDCP_UNKNOWN;
+      break;
+    case 2:
+      new_levels.connectedLevel = HdcpLevel::HDCP_V1;
+      break;
+    case 3:
+      new_levels.connectedLevel = HdcpLevel::HDCP_V2;
+      break;
+    default:
+      new_levels.connectedLevel = HdcpLevel::HDCP_NONE;
+      break;
+  }
+
+  callback_->onHdcpLevelsChanged(display, new_levels);
+}
+#endif
 
 Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle) {
   // TODO(user): revisit for caching and freeBuffer in success case.

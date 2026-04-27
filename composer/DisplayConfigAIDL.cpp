@@ -70,6 +70,10 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
       (sdm_factory->CreateDrawCycleIntf());
   sideband_ = sdm_factory->CreateSideBandIntf();
   layer_builder_ = sdm_factory->CreateLayerBuilderIntf();
+
+  int value = 0;
+  sideband_->GetProperty(COMPOSER_DRIVEN_HDCP, &value);
+  composer_driven_hdcp_ = (value == 1);
 }
 
 DisplayConfigAIDL::~DisplayConfigAIDL() {
@@ -267,7 +271,12 @@ ScopedAStatus DisplayConfigAIDL::getPanelBrightness(int *level) {
 }
 
 ScopedAStatus DisplayConfigAIDL::minHdcpEncryptionLevelChanged(DisplayType dpy, int min_enc_level) {
+  // this property is used to switch between composer and DisplayConfig HDCP paths
+  if (composer_driven_hdcp_) {
+    return ScopedAStatus::ok();
+  }
   drawcycle_->MinHdcpEncryptionLevelChanged(MapDisplayType(dpy), min_enc_level);
+
   return ScopedAStatus::ok();
 }
 
