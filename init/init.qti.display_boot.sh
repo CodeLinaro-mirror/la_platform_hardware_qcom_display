@@ -70,6 +70,7 @@ case "$target" in
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.disable_noise_layer 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
         ;;
     esac
     ;;
