@@ -54,7 +54,7 @@ namespace mapper5 {
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using gralloc::BufferInfo;
 
-std::mutex QtiMapper5::handles_heap_lock_;
+[[clang::no_destroy]] std::mutex QtiMapper5::handles_heap_lock_;
 
 QtiMapper5::QtiMapper5() {
   enable_logs = property_get_bool(ENABLE_LOGS_PROP, 0);
