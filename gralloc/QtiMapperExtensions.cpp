@@ -100,10 +100,10 @@ Return<void> QtiMapperExtensions::getInterlacedFlag(void *buffer, getInterlacedF
   }
   if (ret != Error::NONE) {
     interlaced_flag = 0;
-    ALOGW(
-        "%s: getMetaData returned %d, defaulting to "
-        "interlaced_flag = %d",
-        __FUNCTION__, ret, interlaced_flag);
+    ALOGW_IF(enable_logs_,
+             "%s: getMetaData returned %d, defaulting to "
+             "interlaced_flag = %d",
+             __FUNCTION__, ret, interlaced_flag);
   }
   hidl_cb(err, interlaced_flag != 0);
   return Void();
