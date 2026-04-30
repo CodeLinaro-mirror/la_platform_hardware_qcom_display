@@ -101,6 +101,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   ALOGV("disable_fp16_support_: %d", disable_fp16_support_);
 
   value = 0;
+  sideband_->GetProperty(DISABLE_HDR_GAMMA_SUPPORT, &value);
+  disable_hdr_gamma_support_ = (value == 1);
+  ALOGV("disable_hdr_gamma_support_: %d", disable_hdr_gamma_support_);
+
+  value = 0;
   sideband_->GetProperty(DISABLE_QUERY_LUTS, &value);
   disable_query_luts_ = (value == 1);
   ALOGV("disable_query_luts_: %d", disable_query_luts_);
@@ -804,14 +809,21 @@ ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_retu
   if (!disable_fp16_support_ && !overlay_values_init) {
     pixel_formats.push_back(PixelFormat::RGBA_FP16);
   }
-  overlay_values_init = true;
 
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
+
   static std::vector<Dataspace> dataspace_transfers{
       Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2, Dataspace::TRANSFER_SMPTE_170M,
       Dataspace::TRANSFER_LINEAR};
+
+  if (!disable_hdr_gamma_support_ && !overlay_values_init) {
+    dataspace_transfers.push_back(Dataspace::TRANSFER_ST2084);
+    dataspace_transfers.push_back(Dataspace::TRANSFER_HLG);
+  }
+  overlay_values_init = true;
+
   static std::vector<Dataspace> dataspace_ranges{Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
                                                  Dataspace::RANGE_EXTENDED};
   static bool mixed_colorspaces_support = true;
