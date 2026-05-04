@@ -41,6 +41,12 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_vtdr6130_amol
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_vtdr6130_amoled_qsync_cmd_mode_dsi_visionox_panel_with_DSC.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_vtdr6130_amoled_qsync_cmd_mode_dsi_visionox_panel_with_DSC.json
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_vtdr6130_amoled_qsync_video_mode_dsi_visionox_panel_with_DSC.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_vtdr6130_amoled_qsync_video_mode_dsi_visionox_panel_with_DSC.json
 
+#QDCM calibration json file for td4330 panel
+ifeq ($(filter bengal khaje, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_td4330_v2_video_mode_dsi_truly_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_td4330_v2_video_mode_dsi_truly_panel.json
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_td4330_v2_cmd_mode_dsi_truly_panel.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_td4330_v2_cmd_mode_dsi_truly_panel.json
+endif
+
 ifeq ($(TARGET_BOARD_PLATFORM),niobe)
     #TBD: derived from qdcm_calib_data_sy103_amoled_video_mode_panel_with_DSC.json
     PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json:$(TARGET_COPY_OUT_VENDOR)/etc/display/qdcm_calib_data_sony_amoled_video_mode_panel_with_DSC_left.json
@@ -103,10 +109,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.gralloc.enable_snapalloc=1 \
     vendor.display.disable_fp16_support=1
 
-ifeq ($(filter art art64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
-PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.disable_idle_fps_switch=1
-endif
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.early.sf.duration=15555555 \
@@ -253,7 +255,15 @@ $(call soong_config_set, qtidisplay, enable_demura, true )
 # BEFORE FRC
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
-      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+        ifeq ($(TARGET_DEFINES_MXR_CONFIG),true)
+            ifeq ($(filter $(TARGET_BOARD_PLATFORM), seraph), $(TARGET_BOARD_PLATFORM))
+                $(call soong_config_set, qtidisplay, composer_version, v3_4_lsr )
+            else
+                $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+            endif
+        else
+            $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+        endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
     endif
