@@ -26,6 +26,7 @@ AC_ARG_WITH([core_includes],
 
 if test "x$with_core_includes" != "xno"; then
    CFLAGS="${CFLAGS} -I${core_incdir}"
+   CPPFLAGS="${CPPFLAGS} -I${core_incdir}"
 fi
 
 AC_ARG_WITH(sanitized-headers,
@@ -49,6 +50,7 @@ AC_SUBST([CC])
 AC_CONFIG_FILES([ \
         Makefile \
         libqservice/Makefile \
-        libqdutils/Makefile
+        libqdutils/Makefile \
+        dp_cec/Makefile
         ])
 AC_OUTPUT

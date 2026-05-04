@@ -330,6 +330,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   std::unordered_map<uint64_t, histogram::HistogramCollector *> histogram_map_;
   std::unordered_map<uint64_t, GLLayerStitch *> layer_stitch_map_;
   void *pose_handle_ = nullptr;
+  bool composer_driven_hdcp_ = false;
 };
 
 }  // namespace config
