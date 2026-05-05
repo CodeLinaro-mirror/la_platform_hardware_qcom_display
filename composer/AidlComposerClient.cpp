@@ -413,7 +413,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
       *aidl_return = INT32(attributes.y_dpi * 1000.0f);
       break;
     case DisplayAttribute::CONFIG_GROUP:
-      *aidl_return = settings_->GetDisplayConfigGroup(in_display, attributes);
+      *aidl_return = settings_->GetDisplayConfigGroup(in_display, attributes, attributes.fps);
       break;
     default:
       ALOGW("Spurious attribute type");
@@ -460,7 +460,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup =
-        settings_->GetDisplayConfigGroup(in_display, variable_config);
+        settings_->GetDisplayConfigGroup(in_display, variable_config, variable_config.fps);
 
 #ifdef COMPOSER3_V4
     // Display output colorspace is fixed for builtin displays regardless of HDR content.
