@@ -256,7 +256,11 @@ $(call soong_config_set, qtidisplay, enable_demura, true )
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava))
         ifeq ($(TARGET_DEFINES_MXR_CONFIG),true)
-            $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+            ifeq ($(filter $(TARGET_BOARD_PLATFORM), seraph), $(TARGET_BOARD_PLATFORM))
+                $(call soong_config_set, qtidisplay, composer_version, v3_4_lsr )
+            else
+                $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+            endif
         else
             $(call soong_config_set, qtidisplay, composer_version, v3_5 )
         endif
