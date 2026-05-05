@@ -536,6 +536,35 @@ case "$target" in
             setprop vendor.display.enable_latch_media_content 1
         fi
         ;;
+      776|777)
+        # SOC ID for BOURTZI is 776
+        # SOC ID for BOURTZIP is 777
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.target.version 5
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.disable_mitigated_fps 1
+        setprop vendor.display.secure_preview_buffer_format 420_sp
+        setprop vendor.gralloc.secure_preview_buffer_format 420_sp
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.enable_rotator_concurrency 1
+        setprop vendor.display.disable_offline_rotator 0
+        setprop vendor.display.disable_rotator_ubwc 1
+        setprop vendor.display.supports_background_blur 0
+        setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
+        setprop debug.sf.enable_hwc_vds 0
+        setprop persist.sys.sf.color_mode 7
+        setprop vendor.display.disable_sdr_dimming 1
+        ;;
     esac
     ;;
     "malabar")
