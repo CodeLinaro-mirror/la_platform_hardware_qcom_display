@@ -730,8 +730,8 @@ SnapError GrallocSnapHelper::DataspaceHelper(SnapHandle *hnd, uint32_t aidl_size
       }
       int err = ConvertGrallocDataspaceToSnapDataspace(*decoded_result, &dataspace);
       if (err != SnapError::NONE && static_cast<int>(*decoded_result) != 0) {
-        ALOGW("%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__,
-              *decoded_result);
+        ALOGW_IF(enable_logs_, "%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__,
+                 *decoded_result);
         return SnapError::UNSUPPORTED;
       }
       snap_dataspace = static_cast<SnapDataspace *>(&dataspace);
@@ -1752,6 +1752,11 @@ SnapError GrallocSnapHelper::SMPTE2094_10Helper(SnapHandle *hnd, uint32_t aidl_s
         return SnapError::UNSUPPORTED;
       }
       custom_metadata_payload = *decoded_result;
+      constexpr size_t MAX_PAYLOAD_SIZE = sizeof(snap_converted_custom_metadata.metadataPayload);
+      if (custom_metadata_payload->size() > MAX_PAYLOAD_SIZE) {
+        ALOGW("SMPTE 2094-10 metadata too large! Size: %zu, Max: %zu",
+              custom_metadata_payload->size(), MAX_PAYLOAD_SIZE);
+      }
       snap_converted_custom_metadata.size = static_cast<int>(custom_metadata_payload->size());
       memcpy(&snap_converted_custom_metadata.metadataPayload, custom_metadata_payload->data(),
              custom_metadata_payload->size());
@@ -1948,6 +1953,10 @@ SnapError GrallocSnapHelper::DynamicMetadataHelper(SnapHandle *hnd, uint32_t aid
       }
       dynamic_metadata_payload = *decoded_result;
       if (dynamic_metadata_payload != std::nullopt) {
+        if (dynamic_metadata_payload->size() > QTI_HDR_DYNAMIC_META_DATA_SZ) {
+          ALOGW("Metadata size %zu exceeds buffer limit %d", dynamic_metadata_payload->size(),
+                QTI_HDR_DYNAMIC_META_DATA_SZ);
+        }
         snap_converted_dynamic_metadata.dynamicMetaDataLen =
             static_cast<int>(dynamic_metadata_payload->size());
         memcpy(&snap_converted_dynamic_metadata.dynamicMetaDataPayload,
@@ -3845,7 +3854,8 @@ SnapError GrallocSnapHelperLegacy::DataspaceHelper(SnapHandle *hnd, bool hidl_by
           *static_cast<GrallocDataspace *>(gralloc_in_set), &snap_dataspace);
     }
     if (conversion_err != SnapError::NONE) {
-      ALOGW("%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__, gr_dataspace);
+      ALOGW_IF(enable_logs_, "%s: Attempting to set invalid gralloc dataspace - %d", __FUNCTION__,
+               gr_dataspace);
       return SnapError::UNSUPPORTED;
     }
     error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::DATASPACE, &snap_dataspace);
@@ -5975,6 +5985,10 @@ SnapError GrallocSnapHelperLegacy::DynamicMetadataHelper(SnapHandle *hnd, bool h
           *static_cast<std::optional<std::vector<uint8_t>> *>(gralloc_in_set);
     }
     if (dynamic_metadata_payload != std::nullopt) {
+      if (dynamic_metadata_payload->size() > QTI_HDR_DYNAMIC_META_DATA_SZ) {
+        ALOGW("Metadata size %zu exceeds buffer limit %d", dynamic_metadata_payload->size(),
+              QTI_HDR_DYNAMIC_META_DATA_SZ);
+      }
       snap_dynamic_metadata.dynamicMetaDataLen = static_cast<int>(dynamic_metadata_payload->size());
       memcpy(&snap_dynamic_metadata.dynamicMetaDataPayload, dynamic_metadata_payload->data(),
              dynamic_metadata_payload->size());
