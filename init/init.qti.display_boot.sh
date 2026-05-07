@@ -69,7 +69,7 @@ case "$target" in
         setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_inline_writeback 1
-        setprop vendor.display.enable_rounded_corner 0
+        setprop vendor.display.disable_noise_layer 1
         ;;
     esac
     ;;
@@ -117,7 +117,7 @@ case "$target" in
     setprop vendor.display.enable_spec_fence 1
     setprop vendor.display.thermal.version 1
     setprop vendor.display.enable_rc_support 1
-    setprop vendor.display.target.version 2
+    setprop vendor.display.target.version 6
     setprop vendor.display.enable_qsync_idle 0
     setprop vendor.display.disable_mitigated_fps 1
     setprop vendor.display.secure_preview_buffer_format 420_sp
@@ -158,6 +158,7 @@ case "$target" in
     # SOC ID for KaM is 704
     # SOC ID for Alor is 685
     # SOC ID for Alor APQ is 727
+    # SOC ID for Alor IoT APQ is 764
     # SOC ID for Purwa is 635
     # SOC ID for CanoeS is 722
     # SOC ID for CanoeS APQ is 723
@@ -165,7 +166,7 @@ case "$target" in
     # SOC ID for Canoe Compute SKU and APQ SKU is 743
     # SOC ID for Hamoa is 555
     case "$soc_hwid" in
-      660|661|704|685|727|635|743|722|723|730|555)
+      660|661|704|685|727|635|743|722|723|730|555|764)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -182,45 +183,22 @@ case "$target" in
           if [ "$platform_subtype_id" -eq 43 ]; then
             setprop vendor.display.enable_null_display 1
           fi
-          setprop vendor.display.disable_dpps_features 1
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.disable_fbt_for_cwb_fallback 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        ;;
-    esac
-    ;;
-    "pikachu")
-    # SOC ID for Pikachu is 736
-    # SOC ID for Pikachu is 737
-    case "$soc_hwid" in
-      736|737)
-        setprop vendor.display.target.version 6
-        setprop vendor.display.enable_rotator_ui 1
-        setprop vendor.display.thermal.version 1
-        setprop vendor.gralloc.enable_snapalloc 1
-        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
-        setprop vendor.display.enable_spec_fence 0
-        setprop vendor.display.enable_inline_writeback 1
-        setprop vendor.display.enable_optimal_refresh_rate 1
-        setprop vendor.display.refresh_rate_changeable 1
-        setprop vendor.display.idle_time 0
-        setprop vendor.display.idle_time_inactive 0
-        setprop vendor.display.disable_cwb_idle_fallback 1
-        setprop vendor.display.disable_multirect 1
-        setprop vendor.display.disable_llcbc_support 1
-        setprop vendor.display.enable_rounded_corner 0
-        setprop vendor.display.perf_version 2
-        setprop vendor.display.minimum_large_comp_fps 60
         ;;
     esac
     ;;
     "seraph")
     # SOC ID for Seraph is 672
     # SOC ID for Seraph is 673
+    # SOC ID for Pikachu is 736
+    # SOC ID for Pikachu is 737
     case "$soc_hwid" in
-      672|673)
+      672|673|736|737)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1

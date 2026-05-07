@@ -1319,7 +1319,7 @@ void DisplayConfigAIDL::DestroyLayerStitch(uint64_t display) {
 
 void DisplayConfigAIDL::InitColorConvert(uint64_t display, bool secure) {
   if (color_convert_map_.find(display) == color_convert_map_.end()) {
-    ALOGI("Creating GLColorConvert instance for the display %d", display);
+    ALOGI("Creating GLColorConvert instance for the display %" PRIu64, display);
     color_convert_map_.insert({display, nullptr});
     color_convert_map_.at(display) = GLColorConvert::GetInstance(sdm::kTargetYUV, secure);
   }

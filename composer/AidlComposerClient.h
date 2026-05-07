@@ -42,6 +42,7 @@
 #include <Error.h>
 
 #include <core/buffer_allocator.h>
+#include <core/sdm_types.h>
 
 #include "AidlComposerHandleImporter.h"
 #include "AidlComposerServiceWriter.h"
@@ -328,6 +329,7 @@ class AidlComposerClient : public BnComposerClient,
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
   bool disable_fp16_support_ = false;
   bool disable_query_luts_ = false;
+  bool disable_luts_overlay_support_ = false;
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;
@@ -366,8 +368,6 @@ class AidlComposerClient : public BnComposerClient,
                         std::unique_ptr<std::vector<Lut3d *>> &out_luts);
 #endif
 
-    void reset() { mWriter->reset(); }
-
    private:
     template <typename field, typename... Args, typename... prototypeParams>
     void ExecuteCommand(field &commandField, void (CommandEngine::*func)(prototypeParams...),
@@ -376,9 +376,13 @@ class AidlComposerClient : public BnComposerClient,
         (this->*func)(std::forward<Args>(args)...);
       }
     }
-    __attribute__((always_inline)) inline void writeError(std::string function, Error err) {
+    __attribute__((always_inline)) inline void writeError(std::string function, int64_t displayId,
+                                                          Error err) {
       ALOGW("%s: error: %s", function.c_str(), sdm::to_string(err).c_str());
-      mWriter->setError(mCommandIndex, INT32(err));
+
+      // Get the writer for this display
+      ComposerServiceWriter *writer = getWriterForDisplay(displayId);
+      writer->setError(mCommandIndex[displayId], INT32(err));
     }
 
     void executeDisplayCommmands(const DisplayCommand &displayCmd);
@@ -481,8 +485,24 @@ class AidlComposerClient : public BnComposerClient,
     std::vector<Rect> readRegion(size_t count);
     FRect readFRect();
     AidlComposerClient &mClient;
-    std::unique_ptr<ComposerServiceWriter> mWriter;
-    int32_t mCommandIndex;
+    std::unordered_map<int64_t, std::unique_ptr<ComposerServiceWriter>> mDisplayWriters;
+    std::mutex mWritersMutex;
+    // Per-display command index — avoids data race when MULTI_THREADED_PRESENT causes
+    // concurrent execute() calls on different threads for different displays.
+    std::unordered_map<int64_t, int32_t> mCommandIndex;
+
+    // Get writer for a specific display
+    ComposerServiceWriter *getWriterForDisplay(int64_t display) {
+      std::lock_guard<std::mutex> lock(mWritersMutex);
+      auto it = mDisplayWriters.find(display);
+      if (it == mDisplayWriters.end()) {
+        // Create a new writer for this display
+        auto [newIt, inserted] =
+            mDisplayWriters.emplace(display, std::make_unique<ComposerServiceWriter>());
+        return newIt->second.get();
+      }
+      return it->second.get();
+    }
 
     // Buffer cache impl
     enum class BufferCache {
@@ -564,7 +584,8 @@ class AidlComposerClient : public BnComposerClient,
   QServiceBackend *qservice_ = nullptr;
 
   std::shared_ptr<IComposerCallback> callback_ = nullptr;
-  std::mutex m_command_mutex_;
+  // Per-display mutex for command execution
+  std::mutex m_display_command_mutex_[sdm::kNumDisplays];
   std::mutex m_display_data_mutex_;
   std::unique_ptr<CommandEngine> mCommandEngine;
   std::function<void()> mOnClientDestroyed;
