@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -99,7 +99,7 @@ HWC3::Error HWCCallbacks::Vsync(Display display, int64_t timestamp, uint32_t per
   if (!vsync_) {
     return HWC3::Error::NoResources;
   }
-  (*vsync_)(callback_data_, static_cast<long>(display), timestamp, static_cast<int>(period));
+  (*vsync_)(callback_data_, static_cast<long>(vsync_source_), timestamp, static_cast<int>(period));
   return HWC3::Error::None;
 }
 

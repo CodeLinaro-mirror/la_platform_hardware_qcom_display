@@ -148,6 +148,21 @@ class HWCSession : public HWCUEvent,
     kCwbFlagAvoidRefresh,
   };
 
+  enum DisplayRebootStrategy {
+    kRebootStrategyDefault,
+    kRebootStrategyOnceDSI = kRebootStrategyDefault,
+    kRebootStrategyAlwaysDSI,
+    kRebootStrategyAnyOnce,
+    kRebootStrategyNoReboot,
+  };
+
+  enum ComposerSetupMode {
+    kCompSetupModeDefault,
+    kCompSetupModePrimary = kCompSetupModeDefault,
+    kCompSetupModeNonPrimary,
+    kCompSetupModeNoDisplay,
+  };
+
   HWCSession();
   int Init();
   int Deinit();
@@ -456,6 +471,7 @@ class HWCSession : public HWCUEvent,
   int HandlePluggableDisplays(bool delay_hotplug);
   int HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool delay_hotplug);
   int HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info);
+  int RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info);
   void DestroyDisplay(DisplayMapInfo *map_info);
   void DestroyDisplayLocked(DisplayMapInfo *map_info);
   void DestroyPluggableDisplay(DisplayMapInfo *map_info);
@@ -485,6 +501,8 @@ class HWCSession : public HWCUEvent,
   bool HasHDRSupport(HWCDisplay *hwc_display);
   void PostInit();
   int GetDispTypeFromPhysicalId(uint64_t physical_disp_id, DispType *disp_type);
+  int SetBestNullDisplayResolution();
+  bool IsFrameworkRebootRequired(bool is_primary);
 #ifdef PROFILE_COVERAGE_DATA
   android::status_t DumpCodeCoverage(const android::Parcel *input_parcel);
 #endif
@@ -588,7 +606,6 @@ class HWCSession : public HWCUEvent,
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = nullptr;
   HWCSocketHandler socket_handler_;
-  bool hdmi_is_primary_ = false;
   bool is_composer_up_ = false;
   std::mutex mutex_lum_;
   static bool pending_power_mode_[HWCCallbacks::kNumDisplays];
@@ -648,6 +665,13 @@ class HWCSession : public HWCUEvent,
   void HpdThreadBottom();
   std::thread hpd_thread_;
   LayerId tunneled_layer_ = -1;
+  bool pluggable_is_primary_ = false;
+  bool pluggable_primary_connected_ = false;
+  DisplayConfigVariableInfo primary_config_ = {};
+  int composer_setup_mode_ = kCompSetupModeDefault;
+  int display_reboot_strategy_ = kRebootStrategyDefault;
+  bool null_display_active_ = false;
+  int send_primary_hotplug_to_sf_ = 0;
 };
 
 }  // namespace sdm

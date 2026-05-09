@@ -28,9 +28,9 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -265,6 +265,10 @@ void HWCDisplayPluggable::GetDownscaleResolution(uint32_t primary_width, uint32_
   }
 }
 
+int HWCDisplayPluggable::UpdateFBResolution(int width, int height) {
+   return SetFrameBufferResolution(width, height);
+}
+
 int HWCDisplayPluggable::SetState(bool connected) {
   DisplayError error = kErrorNone;
   DisplayState state = kStateOff;
@@ -272,7 +276,7 @@ int HWCDisplayPluggable::SetState(bool connected) {
 
   if (connected) {
     if (display_null_.IsActive()) {
-      error = core_intf_->CreateDisplay(type_, this, &display_intf_);
+      error = core_intf_->CreateDisplay(sdm_id_, this, &display_intf_);
       if (error != kErrorNone) {
         DLOGE("Display create failed. Error = %d display_type %d event_handler %p disp_intf %p",
               error, type_, this, &display_intf_);

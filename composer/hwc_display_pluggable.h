@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -55,6 +55,7 @@ class HWCDisplayPluggable : public HWCDisplay {
   virtual HWC3::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
   virtual HWC3::Error Present(shared_ptr<Fence> *out_retire_fence);
   virtual int SetState(bool connected);
+  virtual int UpdateFBResolution(int width, int height);
   virtual DisplayError Flush();
   virtual HWC3::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
   virtual HWC3::Error GetRenderIntents(ColorMode mode, uint32_t *out_num_intents,
