@@ -427,7 +427,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
     display_configuration.hdrOutputType =
         (fixed_info.hdr_eotf & sdm::kHdrEOTFHDR10) ? OutputType::HDR10
         : (fixed_info.hdr_eotf & sdm::kHdrEOTFSDR) ? OutputType::SDR
-                                                   : OutputType::INVALID;
+                                                   : OutputType::SYSTEM;
     if (display_class == sdm::DISPLAY_CLASS_BUILTIN) {
       display_configuration.hdrOutputType = OutputType::SYSTEM;
     }
