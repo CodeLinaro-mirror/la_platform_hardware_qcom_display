@@ -1893,6 +1893,16 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   // scoped fence fds will be automatically closed when function scope ends,
   // atomic commit will have these fds already set on kernel by then.
   Fence::ScopedRef scoped_ref;
+
+  if (first_cycle_ && IsPrimaryDisplay() && hw_panel_info_.is_pluggable) {
+    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
+    int ret = NullCommit(true /* synchronous */, false /* retain_planes */);
+    if (ret) {
+      DLOGE("Failed with error: %d", ret);
+      return kErrorHardware;
+    }
+  }
+
   SetupAtomic(scoped_ref, hw_layers_info, false /* validate */,
                                    &release_fence_fd, &retire_fence_fd);
 
