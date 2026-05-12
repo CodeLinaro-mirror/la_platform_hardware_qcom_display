@@ -149,7 +149,7 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
 
   gralloc::GrallocSnapHelper *_Nullable snap_helper_ = nullptr;
   bool snap_alloc_enable_ = false;
-  static std::mutex handles_heap_lock_;
+  [[clang::no_destroy]] static std::mutex handles_heap_lock_;
 
   std::unordered_map<uint64_t, size_t> type_to_size_{
       {static_cast<uint64_t>(SnapMetadataType::BUFFER_ID), sizeof(uint64_t)},
