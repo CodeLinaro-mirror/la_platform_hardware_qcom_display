@@ -1983,6 +1983,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
 void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
   auto error = Error::None;
+  mClient.drawcycle_->WaitForDrawCycleToComplete(display);
   for (auto &slot : slotsToClear) {
     SnapHandle *layerBuffer = nullptr;
     lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, true, &layerBuffer);
