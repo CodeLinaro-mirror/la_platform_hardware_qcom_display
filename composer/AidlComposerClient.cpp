@@ -1338,6 +1338,10 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  displayCmd.display);
   ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
                  displayCmd.display);
+#ifdef COMPOSER3_V5
+  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
+                 displayCmd.display, *displayCmd.activeConfig);
+#endif
 #ifdef COMPOSER3_V3
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
@@ -1345,10 +1349,6 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                  displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
 #else
-#ifdef COMPOSER3_V5
-  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
-                 displayCmd.display, *displayCmd.activeConfig);
-#endif
   int32_t frameIntervalNs = -1;
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
