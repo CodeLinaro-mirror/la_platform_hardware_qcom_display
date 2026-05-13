@@ -1054,7 +1054,10 @@ void AidlComposerClient::OnHotplug(uint64_t in_display, bool in_connected) {
     mDisplayData.emplace(in_display, DisplayData(false));
   }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
   callback_->onHotplug(in_display, in_connected);
+#pragma clang diagnostic pop
 
   if (!in_connected) {
     // Trigger refresh to make sure disconnect event received/updated properly by SurfaceFlinger.
