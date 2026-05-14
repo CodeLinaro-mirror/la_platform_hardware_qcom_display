@@ -44,6 +44,8 @@
 using ::aidl::android::hardware::common::NativeHandle;
 using AlgoConfigType =
     aidl::vendor::qti::hardware::qacs::ambientdatacapture::ADCAlgoConfigs::AlgoConfigType;
+using AlgoConfigCommandType =
+    aidl::vendor::qti::hardware::qacs::ambientdatacapture::ADCAlgoConfigs::AlgoConfigCommandType;
 using sdm::SDMInterfaceFactory;
 
 namespace aidl {
@@ -76,6 +78,15 @@ AmbientDataCaptureAIDL::~AmbientDataCaptureAIDL() {
     lifecycle_->RegisterSideBandCallbackEx(this, false,
                                            sdm::SideBandCallbackClient::kAmbientDataCapture);
   }
+
+  std::lock_guard<decltype(imagealgo_lock_)> lock_guard(imagealgo_lock_);
+  // Deinit SmartSelection adapter
+  if (imagealgo_adapter_) {
+    imagealgo_adapter_->Deinit();
+    imagealgo_adapter_.reset();
+    ALOGI("%s: ImageAlgo adapter deinitialized", __FUNCTION__);
+  }
+
   if (snapmapper_) {
     snapmapper_.reset();
   }
@@ -85,6 +96,136 @@ AmbientDataCaptureAIDL::~AmbientDataCaptureAIDL() {
     }
     snap_impl_lib_ = nullptr;
   }
+}
+
+int AmbientDataCaptureAIDL::InitImageAlgoAdapter(
+    const std::optional<std::vector<uint8_t>> &algoConfigsBlob) {
+  std::lock_guard<decltype(imagealgo_lock_)> lock_guard(imagealgo_lock_);
+  if (imagealgo_adapter_) {
+    ALOGI("%s: ImageAlgo SmartSelection adapter already initialized", __FUNCTION__);
+    return EX_NONE;
+  }
+
+  if (!algoConfigsBlob.has_value()) {
+    ALOGE("%s: algoConfigsBlob parameter is null", __FUNCTION__);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  // Reinterpret the blob as ADCAlgoConfigsStructBlob struct
+  const ADCAlgoConfigsStructBlob *configBlob =
+      reinterpret_cast<const ADCAlgoConfigsStructBlob *>(algoConfigsBlob->data());
+  if (configBlob && configBlob->dataSize > 0 && configBlob->dataSize <= ALGO_CONFIG_SIZE) {
+    ALOGI("%s: ImageAlgo adapter config_json set", __FUNCTION__);
+  } else {
+    ALOGE("%s: Invalid blob data (dataSize=%zu)", __FUNCTION__,
+          configBlob ? configBlob->dataSize : 0);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  // Initialize the SmartSelection adapter once (shared across all displays).
+  auto *factory = GetImageAlgoAdapterFactory();
+  if (!factory) {
+    ALOGW("%s: GetImageAlgoAdapterFactory() returned null — ImageAlgo disabled", __FUNCTION__);
+    return EX_UNSUPPORTED_OPERATION;
+  }
+
+  imagealgo_adapter_ = factory->CreateAdapter<imagealgo::SmartSelectionIntf>();
+  if (!imagealgo_adapter_) {
+    ALOGW("%s: GetImageAlgoAdapterFactory() returned null — ImageAlgo disabled", __FUNCTION__);
+    return EX_UNSUPPORTED_OPERATION;
+  }
+
+  int ret = imagealgo_adapter_->Init();
+  if (ret != 0) {
+    ALOGE("%s: ImageAlgo adapter Init() failed: %d", __FUNCTION__, ret);
+    imagealgo_adapter_.reset();
+    return ret;
+  }
+
+  // Initialize the SmartSelection pipeline with the emit callback.
+  sdm::GenericPayload init_payload;
+  imagealgo::SmartSelectionInitInput *init_input = nullptr;
+  init_payload.CreatePayload(init_input);
+  if (!init_input) {
+    ALOGE("%s: ImageAlgo CreatePayload for Init failed, adapter disabled", __FUNCTION__);
+    imagealgo_adapter_->Deinit();
+    imagealgo_adapter_.reset();
+    return EX_TRANSACTION_FAILED;
+  }
+
+  init_input->config_json = "";  //TODO : use configBlob->data here.
+  init_input->callback = OnImageAlgoEmit;
+  init_input->cookie = this;
+  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSInit, init_payload, nullptr);
+  if (ret != 0) {
+    ALOGE("%s: ImageAlgo kSSInit failed: %d — adapter disabled", __FUNCTION__, ret);
+    imagealgo_adapter_->Deinit();
+    imagealgo_adapter_.reset();
+    return ret;
+  }
+
+  ALOGI("%s: ImageAlgo SmartSelection adapter initialized", __FUNCTION__);
+  return ret;
+}
+
+int AmbientDataCaptureAIDL::DeInitImageAlgoAdapter() {
+  // SmartSelection pipeline teardown
+  std::lock_guard<decltype(imagealgo_lock_)> lock_guard(imagealgo_lock_);
+  if (!imagealgo_adapter_) {
+    ALOGI("%s: ImageAlgo adapter is not initialized", __FUNCTION__);
+    return EX_NONE;
+  }
+
+  sdm::GenericPayload wait_payload;
+  imagealgo::SmartSelectionWaitInput *wait_input = nullptr;
+  wait_payload.CreatePayload(wait_input);
+  if (wait_input) {
+    wait_input->timeout_ms = timeout_ms;
+  }
+
+  int ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSWaitUntilIdle, wait_payload, nullptr);
+  ALOGI("%s: ImageAlgo WaitUntilIdle (pre-flush) for ret=%d", __FUNCTION__, ret);
+
+  sdm::GenericPayload flush_payload;
+  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSFlushAll, flush_payload, nullptr);
+  ALOGI("%s: ImageAlgo FlushAll for ret=%d", __FUNCTION__, ret);
+
+  sdm::GenericPayload wait2_payload;
+  imagealgo::SmartSelectionWaitInput *wait2_input = nullptr;
+  wait2_payload.CreatePayload(wait2_input);
+  if (wait2_input) {
+    wait2_input->timeout_ms = timeout_ms;
+  }
+  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSWaitUntilIdle, wait2_payload, nullptr);
+  ALOGI("%s: ImageAlgo WaitUntilIdle (post-flush) for ret=%d", __FUNCTION__, ret);
+
+  imagealgo_adapter_->Deinit();
+  imagealgo_adapter_.reset();
+  ALOGI("%s: ImageAlgo adapter deinitialized", __FUNCTION__);
+  return ret;
+}
+
+int AmbientDataCaptureAIDL::FlushAllImageAlgoAdapter() {
+  std::lock_guard<decltype(imagealgo_lock_)> lock_guard(imagealgo_lock_);
+  if (!imagealgo_adapter_) {
+    ALOGI("%s: ImageAlgo adapter is not initialized", __FUNCTION__);
+    return EX_NONE;
+  }
+
+  sdm::GenericPayload wait_payload;
+  imagealgo::SmartSelectionWaitInput *wait_input = nullptr;
+  wait_payload.CreatePayload(wait_input);
+  if (wait_input) {
+    wait_input->timeout_ms = timeout_ms;
+  }
+
+  int ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSWaitUntilIdle, wait_payload, nullptr);
+  ALOGI("%s: ImageAlgo WaitUntilIdle (pre-flush) for ret=%d", __FUNCTION__, ret);
+
+  sdm::GenericPayload flush_payload;
+  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSFlushAll, flush_payload, nullptr);
+  ALOGI("%s: ImageAlgo FlushAll for ret=%d", __FUNCTION__, ret);
+  return ret;
 }
 
 int MapDisplayType(DisplayType dpy) {
@@ -161,15 +302,70 @@ ScopedAStatus AmbientDataCaptureAIDL::getDisplayAttributes(int32_t config_index,
 ScopedAStatus AmbientDataCaptureAIDL::setAlgoConfig(const ADCAlgoConfigs &algoConfigs) {
   bool success = true;
   switch (algoConfigs.algoConfigType) {
-    case AlgoConfigType::SMART_SEL:
-      success = true;
+    case AlgoConfigType::SMART_SEL: {
+      switch (algoConfigs.algoConfigCommandType) {
+        case AlgoConfigCommandType::INIT: {
+          auto ret = InitImageAlgoAdapter(algoConfigs.algoConfigsBlob);
+          success = ((ret == EX_NONE) && (imagealgo_adapter_)) ? true : false;
+          break;
+        }
+        case AlgoConfigCommandType::ENQUEUE: {
+          auto ret = EnqueueImageAlgoAdapter(algoConfigs.algoConfigsBlob);
+          success = (ret == EX_NONE) ? true : false;
+          break;
+        }
+        case AlgoConfigCommandType::FLUSH_ALL: {
+          auto ret = FlushAllImageAlgoAdapter();
+          success = (ret == EX_NONE) ? true : false;
+          break;
+        }
+        case AlgoConfigCommandType::DEINIT: {
+          auto ret = DeInitImageAlgoAdapter();
+          success = ((ret == EX_NONE) && (!imagealgo_adapter_)) ? true : false;
+          break;
+        }
+        default: {
+          success = false;
+          break;
+        }
+      }
       break;
+    }
     default:
       success = false;
       break;
   }
   return (success ? ScopedAStatus::ok()
                   : ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT)));
+}
+
+int AmbientDataCaptureAIDL::EnqueueImageAlgoAdapter(
+    const std::optional<std::vector<uint8_t>> &algoConfigsBlob) {
+  std::lock_guard<decltype(imagealgo_lock_)> lock_guard(imagealgo_lock_);
+  if (!imagealgo_adapter_) {
+    ALOGW("%s: ImageAlgo adapter is not initialized", __FUNCTION__);
+    return EX_NONE;
+  }
+
+  if (!algoConfigsBlob.has_value()) {
+    ALOGE("%s: algoConfigsBlob parameter is null", __FUNCTION__);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  // Reinterpret the blob as ADCAlgoConfigsStructBlob struct
+  const ADCAlgoConfigsStructBlob *configBlob =
+      reinterpret_cast<const ADCAlgoConfigsStructBlob *>(algoConfigsBlob->data());
+  if (configBlob && configBlob->dataSize > 0 && configBlob->dataSize <= ALGO_CONFIG_SIZE) {
+    // Copy the char data[] array into imagealgo_app_name_ as a string
+    imagealgo_app_name_ =
+        std::string(configBlob->data, strnlen(configBlob->data, configBlob->dataSize));
+    ALOGI("%s: imagealgo_app_name_ set to '%s' (dataSize=%zu)", __FUNCTION__,
+          imagealgo_app_name_.c_str(), configBlob->dataSize);
+    return EX_NONE;
+  }
+  ALOGE("%s: Invalid blob data (dataSize=%zu)", __FUNCTION__,
+        configBlob ? configBlob->dataSize : 0);
+  return EX_ILLEGAL_ARGUMENT;
 }
 
 ScopedAStatus AmbientDataCaptureAIDL::captureOutputBuffer(
@@ -275,7 +471,7 @@ ScopedAStatus AmbientDataCaptureAIDL::captureOutputBuffer(
 
 int AmbientDataCaptureAIDL::GetSnapInstance() {
   if (snapmapper_ != nullptr) {
-    return 0;
+    return EX_NONE;
   }
 
   const std::string snapalloc_lib_name = "vendor.qti.hardware.display.snapalloc-impl.so";
@@ -294,23 +490,20 @@ int AmbientDataCaptureAIDL::GetSnapInstance() {
 
   if (snapmapper_ == nullptr) {
     ALOGE("%s: Failed to link FETCH_ISnapMapper - %s", __FUNCTION__, strerror(errno));
+    if (dlclose(snap_impl_lib_) != 0) {
+      ALOGE("%s: Failed to close snap_impl_lib: %s", __FUNCTION__, dlerror());
+    }
+    snap_impl_lib_ = nullptr;
     return sdm::kErrorCriticalResource;
   }
 
-  return 0;
+  return EX_NONE;
 }
 
-int AmbientDataCaptureAIDL::AddCWBMetadata(void *hdl, int32_t display_type) {
+int AmbientDataCaptureAIDL::AddCWBMetadata(SnapHandle *handle, int32_t display_type) {
   auto ret_status = EX_NONE;
-  if (!hdl) {
+  if (!handle) {
     ALOGE("%s: Null buffer handle is detected to notify!", __FUNCTION__);
-    ret_status = EX_TRANSACTION_FAILED;
-    return ret_status;
-  }
-
-  auto err = GetSnapInstance();
-  if (err != 0 || !snapmapper_) {
-    ALOGE("%s: GetSnapInstance failed or snapmapper is null!", __FUNCTION__);
     ret_status = EX_TRANSACTION_FAILED;
     return ret_status;
   }
@@ -324,15 +517,13 @@ int AmbientDataCaptureAIDL::AddCWBMetadata(void *hdl, int32_t display_type) {
   set_cwbMetadata.capture_metadata.cwb_sensitive_layer = true;
 
   set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.smart_selection_score = 0;
-  set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.selected = true;
-  std::string appIDString = "example.AppIDInfo";
+  set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.selected = false;
+  std::string appIDString = imagealgo_app_name_;
   std::snprintf(set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.app_id,
                 sizeof(set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.app_id), "%s",
                 appIDString.c_str());
 
-  SnapHandle *handle = reinterpret_cast<SnapHandle *>(hdl);
-  auto status = snapmapper_->SetMetadata(
-      *handle, vendor_qti_hardware_display_common_MetadataType::CWB_METADATA, &set_cwbMetadata);
+  auto status = snapmapper_->SetMetadata(*handle, CWB_METADATA, &set_cwbMetadata);
   if (status != ::vendor::qti::hardware::display::snapalloc::Error::NONE) {
     ALOGE("%s: setMetadata failed for CWB_METADATA %d", __FUNCTION__, status);
     ret_status = EX_TRANSACTION_FAILED;
@@ -340,7 +531,218 @@ int AmbientDataCaptureAIDL::AddCWBMetadata(void *hdl, int32_t display_type) {
   return ret_status;
 }
 
+int AmbientDataCaptureAIDL::CreateEnqueuePayload(SnapHandle *handle,
+                                                 sdm::GenericPayload &enq_payload) {
+  auto ret_status = EX_NONE;
+  if (!handle) {
+    ALOGE("%s: Null buffer handle is detected!", __FUNCTION__);
+    ret_status = EX_TRANSACTION_FAILED;
+    return ret_status;
+  }
+
+  if (!snapmapper_) {
+    ALOGE("%s: snapmapper_ is null!", __FUNCTION__);
+    return EX_TRANSACTION_FAILED;
+  }
+
+  uint64_t gralloc_width = 0, gralloc_height = 0;
+  uint32_t gralloc_stride = 0, gralloc_aligned_height = 0;
+  int32_t gralloc_format = 0;
+  snapmapper_->GetMetadata(*handle, WIDTH, &gralloc_width);
+  snapmapper_->GetMetadata(*handle, HEIGHT, &gralloc_height);
+  snapmapper_->GetMetadata(*handle, STRIDE, &gralloc_stride);
+  snapmapper_->GetMetadata(*handle, ALIGNED_HEIGHT_IN_PIXELS, &gralloc_aligned_height);
+  snapmapper_->GetMetadata(*handle, PIXEL_FORMAT_ALLOCATED, &gralloc_format);
+  const char *fmt_str = (gralloc_format == sdm::kFormatRGB888) ? "RGB888" : "RGBA8888";
+
+  imagealgo::SmartSelectionEnqueueInput *enq_input = nullptr;
+  enq_payload.CreatePayload(enq_input);
+  if (!enq_input) {
+    ALOGE("%s: CreatePayload returned a Null", __FUNCTION__);
+    ret_status = EX_TRANSACTION_FAILED;
+    return ret_status;
+  }
+
+  const native_handle_t *qbuffer = reinterpret_cast<native_handle_t *>(handle);
+  enq_input->buffer = const_cast<native_handle_t *>(qbuffer);
+  // Build metadata_json from BufferInfo (same fields as QaiorSS_FrameHandle_t.metadataJson).
+  enq_input->metadata_json = std::string("{\"appName\":\"") + imagealgo_app_name_ +
+                             "\","
+                             "\"width\":" +
+                             std::to_string(static_cast<uint32_t>(gralloc_width)) +
+                             ","
+                             "\"height\":" +
+                             std::to_string(static_cast<uint32_t>(gralloc_height)) +
+                             ","
+                             "\"stride\":" +
+                             std::to_string(static_cast<uint32_t>(gralloc_stride)) +
+                             ","
+                             "\"alignedHeight\":" +
+                             std::to_string(static_cast<uint32_t>(gralloc_aligned_height)) +
+                             ","
+                             "\"format\":\"" +
+                             fmt_str + "\"}";
+  ALOGI("%s: ImageAlgo enqueue metadata_json: %s", __FUNCTION__, enq_input->metadata_json.c_str());
+  return ret_status;
+}
+
 void AmbientDataCaptureAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
+  std::shared_ptr<IAmbientDataCaptureCallback> callback = nullptr;
+  int32_t display_type = 0;
+
+  if (!hdl) {
+    ALOGE("%s: Null buffer handle is detected to notify!", __FUNCTION__);
+    return;
+  }
+
+  {
+    std::lock_guard<decltype(cwb_callbacks_lock_)> lock_guard(cwb_callbacks_lock_);
+    auto it = cwb_callbacks_.find(hdl);
+    if (it != cwb_callbacks_.end()) {
+      std::tie(display_type, callback) = it->second;
+    } else {
+      ALOGE("%s: buffer handle(%p) not found", __FUNCTION__, hdl);
+      return;
+    }
+  }
+
+  if (!callback) {
+    ALOGE("%s: buffer handle(%p) not found", __FUNCTION__, hdl);
+    return;
+  }
+
+  if ((GetSnapInstance() != EX_NONE) || !snapmapper_ || (status != EX_NONE)) {
+    ALOGE("%s: GetSnapInstance failed! or CWB capture failed with status %d", __FUNCTION__, status);
+    NotifyOutputBuffer(status, hdl);
+    return;
+  }
+
+  SnapHandle *handle = reinterpret_cast<SnapHandle *>(hdl);
+  if (AddCWBMetadata(handle, display_type) == EX_NONE) {
+    ALOGI("%s: AddCWBMetadata succeeded for buffer (%p) display-%d", __FUNCTION__, hdl,
+          display_type);
+  } else {
+    ALOGE("%s: AddCWBMetadata failed for buffer (%p) display-%d", __FUNCTION__, hdl, display_type);
+  }
+
+  int ret;
+  std::shared_ptr<imagealgo::SmartSelectionIntf> local_adapter;
+  {
+    std::lock_guard<decltype(imagealgo_lock_)> algo_lock(imagealgo_lock_);
+    local_adapter = imagealgo_adapter_;
+  }
+
+  if (!local_adapter) {
+    ALOGI("%s: ImageAlgo enqueue failed for buffer handle =%p as it is not initialized",
+          __FUNCTION__, handle);
+    NotifyOutputBuffer(status, hdl);
+    return;
+  }
+
+  if (ss_enqueue_count_ > max_enqueue_count) {
+    ret = FlushAllImageAlgoAdapter();
+    if (ret != 0) {
+      ALOGI("%s: ImageAlgo flushAll failed for enqueue count %d", __FUNCTION__,
+            ss_enqueue_count_.load());
+    }
+  }
+
+  // Enqueue the captured CWB buffer to the SmartSelection adapter.
+  sdm::GenericPayload enq_payload;
+  ret = CreateEnqueuePayload(handle, enq_payload);
+  if (ret != 0) {
+    ALOGE("%s: ImageAlgo CreateEnqueuePayload failed with ret=%d, notifying client", __FUNCTION__,
+          ret);
+    NotifyOutputBuffer(status, hdl);
+    return;
+  }
+
+  ret = local_adapter->ProcessOps(imagealgo::kSSEnqueue, enq_payload, nullptr);
+  ALOGI("%s: ImageAlgo enqueue for disp %d: ret=%d, buffer handle =%p", __FUNCTION__, display_type,
+        ret, handle);
+
+  // Handle enqueue failure
+  if (ret != 0) {
+    ALOGE("%s: ImageAlgo enqueue failed with ret=%d, notifying client", __FUNCTION__, ret);
+    NotifyOutputBuffer(status, hdl);
+    return;
+  }
+  ss_enqueue_count_++;
+}
+
+void AmbientDataCaptureAIDL::OnImageAlgoEmit(const imagealgo::SmartSelectionEmitResult *result,
+                                             void *cookie) {
+  if (!result || !cookie) {
+    return;
+  }
+
+  AmbientDataCaptureAIDL *self = static_cast<AmbientDataCaptureAIDL *>(cookie);
+  void *hdl = nullptr;
+  ALOGI("%s: selected=%zu rejected=%zu", __FUNCTION__, result->selected_frames.size(),
+        result->rejected_frames.size());
+
+  for (const auto &f : result->selected_frames) {
+    hdl = f.buffer;
+    ALOGI("%s: SELECTED: type=%d buffer=%p fd=%d meta=%s", __FUNCTION__, static_cast<int>(f.type),
+          f.buffer, f.parcel_fd, f.metadata_json.c_str());
+    self->ProcessImageAlgoResult(hdl, true);
+  }
+  for (const auto &f : result->rejected_frames) {
+    hdl = f.buffer;
+    ALOGI("%s: REJECTED: type=%d buffer=%p fd=%d meta=%s", __FUNCTION__, static_cast<int>(f.type),
+          f.buffer, f.parcel_fd, f.metadata_json.c_str());
+    self->ProcessImageAlgoResult(hdl, false);
+  }
+}
+
+void AmbientDataCaptureAIDL::ProcessImageAlgoResult(void *hdl, bool frame_selected) {
+  if (!hdl) {
+    ALOGE("%s: Null buffer handle is detected to notify!", __FUNCTION__);
+    return;
+  }
+  std::shared_ptr<IAmbientDataCaptureCallback> callback = nullptr;
+  int32_t display_type = 0;
+
+  {
+    std::lock_guard<decltype(cwb_callbacks_lock_)> lock_guard(cwb_callbacks_lock_);
+    auto it = cwb_callbacks_.find(hdl);
+    if (it != cwb_callbacks_.end()) {
+      std::tie(display_type, callback) = it->second;
+      cwb_callbacks_.erase(it);
+      if (ss_enqueue_count_ > 0) {
+        ss_enqueue_count_--;
+      }
+    }
+  }
+
+  if (!callback) {
+    ALOGE("%s: buffer handle(%p) not found", __FUNCTION__, hdl);
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(hdl));
+    return;
+  }
+
+  SnapHandle *handle = reinterpret_cast<SnapHandle *>(hdl);
+  if (snapmapper_) {
+    SnapCWBMetadata set_cwbMetadata_SS = {};
+    snapmapper_->GetMetadata(*handle, CWB_METADATA, &set_cwbMetadata_SS);
+    set_cwbMetadata_SS.algo_metadata.smart_selection_algo_metadata.selected = frame_selected;
+    auto ret = snapmapper_->SetMetadata(*handle, CWB_METADATA, &set_cwbMetadata_SS);
+    if (ret != ::vendor::qti::hardware::display::snapalloc::Error::NONE) {
+      ALOGE("%s: setMetadata of Smart Selection failed for CWB_METADATA %d", __FUNCTION__, ret);
+    }
+  } else {
+    ALOGW("%s: snapmapper_ is null, skipping metadata update", __FUNCTION__);
+  }
+
+  NativeHandle buffer =
+      sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
+
+  callback->notifyOutputBufferDone(EX_NONE, buffer);
+
+  handle_importer_.freeBuffer(static_cast<const SnapHandle *>(hdl));
+}
+
+void AmbientDataCaptureAIDL::NotifyOutputBuffer(int32_t status, void *hdl) {
   std::shared_ptr<IAmbientDataCaptureCallback> callback = nullptr;
   int32_t display_type = 0;
 
@@ -361,23 +763,11 @@ void AmbientDataCaptureAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
   if (!callback) {
     ALOGE("%s: buffer handle(%p) not found", __FUNCTION__, hdl);
   } else {
-    if (AddCWBMetadata(hdl, display_type) == EX_NONE) {
-      ALOGI("%s: AddCWBMetadata succeeded for buffer (%p) display-%d", __FUNCTION__, hdl,
-            display_type);
-    } else {
-      ALOGE("%s: AddCWBMetadata failed for buffer (%p) display-%d", __FUNCTION__, hdl,
-            display_type);
-    }
-
     NativeHandle buffer =
         sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
-    ALOGI("%s: Notify the client about buffer (%p) status %d for display-%d.", __FUNCTION__, hdl,
-          status, display_type);
-
     callback->notifyOutputBufferDone(status, buffer);
+    handle_importer_.freeBuffer(static_cast<const SnapHandle *>(hdl));
   }
-
-  handle_importer_.freeBuffer(static_cast<const SnapHandle *>(hdl));
 }
 
 }  // namespace ambientdatacapture
