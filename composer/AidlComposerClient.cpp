@@ -530,22 +530,23 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
     return ScopedAStatus::ok();
   }
 
-  int connected_level_int = 0;
+  // set default to no hdcp (int value of 3)
+  int connected_level_int;
   switch (in_levels.connectedLevel) {
     case HdcpLevel::HDCP_NONE:
-      connected_level_int = 0;
+      connected_level_int = 3;
       break;
     case HdcpLevel::HDCP_V1:
-      connected_level_int = 2;
+      connected_level_int = 1;
       break;
     case HdcpLevel::HDCP_V2:
     case HdcpLevel::HDCP_V2_1:
     case HdcpLevel::HDCP_V2_2:
     case HdcpLevel::HDCP_V2_3:
-      connected_level_int = 3;
+      connected_level_int = 2;
       break;
     default:
-      connected_level_int = 0;
+      connected_level_int = 3;
       break;
   }
   auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
@@ -1281,17 +1282,21 @@ void AidlComposerClient::onHdcpLevelsChanged(uint64_t display, int32_t min_enc_l
       new_levels.connectedLevel = HdcpLevel::HDCP_UNKNOWN;
       new_levels.maxLevel = HdcpLevel::HDCP_UNKNOWN;
       break;
-    case 2:
+    case 1:
       new_levels.connectedLevel = HdcpLevel::HDCP_V1;
       break;
-    case 3:
+    case 2:
       new_levels.connectedLevel = HdcpLevel::HDCP_V2;
+      break;
+    case 3:
+      new_levels.connectedLevel = HdcpLevel::HDCP_NONE;
       break;
     default:
       new_levels.connectedLevel = HdcpLevel::HDCP_NONE;
       break;
   }
 
+  ALOGI("HDCP connected level successfully changed to %d", min_enc_level);
   callback_->onHdcpLevelsChanged(display, new_levels);
 }
 #endif
