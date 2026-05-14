@@ -34,6 +34,7 @@
 #include <QtiGralloc.h>
 #include <android/binder_manager.h>
 #include <utils/Timers.h>
+#include <dlfcn.h>
 
 #include "AmbientDataCaptureAIDL.h"
 
@@ -62,7 +63,8 @@ AmbientDataCaptureAIDL::AmbientDataCaptureAIDL() {
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
   if (lifecycle_) {
-    lifecycle_->RegisterSideBandCallback(this, true);
+    lifecycle_->RegisterSideBandCallbackEx(this, true,
+                                           sdm::SideBandCallbackClient::kAmbientDataCapture);
   }
   drawcycle_ =
       reinterpret_pointer_cast<SDMDisplayDrawCycleIntfV>(sdm_factory->CreateDrawCycleIntf());
@@ -71,7 +73,17 @@ AmbientDataCaptureAIDL::AmbientDataCaptureAIDL() {
 
 AmbientDataCaptureAIDL::~AmbientDataCaptureAIDL() {
   if (lifecycle_) {
-    lifecycle_->RegisterSideBandCallback(this, false);
+    lifecycle_->RegisterSideBandCallbackEx(this, false,
+                                           sdm::SideBandCallbackClient::kAmbientDataCapture);
+  }
+  if (snapmapper_) {
+    snapmapper_.reset();
+  }
+  if (snap_impl_lib_) {
+    if (dlclose(snap_impl_lib_) != 0) {
+      ALOGE("%s: Failed to close snap_impl_lib: %s", __FUNCTION__, dlerror());
+    }
+    snap_impl_lib_ = nullptr;
   }
 }
 
@@ -243,7 +255,7 @@ ScopedAStatus AmbientDataCaptureAIDL::captureOutputBuffer(
         ds_rect.right, ds_rect.bottom, display_type);
 
     // Submit the CWB request with output buffer
-    sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
+    sdm::DisplayError ret = sideband_->PostBufferWithOwner(cwb_config, hdl, display_type, this);
     if (ret != sdm::kErrorNone) {
       ret_status = EX_TRANSACTION_FAILED;
     } else {
@@ -259,6 +271,73 @@ ScopedAStatus AmbientDataCaptureAIDL::captureOutputBuffer(
 
   return (ret_status == EX_NONE) ? ScopedAStatus::ok()
                                  : ScopedAStatus(AStatus_fromExceptionCode(ret_status));
+}
+
+int AmbientDataCaptureAIDL::GetSnapInstance() {
+  if (snapmapper_ != nullptr) {
+    return 0;
+  }
+
+  const std::string snapalloc_lib_name = "vendor.qti.hardware.display.snapalloc-impl.so";
+  snap_impl_lib_ = ::dlopen(snapalloc_lib_name.c_str(), RTLD_NOW);
+  if (!snap_impl_lib_) {
+    ALOGE("Dlopen error for snapalloc impl: %s", dlerror());
+    return sdm::kErrorCriticalResource;
+  }
+
+  std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
+  *reinterpret_cast<void **>(&LINK_FETCH_ISnapMapper) =
+      ::dlsym(snap_impl_lib_, "FETCH_ISnapMapper");
+  if (LINK_FETCH_ISnapMapper) {
+    snapmapper_ = LINK_FETCH_ISnapMapper(nullptr);
+  }
+
+  if (snapmapper_ == nullptr) {
+    ALOGE("%s: Failed to link FETCH_ISnapMapper - %s", __FUNCTION__, strerror(errno));
+    return sdm::kErrorCriticalResource;
+  }
+
+  return 0;
+}
+
+int AmbientDataCaptureAIDL::AddCWBMetadata(void *hdl, int32_t display_type) {
+  auto ret_status = EX_NONE;
+  if (!hdl) {
+    ALOGE("%s: Null buffer handle is detected to notify!", __FUNCTION__);
+    ret_status = EX_TRANSACTION_FAILED;
+    return ret_status;
+  }
+
+  auto err = GetSnapInstance();
+  if (err != 0 || !snapmapper_) {
+    ALOGE("%s: GetSnapInstance failed or snapmapper is null!", __FUNCTION__);
+    ret_status = EX_TRANSACTION_FAILED;
+    return ret_status;
+  }
+
+  // Query the current display rotation to determine if buffer is rotated
+  sdm::SDMTransform display_rotation = sdm::SDMTransform::TRANSFORM_NONE;
+
+  SnapCWBMetadata set_cwbMetadata = {};
+  set_cwbMetadata.capture_metadata.cwb_timestamp = systemTime(SYSTEM_TIME_MONOTONIC);
+  set_cwbMetadata.capture_metadata.cwb_rotation = static_cast<int32_t>(display_rotation);
+  set_cwbMetadata.capture_metadata.cwb_sensitive_layer = true;
+
+  set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.smart_selection_score = 0;
+  set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.selected = true;
+  std::string appIDString = "example.AppIDInfo";
+  std::snprintf(set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.app_id,
+                sizeof(set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.app_id), "%s",
+                appIDString.c_str());
+
+  SnapHandle *handle = reinterpret_cast<SnapHandle *>(hdl);
+  auto status = snapmapper_->SetMetadata(
+      *handle, vendor_qti_hardware_display_common_MetadataType::CWB_METADATA, &set_cwbMetadata);
+  if (status != ::vendor::qti::hardware::display::snapalloc::Error::NONE) {
+    ALOGE("%s: setMetadata failed for CWB_METADATA %d", __FUNCTION__, status);
+    ret_status = EX_TRANSACTION_FAILED;
+  }
+  return ret_status;
 }
 
 void AmbientDataCaptureAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
@@ -282,6 +361,14 @@ void AmbientDataCaptureAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
   if (!callback) {
     ALOGE("%s: buffer handle(%p) not found", __FUNCTION__, hdl);
   } else {
+    if (AddCWBMetadata(hdl, display_type) == EX_NONE) {
+      ALOGI("%s: AddCWBMetadata succeeded for buffer (%p) display-%d", __FUNCTION__, hdl,
+            display_type);
+    } else {
+      ALOGE("%s: AddCWBMetadata failed for buffer (%p) display-%d", __FUNCTION__, hdl,
+            display_type);
+    }
+
     NativeHandle buffer =
         sdm::AIDLNativeHandleFromSnapHandle(reinterpret_cast<SnapHandle *>(hdl), false);
     ALOGI("%s: Notify the client about buffer (%p) status %d for display-%d.", __FUNCTION__, hdl,
