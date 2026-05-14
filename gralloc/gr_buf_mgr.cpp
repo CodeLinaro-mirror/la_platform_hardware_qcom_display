@@ -16,11 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ */
 
 #include "gr_buf_mgr.h"
 
@@ -283,7 +284,10 @@ BufferManager::~BufferManager() {
 
 void BufferManager::SetGrallocDebugProperties(gralloc::GrallocProperties props) {
   allocator_->SetProperties(props);
-  AdrenoMemInfo::GetInstance()->AdrenoSetProperties(props);
+  AdrenoMemInfo *adreno_mem_info = AdrenoMemInfo::GetInstance();
+  if (adreno_mem_info->AdrenoSizeAPIAvaliable()) {
+    adreno_mem_info->AdrenoSetProperties(props);
+  }
 }
 
 Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
