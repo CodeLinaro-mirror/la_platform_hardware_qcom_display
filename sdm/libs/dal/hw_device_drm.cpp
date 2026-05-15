@@ -913,7 +913,8 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   }
 
   hw_panel_info_.is_primary_panel = connector_info_.is_primary;
-  hw_panel_info_.is_pluggable = 0;
+  //hw_panel_info_.is_pluggable is used for DSi->HDMI bridge only.
+  hw_panel_info_.is_pluggable = connector_info_.ext_bridge_hpd;
   hw_panel_info_.hdr_enabled = connector_info_.panel_hdr_prop.hdr_enabled;
   // Convert the luminance values to cd/m^2 units.
   hw_panel_info_.peak_luminance = FLOAT(connector_info_.panel_hdr_prop.peak_brightness) / 10000.0f;
