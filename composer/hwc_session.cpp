@@ -485,6 +485,10 @@ void HWCSession::InitSupportedDisplaySlots() {
   }
 }
 
+bool HWCSession::IsPluggablePrimary() const {
+  return pluggable_is_primary_;
+}
+
 int HWCSession::GetDisplayIndex(int dpy) {
   DisplayMapInfo *map_info = nullptr;
   switch (dpy) {
