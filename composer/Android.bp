@@ -179,11 +179,14 @@ qticomposer3_cc_defaults {
     soong_config_variables: {
         composer_version: {
             v3_5: {
-                srcs: ["DisplayAiqeAIDL.cpp"],
+                srcs: ["DisplayAiqeAIDL.cpp",
+                       "AmbientDataCaptureAIDL.cpp"],
                 shared_libs: [
                     "android.hardware.graphics.composer3-V5-ndk",
                     "vendor.qti.hardware.display.composer3-V5-ndk",
                     "vendor.qti.hardware.display.aiqe-V3-ndk",
+                    "vendor.qti.hardware.qacs.ambientdatacapture-V1-ndk",
+                    "libImageAlgoIntegration",
                 ],
                 vintf_fragments: ["vendor.qti.hardware.display.composer-service3_v5.xml"],
             },

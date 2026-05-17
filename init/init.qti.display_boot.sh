@@ -71,6 +71,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.disable_noise_layer 1
         setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop  vendor.display.composer_driven_hdcp 1
         ;;
     esac
     ;;
@@ -87,6 +88,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.max_virtual_display_count 0
         ;;
     esac
     ;;
@@ -535,6 +537,40 @@ case "$target" in
         if [ "$soc_hwid" -eq 653 ] || [ "$soc_hwid" -eq 654 ]; then
             setprop vendor.display.enable_latch_media_content 1
         fi
+        ;;
+      776|777)
+        # SOC ID for BOURTZI is 776
+        # SOC ID for BOURTZIP is 777
+        setprop vendor.gralloc.use_dma_buf_heaps 1
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.display.enable_rc_support 1
+        setprop vendor.display.target.version 5
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.gralloc.secure_preview_buffer_format 420_sp
+        setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.enable_rotator_concurrency 1
+        setprop vendor.display.disable_offline_rotator 0
+        setprop vendor.display.disable_rotator_ubwc 1
+        setprop vendor.display.supports_background_blur 0
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop debug.sf.enable_hwc_vds 0
+        setprop vendor.display.disable_sdr_dimming 1
+        setprop vendor.display.enable_fb_scaling 0
+        setprop vendor.display.perf.version 4
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.disable_gpu_color_convert 0
+        setprop vendor.gralloc.allow_camera_preview_write 1
+        setprop vendor.display.cpu_cluster_boost_mask 6
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_privacy_layers 1
         ;;
     esac
     ;;
