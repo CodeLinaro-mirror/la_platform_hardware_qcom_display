@@ -1291,14 +1291,17 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
   }
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
-  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
+  if (disp_type_ != DRMDisplayType::VIRTUAL) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
+  }
 
   if (cwb_config_.enabled) {
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
     DLOGI("Tearing down the CWB topology");
   }
 
-  int ret = NullCommit(false /* synchronous */, false /* retain_planes */);
+  bool is_synchronous = (disp_type_ == DRMDisplayType::VIRTUAL);
+  int ret = NullCommit(is_synchronous, false /* retain_planes */);
   if (ret) {
     DLOGE(
         "Failed with error: %d, dynamic_fps=%d, seamless_mode_switch_=%d, vrefresh_=%d,"
