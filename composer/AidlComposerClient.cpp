@@ -1156,8 +1156,9 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
   mCommandIndex = 0;
 
   for (const auto &displayCmd : commands) {
+    bool performing_commit = (displayCmd.presentOrValidateDisplay || displayCmd.validateDisplay);
     ExecuteCommand(displayCmd.brightness, &CommandEngine::executeSetDisplayBrightness,
-                   displayCmd.display, *displayCmd.brightness);
+                   displayCmd.display, *displayCmd.brightness, performing_commit);
     for (const auto &layerCmd : displayCmd.layers) {
       ExecuteCommand(layerCmd.cursorPosition, &CommandEngine::executeSetLayerCursorPosition,
                      displayCmd.display, layerCmd.layer, *layerCmd.cursorPosition);
@@ -1324,14 +1325,14 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
 }
 
 void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
-    uint64_t display, const DisplayBrightness &command) {
+    uint64_t display, const DisplayBrightness &command, bool performing_commit) {
   if (std::isnan(command.brightness) || command.brightness > 1.0f ||
       (command.brightness < 0.0f && command.brightness != -1.0f)) {
     writeError(__FUNCTION__, Error::BadParameter);
     return;
   }
 
-  auto err = mClient.settings_->SetDisplayBrightness(display, command.brightness);
+  auto err = mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
   if (err == sdm::kErrorNotSupported) {
     writeError(__FUNCTION__, Error::Unsupported);
   } else if (err != sdm::kErrorNone) {
