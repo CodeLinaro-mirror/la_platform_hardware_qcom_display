@@ -177,7 +177,14 @@ else
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.set_touch_timer_ms=200
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
+ifeq ($(TARGET_QCOM_IOT_LOW_RAM), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.disable_cache_manager=1 \
+    vendor.display.disable_layer_stitch=1 \
+    ro.surface_flinger.max_frame_buffer_acquired_buffers=2
+else
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_frame_buffer_acquired_buffers=3
+endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.max_virtual_display_dimension=4096
 ifeq ($(TARGET_BOARD_PLATFORM),canoe)
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.supports_background_blur=1
@@ -198,13 +205,6 @@ else
 # Recovery is enabled, logging is disabled
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_hw_recovery_dump=1
-endif
-
-ifeq ($(TARGET_QCOM_IOT_LOW_RAM), true)
-PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.disable_cache_manager=1 \
-    vendor.display.disable_layer_stitch=1 \
-    ro.surface_flinger.max_frame_buffer_acquired_buffers=2
 endif
 
 TARGET_IS_HEADLESS := false
