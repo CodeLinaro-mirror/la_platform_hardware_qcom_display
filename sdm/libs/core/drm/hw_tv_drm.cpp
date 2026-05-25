@@ -190,21 +190,7 @@ DisplayError HWTVDRM::PowerOff(bool teardown) {
     return kErrorUndefined;
   }
 
-#ifdef HYPERVISOR
-  teardown = true;
-#endif
-
-  if (teardown) {
-    // LP connecter prop N/A for External
-    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
-  }
-  int ret = drm_atomic_intf_->Commit(true /* synchronous */, false /* retain_planes*/);
-  if (ret) {
-    DLOGE("%s failed with error %d", __FUNCTION__, ret);
-    return kErrorHardware;
-  }
-
-  return kErrorNone;
+  return HWDeviceDRM::PowerOff(teardown);
 }
 
 DisplayError HWTVDRM::Doze(const HWQosData &qos_data, int *release_fence) {
