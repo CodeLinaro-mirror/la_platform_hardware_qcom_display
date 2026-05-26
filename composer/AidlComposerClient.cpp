@@ -606,7 +606,9 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     // this is needed to prevent applying color transform twice. When client queries per display
     // capabilities, the global Capability::SKIP_CLIENT_COLOR_TRANSFORM is ignored. We need to push
     // DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM here to maintain support.
-    aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    if (caps_ && !caps_->IsPluggablePrimary()) {
+      aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    }
     int32_t has_doze_support = 0;
     caps_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
