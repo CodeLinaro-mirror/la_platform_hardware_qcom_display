@@ -92,12 +92,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_dpps_dynamic_fps=1 \
     debug.sf.disable_client_composition_cache=1 \
     debug.sf.enable_gl_backpressure=1 \
-    debug.sf.enable_advanced_sf_phase_offset=1 \
     vendor.display.vds_allow_hwc=1 \
-    debug.sf.use_phase_offsets_as_durations=1 \
-    debug.sf.late.app.duration=13666666 \
-    debug.sf.early.app.duration=13666666 \
-    debug.sf.earlyGl.app.duration=13666666 \
     vendor.display.enable_async_vds_creation=1 \
     vendor.display.enable_rounded_corner=1 \
     vendor.display.disable_3d_adaptive_tm=1 \
@@ -112,7 +107,30 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.gralloc.enable_snapalloc=1 \
     vendor.display.disable_fp16_support=1 \
     vendor.display.disable_luts_overlay_support=1
+ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.enable_advanced_sf_phase_offset=1 \
+    debug.sf.use_phase_offsets_as_durations=1 \
+    debug.sf.late.app.duration=13666666 \
+    debug.sf.early.app.duration=13666666 \
+    debug.sf.earlyGl.app.duration=13666666
+endif
 
+# Begin Android XR
+# On Android XR, we don't want negative SurfaceFlinger phase offsets, because
+# they do not make sense and because they lead to problems such as "early present".
+# PRODUCT_PROPERTY_OVERRIDES += \
+#    debug.sf.enable_advanced_sf_phase_offset=1 \
+#    debug.sf.use_phase_offsets_as_durations=1 \
+#    debug.sf.late.app.duration=13666666 \
+#    debug.sf.early.app.duration=13666666 \
+#    debug.sf.earlyGl.app.duration=13666666 \
+#    debug.sf.early.sf.duration=10500000 \
+#    debug.sf.earlyGl.sf.duration=10500000 \
+#    debug.sf.late.sf.duration=10500000
+# End Android XR
+
+ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.early.sf.duration=15555555 \
@@ -123,6 +141,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.early.sf.duration=10500000 \
     debug.sf.earlyGl.sf.duration=10500000 \
     debug.sf.late.sf.duration=10500000
+endif
 endif
 
 # Enable offline rotator for Bengal, Khaje and Monaco
@@ -172,6 +191,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_HDR_display=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.use_color_management=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.wcg_composition_dataspace=143261696
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
+ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
       ro.surface_flinger.use_content_detection_for_refresh_rate=false
@@ -180,6 +200,7 @@ else
       ro.surface_flinger.use_content_detection_for_refresh_rate=true
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.set_touch_timer_ms=200
+endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
 ifeq ($(TARGET_QCOM_IOT_LOW_RAM), true)
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -198,6 +219,11 @@ ifeq ($(filter $(TARGET_BOARD_PLATFORM), chora malabar), $(TARGET_BOARD_PLATFORM
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.clear_slots_with_set_layer_buffer=false
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate_override=60
+
+ifeq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
+# VRR
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.enable_frame_rate_override=false
+endif
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
 # Recovery is enabled, logging is enabled
