@@ -51,7 +51,7 @@
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
 #include "sdm_display_intf_lifecycle.h"
-#include "sdm_display_intf_drawcycle.h"
+#include "sdm_display_intf_drawcycle_v2.h"
 #include "sdm_display_intf_layer_builder.h"
 #include "sdm_display_intf_sideband.h"
 
@@ -137,7 +137,6 @@ using std::shared_ptr;
 
 using sdm::SDMCompositorCbIntf;
 using sdm::SDMDisplayCapsIntf;
-using sdm::SDMDisplayDrawCycleIntf;
 using sdm::SDMDisplayLifeCycleIntf;
 using sdm::SDMDisplaySettingsIntf;
 using sdm::SDMDisplaySideBandIntf;
@@ -147,6 +146,13 @@ using sdm::QServiceBackend;
 
 using sdm::DisplayConfigVariableInfo;
 using sdm::SDMDisplayLayerBuilderIntf;
+
+#ifdef COMPOSER3_V3
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntfV2
+#else
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntf
+#endif
+using sdm::SDMDisplayDrawCycleIntfV;
 
 using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
 using SnapError = ::vendor::qti::hardware::display::snapalloc::Error;
@@ -179,7 +185,7 @@ class AidlComposerClient : public BnComposerClient,
   bool init(std::shared_ptr<SDMDisplayCapsIntf> caps,
             std::shared_ptr<SDMDisplaySettingsIntf> settings,
             std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-            std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+            std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
             std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
             std::shared_ptr<SDMDisplaySideBandIntf> sideband);
 
@@ -452,7 +458,7 @@ class AidlComposerClient : public BnComposerClient,
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
   std::shared_ptr<SDMDisplaySettingsIntf> settings_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
-  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle_;
   std::shared_ptr<SDMDisplayLayerBuilderIntf> layer_builder_;
   std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
 

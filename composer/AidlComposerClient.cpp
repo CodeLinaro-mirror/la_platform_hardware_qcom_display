@@ -67,7 +67,7 @@ void BufferCacheEntry::clear() {
 bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
                               std::shared_ptr<SDMDisplaySettingsIntf> settings,
                               std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-                              std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+                              std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
                               std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
                               std::shared_ptr<SDMDisplaySideBandIntf> sideband) {
   if (!caps || !settings || !lifecycle || !drawcycle || !layers) {
