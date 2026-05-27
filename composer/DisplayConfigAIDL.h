@@ -123,6 +123,9 @@ using ::aidl::vendor::qti::hardware::display::config::Fovea;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfig;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
 using ::aidl::vendor::qti::hardware::display::config::TUIEventType;
+#ifdef IDISPLAYCONFIG_18
+using ::aidl::vendor::qti::hardware::display::config::VirtualDispType;
+#endif
 
 using ::android::binder::Status;
 using ndk::ScopedAStatus;
@@ -267,6 +270,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 #endif
 #ifdef IDISPLAYCONFIG_16
   ScopedAStatus setHDRCapabilities(DisplayType dpy, const HDRCapsParams &caps) override;
+#endif
+#ifdef IDISPLAYCONFIG_18
+  ScopedAStatus setVirtualDispType(VirtualDispType type) override;
 #endif
 
   void NotifyQsyncChange(uint64_t display_id, bool qsync_enabled, uint32_t refresh_rate,
