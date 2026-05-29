@@ -63,6 +63,7 @@ case "$target" in
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.disable_pu_ds 1
         setprop vendor.display.force_gpu_composition 0
@@ -588,7 +589,7 @@ case "$target" in
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.enable_spec_fence 1
-        setprop vendor.display.thermal.version 1
+        setprop vendor.display.thermal.version 3
         setprop vendor.display.enable_rc_support 1
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.disable_gpu_color_convert 0
