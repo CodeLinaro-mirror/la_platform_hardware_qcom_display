@@ -127,6 +127,9 @@ static Error dataspaceToColorMetadata(Dataspace dataspace, ColorMetaData *color_
     case (uint32_t)Dataspace::TRANSFER_HLG:
       out.transfer = Transfer_HLG;
       break;
+    case (uint32_t)Dataspace::TRANSFER_ST2084:
+      out.transfer = Transfer_SMPTE_ST2084;
+      break;
     default:
       return Error::UNSUPPORTED;
       /*
@@ -138,7 +141,6 @@ static Error dataspaceToColorMetadata(Dataspace dataspace, ColorMetaData *color_
       Transfer_sYCC
       Transfer_BT2020_2_1
       Transfer_BT2020_2_2
-      Transfer_SMPTE_ST2084
       Transfer_ST_428
       */
   }
