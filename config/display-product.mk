@@ -181,7 +181,7 @@ SOONG_CONFIG_qtidisplay := drmpp headless llvmsa \
                            default var1 var2 var3 llvmcov  \
                            composer_version smmu_proxy \
                            ubwcp_headers hwasan mapper_ext \
-                           hy11 hy22 hy33
+                           hy11 hy22 hy33 gralloc_version
 
 # Soong Values
 SOONG_CONFIG_qtidisplay_drmpp := true
@@ -220,6 +220,9 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
       PRODUCT_PROPERTY_OVERRIDES += persist.sys.display.enable_on_connect.external=true
       PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_hw_recovery=1
+      ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun 17))
+        SOONG_CONFIG_qtidisplay_gralloc_version := v7
+      endif
     endif
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream 15))
@@ -228,6 +231,9 @@ else
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
       PRODUCT_PROPERTY_OVERRIDES += persist.sys.display.enable_on_connect.external=true
       PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_hw_recovery=1
+      ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun 17))
+        SOONG_CONFIG_qtidisplay_gralloc_version := v7
+      endif
     endif
 endif
 
