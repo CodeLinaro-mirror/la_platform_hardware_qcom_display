@@ -434,7 +434,7 @@ Error BufferManager::MapBuffer(private_handle_t const *handle) {
 }
 
 Error BufferManager::IsBufferImported(const private_handle_t *hnd) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf != nullptr) {
     return Error::NONE;
@@ -445,7 +445,7 @@ Error BufferManager::IsBufferImported(const private_handle_t *hnd) {
 Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
   ALOGD_IF(enable_logs, "Retain buffer handle:%p id: %" PRIu64, hnd, hnd->id);
   auto err = Error::NONE;
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf != nullptr) {
     buf->IncRef();
@@ -458,7 +458,7 @@ Error BufferManager::RetainBuffer(private_handle_t const *hnd) {
 
 Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
   ALOGD_IF(enable_logs, "Release buffer handle:%p", hnd);
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto buf = GetBufferFromHandleLocked(hnd);
   if (buf == nullptr) {
     ALOGE("Could not find handle: %p", hnd);
@@ -477,7 +477,7 @@ Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
 }
 
 Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto err = Error::NONE;
   ALOGD_IF(enable_logs, "LockBuffer buffer handle:%p id: %" PRIu64, hnd, hnd->id);
 
@@ -521,7 +521,7 @@ Error BufferManager::LockBuffer(const private_handle_t *hnd, uint64_t usage) {
 }
 
 Error BufferManager::FlushBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -540,7 +540,7 @@ Error BufferManager::FlushBuffer(const private_handle_t *handle) {
 }
 
 Error BufferManager::RereadBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
 
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
@@ -558,7 +558,7 @@ Error BufferManager::RereadBuffer(const private_handle_t *handle) {
 }
 
 Error BufferManager::UnlockBuffer(const private_handle_t *handle) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   auto status = Error::NONE;
   private_handle_t *hnd = const_cast<private_handle_t *>(handle);
 
@@ -621,7 +621,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
                                     unsigned int bufferSize, bool testAlloc) {
   if (!handle)
     return Error::BAD_BUFFER;
-  std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> buffer_lock(buffer_lock_);
 
   uint64_t usage = descriptor.GetUsage();
   int format = GetImplDefinedFormat(usage, descriptor.GetFormat());
@@ -803,7 +803,7 @@ void BufferManager::BuffersDump() {
 }
 
 Error BufferManager::Dump(std::ostringstream *os) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> buffer_lock(buffer_lock_);
   for (auto it : handles_map_) {
     auto buf = it.second;
     auto hnd = buf->handle;
@@ -829,7 +829,7 @@ Error BufferManager::Dump(std::ostringstream *os) {
 
 // Get list of private handles in handles_map_
 Error BufferManager::GetAllHandles(std::vector<const private_handle_t *> *out_handle_list) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (handles_map_.empty()) {
     return Error::NO_RESOURCES;
   }
@@ -842,7 +842,7 @@ Error BufferManager::GetAllHandles(std::vector<const private_handle_t *> *out_ha
 
 Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved_region,
                                        uint64_t *reserved_region_size) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
 
@@ -862,7 +862,7 @@ Error BufferManager::GetReservedRegion(private_handle_t *handle, void **reserved
 Error BufferManager::GetCustomContentMdRegion(private_handle_t *handle,
                                             void **custom_content_md_region,
                                             uint64_t *custom_content_md_region_size) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
 
@@ -881,7 +881,7 @@ Error BufferManager::GetCustomContentMdRegion(private_handle_t *handle,
 
 Error BufferManager::GetMetadataValue(private_handle_t *handle, int64_t metadatatype_value,
                                       void *param) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
   auto buf = GetBufferFromHandleLocked(handle);
@@ -947,7 +947,7 @@ int BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_va
 
 Error BufferManager::GetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> *out) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::shared_lock<std::shared_mutex> lock(buffer_lock_);
   if (!handle)
     return Error::BAD_BUFFER;
   auto buf = GetBufferFromHandleLocked(handle);
@@ -1498,7 +1498,7 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
 
 Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_value,
                                  hidl_vec<uint8_t> in) {
-  std::lock_guard<std::mutex> lock(buffer_lock_);
+  std::lock_guard<std::shared_mutex> lock(buffer_lock_);
 
   if (!handle)
     return Error::BAD_BUFFER;
