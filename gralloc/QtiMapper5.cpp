@@ -325,7 +325,7 @@ constexpr AIMapper_MetadataTypeDescription describeQTI(int64_t type, const char 
 Error QtiMapper5::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 67> sSupportedMetadaTypes{
+  static constexpr AIMapper_MetadataTypeDescription sSupportedMetadaTypes[]{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -349,6 +349,9 @@ Error QtiMapper5::listSupportedMetadataTypes(
       describeStandard(StandardMetadataType::CTA861_3, true, true),
       describeStandard(StandardMetadataType::SMPTE2094_40, true, true),
       describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
+#ifdef GRALLOC_COMMON_V7
+      describeStandard(StandardMetadataType::SMPTE2094_50, true, true),
+#endif
       describeStandard(StandardMetadataType::STRIDE, true, false),
       describeQTI(SnapMetadataType::VT_TIMESTAMP, "VT Timestamp", true, true),
       describeQTI(SnapMetadataType::MATRIX_COEFFICIENTS, "Color metadata - Matrix coefficients",
@@ -409,8 +412,8 @@ Error QtiMapper5::listSupportedMetadataTypes(
       describeQTI(SnapMetadataType::ROI_RECT_METADATA, "ROI Rectangle metadata", true, true),
       describeQTI(SnapMetadataType::CUSTOM_TUNING_METADATA, "Custom tuning metadata", true, true),
   };
-  *outDescriptionList = sSupportedMetadaTypes.data();
-  *outNumberOfDescriptions = sSupportedMetadaTypes.size();
+  *outDescriptionList = sSupportedMetadaTypes;
+  *outNumberOfDescriptions = std::size(sSupportedMetadaTypes);
   return AIMAPPER_ERROR_NONE;
 }
 
@@ -767,7 +770,7 @@ Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandl
 Error QtiMapper5Legacy::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 64> sSupportedMetadaTypes{
+  static constexpr AIMapper_MetadataTypeDescription sSupportedMetadaTypes[]{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -791,6 +794,9 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
       describeStandard(StandardMetadataType::CTA861_3, true, true),
       describeStandard(StandardMetadataType::SMPTE2094_40, true, true),
       describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
+#ifdef GRALLOC_COMMON_V7
+      describeStandard(StandardMetadataType::SMPTE2094_50, true, true),
+#endif
       describeStandard(StandardMetadataType::STRIDE, true, false),
       describeQTI(SnapMetadataType::VT_TIMESTAMP, "VT Timestamp", true, true),
       describeQTI(SnapMetadataType::MATRIX_COEFFICIENTS, "Color metadata - Matrix coefficients",
@@ -846,8 +852,8 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
                   true),
       describeQTI(SnapMetadataType::DISPARITY_PHASE, "Disparity phase", true, true),
   };
-  *outDescriptionList = sSupportedMetadaTypes.data();
-  *outNumberOfDescriptions = sSupportedMetadaTypes.size();
+  *outDescriptionList = sSupportedMetadaTypes;
+  *outNumberOfDescriptions = std::size(sSupportedMetadaTypes);
   return AIMAPPER_ERROR_NONE;
 }
 

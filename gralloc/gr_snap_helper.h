@@ -20,6 +20,9 @@
 #include <ChromaSiting.h>
 #include <Compression.h>
 #include <CustomContentMetadata.h>
+#ifdef GRALLOC_COMMON_V7
+#include <SMPTE2094_50.h>
+#endif
 #include <Dataspace.h>
 #include <Error.h>
 #include <Fence.h>
@@ -123,6 +126,9 @@ using SnapVideoTranscodeStatsMetadata =
 using SnapVideoTimestampInfo = vendor_qti_hardware_display_common_VideoTimestampInfo;
 using SnapVideoHistogramMetadata = vendor_qti_hardware_display_common_VideoHistogramMetadata;
 using SnapCustomContentMetadata = vendor_qti_hardware_display_common_CustomContentMetadata;
+#ifdef GRALLOC_COMMON_V7
+using SnapSMPTE2094_50Metadata = vendor_qti_hardware_display_common_SMPTE2094_50Metadata;
+#endif
 using SnapAnamorphicMetadata = vendor_qti_hardware_display_common_QtiAnamorphicMetadata;
 using SnapThreeDimensionalRefInfo = vendor_qti_hardware_display_common_ThreeDimensionalRefInfo;
 using SnapCWBMetadata = vendor_qti_hardware_display_common_cwb_metadata;
@@ -1353,6 +1359,11 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
   SnapError SMPTE2094_10Helper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
                                void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
                                bool check_metadata_set = true, int32_t *mapper_return = nullptr);
+#ifdef GRALLOC_COMMON_V7
+  SnapError SMPTE2094_50Helper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                               bool check_metadata_set = true, int32_t *mapper_return = nullptr);
+#endif
   SnapError MatrixCoefficientsHelper(SnapHandle *, uint32_t aidl_size,
                                      void *gralloc_in_set = nullptr,
                                      void *gralloc_out_get = nullptr,
@@ -1498,6 +1509,11 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_10),
            &GrallocSnapHelper::SMPTE2094_10Helper},
+#ifdef GRALLOC_COMMON_V7
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2094_50),
+           &GrallocSnapHelper::SMPTE2094_50Helper},
+#endif
           {COLOR_REMAPPING_INFO, &GrallocSnapHelper::ColorRemappingInfoHelper},
           {HEAP_NAME, &GrallocSnapHelper::HeapNameHelper},
           {IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
