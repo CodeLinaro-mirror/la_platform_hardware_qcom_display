@@ -344,6 +344,11 @@ class AidlComposerClient : public BnComposerClient {
         int64_t display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
+
+#ifdef COMPOSER3_V4
+    void executeSetLayerLuts(int64_t display, int64_t layer, const Luts &luts);
+#endif
+
 #ifdef COMPOSER3_V4
     Error setDisplayLuts(int64_t display);
     Error populateDisplayLuts(Lut3d *lut_3d, Luts *luts, int32_t *lut_fd);
