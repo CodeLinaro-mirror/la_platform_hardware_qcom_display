@@ -129,6 +129,12 @@ ifneq ($(PLATFORM_VERSION), 10)
     PRODUCT_PROPERTY_OVERRIDES +=  vendor.display.enable_async_powermode=0
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),gen5)
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.display.enable_automotive_platform=1 \
+    vendor.display.flush_on_layer_set_empty=1
+endif
+
 #Set WCG properties
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_wide_color_display=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_HDR_display=true
@@ -209,13 +215,13 @@ SOONG_CONFIG_qtidisplay_mapper_ext := true
 #   PLATFORM_VERSION_CODENAME = W, PLATFORM_VERSION = 16
 
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
-    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+    ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16 CinnamonBun 17))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
     endif
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream 15))
       SOONG_CONFIG_qtidisplay_composer_version := v3_3
-    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16 CinnamonBun 17))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
     endif
 endif

@@ -43,9 +43,12 @@
 // Helpers
 // ----------------------------------------------------------------------------
 inline android::sp<qService::IQService> getBinder() {
-    android::sp<android::IServiceManager> sm = android::defaultServiceManager();
-    android::sp<qService::IQService> binder = android::interface_cast<qService::IQService>(
-        sm->checkService(android::String16("display.qservice")));
+    android::sp<android::IServiceManager> sm =
+        android::defaultServiceManager();
+    android::sp<android::IBinder> service =
+        sm->checkService(android::String16("display.qservice"));
+    android::sp<qService::IQService> binder =
+        android::interface_cast<qService::IQService>(service);
     if (binder == NULL) {
         ALOGE("%s: invalid binder object", __FUNCTION__);
     }
@@ -56,7 +59,7 @@ inline android::status_t sendSingleParam(uint32_t command, uint32_t value) {
     android::status_t err = (android::status_t) android::FAILED_TRANSACTION;
     android::sp<qService::IQService> binder = getBinder();
     android::Parcel inParcel, outParcel;
-    inParcel.writeInt32(value);
+    inParcel.writeInt32(static_cast<int32_t>(value));
     if(binder != nullptr) {
         err = binder->dispatch(command, &inParcel , &outParcel);
     }
@@ -67,31 +70,40 @@ inline android::status_t sendSingleParam(uint32_t command, uint32_t value) {
 // Convenience wrappers that clients can call
 // ----------------------------------------------------------------------------
 inline android::status_t screenRefresh(int dpy) {
-    return sendSingleParam(qService::IQService::SCREEN_REFRESH, dpy);
+    uint32_t cmd =
+        static_cast<uint32_t>(qService::IQService::SCREEN_REFRESH);
+    return sendSingleParam(cmd, static_cast<uint32_t>(dpy));
 }
 
 inline android::status_t toggleScreenUpdate(uint32_t on) {
-    return sendSingleParam(qService::IQService::TOGGLE_SCREEN_UPDATES, on);
+    uint32_t cmd =
+        static_cast<uint32_t>(qService::IQService::TOGGLE_SCREEN_UPDATES);
+    return sendSingleParam(cmd, on);
 }
 
 inline android::status_t setCameraLaunchStatus(uint32_t on) {
-    return sendSingleParam(qService::IQService::SET_CAMERA_STATUS, on);
+    uint32_t cmd =
+        static_cast<uint32_t>(qService::IQService::SET_CAMERA_STATUS);
+    return sendSingleParam(cmd, on);
 }
 
 inline bool displayBWTransactionPending() {
-    android::status_t err = (android::status_t) android::FAILED_TRANSACTION;
+    uint32_t cmd = static_cast<uint32_t>(
+        qService::IQService::GET_BW_TRANSACTION_STATUS);
+    android::status_t err = (android::status_t)android::FAILED_TRANSACTION;
     bool ret = false;
     android::sp<qService::IQService> binder = getBinder();
     android::Parcel inParcel, outParcel;
-    if(binder != NULL) {
-        err = binder->dispatch(qService::IQService::GET_BW_TRANSACTION_STATUS,
-                &inParcel , &outParcel);
-        if(err != android::NO_ERROR){
-          ALOGE("GET_BW_TRANSACTION_STATUS binder call failed err=%d", err);
-          return ret;
+
+    if (binder != NULL) {
+        err = binder->dispatch(cmd, &inParcel, &outParcel);
+        if (err != android::NO_ERROR) {
+            ALOGE("GET_BW_TRANSACTION_STATUS binder call failed err=%d",
+                  err);
+            return ret;
         }
+        ret = outParcel.readInt32();
     }
-    ret = outParcel.readInt32();
     return ret;
 }
 #endif /* end of include guard: QSERVICEUTILS_H */
