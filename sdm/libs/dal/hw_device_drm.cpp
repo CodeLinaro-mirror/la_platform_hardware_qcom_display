@@ -2702,9 +2702,31 @@ void HWDeviceDRM::AddDimLayerIfNeeded() {
 
 DisplayError HWDeviceDRM::NullCommit(bool synchronous, bool retain_planes) {
   DTRACE_SCOPED();
-  AddDimLayerIfNeeded();
-  drm_atomic_intf_->Perform(DRMOps::NULL_COMMIT_PANEL_FEATURES, 0 /* argument is not used */);
-  int ret = drm_atomic_intf_->Commit(synchronous , retain_planes);
+
+  /*
+   * On -EBUSY the DRM atomic state is reset after each attempt
+   * (drmModeAtomicSetCursor rewinds to 0). Rebuild Perform state on
+   * every iteration so properties are correctly set before retrying.
+   */
+  const int kMaxBusyRetries = 5;
+  const int kBusyRetryDelayUs = 50 * 1000;  /* 50 ms */
+  int ret = 0;
+
+  for (int retry = 0; retry <= kMaxBusyRetries; retry++) {
+    if (retry > 0) {
+      DLOGW("NullCommit EBUSY, retry %d/%d after %d ms, crtc=%u",
+            retry, kMaxBusyRetries, kBusyRetryDelayUs / 1000, token_.crtc_id);
+      usleep(kBusyRetryDelayUs);
+    }
+
+    AddDimLayerIfNeeded();
+    drm_atomic_intf_->Perform(DRMOps::NULL_COMMIT_PANEL_FEATURES, 0 /* argument is not used */);
+
+    ret = drm_atomic_intf_->Commit(synchronous, retain_planes);
+    if (ret != -EBUSY)
+      break;
+  }
+
   if (ret) {
     DLOGE("failed with error %d, crtc=%u", ret, token_.crtc_id);
     return kErrorHardware;
