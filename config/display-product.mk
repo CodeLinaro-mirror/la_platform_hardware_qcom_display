@@ -91,7 +91,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.disable_cwb_idle_fallback=1 \
     vendor.display.primary_mixer_stages=6 \
-    vendor.display.builtin_mirroring=1
+    vendor.display.builtin_mirroring=1 \
+    vendor.display.prefer_multirect=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
