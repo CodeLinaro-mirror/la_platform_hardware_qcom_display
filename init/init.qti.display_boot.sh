@@ -72,7 +72,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.disable_noise_layer 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop  vendor.display.composer_driven_hdcp 1
+        setprop vendor.display.composer_driven_hdcp 0
         ;;
     esac
     ;;
