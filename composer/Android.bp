@@ -68,7 +68,6 @@ cc_defaults {
         "libvndksupport",
         "libsdmclient",
         "libjsoncpp",
-        "libfecservice_interface",
     ],
 
     static_libs: [
