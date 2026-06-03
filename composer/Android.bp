@@ -30,7 +30,6 @@ cc_defaults {
         "snapalloc_interface_headers",
         "common_interface_headers",
         "sdmclient_interface_headers",
-        "featenab_client_headers",
     ],
 
     shared_libs: [
