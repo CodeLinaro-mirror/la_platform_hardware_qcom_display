@@ -49,8 +49,40 @@ DisplayError SetCSC(const native_handle_t *handle, ColorMetaData *color_metadata
     }
   }
 
-  DLOGW("Failed to get values for CSC");
-  return kErrorNotSupported;
+  uint32_t csc = HAL_CSC_ITU_R_601;
+  if (qtigralloc::getMetadataState(const_cast<native_handle_t *>(handle), QTI_COLORSPACE)) {
+    int err = static_cast<int>(
+        qtigralloc::get(const_cast<native_handle_t *>(handle), QTI_COLORSPACE, &csc));
+    if (!err) {
+      if (csc == HAL_CSC_ITU_R_601_FR || csc == HAL_CSC_ITU_R_709_FR ||
+          csc == HAL_CSC_ITU_R_2020_FR) {
+        color_metadata->range = Range_Full;
+      }
+      color_metadata->transfer = Transfer_sRGB;
+      switch (csc) {
+        case HAL_CSC_ITU_R_601:
+        case HAL_CSC_ITU_R_601_FR:
+          color_metadata->colorPrimaries = ColorPrimaries_BT601_6_525;
+          color_metadata->matrixCoefficients = MatrixCoEff_BT601_6_525;
+          break;
+        case HAL_CSC_ITU_R_709:
+        case HAL_CSC_ITU_R_709_FR:
+          color_metadata->colorPrimaries = ColorPrimaries_BT709_5;
+          color_metadata->matrixCoefficients = MatrixCoEff_BT709_5;
+          break;
+        case HAL_CSC_ITU_R_2020:
+        case HAL_CSC_ITU_R_2020_FR:
+          color_metadata->colorPrimaries = ColorPrimaries_BT2020;
+          color_metadata->matrixCoefficients = MatrixCoEff_BT2020;
+          break;
+        default:
+          DLOGW("Unsupported CSC: %d", csc);
+          return kErrorNotSupported;
+      }
+    }
+  }
+
+  return kErrorNone;
 }
 
 // Returns true when color primary is supported
