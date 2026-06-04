@@ -108,7 +108,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.predict_hwc_composition_strategy=0 \
     debug.sf.treat_170m_as_sRGB=1 \
     vendor.display.enable_display_extensions=1 \
-    debug.graphics.game_default_frame_rate.disabled=1
+    debug.graphics.game_default_frame_rate.disabled=1 \
+    vendor.display.prefer_multirect=1
 
 ifeq ($(PLATFORM_VERSION), 15)
 PRODUCT_PROPERTY_OVERRIDES +=  debug.sf.auto_latch_unsignaled=1
