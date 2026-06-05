@@ -36,7 +36,6 @@
 #include <utils/String16.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
-#include <QService.h>
 #include <utils/utils.h>
 #include <algorithm>
 #include <utility>
@@ -4467,7 +4466,7 @@ HWC3::Error HWCSession::WaitForResources(bool wait_for_resources, Display active
             cached_retire_fence_) {
           Fence::Wait(cached_retire_fence_);
         }
-        cached_retire_fence_ == nullptr;
+        cached_retire_fence_ = nullptr;
       }
       {
         SCOPE_LOCK(locker_[display_id]);
