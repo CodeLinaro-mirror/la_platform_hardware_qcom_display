@@ -251,6 +251,8 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
 
   ALOGV("%s: destroyLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
         in_layer, in_display);
+
+  std::lock_guard<std::mutex> lock(m_display_command_mutex_[in_display]);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
   drawcycle_->LayerStackUpdated(in_display);
@@ -295,6 +297,18 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
   }
 
   int64_t displayId = in_commands[0].display;  // Use per-display lock
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+      ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
+      CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
+      std::vector<CommandResultPayload> results;
+      results.emplace_back(std::move(error));
+      *aidl_return = std::move(results);
+      return TO_BINDER_STATUS(INT32(Error::None));
+    }
+  }
+
   std::lock_guard<std::mutex> lock(m_display_command_mutex_[displayId]);
 
   lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeAcquire);
@@ -314,6 +328,18 @@ ScopedAStatus AidlComposerClient::executeQtiExtendedCommands(
   }
 
   int64_t displayId = in_commands[0].display;  // Use per-display lock
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+      ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
+      CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
+      std::vector<CommandResultPayload> results;
+      results.emplace_back(std::move(error));
+      *aidl_return = std::move(results);
+      return TO_BINDER_STATUS(INT32(Error::None));
+    }
+  }
+
   std::lock_guard<std::mutex> lock(m_display_command_mutex_[displayId]);
 
   lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeAcquire);
@@ -413,7 +439,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
       *aidl_return = INT32(attributes.y_dpi * 1000.0f);
       break;
     case DisplayAttribute::CONFIG_GROUP:
-      *aidl_return = settings_->GetDisplayConfigGroup(in_display, attributes);
+      *aidl_return = settings_->GetDisplayConfigGroup(in_display, attributes, attributes.fps);
       break;
     default:
       ALOGW("Spurious attribute type");
@@ -460,7 +486,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup =
-        settings_->GetDisplayConfigGroup(in_display, variable_config);
+        settings_->GetDisplayConfigGroup(in_display, variable_config, variable_config.fps);
 
 #ifdef COMPOSER3_V4
     // Display output colorspace is fixed for builtin displays regardless of HDR content.
@@ -526,28 +552,52 @@ ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
                                                        const HdcpLevels &in_levels) {
-  if (!composer_driven_hdcp_) {
-    return ScopedAStatus::ok();
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto dpy = mDisplayData.find(in_display);
+    if (dpy == mDisplayData.end()) {
+      ALOGE("HDCP negotiation failed for display %d: Display not found!", in_display);
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
   }
 
-  int connected_level_int = 0;
+  int connected_level_int;
   switch (in_levels.connectedLevel) {
+    case HdcpLevel::HDCP_UNKNOWN:
+      connected_level_int = -1;
+      break;
     case HdcpLevel::HDCP_NONE:
-      connected_level_int = 0;
+      connected_level_int = 3;
       break;
     case HdcpLevel::HDCP_V1:
-      connected_level_int = 2;
+      connected_level_int = 1;
       break;
     case HdcpLevel::HDCP_V2:
     case HdcpLevel::HDCP_V2_1:
     case HdcpLevel::HDCP_V2_2:
     case HdcpLevel::HDCP_V2_3:
-      connected_level_int = 3;
+      connected_level_int = 2;
       break;
     default:
-      connected_level_int = 0;
+      connected_level_int = -1;
       break;
   }
+
+  if (connected_level_int == -1) {
+    ALOGE("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
+  }
+
+  // TODO(user): b/516707332. Until this content encryption check is added in SF,
+  // we will not use this path for hdcp. But this stub is needed, and this check
+  // has to happen after validating the input parameters to satisfy VTS req's
+  if (!composer_driven_hdcp_) {
+    if (callback_) {
+      callback_->onHdcpLevelsChanged(in_display, in_levels);
+    }
+    return ScopedAStatus::ok();
+  }
+
   auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::BadConfig));
@@ -643,7 +693,9 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     // this is needed to prevent applying color transform twice. When client queries per display
     // capabilities, the global Capability::SKIP_CLIENT_COLOR_TRANSFORM is ignored. We need to push
     // DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM here to maintain support.
-    aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    if (caps_ && !caps_->IsPluggablePrimary()) {
+      aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    }
     int32_t has_doze_support = 0;
     caps_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
@@ -1281,17 +1333,21 @@ void AidlComposerClient::onHdcpLevelsChanged(uint64_t display, int32_t min_enc_l
       new_levels.connectedLevel = HdcpLevel::HDCP_UNKNOWN;
       new_levels.maxLevel = HdcpLevel::HDCP_UNKNOWN;
       break;
-    case 2:
+    case 1:
       new_levels.connectedLevel = HdcpLevel::HDCP_V1;
       break;
-    case 3:
+    case 2:
       new_levels.connectedLevel = HdcpLevel::HDCP_V2;
+      break;
+    case 3:
+      new_levels.connectedLevel = HdcpLevel::HDCP_NONE;
       break;
     default:
       new_levels.connectedLevel = HdcpLevel::HDCP_NONE;
       break;
   }
 
+  ALOGI("HDCP connected level successfully changed to %d", min_enc_level);
   callback_->onHdcpLevelsChanged(display, new_levels);
 }
 #endif
@@ -1338,6 +1394,10 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  displayCmd.display);
   ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
                  displayCmd.display);
+#ifdef COMPOSER3_V5
+  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
+                 displayCmd.display, *displayCmd.activeConfig);
+#endif
 #ifdef COMPOSER3_V3
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
@@ -1345,10 +1405,6 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                  displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
 #else
-#ifdef COMPOSER3_V5
-  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
-                 displayCmd.display, *displayCmd.activeConfig);
-#endif
   int32_t frameIntervalNs = -1;
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
@@ -2180,6 +2236,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
 void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
   auto error = Error::None;
+  mClient.drawcycle_->WaitForDrawCycleToComplete(display);
   for (auto &slot : slotsToClear) {
     SnapHandle *layerBuffer = nullptr;
     lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, true, &layerBuffer);

@@ -1,38 +1,8 @@
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of The Linux Foundation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -40,18 +10,21 @@
 #include <cutils/properties.h>
 #include <dlfcn.h>
 #include <mutex>
+#include <fstream>
 
 #include "gr_adreno_info.h"
 #include "gr_utils.h"
 #include <QtiGrallocPriv.h>
 #include <QtiGrallocDefs.h>
 
+using std::fstream;
 using std::lock_guard;
 using std::mutex;
 
 namespace gralloc {
 
 AdrenoMemInfo *AdrenoMemInfo::s_instance = nullptr;
+const char kgsl_path[] = "/dev/kgsl-3d0";
 
 AdrenoMemInfo *AdrenoMemInfo::GetInstance() {
   static mutex s_lock;
@@ -64,6 +37,17 @@ AdrenoMemInfo *AdrenoMemInfo::GetInstance() {
 }
 
 AdrenoMemInfo::AdrenoMemInfo() {
+  char property[PROPERTY_VALUE_MAX] = {};
+  property_get(DISABLE_UBWC_PROP, property, "0");
+  if (!(strcmp(property, "1")) || !(strcmp(property, "true"))) {
+    gfx_ubwc_disable_ = true;
+  }
+
+  fstream fs(kgsl_path, fstream::in);
+  if (!fs.is_open()) {
+    return;
+  }
+
   libadreno_utils_ = ::dlopen("libadreno_utils.so", RTLD_NOW);
   if (libadreno_utils_) {
     *reinterpret_cast<void **>(&LINK_adreno_compute_aligned_width_and_height) =
@@ -86,12 +70,6 @@ AdrenoMemInfo::AdrenoMemInfo() {
         ::dlsym(libadreno_utils_, "adreno_get_aligned_gpu_buffer_size");
   } else {
     ALOGE(" Failed to load libadreno_utils.so");
-  }
-  char property[PROPERTY_VALUE_MAX];
-  property_get(DISABLE_UBWC_PROP, property, "0");
-  if (!(strncmp(property, "1", PROPERTY_VALUE_MAX)) ||
-      !(strncmp(property, "true", PROPERTY_VALUE_MAX))) {
-    gfx_ubwc_disable_ = true;
   }
 }
 

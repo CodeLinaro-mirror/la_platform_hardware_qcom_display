@@ -35,8 +35,11 @@
 
 #include <QtiGralloc.h>
 #include <aidl/vendor/qti/hardware/display/demura/IDemuraFileFinder.h>
+#include <android/binder_process.h>
 #include <android/binder_manager.h>
+#include <binder/IInterface.h>
 #include <utils/Timers.h>
+#include <cutils/properties.h>
 
 #include "DisplayConfigAIDL.h"
 
@@ -62,7 +65,7 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
   caps_ = sdm_factory->CreateCapsIntf();
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
-  lifecycle_->RegisterSideBandCallback(this, true);
+  lifecycle_->RegisterSideBandCallbackEx(this, true, sdm::SideBandCallbackClient::kDisplayConfig);
   drawcycle_ =
 #ifdef COMPOSER3_V3
       reinterpret_pointer_cast<SDMDisplayDrawCycleIntfV>
@@ -74,13 +77,84 @@ DisplayConfigAIDL::DisplayConfigAIDL() {
   int value = 0;
   sideband_->GetProperty(COMPOSER_DRIVEN_HDCP, &value);
   composer_driven_hdcp_ = (value == 1);
+
+#ifdef IDISPLAYCONFIG_17
+  PopulateDynamicCacConfig();
+#endif
 }
+
+#ifdef IDISPLAYCONFIG_17
+void DisplayConfigAIDL::PopulateDynamicCacConfig() {
+  char path[PROPERTY_VALUE_MAX];
+  if (sideband_->GetProperty(DYNAMIC_CAC_FILE_PATH, path) != sdm::kErrorNone) {
+    ALOGW("Dynamic CAC config file path not set.");
+    return;
+  }
+
+  // Expected JSON format
+  // "polynomial_data": {
+  //   "x": {                  co-ordinate x or y
+  //     "left": {             eye left or right
+  //       "fovea_start": {    valid start of fovea region
+  //        "0": [             polynomical coefficients for dynamic cac
+  //          -0.000212122,    [bh2L, bh1L, bh0L, rh2L, rh1L, rh0L]
+  //          ...],
+
+  const std::string kConfigPath = std::string(path);
+
+  std::ifstream file(kConfigPath);
+  if (!file.is_open()) {
+    ALOGE("Failed to open CAC config: %s", kConfigPath.c_str());
+    return;
+  }
+
+  Json::Value json_data;
+  Json::Reader reader;
+  if (!reader.parse(file, json_data)) {
+    ALOGE("JSON parse error: %s", reader.getFormattedErrorMessages().c_str());
+    return;
+  }
+
+  // Verify root structure
+  if (!json_data.isObject() || !json_data.isMember("polynomial_data")) {
+    ALOGE("Invalid JSON structure");
+    return;
+  }
+
+  const Json::Value &polynomial_data = json_data["polynomial_data"];
+  for (auto axis_it = polynomial_data.begin(); axis_it != polynomial_data.end(); ++axis_it) {
+    const std::string &axis = axis_it.key().asString();
+
+    for (auto eye_it = axis_it->begin(); eye_it != axis_it->end(); ++eye_it) {
+      const std::string &eye = eye_it.key().asString();
+
+      const Json::Value &fovea_obj = (*eye_it)["fovea_start"];
+      for (auto fovea_it = fovea_obj.begin(); fovea_it != fovea_obj.end(); ++fovea_it) {
+        int fovea_start = std::stoi(fovea_it.key().asString());
+
+        // Convert JSON array to vector<double>
+        std::vector<double> values;
+        for (unsigned i = 0; i < fovea_it->size(); ++i) {
+          values.push_back((*fovea_it)[i].asDouble());
+        }
+
+        dynamic_cac_v2_data_[axis][eye][fovea_start] = std::move(values);
+      }
+    }
+  }
+
+  ALOGI("Dynamic CAC JSON file read successfully");
+  dynamic_cac_data_populated_ = true;
+}
+#endif
 
 DisplayConfigAIDL::~DisplayConfigAIDL() {
   if (pose_handle_) {
     handle_importer_.freeBuffer(static_cast<const SnapHandle *>(pose_handle_));
     pose_handle_ = nullptr;
   }
+
+  featenab_client_ = nullptr;
 }
 
 int MapDisplayType(DisplayType dpy) {
@@ -556,6 +630,31 @@ ScopedAStatus DisplayConfigAIDL::createVirtualDisplay(int width, int height, int
   return ScopedAStatus::ok();
 }
 
+#ifdef IDISPLAYCONFIG_18
+ScopedAStatus DisplayConfigAIDL::setVirtualDispType(VirtualDispType type) {
+  sdm::SDMVirtualDispType disp_type = sdm::kVirtualTypeMax;
+  switch (type) {
+    case VirtualDispType::DEFAULT:
+      disp_type = sdm::kVirtualTypeDefault;
+      break;
+    case VirtualDispType::WITH_PQ:
+      disp_type = sdm::kVirtualTypePQ;
+      break;
+    default:
+      ALOGW("%s: Unsupported virtual display type: %d", __FUNCTION__, static_cast<int>(type));
+      return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  auto ret = sideband_->SetVirtualDispType(disp_type);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Failed to set virtual disp type: %d ret: %d", __FUNCTION__, disp_type, ret);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+#endif
+
 ScopedAStatus DisplayConfigAIDL::getSupportedDSIBitClks(int32_t disp_id,
                                                         std::vector<int64_t> *bit_clks) {
   auto ret = caps_->GetSupportedDSIClock(disp_id, bit_clks);
@@ -822,7 +921,7 @@ ScopedAStatus DisplayConfigAIDL::setCWBOutputBufferInternal(
     // Reset internal control flags
     cwb_config.cwb_control_params.internal_control_flags = 0;
     // Submit the CWB request with output buffer.
-    sdm::DisplayError ret = sideband_->PostBuffer(cwb_config, hdl, display_type);
+    sdm::DisplayError ret = sideband_->PostBufferWithOwner(cwb_config, hdl, display_type, this);
     if (ret != sdm::kErrorNone) {
       ret_status = EX_TRANSACTION_FAILED;
     } else {
@@ -1054,6 +1153,92 @@ ScopedAStatus DisplayConfigAIDL::configureCacV2(int32_t disp_id, const CacV2Conf
 
   return ScopedAStatus::ok();
 }
+
+#ifdef IDISPLAYCONFIG_17
+bool DisplayConfigAIDL::GetSdmDynamicCacV2Config(const DynamicCacV2Config &config,
+                                                 sdm::DynamicCacV2Config *sdm_cac_config) {
+  if (!sdm_cac_config) {
+    ALOGW("sdm_cac_config is null");
+    return false;
+  }
+
+  auto fovea_left_start_x = config.foveaLeft.startX;
+  auto fovea_left_start_y = config.foveaLeft.startY;
+  auto fovea_right_start_x = config.foveaRight.startX;
+  auto fovea_right_start_y = config.foveaRight.startY;
+
+  if (!dynamic_cac_data_populated_) {
+    ALOGW("Dynamic cac data is not populated!");
+    return false;
+  }
+
+  // if the DynamicCacV2 data is already parsed from json, then read the cached data
+  auto &poly_data_left_x = dynamic_cac_v2_data_["x"]["left"][fovea_left_start_x];
+  auto &poly_data_left_y = dynamic_cac_v2_data_["y"]["left"][fovea_left_start_y];
+  auto &poly_data_right_x = dynamic_cac_v2_data_["x"]["right"][fovea_right_start_x];
+  auto &poly_data_right_y = dynamic_cac_v2_data_["y"]["right"][fovea_right_start_y];
+
+  if (poly_data_left_x.size() != 6 || poly_data_left_y.size() != 6 ||
+      poly_data_right_x.size() != 6 || poly_data_right_y.size() != 6) {
+    ALOGW("Invalid size for poly ctrl data");
+    return false;
+  }
+
+  std::copy_n(poly_data_left_x.begin(), 3, sdm_cac_config->poly_ctrl_left.bhc);
+  std::copy_n(poly_data_left_x.begin() + 3, 3, sdm_cac_config->poly_ctrl_left.rhc);
+
+  std::copy_n(poly_data_left_y.begin(), 3, sdm_cac_config->poly_ctrl_left.bvc);
+  std::copy_n(poly_data_left_y.begin() + 3, 3, sdm_cac_config->poly_ctrl_left.rvc);
+
+  std::copy_n(poly_data_right_x.begin(), 3, sdm_cac_config->poly_ctrl_right.bhc);
+  std::copy_n(poly_data_right_x.begin() + 3, 3, sdm_cac_config->poly_ctrl_right.rhc);
+
+  std::copy_n(poly_data_right_y.begin(), 3, sdm_cac_config->poly_ctrl_right.bvc);
+  std::copy_n(poly_data_right_y.begin() + 3, 3, sdm_cac_config->poly_ctrl_right.rvc);
+
+  return true;
+}
+
+ScopedAStatus DisplayConfigAIDL::configureDynamicCacV2(int32_t disp_id,
+                                                       const DynamicCacV2Config &config,
+                                                       bool enable) {
+  if (disp_id < 0 || disp_id >= sdm::kNumDisplays) {
+    ALOGW("%s: Not valid display", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  if (!dynamic_cac_data_populated_) {
+    ALOGW("%s: Dynamic CAC File path is not set.", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  sdm::DynamicCacV2Config sdm_cac_config = {};
+  if (!GetSdmDynamicCacV2Config(config, &sdm_cac_config)) {
+    ALOGW("%s: Failed to get dynamic CAC data", __FUNCTION__);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+  auto ret = settings_->PerformDynamicCac(disp_id, sdm_cac_config, enable);
+  if (ret != sdm::kErrorNone) {
+    ALOGW("%s: Failed to configure dynamic CAC = %d", __FUNCTION__, enable);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  bool needsCommit = false;
+  shared_ptr<sdm::Fence> presentFence = nullptr;
+  uint32_t typesCount = 0;
+  uint32_t reqsCount = 0;
+  bool validate_only = false;
+  auto error = drawcycle_->CommitOrPrepare(disp_id, validate_only, &presentFence, &typesCount,
+                                           &reqsCount, &needsCommit);
+
+  if (error != sdm::kErrorNone && error != sdm::kErrorNeedsCommit) {
+    ALOGE("CommitOrPrepare failed!, error: %d", error);
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+  }
+
+  return ScopedAStatus::ok();
+}
+#endif
 
 ScopedAStatus DisplayConfigAIDL::configureCacV2PerEye(int32_t disp_id,
                                                       const CacV2Config &leftConfig,
@@ -1439,6 +1624,26 @@ sdm::DisplayError DisplayConfigAIDL::GetHistogramAttributes(uint64_t display, in
 
 sdm::nsecs_t DisplayConfigAIDL::SystemTime(int clock) {
   return systemTime(clock);
+}
+
+sdm::DisplayError DisplayConfigAIDL::SendFeatenablerCommand(sdm::FeatenablerCommand cmd) {
+  if (!featenab_client_) {
+    ::android::sp<::android::IServiceManager> sm = ::android::defaultServiceManager();
+    ::android::sp<::android::IBinder> binder =
+        sm->getService(::android::String16("featenab_client.service"));
+    if (binder.get() == nullptr) {
+      ALOGE("Unable to acquire featenabler client!");
+      return sdm::kErrorResources;
+    }
+    featenab_client_ = IFECService::asInterface(binder);
+  }
+
+  ::android::Parcel input_parcel, output_parcel;
+  auto ret = featenab_client_->dispatch(INT32(cmd), &input_parcel, &output_parcel);
+
+  ALOGI("Feature enabler command %d returns %d", cmd, ret);
+
+  return sdm::kErrorNone;
 }
 
 }  // namespace config

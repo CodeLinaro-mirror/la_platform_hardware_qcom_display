@@ -28,8 +28,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -47,6 +47,12 @@
 
 using aidl::vendor::qti::hardware::display::aiqe::DisplayAiqeAIDL;
 #endif
+
+#ifdef COMPOSER3_V5
+#include "AmbientDataCaptureAIDL.h"
+using aidl::vendor::qti::hardware::qacs::ambientdatacapture::AmbientDataCaptureAIDL;
+#endif
+
 using aidl::vendor::qti::hardware::display::composer3::AidlComposer;
 using aidl::vendor::qti::hardware::display::composer3::QtiComposer3Client;
 using aidl::vendor::qti::hardware::display::config::DisplayConfigAIDL;
@@ -120,6 +126,23 @@ int main(int, char **) {
   } else {
     ALOGI("Successfully registered DisplayConfig AIDL as a service");
   }
+
+#ifdef COMPOSER3_V5
+  ALOGI("Registering AmbientDataCapture AIDL as a service");
+  std::shared_ptr<AmbientDataCaptureAIDL> ambientDataCapture =
+      ndk::SharedRefBase::make<AmbientDataCaptureAIDL>();
+  const std::string instance3 = std::string() + AmbientDataCaptureAIDL::descriptor + "/default";
+  if (!ambientDataCapture->asBinder().get()) {
+    ALOGW("AmbientDataCapture AIDL's binder is null");
+  }
+
+  status = AServiceManager_addService(ambientDataCapture->asBinder().get(), instance3.c_str());
+  if (status != STATUS_OK) {
+    ALOGW("Failed to register AmbientDataCapture AIDL as a service (status:%d)", status);
+  } else {
+    ALOGI("Successfully registered AmbientDataCapture AIDL as a service");
+  }
+#endif
 
 #ifdef COMPOSER3_V3
   std::shared_ptr<DisplayAiqeAIDL> displayAiqe = ndk::SharedRefBase::make<DisplayAiqeAIDL>();
