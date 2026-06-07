@@ -72,7 +72,7 @@ case "$target" in
         setprop vendor.display.enable_inline_writeback 1
         setprop vendor.display.disable_noise_layer 1
         setprop vendor.display.enable_idle_content_fps_hint 1
-        setprop  vendor.display.composer_driven_hdcp 1
+        setprop vendor.display.composer_driven_hdcp 0
         ;;
     esac
     ;;
@@ -210,7 +210,11 @@ case "$target" in
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 0
-        setprop vendor.display.enable_inline_writeback 1
+        if [ "$soc_hwid" -eq 736 ] || [ "$soc_hwid" -eq 737 ]; then
+           setprop vendor.display.enable_inline_writeback 0
+        else
+           setprop vendor.display.enable_inline_writeback 1
+        fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.idle_time 0

@@ -297,6 +297,18 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
   }
 
   int64_t displayId = in_commands[0].display;  // Use per-display lock
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+      ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
+      CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
+      std::vector<CommandResultPayload> results;
+      results.emplace_back(std::move(error));
+      *aidl_return = std::move(results);
+      return TO_BINDER_STATUS(INT32(Error::None));
+    }
+  }
+
   std::lock_guard<std::mutex> lock(m_display_command_mutex_[displayId]);
 
   lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeAcquire);
@@ -316,6 +328,18 @@ ScopedAStatus AidlComposerClient::executeQtiExtendedCommands(
   }
 
   int64_t displayId = in_commands[0].display;  // Use per-display lock
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+      ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
+      CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
+      std::vector<CommandResultPayload> results;
+      results.emplace_back(std::move(error));
+      *aidl_return = std::move(results);
+      return TO_BINDER_STATUS(INT32(Error::None));
+    }
+  }
+
   std::lock_guard<std::mutex> lock(m_display_command_mutex_[displayId]);
 
   lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeAcquire);
@@ -528,13 +552,20 @@ ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
                                                        const HdcpLevels &in_levels) {
-  if (!composer_driven_hdcp_) {
-    return ScopedAStatus::ok();
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto dpy = mDisplayData.find(in_display);
+    if (dpy == mDisplayData.end()) {
+      ALOGE("HDCP negotiation failed for display %d: Display not found!", in_display);
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
   }
 
-  // set default to no hdcp (int value of 3)
   int connected_level_int;
   switch (in_levels.connectedLevel) {
+    case HdcpLevel::HDCP_UNKNOWN:
+      connected_level_int = -1;
+      break;
     case HdcpLevel::HDCP_NONE:
       connected_level_int = 3;
       break;
@@ -548,9 +579,25 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
       connected_level_int = 2;
       break;
     default:
-      connected_level_int = 3;
+      connected_level_int = -1;
       break;
   }
+
+  if (connected_level_int == -1) {
+    ALOGE("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
+  }
+
+  // TODO(user): b/516707332. Until this content encryption check is added in SF,
+  // we will not use this path for hdcp. But this stub is needed, and this check
+  // has to happen after validating the input parameters to satisfy VTS req's
+  if (!composer_driven_hdcp_) {
+    if (callback_) {
+      callback_->onHdcpLevelsChanged(in_display, in_levels);
+    }
+    return ScopedAStatus::ok();
+  }
+
   auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
   if (error != sdm::kErrorNone) {
     return TO_BINDER_STATUS(INT32(Error::BadConfig));
