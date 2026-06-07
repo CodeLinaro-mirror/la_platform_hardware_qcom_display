@@ -16,8 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -26,7 +26,7 @@
 
 #include <pthread.h>
 
-#include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -113,7 +113,7 @@ class BufferManager {
   // Get the wrapper Buffer object from the handle, returns nullptr if handle is not found
   std::shared_ptr<Buffer> GetBufferFromHandleLocked(const private_handle_t *hnd);
   Allocator *allocator_ = NULL;
-  std::mutex buffer_lock_;
+  std::shared_mutex buffer_lock_;
   std::unordered_map<const private_handle_t *, std::shared_ptr<Buffer>> handles_map_ = {};
   std::atomic<uint64_t> next_id_;
   uint64_t allocated_ = 0;

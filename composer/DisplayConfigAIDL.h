@@ -63,6 +63,9 @@
 #include <string>
 #include <memory>
 #include <atomic>
+#include <json/json.h>
+#include <fstream>
+
 #include <core/display_interface.h>
 #include "hwc_common.h"
 #include "AidlComposerHandleImporter.h"
@@ -78,6 +81,8 @@
 #include "histogram_collector.h"
 #include "gl_color_convert.h"
 #include "gl_layer_stitch.h"
+
+#include <IFECService.h>
 
 namespace aidl::vendor::qti::hardware::display::config {
 class DisplayConfigAIDL;
@@ -113,9 +118,16 @@ using ::aidl::vendor::qti::hardware::display::config::CacV2ConfigExt;
 using ::aidl::vendor::qti::hardware::display::config::CameraSmoothOp;
 using ::aidl::vendor::qti::hardware::display::config::DisplayPortType;
 using ::aidl::vendor::qti::hardware::display::config::HDRCapsParams;
+#ifdef IDISPLAYCONFIG_17
+using ::aidl::vendor::qti::hardware::display::config::DynamicCacV2Config;
+using ::aidl::vendor::qti::hardware::display::config::Fovea;
+#endif
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfig;
 using ::aidl::vendor::qti::hardware::display::config::IDisplayConfigCallback;
 using ::aidl::vendor::qti::hardware::display::config::TUIEventType;
+#ifdef IDISPLAYCONFIG_18
+using ::aidl::vendor::qti::hardware::display::config::VirtualDispType;
+#endif
 
 using ::android::binder::Status;
 using ndk::ScopedAStatus;
@@ -245,6 +257,10 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   ScopedAStatus isCacV2Supported(int32_t disp_id, bool *_aidl_return) override;
   ScopedAStatus configureCacV2(int32_t disp_id, const CacV2Config &in_config,
                                bool in_enable) override;
+#ifdef IDISPLAYCONFIG_17
+  ScopedAStatus configureDynamicCacV2(int32_t disp_id, const DynamicCacV2Config &in_config,
+                                      bool in_enable) override;
+#endif
   ScopedAStatus configureCacV2PerEye(int32_t disp_id, const CacV2Config &in_leftConfig,
                                      const CacV2Config &in_rightConfig, bool in_enable) override;
   ScopedAStatus configureCacV2ExtPerEye(int32_t disp_id, const CacV2ConfigExt &in_leftConfig,
@@ -256,6 +272,9 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
 #endif
 #ifdef IDISPLAYCONFIG_16
   ScopedAStatus setHDRCapabilities(DisplayType dpy, const HDRCapsParams &caps) override;
+#endif
+#ifdef IDISPLAYCONFIG_18
+  ScopedAStatus setVirtualDispType(VirtualDispType type) override;
 #endif
 
   void NotifyQsyncChange(uint64_t display_id, bool qsync_enabled, uint32_t refresh_rate,
@@ -295,12 +314,18 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   void DestroyLayerStitch(uint64_t display);
 
   sdm::nsecs_t SystemTime(int clock);
+  sdm::DisplayError SendFeatenablerCommand(sdm::FeatenablerCommand cmd);
 
  private:
   ScopedAStatus setCWBOutputBufferInternal(
       const std::shared_ptr<IDisplayConfigCallback> &callback, int32_t disp_id,
       const Rect &roi_rect, const Rect &downscale_rect, int32_t cwb_control_flag,
       const ::aidl::android::hardware::common::NativeHandle &buffer);
+#ifdef IDISPLAYCONFIG_17
+  bool GetSdmDynamicCacV2Config(const DynamicCacV2Config &config,
+                                sdm::DynamicCacV2Config *sdm_cac_config);
+  void PopulateDynamicCacConfig();
+#endif
 
   std::weak_ptr<DisplayConfig::ConfigCallback> qsync_callback_;
 
@@ -331,6 +356,13 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   std::unordered_map<uint64_t, GLLayerStitch *> layer_stitch_map_;
   void *pose_handle_ = nullptr;
   bool composer_driven_hdcp_ = false;
+  std::map<std::string,            // coordinate "x" or "y"
+           std::map<std::string,   // eye "left" or "right"
+                    std::map<int,  // fovea_start value (0, 36, etc.)
+                             std::vector<double>>>>
+      dynamic_cac_v2_data_;
+  bool dynamic_cac_data_populated_ = false;
+  sp<IFECService> featenab_client_ = nullptr;
 };
 
 }  // namespace config
