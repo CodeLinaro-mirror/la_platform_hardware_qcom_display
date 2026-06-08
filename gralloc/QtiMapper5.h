@@ -146,7 +146,8 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
   bool snap_alloc_enable_ = false;
 
   std::list<uint64_t> batch_mode_metadata_types_ = {
-      static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA)};
+      static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA),
+      static_cast<uint64_t>(SnapMetadataType::CUSTOM_CONTENT_METADATA)};
 
   std::unordered_map<uint64_t, size_t> type_to_size_{
       {static_cast<uint64_t>(SnapMetadataType::BUFFER_ID), sizeof(uint64_t)},
