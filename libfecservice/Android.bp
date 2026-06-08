@@ -1,0 +1,17 @@
+cc_library_shared {
+  name: "libfecservice",
+  vendor: true,
+  srcs: ["IFECService.cpp"],
+  export_include_dirs: ["."],
+  shared_libs: [
+    "libbinder",
+    "libutils",
+    "liblog"
+  ],
+  cflags: [
+    "-fno-operator-names",
+    "-Werror",
+    "-Wno-undefined-bool-conversion",
+    "-Wno-format",
+  ],
+}
