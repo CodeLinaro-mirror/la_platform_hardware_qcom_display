@@ -110,7 +110,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.enable_display_extensions=1 \
     vendor.gralloc.enable_snapalloc=1 \
-    vendor.display.disable_fp16_support=1
+    vendor.display.disable_fp16_support=1 \
+    vendor.display.disable_luts_overlay_support=1
 
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
