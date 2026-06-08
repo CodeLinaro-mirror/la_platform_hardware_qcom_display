@@ -2493,7 +2493,22 @@ DisplayError HWDeviceDRM::SetRefreshRate(uint32_t refresh_rate) {
   return kErrorNotSupported;
 }
 
+DisplayError HWDeviceDRM::SetAutoRefresh(uint32_t frame_count) {
+  autorefresh_ = frame_count;
+  return kErrorNone;
+}
 
+DisplayError HWDeviceDRM::GetModePanelSelfRefreshRate(uint32_t *curr_panel_self_refresh_rate,
+                                                       uint32_t *mode_refresh_rate) {
+  if (!curr_panel_self_refresh_rate || !mode_refresh_rate) {
+    return kErrorParameters;
+  }
+
+  const auto &mode = connector_info_.modes[current_mode_index_];
+  *curr_panel_self_refresh_rate = mode.curr_panel_self_refresh_rate;
+  *mode_refresh_rate = mode.mode.vrefresh;
+  return kErrorNone;
+}
 
 DisplayError HWDeviceDRM::GetHWScanInfo(HWScanInfo *scan_info) {
   return kErrorNotSupported;
