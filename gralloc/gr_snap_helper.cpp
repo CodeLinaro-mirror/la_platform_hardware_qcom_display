@@ -3046,7 +3046,7 @@ int GrallocSnapHelper::GetColorSpaceFromDataspaceMetadata(SnapDataspace snap_dat
     default: {
       err = -1;
       *color_space = 0;
-      ALOGW("Unknown Color primary = %d", snap_dataspace.colorPrimaries);
+      ALOGW_IF(enable_logs_, "Unknown Color primary = %d", snap_dataspace.colorPrimaries);
       break;
     }
   }
@@ -7263,7 +7263,8 @@ int GrallocSnapHelperLegacy::GetColorSpaceFromDataspaceMetadata(SnapDataspace sn
     default: {
       err = -1;
       *color_space = 0;
-      ALOGW("%s: Unknown Color primary = %d", __FUNCTION__, snap_dataspace.colorPrimaries);
+      ALOGW_IF(enable_logs_, "%s: Unknown Color primary = %d", __FUNCTION__,
+               snap_dataspace.colorPrimaries);
       break;
     }
   }
