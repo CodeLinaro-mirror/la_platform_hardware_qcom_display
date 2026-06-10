@@ -145,6 +145,13 @@ case "$target" in
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_allow_idle_fallback 1
+        setprop vendor.gralloc.hw_supports_ubwcp 0
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_async_powermode 0
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.disable_cwb_idle_fallback 0
+        setprop vendor.display.disable_gpu_color_convert 1
         ;;
         450)
         # Set property for shima
