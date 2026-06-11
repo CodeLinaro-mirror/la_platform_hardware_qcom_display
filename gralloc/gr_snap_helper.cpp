@@ -628,6 +628,7 @@ int GrallocSnapHelper::IsSupported(gralloc::BufferDescriptor gr_desc, bool *is_s
   SnapDescriptor snap_desc = {};
   auto err = GetSnapDescriptor(gr_desc, snap_desc);
   if (err) {
+    *is_supported = false;
     return err;
   }
 
@@ -3850,6 +3851,7 @@ int GrallocSnapHelperLegacy::IsSupported(gralloc::BufferDescriptor gr_desc, bool
   SnapDescriptor snap_desc = {};
   auto err = GetSnapDescriptor(gr_desc, snap_desc);
   if (err) {
+    *is_supported = false;
     return err;
   }
   auto status = snapallocator_->IsSupported(snap_desc, is_supported);
