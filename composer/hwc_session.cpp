@@ -1386,6 +1386,13 @@ HWC3::Error HWCSession::SetPowerMode(Display display, int32_t int_mode) {
 
 HWC3::Error HWCSession::SetVsyncEnabled(Display display, bool enabled) {
   DLOGV("Enable vsync : display = %d, enable = %d",(int)(display), enabled);
+  if (!pluggable_is_primary_) {
+    if (enabled == true) {
+      callbacks_.UpdateVsyncSource(display);
+    }
+    return CallDisplayFunction(display, &HWCDisplay::SetVsyncEnabled, enabled);
+  }
+
   if (enabled) {
   /* To avoid the race conditions for hotplugs of all displays,
      before enabling vsyncs on any displays, disable vsyncs on
