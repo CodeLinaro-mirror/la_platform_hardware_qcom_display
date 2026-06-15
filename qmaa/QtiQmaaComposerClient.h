@@ -19,7 +19,7 @@
 
 /*
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -285,6 +285,12 @@ class QtiComposerClient : public BnComposerClient {
   ScopedAStatus startHdcpNegotiation(int64_t in_display,
                                      const aidl::android::hardware::drm::HdcpLevels& in_levels);
   ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *);
+
+#ifdef COMPOSER3_V5
+  ScopedAStatus getDisplayKnownVsyncSample(
+      int64_t in_display,
+      aidl::android::hardware::graphics::composer3::VsyncSample *aidl_return) override;
+#endif
 
   // Methods for callbacks
   void onHotplug(Display display, bool connected);

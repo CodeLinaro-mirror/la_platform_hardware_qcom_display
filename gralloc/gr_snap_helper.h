@@ -55,6 +55,7 @@
 #include <ThreeDimensionalRefInfo.h>
 #include <CWBMetadata.h>
 #include <ROIRectMetadata.h>
+#include <CustomTuningMetadata.h>
 
 #include <aidl/android/hardware/common/NativeHandle.h>
 #include <aidl/android/hardware/graphics/common/Dataspace.h>
@@ -126,6 +127,7 @@ using SnapAnamorphicMetadata = vendor_qti_hardware_display_common_QtiAnamorphicM
 using SnapThreeDimensionalRefInfo = vendor_qti_hardware_display_common_ThreeDimensionalRefInfo;
 using SnapCWBMetadata = vendor_qti_hardware_display_common_cwb_metadata;
 using SnapROIRectMetadata = vendor_qti_hardware_display_common_ROIRectMetadata;
+using SnapCustomTuningMetadata = vendor_qti_hardware_display_common_CustomTuningMetadata;
 
 using ::android::hardware::hidl_vec;
 using GrallocError = android::hardware::graphics::mapper::V4_0::Error;
@@ -1072,7 +1074,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
        SnapMetadataType::CONTENT_LIGHT_LEVEL},
       {static_cast<uint64_t>(
            aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_40),
-       SnapMetadataType::DYNAMIC_METADATA},
+       SnapMetadataType::SMPTE2094_40},
       {static_cast<uint64_t>(
            aidl::android::hardware::graphics::common::StandardMetadataType::SMPTE2094_10),
        SnapMetadataType::SMPTE2094_10},
@@ -1135,6 +1137,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {SnapMetadataType::THREE_DIMENSIONAL_REF_INFO, SnapMetadataType::THREE_DIMENSIONAL_REF_INFO},
       {SnapMetadataType::CWB_METADATA, SnapMetadataType::CWB_METADATA},
       {SnapMetadataType::DISPARITY_PHASE, SnapMetadataType::DISPARITY_PHASE},
+      {SnapMetadataType::CUSTOM_TUNING_METADATA, SnapMetadataType::CUSTOM_TUNING_METADATA},
   };
 
   std::list<int> unsupported_formats = {
@@ -1423,6 +1426,15 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                   void *gralloc_out_get = nullptr,
                                   SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
                                   int32_t *mapper_return = nullptr);
+  SnapError CustomTuningMetadataHelper(SnapHandle *, uint32_t aidl_size,
+                                       void *gralloc_in_set = nullptr,
+                                       void *gralloc_out_get = nullptr,
+                                       SnapDescriptor *buf_des = nullptr,
+                                       bool check_metadata_set = true,
+                                       int32_t *mapper_return = nullptr);
+  SnapError SMPTE2094_40Helper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                               bool check_metadata_set = true, int32_t *mapper_return = nullptr);
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
       metadata_conversion_helper_function_map = {
@@ -1482,7 +1494,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {DYNAMIC_METADATA, &GrallocSnapHelper::DynamicMetadataHelper},
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_40),
-           &GrallocSnapHelper::DynamicMetadataHelper},
+           &GrallocSnapHelper::SMPTE2094_40Helper},
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_10),
            &GrallocSnapHelper::SMPTE2094_10Helper},
@@ -1504,6 +1516,7 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {CWB_METADATA, &GrallocSnapHelper::CWBMetadataHelper},
           {DISPARITY_PHASE, &GrallocSnapHelper::DisparityPhaseHelper},
           {ROI_RECT_METADATA, &GrallocSnapHelper::ROIRectMetadataHelper},
+          {CUSTOM_TUNING_METADATA, &GrallocSnapHelper::CustomTuningMetadataHelper},
       };
 
   std::unordered_map<vendor_qti_hardware_display_common_MetadataType, MetadataHelper>
