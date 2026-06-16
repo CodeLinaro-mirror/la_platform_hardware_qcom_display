@@ -107,6 +107,7 @@ case "$target" in
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.gralloc.disable_ubwc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
         ;;
     esac
     ;;
