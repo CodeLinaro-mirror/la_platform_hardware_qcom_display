@@ -51,7 +51,7 @@ using aidl::android::hardware::graphics::composer3::DisplayRequest;
 using aidl::android::hardware::graphics::composer3::PresentFence;
 using aidl::android::hardware::graphics::composer3::PresentOrValidate;
 using aidl::android::hardware::graphics::composer3::ReleaseFences;
-#ifdef COMPOSER3_V4
+#ifdef ENABLE_COMPOSER3_V4
 using aidl::android::hardware::graphics::composer3::DisplayLuts;
 using aidl::android::hardware::graphics::composer3::LutProperties;
 using aidl::android::hardware::graphics::composer3::Luts;
@@ -133,7 +133,7 @@ class ComposerServiceWriter {
     }
     mCommandsResults.emplace_back(std::move(releaseFencesCommand));
   }
-#ifdef COMPOSER3_V4
+#ifdef ENABLE_COMPOSER3_V4
   void setDisplayLuts(int64_t display, const std::vector<int64_t> &layers,
                       const std::vector<Luts> &luts, std::vector<::ndk::ScopedFileDescriptor> fds) {
     DisplayLuts displayLuts;
