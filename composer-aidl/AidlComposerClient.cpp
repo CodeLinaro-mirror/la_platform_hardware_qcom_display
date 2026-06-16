@@ -862,7 +862,7 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
                      layerCmd.layer, *layerCmd.perFrameMetadataBlob);
       ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
                      displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
-#ifdef COMPOSER3_V4
+#ifdef ENABLE_COMPOSER3_V4
       ExecuteCommand(layerCmd.luts, &CommandEngine::executeSetLayerLuts, displayCmd.display,
                    layerCmd.layer, *layerCmd.luts);
 #endif
@@ -1319,7 +1319,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
   }
 }
 
-#ifdef COMPOSER3_V4
+#ifdef ENABLE_COMPOSER3_V4
 void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int64_t layer,
                                                             const Luts &luts) {
   writeError(__FUNCTION__, Error::Unsupported);
@@ -1503,7 +1503,7 @@ Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display,
   return static_cast<Error>(err);
 }
 
-#ifdef COMPOSER3_V4
+#ifdef ENABLE_COMPOSER3_V4
 Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, 
                             bool reset_luts, Luts *luts, int32_t *lut_fd) {
   if (!lut_3d) {
@@ -1610,10 +1610,10 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
   auto requested_luts = std::make_unique<std::vector<std::pair<sdm::LayerId, Lut3d *>>>();
   std::vector<::ndk::ScopedFileDescriptor> requestedFds;
   std::vector<int64_t> requestedLayers;
-  std::unique_ptr<std::vector<std::pair<LayerId, Lut3d *>>> requestedLuts;
+  std::vector<Luts> requestedLuts;
 
-  auto err = mClient.drawcycle_->GetDisplayLuts(display, requested_luts);
-  if (err != sdm::kErrorNone) {
+  auto err = mClient.hwc_session_->GetDisplayLuts(display, requested_luts);
+  if (err != Error::None) {
     return Error::BadConfig;
   }
 
@@ -1624,20 +1624,19 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
 
   requestedLuts.resize(num_elements);
   auto it = requested_luts->begin();
-  for (uint32_t i = 0; i < num_elements; i++, it++) {
+  for (uint32_t i = 0; i < num_elements; i++, ++it) {
     int32_t fd = -1;
     requestedLayers.emplace_back(static_cast<int64_t>(it->first));
     if (it != requested_luts->end()) {
       // populateDisplayLuts will return error if the lut pointer we pass is nullptr
       // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
-      if (*it != nullptr) {
+      if (it->second != nullptr) {
         auto error = populateDisplayLuts(it->second, true, &requestedLuts[i], &fd);
         if (error != Error::None) {
           return error;
         }
       }
     }
-    it++;
 
     if (fd == -1) {
       ALOGI("%s: Resetting LUTs on client for layer %lu on display-%lu", __FUNCTION__,

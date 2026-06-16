@@ -345,13 +345,13 @@ class AidlComposerClient : public BnComposerClient {
     void executeSetLayerBlockingRegion(int64_t display, int64_t layer,
                                        const std::vector<std::optional<Rect>> &blockingRegion);
 
-#ifdef COMPOSER3_V4
+#ifdef ENABLE_COMPOSER3_V4
     void executeSetLayerLuts(int64_t display, int64_t layer, const Luts &luts);
 #endif
 
-#ifdef COMPOSER3_V4
+#ifdef ENABLE_COMPOSER3_V4
     Error setDisplayLuts(int64_t display);
-    Error populateDisplayLuts(Lut3d *lut_3d, Luts *luts, int32_t *lut_fd);
+    Error populateDisplayLuts(Lut3d *lut_3d, bool reset_luts, Luts *luts, int32_t *lut_fd);
 #endif
     Rect readRect();
     std::vector<Rect> readRegion(size_t count);
