@@ -145,6 +145,7 @@ public:
       SET_RGB_HISTOGRAM_CONFIG = 70,           // Set rgb histogram config
       SET_QRTC_FEATURE_CONFIG = 71,            // Set QRTC feature config
       SET_STC_FEATURE_CONFIG = 72,             // Set cfg for stc feature
+      SET_SPR_STATE = 73,                      // Set SPR state
       COMMAND_LIST_END = 400,
     };
 
