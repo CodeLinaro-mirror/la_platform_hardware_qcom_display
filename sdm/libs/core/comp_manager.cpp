@@ -489,7 +489,15 @@ void CompManager::Purge(Handle display_ctx) {
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
-  resource_intf_->Purge(display_comp_ctx->display_resource_ctx);
+  // Automotive persistent-dedicate: builtin and pluggable displays keep their dedicated
+  // SSPP pipes across kStateOff and UnregisterDisplay. The pipes are only released when
+  // the SDM process exits. Virtual displays (WFD/screen-record) continue to release on
+  // Purge as before.
+  bool keep_dedicate =
+      (display_comp_ctx->display_type == kBuiltIn ||
+       display_comp_ctx->display_type == kPluggable);
+
+  resource_intf_->Purge(display_comp_ctx->display_resource_ctx, keep_dedicate);
 
   display_comp_ctx->strategy->Purge();
 }
