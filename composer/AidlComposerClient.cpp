@@ -1396,7 +1396,7 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  displayCmd.display);
 #ifdef COMPOSER3_V5
   ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
-                 displayCmd.display, *displayCmd.activeConfig);
+                 displayCmd.display, *displayCmd.activeConfig, performing_commit);
 #endif
 #ifdef COMPOSER3_V3
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
@@ -2265,7 +2265,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
 
 #ifdef COMPOSER3_V5
 void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
-    int64_t display, const ActiveConfigCommand &config) {
+    int64_t display, const ActiveConfigCommand &config, bool performing_commit) {
   sdm::SDMVsyncPeriodChangeConstraints constraints = {0, config.seamlessRequired};
   sdm::SDMVsyncPeriodChangeTimeline timeline{};
 
@@ -2278,6 +2278,27 @@ void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
 
   if (error != sdm::kErrorNone) {
     writeError(__FUNCTION__, display, Error::BadConfig);
+    return;
+  }
+
+  // Workaround for VTS test behavior: VTS sends a setActiveConfig display
+  // command without a following present/validate, so the mode change stays
+  // pending in SDM/DRM. Force an explicit commit here to apply the config
+  // change immediately. In normal SurfaceFlinger usage, a present/validate
+  // always follows.
+  if (!performing_commit) {
+    bool validate_only = false;
+    bool needsCommit = false;
+    uint32_t types_count = 0;
+    uint32_t reqs_count = 0;
+    shared_ptr<Fence> presentFence = nullptr;
+
+    auto err = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
+                                                   &types_count, &reqs_count, &needsCommit);
+    if (err != sdm::kErrorNone && err != sdm::kErrorNeedsCommit) {
+      ALOGW("%s: Forced CommitOrPrepare failed", __FUNCTION__);
+      return;
+    }
   }
 }
 #endif
