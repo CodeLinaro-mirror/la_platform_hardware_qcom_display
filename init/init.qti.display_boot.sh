@@ -216,6 +216,11 @@ case "$target" in
         else
            setprop vendor.display.enable_inline_writeback 1
         fi
+        #SOC ID for 737 is no display
+        if [ "$soc_hwid" -eq 737 ]; then
+            setprop vendor.display.enable_null_display 1
+            setprop vendor.display.null_display_resolution 64x64
+        fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.idle_time 0
