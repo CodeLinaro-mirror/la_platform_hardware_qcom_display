@@ -230,6 +230,9 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(SnapMetadataType::VIEW_ID), sizeof(uint32_t)},
       {static_cast<uint64_t>(SnapMetadataType::CWB_METADATA), sizeof(SnapCWBMetadata)},
       {static_cast<uint64_t>(SnapMetadataType::DISPARITY_PHASE), sizeof(uint32_t)},
+      {static_cast<uint64_t>(SnapMetadataType::ROI_RECT_METADATA), sizeof(SnapROIRectMetadata)},
+      {static_cast<uint64_t>(SnapMetadataType::CUSTOM_TUNING_METADATA),
+       sizeof(SnapCustomTuningMetadata)},
   };
 };
 

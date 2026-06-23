@@ -101,6 +101,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   ALOGV("disable_fp16_support_: %d", disable_fp16_support_);
 
   value = 0;
+  sideband_->GetProperty(DISABLE_HDR_GAMMA_SUPPORT, &value);
+  disable_hdr_gamma_support_ = (value == 1);
+  ALOGV("disable_hdr_gamma_support_: %d", disable_hdr_gamma_support_);
+
+  value = 0;
   sideband_->GetProperty(DISABLE_QUERY_LUTS, &value);
   disable_query_luts_ = (value == 1);
   ALOGV("disable_query_luts_: %d", disable_query_luts_);
@@ -109,6 +114,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   sideband_->GetProperty(DISABLE_LUTS_OVERLAY_SUPPORT, &value);
   disable_luts_overlay_support_ = (value == 1);
   ALOGV("disable_luts_overlay_support_: %d", disable_luts_overlay_support_);
+
+  value = 0;
+  sideband_->GetProperty(COMPOSER_DRIVEN_HDCP, &value);
+  composer_driven_hdcp_ = (value == 1);
+  ALOGV("composer_driven_hdcp_: %d", composer_driven_hdcp_);
 
   return true;
 }
@@ -241,6 +251,8 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
 
   ALOGV("%s: destroyLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
         in_layer, in_display);
+
+  std::lock_guard<std::mutex> lock(m_display_command_mutex_[in_display]);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
   drawcycle_->LayerStackUpdated(in_display);
@@ -279,11 +291,29 @@ ScopedAStatus AidlComposerClient::destroyVirtualDisplay(int64_t in_display) {
 
 ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayCommand> &in_commands,
                                                   std::vector<CommandResultPayload> *aidl_return) {
-  std::lock_guard<std::mutex> lock(m_command_mutex_);
+  // Get the display ID from the first command
+  if (in_commands.empty()) {
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
 
-  lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
+  int64_t displayId = in_commands[0].display;  // Use per-display lock
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+      ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
+      CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
+      std::vector<CommandResultPayload> results;
+      results.emplace_back(std::move(error));
+      *aidl_return = std::move(results);
+      return TO_BINDER_STATUS(INT32(Error::None));
+    }
+  }
+
+  std::lock_guard<std::mutex> lock(m_display_command_mutex_[displayId]);
+
+  lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeAcquire);
   Error error = mCommandEngine->execute(in_commands, aidl_return);
-  lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
+  lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
 }
@@ -292,11 +322,29 @@ ScopedAStatus AidlComposerClient::executeQtiExtendedCommands(
     const std::vector<DisplayCommand> &in_commands,
     const std::vector<QtiDisplayCommand> &in_qti_commands,
     std::vector<CommandResultPayload> *aidl_return) {
-  std::lock_guard<std::mutex> lock(m_command_mutex_);
+  // Get the display ID from the first command
+  if (in_commands.empty()) {
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
 
-  lifecycle_->CompositorSync(sdm::CompositorSyncTypeAcquire);
+  int64_t displayId = in_commands[0].display;  // Use per-display lock
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+      ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
+      CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
+      std::vector<CommandResultPayload> results;
+      results.emplace_back(std::move(error));
+      *aidl_return = std::move(results);
+      return TO_BINDER_STATUS(INT32(Error::None));
+    }
+  }
+
+  std::lock_guard<std::mutex> lock(m_display_command_mutex_[displayId]);
+
+  lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeAcquire);
   Error error = mCommandEngine->qtiExtendedExecute(in_commands, in_qti_commands, aidl_return);
-  lifecycle_->CompositorSync(sdm::CompositorSyncTypeRelease);
+  lifecycle_->CompositorSync(displayId, sdm::CompositorSyncTypeRelease);
 
   return TO_BINDER_STATUS(INT32(Error::None));
 }
@@ -391,7 +439,7 @@ ScopedAStatus AidlComposerClient::getDisplayAttribute(int64_t in_display, int32_
       *aidl_return = INT32(attributes.y_dpi * 1000.0f);
       break;
     case DisplayAttribute::CONFIG_GROUP:
-      *aidl_return = settings_->GetDisplayConfigGroup(in_display, attributes);
+      *aidl_return = settings_->GetDisplayConfigGroup(in_display, attributes, attributes.fps);
       break;
     default:
       ALOGW("Spurious attribute type");
@@ -438,7 +486,7 @@ ScopedAStatus AidlComposerClient::getDisplayConfigurations(
                                  static_cast<float>(variable_config.y_dpi)};
     display_configuration.vsyncPeriod = variable_config.vsync_period_ns;
     display_configuration.configGroup =
-        settings_->GetDisplayConfigGroup(in_display, variable_config);
+        settings_->GetDisplayConfigGroup(in_display, variable_config, variable_config.fps);
 
 #ifdef COMPOSER3_V4
     // Display output colorspace is fixed for builtin displays regardless of HDR content.
@@ -502,8 +550,59 @@ ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
   return TO_BINDER_STATUS(INT32(Error::Unsupported));
 }
 
-ScopedAStatus AidlComposerClient::startHdcpNegotiation(
-    int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) {
+ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
+                                                       const HdcpLevels &in_levels) {
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto dpy = mDisplayData.find(in_display);
+    if (dpy == mDisplayData.end()) {
+      ALOGE("HDCP negotiation failed for display %d: Display not found!", in_display);
+      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
+    }
+  }
+
+  int connected_level_int;
+  switch (in_levels.connectedLevel) {
+    case HdcpLevel::HDCP_UNKNOWN:
+      connected_level_int = -1;
+      break;
+    case HdcpLevel::HDCP_NONE:
+      connected_level_int = 3;
+      break;
+    case HdcpLevel::HDCP_V1:
+      connected_level_int = 1;
+      break;
+    case HdcpLevel::HDCP_V2:
+    case HdcpLevel::HDCP_V2_1:
+    case HdcpLevel::HDCP_V2_2:
+    case HdcpLevel::HDCP_V2_3:
+      connected_level_int = 2;
+      break;
+    default:
+      connected_level_int = -1;
+      break;
+  }
+
+  if (connected_level_int == -1) {
+    ALOGE("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
+    return TO_BINDER_STATUS(INT32(Error::BadParameter));
+  }
+
+  // TODO(user): b/516707332. Until this content encryption check is added in SF,
+  // we will not use this path for hdcp. But this stub is needed, and this check
+  // has to happen after validating the input parameters to satisfy VTS req's
+  if (!composer_driven_hdcp_) {
+    if (callback_) {
+      callback_->onHdcpLevelsChanged(in_display, in_levels);
+    }
+    return ScopedAStatus::ok();
+  }
+
+  auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
+  if (error != sdm::kErrorNone) {
+    return TO_BINDER_STATUS(INT32(Error::BadConfig));
+  }
+
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
@@ -594,7 +693,9 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
     // this is needed to prevent applying color transform twice. When client queries per display
     // capabilities, the global Capability::SKIP_CLIENT_COLOR_TRANSFORM is ignored. We need to push
     // DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM here to maintain support.
-    aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    if (caps_ && !caps_->IsPluggablePrimary()) {
+      aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    }
     int32_t has_doze_support = 0;
     caps_->GetDozeSupport(in_display, &has_doze_support);
     if (has_doze_support) {
@@ -605,7 +706,9 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
       aidl_return->push_back(DisplayCapability::BRIGHTNESS);
     }
   }
-
+#ifdef COMPOSER3_V3
+  aidl_return->push_back(DisplayCapability::MULTI_THREADED_PRESENT);
+#endif
   return ScopedAStatus::ok();
 }
 
@@ -758,14 +861,21 @@ ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_retu
   if (!disable_fp16_support_ && !overlay_values_init) {
     pixel_formats.push_back(PixelFormat::RGBA_FP16);
   }
-  overlay_values_init = true;
 
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
+
   static std::vector<Dataspace> dataspace_transfers{
       Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2, Dataspace::TRANSFER_SMPTE_170M,
       Dataspace::TRANSFER_LINEAR};
+
+  if (!disable_hdr_gamma_support_ && !overlay_values_init) {
+    dataspace_transfers.push_back(Dataspace::TRANSFER_ST2084);
+    dataspace_transfers.push_back(Dataspace::TRANSFER_HLG);
+  }
+  overlay_values_init = true;
+
   static std::vector<Dataspace> dataspace_ranges{Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
                                                  Dataspace::RANGE_EXTENDED};
   static bool mixed_colorspaces_support = true;
@@ -1148,7 +1258,7 @@ void AidlComposerClient::OnHotplug(uint64_t in_display, bool in_connected) {
     usleep(vsync_period * 2 / 1000);
 
     // Wait for the input command message queue to process before destroying the local display data.
-    std::lock_guard<std::mutex> lock(m_command_mutex_);
+    std::lock_guard<std::mutex> lock_cmd(m_display_command_mutex_[in_display]);
     std::lock_guard<std::mutex> lock_d(m_display_data_mutex_);
     mDisplayData.erase(in_display);
   }
@@ -1207,6 +1317,41 @@ void AidlComposerClient::OnVsyncIdle(uint64_t in_display) {
   callback_->onVsyncIdle(in_display);
 }
 
+#ifdef COMPOSER3_V4
+void AidlComposerClient::onHdcpLevelsChanged(uint64_t display, int32_t min_enc_level) {
+  if (!callback_) {
+    ALOGW("%s: Callback not registered or SF is unavailable.", __FUNCTION__);
+    return;
+  }
+  HdcpLevels new_levels;
+  // TODO(user): once driver support is available to notify us of a monitor's specific
+  // HDCP capabilities, we can specify it here. For now just populate with
+  // the maximum level we currently support
+  new_levels.maxLevel = HdcpLevel::HDCP_V2_3;
+  switch (min_enc_level) {
+    case -1:
+      new_levels.connectedLevel = HdcpLevel::HDCP_UNKNOWN;
+      new_levels.maxLevel = HdcpLevel::HDCP_UNKNOWN;
+      break;
+    case 1:
+      new_levels.connectedLevel = HdcpLevel::HDCP_V1;
+      break;
+    case 2:
+      new_levels.connectedLevel = HdcpLevel::HDCP_V2;
+      break;
+    case 3:
+      new_levels.connectedLevel = HdcpLevel::HDCP_NONE;
+      break;
+    default:
+      new_levels.connectedLevel = HdcpLevel::HDCP_NONE;
+      break;
+  }
+
+  ALOGI("HDCP connected level successfully changed to %d", min_enc_level);
+  callback_->onHdcpLevelsChanged(display, new_levels);
+}
+#endif
+
 Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display, SnapHandle *rawHandle) {
   // TODO(user): revisit for caching and freeBuffer in success case.
   if (!mHandleImporter.importBuffer(rawHandle)) {
@@ -1230,8 +1375,9 @@ Error AidlComposerClient::getDisplayReadbackBuffer(int64_t display, SnapHandle *
 }
 
 bool AidlComposerClient::CommandEngine::init() {
-  mWriter = std::make_unique<ComposerServiceWriter>();
-  return (mWriter != nullptr);
+  // Initialize the display writers map
+  mDisplayWriters.clear();
+  return true;
 }
 
 void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCommand &displayCmd) {
@@ -1248,6 +1394,10 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  displayCmd.display);
   ExecuteCommand(displayCmd.presentDisplay, &CommandEngine::executePresentDisplay,
                  displayCmd.display);
+#ifdef COMPOSER3_V5
+  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
+                 displayCmd.display, *displayCmd.activeConfig);
+#endif
 #ifdef COMPOSER3_V3
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
@@ -1255,10 +1405,6 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  &CommandEngine::executePresentOrValidateDisplay, displayCmd.display,
                  displayCmd.expectedPresentTime, displayCmd.frameIntervalNs);
 #else
-#ifdef COMPOSER3_V5
-  ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
-                 displayCmd.display, *displayCmd.activeConfig);
-#endif
   int32_t frameIntervalNs = -1;
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
                  displayCmd.display, displayCmd.expectedPresentTime, frameIntervalNs);
@@ -1333,53 +1479,93 @@ void AidlComposerClient::CommandEngine::executeLayerCommmands(const DisplayComma
 
 Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayCommand> &commands,
                                                  std::vector<CommandResultPayload> *result) {
-  mCommandIndex = 0;
-  for (const auto &displayCmd : commands) {
-    executeLayerCommmands(displayCmd);
-    executeDisplayCommmands(displayCmd);
-    ++mCommandIndex;
+  // Get the display ID from the first command
+  if (commands.empty()) {
+    return Error::BadParameter;
   }
 
-  if (!mCommandIndex) {
+  // Get the writer for this display
+  int64_t displayId = commands[0].display;
+  ComposerServiceWriter *writer = getWriterForDisplay(displayId);
+
+  mCommandIndex[displayId] = 0;
+  for (const auto &displayCmd : commands) {
+    // Verify all commands are for the same display
+    if (displayCmd.display != displayId) {
+      ALOGE("execute: Command for display=%" PRId64 " in batch for display=%" PRId64,
+            displayCmd.display, displayId);
+      continue;  // Skip commands for other displays
+    }
+
+    executeLayerCommmands(displayCmd);
+    executeDisplayCommmands(displayCmd);
+    ++mCommandIndex[displayId];
+  }
+
+  if (!mCommandIndex[displayId]) {
     ALOGW("%s: No command found", __FUNCTION__);
   }
 
-  *result = mWriter->getPendingCommandResults();
-  reset();
+  *result = writer->getPendingCommandResults();
+  writer->reset();
 
-  return (mCommandIndex) ? Error::None : Error::BadParameter;
+  return (mCommandIndex[displayId]) ? Error::None : Error::BadParameter;
 }
 
 Error AidlComposerClient::CommandEngine::qtiExtendedExecute(
     const std::vector<DisplayCommand> &commands, const std::vector<QtiDisplayCommand> &qti_commands,
     std::vector<CommandResultPayload> *result) {
+  // Get the display ID from the first command
+  if (commands.empty()) {
+    return Error::BadParameter;
+  }
+
+  // Get the writer for this display
+  int64_t displayId = commands[0].display;
+  ComposerServiceWriter *writer = getWriterForDisplay(displayId);
+
   std::vector<CommandResultPayload> qti_results = {};
   auto status = Error::None;
 
   // Execute all layer commands first.
-  mCommandIndex = 0;
+  mCommandIndex[displayId] = 0;
   for (const auto &displayCmd : commands) {
+    // Verify all commands are for the same display
+    if (displayCmd.display != displayId) {
+      ALOGE("qtiExtendedExecute: Command for display=%" PRId64 " in batch for display=%" PRId64,
+            displayCmd.display, displayId);
+      continue;  // Skip commands for other displays
+    }
+
     executeLayerCommmands(displayCmd);
-    ++mCommandIndex;
+    ++mCommandIndex[displayId];
   }
 
-  *result = mWriter->getPendingCommandResults();
-  reset();
+  *result = writer->getPendingCommandResults();
+  writer->reset();
+
   // Execute all QTI extension commands after all layer commands.
   if (!qti_commands.empty()) {
     status = qtiExecute(qti_commands, &qti_results);
   }
 
-  if (mCommandIndex) {
+  if (mCommandIndex[displayId]) {
     // Execute all display commands finally.
-    mCommandIndex = 0;
+    mCommandIndex[displayId] = 0;
     for (const auto &displayCmd : commands) {
+      // Verify all commands are for the same display
+      if (displayCmd.display != displayId) {
+        ALOGE("qtiExtendedExecute: Command for display=%" PRId64 " in batch for display=%" PRId64,
+              displayCmd.display, displayId);
+        continue;  // Skip commands for other displays
+      }
+
       executeDisplayCommmands(displayCmd);
-      ++mCommandIndex;
+      ++mCommandIndex[displayId];
     }
 
-    auto new_results = mWriter->getPendingCommandResults();
-    reset();
+    auto new_results = writer->getPendingCommandResults();
+    writer->reset();
     if (!new_results.empty()) {
       for (auto &r : new_results) {
         result->push_back(std::move(r));
@@ -1401,6 +1587,13 @@ Error AidlComposerClient::CommandEngine::qtiExtendedExecute(
 
 Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplayCommand> &commands,
                                                     std::vector<CommandResultPayload> *result) {
+  // Get the display ID from the first command
+  if (commands.empty()) {
+    return Error::None;
+  }
+
+  int64_t displayId = commands[0].display;
+  ComposerServiceWriter *writer = getWriterForDisplay(displayId);
   for (const auto &displayCmd : commands) {
     for (const auto &layerCmd : displayCmd.qtiLayers) {
       ExecuteCommand(layerCmd.qtiLayerType, &CommandEngine::executeSetLayerType, displayCmd.display,
@@ -1437,24 +1630,24 @@ Error AidlComposerClient::CommandEngine::qtiExecute(const std::vector<QtiDisplay
     ExecuteCommand(displayCmd.time, &CommandEngine::executeSetDisplayElapseTime, displayCmd.display,
                    displayCmd.time);
 
-    ++mCommandIndex;
+    ++mCommandIndex[displayId];
   }
 
-  if (!mCommandIndex) {
+  if (!mCommandIndex[displayId]) {
     ALOGW("%s: No command found", __FUNCTION__);
   }
 
-  *result = mWriter->getPendingCommandResults();
-  reset();
+  *result = writer->getPendingCommandResults();
+  writer->reset();
 
-  return (mCommandIndex) ? Error::None : Error::BadParameter;
+  return (mCommandIndex[displayId]) ? Error::None : Error::BadParameter;
 }
 
 void AidlComposerClient::CommandEngine::executeSetColorTransform(int64_t display,
                                                                  const std::vector<float> &matrix) {
   auto err = mClient.settings_->SetColorTransform(display, matrix);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1497,7 +1690,7 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget(int64_t display,
   }
 
   if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+    writeError(__FUNCTION__, display, err);
   }
 }
 
@@ -1505,7 +1698,7 @@ void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
     uint64_t display, const DisplayBrightness &command, bool performing_commit) {
   if (std::isnan(command.brightness) || command.brightness > 1.0f ||
       (command.brightness < 0.0f && command.brightness != -1.0f)) {
-    writeError(__FUNCTION__, Error::BadParameter);
+    writeError(__FUNCTION__, display, Error::BadParameter);
     return;
   }
 
@@ -1520,7 +1713,7 @@ void AidlComposerClient::CommandEngine::executeSetDisplayBrightness(
 
   err = mClient.settings_->SetDisplayBrightness(display, command.brightness, performing_commit);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 void AidlComposerClient::CommandEngine::executeSetOutputBuffer(uint64_t display,
@@ -1550,7 +1743,7 @@ void AidlComposerClient::CommandEngine::executeSetOutputBuffer(uint64_t display,
   }
 
   if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+    writeError(__FUNCTION__, display, err);
   }
 }
 
@@ -1563,7 +1756,7 @@ void AidlComposerClient::CommandEngine::executeValidateDisplay(
   auto err = validateDisplay(display);
 
   if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+    writeError(__FUNCTION__, display, err);
   }
 }
 
@@ -1582,13 +1775,16 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
   // TODO(user): remove typesCount and reqsCount as these are no longer used
   auto status = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
                                                     &typesCount, &reqsCount, &needsCommit);
+  // Get the writer for this display
+  ComposerServiceWriter *writer = getWriterForDisplay(display);
+
   if (needsCommit) {
     if (status != sdm::kErrorNone && status != sdm::kErrorNeedsCommit) {
       ALOGE("%s: CommitOrPrepare failed %d", __FUNCTION__, status);
     }
     // Implement post validation. Getcomptypes etc;
     postValidateDisplay(display);
-    mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
+    writer->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
   } else {
     if (status == sdm::kErrorNeedsCommit) {
       // Perform post validate.
@@ -1597,10 +1793,10 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
         mClient.drawcycle_->AcceptDisplayChanges(display);
       }
       // Set result to validated, has comp changes
-      mWriter->setPresentOrValidateResult(display, static_cast<PresentOrValidate::Result>(2));
+      writer->setPresentOrValidateResult(display, static_cast<PresentOrValidate::Result>(2));
     } else if (status == sdm::kErrorNone) {
       // Set result to Presented.
-      mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Presented);
+      writer->setPresentOrValidateResult(display, PresentOrValidate::Result::Presented);
     } else if (status == sdm::kErrorParameters) {
       // if external display is hotplugged out during a commit, sdm will return display not found
       // which is expected so only warn in this case
@@ -1608,7 +1804,7 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
       return;
     } else {
       ALOGE("CommitOrPrepare failed !needsCommit %d", status);
-      writeError(__FUNCTION__, Error::BadConfig);
+      writeError(__FUNCTION__, display, Error::BadConfig);
       return;
     }
     // perform post present display.
@@ -1619,7 +1815,7 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
 void AidlComposerClient::CommandEngine::executeAcceptDisplayChanges(int64_t display) {
   auto err = mClient.drawcycle_->AcceptDisplayChanges(display);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1638,7 +1834,7 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
 
   auto err = presentDisplay(display, &presentFence);
   if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+    writeError(__FUNCTION__, display, err);
   }
 }
 
@@ -1672,13 +1868,13 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       // disconnect invalidates the display id. The implementation should
       // ensure all layers for the display are destroyed.
       ALOGW("%s: Invalid  display Id(%" PRId64 ")!", __FUNCTION__, display);
-      writeError(__FUNCTION__, Error::BadDisplay);
+      writeError(__FUNCTION__, display, Error::BadDisplay);
       return;
     }
   } else {
     ALOGW("%s: Invalid Parameter out of either display Id(%" PRId64 ") or  layer Id(%" PRId64 ")!", __FUNCTION__,
           display, layer);
-    writeError(__FUNCTION__, Error::BadParameter);
+    writeError(__FUNCTION__, display, Error::BadParameter);
     return;
   }
 
@@ -1693,7 +1889,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       ly->second.Buffers.resize(layerCmd.newBufferSlotCount);
     } else {
       ALOGW("%s: Layer Id %" PRId64 " not allowed for display-%" PRId64 " !", __FUNCTION__, layer, display);
-      writeError(__FUNCTION__, Error::BadLayer);
+      writeError(__FUNCTION__, display, Error::BadLayer);
       return;
     }
   } else if (cmd == LayerLifecycleBatchCommandType::DESTROY) {
@@ -1712,13 +1908,13 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
       }
     } else {
       ALOGW("%s: Layer Id %" PRId64 " not allowed for display-%" PRId64 " !", __FUNCTION__, layer, display);
-      writeError(__FUNCTION__, Error::BadLayer);
+      writeError(__FUNCTION__, display, Error::BadLayer);
       return;
     }
   } else {
     ALOGW("%s: Unsupported LLCBC command Id %d for Layer-%" PRId64 " and display-%" PRId64 " !", __FUNCTION__, cmd,
           layer, display);
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
     return;
   }
 }
@@ -1729,14 +1925,14 @@ void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t di
                                                                       const Point &cursorPosition) {
   if (mClient.layer_builder_->GetDeviceSelectedCompositionType(display, layer) !=
       sdm::SDMCompositionType::COMP_CURSOR) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
     return;
   }
 
   auto err =
       mClient.settings_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
     return;
   }
 
@@ -1771,7 +1967,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, i
   }
 
   if (error != Error::None) {
-    writeError(__FUNCTION__, error);
+    writeError(__FUNCTION__, display, error);
   }
 }
 
@@ -1785,7 +1981,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerSurfaceDamage(
 
   auto err = mClient.layer_builder_->SetLayerSurfaceDamage(display, layer, region);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1805,13 +2001,13 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlendMode(
       break;
     case BlendMode::INVALID:
     default:
-      writeError(__FUNCTION__, Error::BadConfig);
+      writeError(__FUNCTION__, display, Error::BadConfig);
       return;
   }
 
   auto err = mClient.layer_builder_->SetLayerBlendMode(display, layer, blending);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1828,7 +2024,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerColor(int64_t display, in
                           floatColorToUint8Clamped(color.b), floatColorToUint8Clamped(color.a)};
   auto err = mClient.layer_builder_->SetLayerColor(display, layer, int_color);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1837,7 +2033,11 @@ void AidlComposerClient::CommandEngine::executeSetLayerComposition(
   auto err = mClient.layer_builder_->SetLayerCompositionType(display, layer,
                                                              INT32(composition.composition));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    if (err == sdm::kErrorNotSupported) {
+      writeError(__FUNCTION__, display, Error::Unsupported);
+      return;
+    }
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1845,7 +2045,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerDataspace(
     int64_t display, int64_t layer, const ParcelableDataspace &dataspace) {
   auto err = mClient.layer_builder_->SetLayerDataspace(display, layer, INT32(dataspace.dataspace));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1857,7 +2057,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerDisplayFrame(int64_t disp
   GetSDMRectFromRect(&rect, &region);
   auto err = mClient.layer_builder_->SetLayerDisplayFrame(display, layer, region.rects[0]);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1865,7 +2065,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
                                                                   const PlaneAlpha &planeAlpha) {
   auto err = mClient.layer_builder_->SetLayerPlaneAlpha(display, layer, planeAlpha.alpha);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1878,7 +2078,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int
   lut_3d.validLutEntries = luts.pfd.get() >= 0;
   auto err = mClient.layer_builder_->SetLayerLuts(display, layer, &lut_3d);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 #endif
@@ -1898,7 +2098,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerSourceCrop(int64_t displa
 
   auto err = mClient.layer_builder_->SetLayerSourceCrop(display, layer, rect);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1912,7 +2112,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerTransform(
   auto err = mClient.layer_builder_->SetLayerTransform(
       display, layer, static_cast<sdm::SDMTransform>(layer_transform));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1926,7 +2126,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerVisibleRegion(
 
   auto err = mClient.layer_builder_->SetLayerVisibleRegion(display, layer, region);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1934,7 +2134,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerZOrder(int64_t display, i
                                                               const ZOrder &zOrder) {
   auto err = mClient.layer_builder_->SetLayerZOrder(display, layer, zOrder.z);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1952,7 +2152,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPerFrameMetadata(
   auto err = mClient.layer_builder_->SetLayerPerFrameMetadata(
       display, layer, perFrameMetadata.size(), keys.data(), values.data());
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1960,7 +2160,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerColorTransform(
     int64_t display, int64_t layer, const std::vector<float> &colorTransform) {
   auto err = mClient.layer_builder_->SetLayerColorTransform(display, layer, colorTransform.data());
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1981,7 +2181,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPerFrameMetadataBlobs(
       display, layer, perFrameMetadataBlob.size(), keys.data(), sizes_of_metablob_.data(),
       blob_of_data_.data());
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -1989,7 +2189,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBrightness(
     int64_t display, int64_t layer, const LayerBrightness &brightness) {
   auto err = mClient.layer_builder_->SetLayerBrightness(display, layer, brightness.brightness);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadParameter);
+    writeError(__FUNCTION__, display, Error::BadParameter);
   }
 }
 
@@ -2006,7 +2206,7 @@ void AidlComposerClient::CommandEngine::executeSetExpectedPresentTimeInternal(
 
   auto err = mClient.drawcycle_->SetExpectedPresentTime(display, expectedPresentTimestamp);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2018,7 +2218,7 @@ void AidlComposerClient::CommandEngine::executeSetFrameIntervalNsInternal(int64_
   uint32_t fi_ns = (uint32_t)frameIntervalNs;
   auto err = mClient.drawcycle_->SetFrameIntervalNs(display, fi_ns);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2027,15 +2227,16 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
   // TODO: Add impl here and in hwc_session / hwc_display
   //   auto err = mClient.layer_builder_->SetLayerBlockingRegion(display, blockingRegion);
   //   if (err != Error::None) {
-  //     writeError(__FUNCTION__, Error::BadConfig);
+  //     writeError(__FUNCTION__, display, Error::BadConfig);
   //   }
-  // writeError(__FUNCTION__, Error::Unsupported);
+  // writeError(__FUNCTION__, display, Error::Unsupported);
 }
 
 #ifdef COMPOSER3_V3
 void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
   auto error = Error::None;
+  mClient.drawcycle_->WaitForDrawCycleToComplete(display);
   for (auto &slot : slotsToClear) {
     SnapHandle *layerBuffer = nullptr;
     lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, true, &layerBuffer);
@@ -2057,7 +2258,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
   }
 
   if (error != Error::None) {
-    writeError(__FUNCTION__, error);
+    writeError(__FUNCTION__, display, error);
   }
 }
 #endif
@@ -2071,12 +2272,12 @@ void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
   auto error = mClient.settings_->SetActiveConfigWithConstraints(display, config.configId,
                                                                  &constraints, &timeline);
   if (error == sdm::kSeamlessNotAllowed) {
-    writeError(__FUNCTION__, Error::SeamlessNotAllowed);
+    writeError(__FUNCTION__, display, Error::SeamlessNotAllowed);
     return;
   }
 
   if (error != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 #endif
@@ -2124,9 +2325,12 @@ Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
     aidlReleaseFences.emplace_back(::ndk::ScopedFileDescriptor(Fence::Dup(fd)));
   }
 
-  mWriter->setPresentFence(display,
-                           std::move(::ndk::ScopedFileDescriptor(Fence::Dup(*presentFence))));
-  mWriter->setReleaseFences(display, layers, std::move(aidlReleaseFences));
+  // Get the writer for this display
+  ComposerServiceWriter *writer = getWriterForDisplay(display);
+
+  writer->setPresentFence(display,
+                          std::move(::ndk::ScopedFileDescriptor(Fence::Dup(*presentFence))));
+  writer->setReleaseFences(display, layers, std::move(aidlReleaseFences));
 
   return Error::None;
 }
@@ -2151,9 +2355,10 @@ Error AidlComposerClient::CommandEngine::setChangedCompositionTypes(int64_t disp
   if (err != sdm::kErrorNone) {
     return static_cast<Error>(err);
   }
-
-  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(requestedLayers),
-                                      compositionTypes);
+  // Get the writer for this display
+  ComposerServiceWriter *writer = getWriterForDisplay(display);
+  writer->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(requestedLayers),
+                                     compositionTypes);
 
   return Error::None;
 }
@@ -2178,9 +2383,9 @@ Error AidlComposerClient::CommandEngine::setDisplayRequests(int64_t display) {
   if (err != sdm::kErrorNone) {
     return Error::BadConfig;
   }
-
-  mWriter->setDisplayRequests(display, display_reqs,
-                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
+  ComposerServiceWriter *writer = getWriterForDisplay(display);
+  writer->setDisplayRequests(display, display_reqs,
+                             static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
 
   return Error::None;
 }
@@ -2198,8 +2403,8 @@ Error AidlComposerClient::CommandEngine::setClientTargetProperty(int64_t display
 
   clientTargetProperty.dataspace = static_cast<Dataspace>(client_property.dataspace);
   clientTargetProperty.pixelFormat = static_cast<PixelFormat>(client_property.pixel_format);
-
-  mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
+  ComposerServiceWriter *writer = getWriterForDisplay(display);
+  writer->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
 
   return Error::None;
 }
@@ -2344,8 +2549,8 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
       close(fd);
     }
   }
-
-  mWriter->setDisplayLuts(display, requestedLayers, requestedLuts, std::move(requestedFds));
+  ComposerServiceWriter *writer = getWriterForDisplay(display);
+  writer->setDisplayLuts(display, requestedLayers, requestedLuts, std::move(requestedFds));
 
   return Error::None;
 }
@@ -2353,6 +2558,7 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
 
 Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display) {
   auto error = setChangedCompositionTypes(display);
+  ComposerServiceWriter *writer = getWriterForDisplay(display);
   if (error != Error::None) {
     return error;
   }
@@ -2360,20 +2566,20 @@ Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display) {
   error = setDisplayRequests(display);
   if (error != Error::None) {
     // clear mCommandsResults on error
-    reset();
+    writer->reset();
     return error;
   }
 
   error = setClientTargetProperty(display);
   if (error != Error::None) {
-    reset();
+    writer->reset();
     return error;
   }
 
 #ifdef COMPOSER3_V4
   error = setDisplayLuts(display);
   if (error != Error::None) {
-    reset();
+    writer->reset();
     return error;
   }
 #endif
@@ -2415,7 +2621,7 @@ void AidlComposerClient::CommandEngine::executeSetClientTarget_3_1(int64_t displ
     }
   }
   if (err != Error::None) {
-    writeError(__FUNCTION__, err);
+    writeError(__FUNCTION__, display, err);
   }
 }
 
@@ -2423,7 +2629,7 @@ void AidlComposerClient::CommandEngine::executeSetDisplayElapseTime(int64_t disp
                                                                     uint64_t time) {
   auto err = mClient.drawcycle_->SetDisplayElapseTime(display, time);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2432,7 +2638,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerType(int64_t display, int
   auto err =
       mClient.layer_builder_->SetLayerType(display, layer, static_cast<sdm::SDMLayerTypes>(type));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2441,7 +2647,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerFlag(int64_t display, int
   auto err =
       mClient.layer_builder_->SetLayerFlag(display, layer, static_cast<sdm::SDMLayerFlag>(flag));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2452,7 +2658,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
   uint32_t size = privacyRegions.size();
   if (size == 0) {
     ALOGW("%s: Provided empty privacy regions for layer %" PRId64, __func__, layer);
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
     return;
   }
 
@@ -2480,14 +2686,14 @@ void AidlComposerClient::CommandEngine::executeSetLayerPrivacyRegions(
       display, layer, static_cast<const std::vector<sdm::PrivacyRegion> &>(regions));
   if (err != sdm::kErrorNone) {
     ALOGW("%s: Failed to set layer's %" PRId64 " privacy regions", __func__, layer);
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerCornerRadius(
     int64_t display, int64_t layer, const std::optional<QtiCornerRadius> cornerRadius) {
   if (!cornerRadius.has_value()) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
     return;
   }
 
@@ -2496,7 +2702,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerCornerRadius(
   auto err = mClient.layer_builder_->SetLayerCornerRadius(display, layer, radius);
   if (err != sdm::kErrorNone) {
     ALOGW("%s: Failed to set layer's %" PRId64 " corner radius", __func__, layer);
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 #endif
@@ -2510,7 +2716,7 @@ void AidlComposerClient::CommandEngine::executeSetRenderLayerReferenceSpaceType(
       static_cast<sdm::SDMRenderLayerReferenceSpaceType>(
           reference_layer_space_type.renderLayerReferenceSpaceType));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2520,7 +2726,7 @@ void AidlComposerClient::CommandEngine::executeSetCompositionLayerType(
       display, layer,
       static_cast<sdm::SDMCompositionLayerType>(comp_layer_type.compositionLayerType));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2530,7 +2736,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPose(int64_t display, int
   GetSDMLayerPose(layer_pose, sdm_layer_pose);
   auto err = mClient.layer_builder_->SetLayerPose(display, layer, sdm_layer_pose);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2540,7 +2746,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerQuadSize(
   GetSDMLayerQuadSize(layer_quad_size, sdm_layer_quad_size);
   auto err = mClient.layer_builder_->SetLayerQuadSize(display, layer, sdm_layer_quad_size);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2550,7 +2756,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerFrustum(int64_t display, 
   GetSDMLayerFrustum(layer_frustum, sdm_layer_frustum);
   auto err = mClient.layer_builder_->SetLayerFrustum(display, layer, sdm_layer_frustum);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2561,7 +2767,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneEquation(
   auto err =
       mClient.layer_builder_->SetLayerPlaneEquation(display, layer, sdm_layer_plane_equation);
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 
@@ -2571,7 +2777,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerVisibilityType(
       display, layer,
       static_cast<sdm::SDMLayerVisibilityType>(layer_visibility_type.layerVisibilityType));
   if (err != sdm::kErrorNone) {
-    writeError(__FUNCTION__, Error::BadConfig);
+    writeError(__FUNCTION__, display, Error::BadConfig);
   }
 }
 #endif
