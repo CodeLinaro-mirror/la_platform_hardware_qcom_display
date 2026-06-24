@@ -424,7 +424,10 @@ DisplayError ResourceDefault::PostCommit(Handle display_ctx, DispLayerStack *dis
   return kErrorNone;
 }
 
-void ResourceDefault::Purge(Handle display_ctx) {
+void ResourceDefault::Purge(Handle display_ctx, bool /*keep_dedicated*/) {
+  // ResourceDefault does not implement the dedicated-pipe pool used by SDM-noship, so
+  // keep_dedicated is ignored here. Automotive persistent-dedicate only takes effect when
+  // the noship resource_impl is in use.
   DisplayResourceContext *display_resource_ctx =
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
   HWBlockType hw_block_type = display_resource_ctx->hw_block_type;

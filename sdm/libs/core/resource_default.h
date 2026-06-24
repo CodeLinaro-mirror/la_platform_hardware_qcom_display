@@ -101,7 +101,7 @@ class ResourceDefault : public ResourceInterface {
   virtual DisplayError PostCommit(Handle display_ctx, DispLayerStack *disp_layer_stack);
   virtual DisplayError Precheck(Handle display_ctx, DispLayerStack *disp_layer_stack,
                                 LayerFeedback* feedback);
-  virtual void Purge(Handle display_ctx);
+  virtual void Purge(Handle display_ctx, bool keep_dedicated = false);
   virtual DisplayError SetMaxMixerStages(Handle display_ctx, uint32_t max_mixer_stages);
   virtual DisplayError ValidateScaling(const LayerRect &crop, const LayerRect &dst, bool rotate90,
                                        BufferLayout layout, bool use_rotator_downscale);

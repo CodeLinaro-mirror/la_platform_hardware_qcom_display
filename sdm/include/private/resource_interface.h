@@ -111,7 +111,7 @@ class ResourceInterface {
   virtual DisplayError PostPrepare(Handle display_ctx, DispLayerStack *disp_layer_stack) = 0;
   virtual DisplayError Commit(Handle display_ctx, DispLayerStack *disp_layer_stack) = 0;
   virtual DisplayError PostCommit(Handle display_ctx, DispLayerStack *disp_layer_stack) = 0;
-  virtual void Purge(Handle display_ctx) = 0;
+  virtual void Purge(Handle display_ctx, bool keep_dedicated = false) = 0;
   virtual DisplayError SetMaxMixerStages(Handle display_ctx, uint32_t max_mixer_stages) = 0;
   virtual DisplayError ValidateScaling(const LayerRect &crop, const LayerRect &dst, bool rotate90,
                                        BufferLayout layout, bool use_rotator_downscale) = 0;
