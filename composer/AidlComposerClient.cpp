@@ -601,14 +601,7 @@ ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
                                                        const HdcpLevels &in_levels) {
-  {
-    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-    auto dpy = mDisplayData.find(in_display);
-    if (dpy == mDisplayData.end()) {
-      ALOGE("HDCP negotiation failed for display %d: Display not found!", in_display);
-      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
-    }
-  }
+  Error ret = Error::None;
 
   int connected_level_int;
   switch (in_levels.connectedLevel) {
@@ -632,9 +625,31 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
       break;
   }
 
-  if (connected_level_int == -1) {
-    ALOGE("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
-    return TO_BINDER_STATUS(INT32(Error::BadParameter));
+  // check for both bad display and bad parameter simultaneously so the
+  // error code is not overwritten
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto dpy = mDisplayData.find(in_display);
+    if (dpy == mDisplayData.end()) {
+      ALOGW("HDCP negotiation failed for display %" PRId64 ": Display not found!", in_display);
+      ret = Error::BadDisplay;
+    } else if (connected_level_int == -1) {
+      ALOGW("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
+      ret = Error::BadParameter;
+    }
+  }
+
+  // send invalid levels to SF on fail
+  if (ret != Error::None) {
+    if (callback_) {
+      HdcpLevels invalidLevels = {.connectedLevel = HdcpLevel::HDCP_UNKNOWN,
+                                  .maxLevel = HdcpLevel::HDCP_UNKNOWN};
+      callback_->onHdcpLevelsChanged(in_display, invalidLevels);
+    } else {
+      ALOGW("%s: Callback not registered, cannot notify HDCP failure for display %" PRId64,
+            __FUNCTION__, in_display);
+    }
+    return TO_BINDER_STATUS(INT32(ret));
   }
 
   // TODO(user): b/516707332. Until this content encryption check is added in SF,
@@ -644,7 +659,7 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
     if (callback_) {
       callback_->onHdcpLevelsChanged(in_display, in_levels);
     }
-    return ScopedAStatus::ok();
+    return TO_BINDER_STATUS(INT32(ret));
   }
 
   auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
