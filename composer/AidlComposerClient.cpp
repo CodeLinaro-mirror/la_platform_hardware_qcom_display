@@ -120,7 +120,48 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   composer_driven_hdcp_ = (value == 1);
   ALOGV("composer_driven_hdcp_: %d", composer_driven_hdcp_);
 
+  getSupportedOverlayProperties();
+
   return true;
+}
+
+void AidlComposerClient::getSupportedOverlayProperties() {
+  // All individually supported properties by hardware
+  supported_pixel_formats_ = {PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,
+                              PixelFormat::RGB_888,      PixelFormat::RGB_565,
+                              PixelFormat::BGRA_8888,    PixelFormat::YV12,
+                              PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
+
+  if (!disable_fp16_support_) {
+    supported_pixel_formats_.push_back(PixelFormat::RGBA_FP16);
+  }
+
+  supported_dataspace_standards_ = {Dataspace::STANDARD_BT709,     Dataspace::STANDARD_BT601_625,
+                                    Dataspace::STANDARD_BT601_525, Dataspace::STANDARD_BT2020,
+                                    Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
+
+  supported_dataspace_transfers_ = {Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2,
+                                    Dataspace::TRANSFER_SMPTE_170M, Dataspace::TRANSFER_LINEAR};
+
+  if (!disable_hdr_gamma_support_) {
+    supported_dataspace_transfers_.push_back(Dataspace::TRANSFER_ST2084);
+    supported_dataspace_transfers_.push_back(Dataspace::TRANSFER_HLG);
+  }
+
+  supported_dataspace_ranges_ = {Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
+                                 Dataspace::RANGE_EXTENDED};
+
+#ifdef COMPOSER3_V4
+  // only 3d lut is currently supported
+  LutProperties lut_prop;
+  lut_prop.dimension = LutProperties::Dimension::THREE_D;
+  lut_prop.size = INT32(sdm::kLutDim);
+  lut_prop.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+
+  if (!disable_luts_overlay_support_) {
+    supported_lut_props_.push_back(lut_prop);
+  }
+#endif
 }
 
 ::android::status_t AidlComposerClient::notifyCallback(uint32_t command,
@@ -172,6 +213,14 @@ AidlComposerClient::~AidlComposerClient() {
   }
 
   mDisplayData.clear();
+
+  supported_pixel_formats_.clear();
+  supported_dataspace_standards_.clear();
+  supported_dataspace_transfers_.clear();
+  supported_dataspace_ranges_.clear();
+#ifdef COMPOSER3_V4
+  supported_lut_props_.clear();
+#endif
 
   mHandleImporter.cleanup();
 
@@ -851,58 +900,25 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 }
 
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
-  // All individually supported properties by hardware
-  static bool overlay_values_init = false;
-  static std::vector<PixelFormat> pixel_formats{
-      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,   PixelFormat::RGB_888,
-      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
-      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
-
-  if (!disable_fp16_support_ && !overlay_values_init) {
-    pixel_formats.push_back(PixelFormat::RGBA_FP16);
-  }
-
-  static std::vector<Dataspace> dataspace_standards{
-      Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
-      Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
-
-  static std::vector<Dataspace> dataspace_transfers{
-      Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2, Dataspace::TRANSFER_SMPTE_170M,
-      Dataspace::TRANSFER_LINEAR};
-
-  if (!disable_hdr_gamma_support_ && !overlay_values_init) {
-    dataspace_transfers.push_back(Dataspace::TRANSFER_ST2084);
-    dataspace_transfers.push_back(Dataspace::TRANSFER_HLG);
-  }
-  overlay_values_init = true;
-
-  static std::vector<Dataspace> dataspace_ranges{Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
-                                                 Dataspace::RANGE_EXTENDED};
-  static bool mixed_colorspaces_support = true;
+  bool mixed_colorspaces_support = true;
 
   OverlayProperties::SupportedBufferCombinations supported_combination;
 
   // Combination 1 - All support pixel formats work for all supported colorspaces
   // Since all pixel formats work for all colorspaces only 1 entry is required
-  supported_combination.pixelFormats = std::move(pixel_formats);
-  supported_combination.standards = std::move(dataspace_standards);
-  supported_combination.transfers = std::move(dataspace_transfers);
-  supported_combination.ranges = std::move(dataspace_ranges);
+  supported_combination.pixelFormats = supported_pixel_formats_;
+  supported_combination.standards = supported_dataspace_standards_;
+  supported_combination.transfers = supported_dataspace_transfers_;
+  supported_combination.ranges = supported_dataspace_ranges_;
 
   aidl_return->combinations.emplace_back(supported_combination);
   aidl_return->supportMixedColorSpaces = mixed_colorspaces_support;
 
 #ifdef COMPOSER3_V4
-  // only 3d lut is currently supported
-  LutProperties supported_lut_props;
-  supported_lut_props.dimension = LutProperties::Dimension::THREE_D;
-  supported_lut_props.size = INT32(sdm::kLutDim);
-  supported_lut_props.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
-
-  if (!disable_luts_overlay_support_) {
+  if (!supported_lut_props_.empty()) {
     // initialize optional vector
     aidl_return->lutProperties.emplace();
-    aidl_return->lutProperties->emplace_back(supported_lut_props);
+    aidl_return->lutProperties->assign(supported_lut_props_.begin(), supported_lut_props_.end());
   }
 #endif
 
