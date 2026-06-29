@@ -862,6 +862,10 @@ Error AidlComposerClient::CommandEngine::execute(const std::vector<DisplayComman
                      layerCmd.layer, *layerCmd.perFrameMetadataBlob);
       ExecuteCommand(layerCmd.blockingRegion, &CommandEngine::executeSetLayerBlockingRegion,
                      displayCmd.display, layerCmd.layer, *layerCmd.blockingRegion);
+#ifdef COMPOSER3_V4
+      ExecuteCommand(layerCmd.luts, &CommandEngine::executeSetLayerLuts, displayCmd.display,
+                   layerCmd.layer, *layerCmd.luts);
+#endif
     }
     ExecuteCommand(displayCmd.colorTransformMatrix, &CommandEngine::executeSetColorTransform,
                    displayCmd.display, *displayCmd.colorTransformMatrix);
@@ -1314,6 +1318,13 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
     writeError(__FUNCTION__, err);
   }
 }
+
+#ifdef COMPOSER3_V4
+void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int64_t layer,
+                                                            const Luts &luts) {
+  writeError(__FUNCTION__, Error::Unsupported);
+}
+#endif
 
 void AidlComposerClient::CommandEngine::executeSetLayerSidebandStream(
     int64_t display, int64_t layer, const NativeHandle &sidebandStream) {
