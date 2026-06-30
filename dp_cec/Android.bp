@@ -1,6 +1,6 @@
 cc_library_shared {
 
-    name: "dp_cec",
+    name: "hdmi_cec.pluggable",
     defaults: ["qtidisplay_defaults"],
     sanitize: {
         integer_overflow: true,

@@ -44,3 +44,7 @@ ifneq ($(TARGET_IS_HEADLESS),true)
     endif
 
 endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),sun)
+        DISPLAY_MODULES_HARDWARE += hdmi_cec.pluggable
+endif
