@@ -1617,6 +1617,10 @@ Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
     return Error::BadConfig;
   }
 
+  if (!requested_luts) {
+    return Error::BadConfig;
+  }
+
   uint32_t num_elements = requested_luts->size();
   if (!num_elements) {
     return Error::None;
@@ -1714,10 +1718,14 @@ Error AidlComposerClient::CommandEngine::lookupBuffer(int64_t display, int64_t l
   if (useCache) {
     std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
 
-    BufferCacheEntry *entry;
+    BufferCacheEntry *entry = nullptr;
     Error error = lookupBufferCacheEntryLocked(display, layer, cache, slot, &entry);
     if (error != Error::None) {
       return error;
+    }
+
+    if (entry == nullptr) {
+      return Error::BadParameter;
     }
 
     // input handle is ignored
@@ -1754,6 +1762,10 @@ Error AidlComposerClient::CommandEngine::updateBuffer(int64_t display, int64_t l
   Error error = lookupBufferCacheEntryLocked(display, layer, cache, slot, &entry);
   if (error != Error::None) {
     return error;
+  }
+
+  if (entry == nullptr) {
+    return Error::BadParameter;
   }
 
   *entry = handle;
