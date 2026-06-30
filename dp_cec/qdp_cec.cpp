@@ -46,10 +46,14 @@
 #include <linux/cec.h>
 #include <linux/cec-funcs.h>
 #include <cutils/properties.h>
+#include <dirent.h>
+#include <fstream>
+#include <strings.h>
+#include <drm/drm.h>
+#include <drm/drm_mode.h>
 #include "qdp_cec.h"
 
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
-#define HDMI_HPD_STATE_PATH "/sys/bus/i2c/devices/i2c-0/0-002b/get_hpd_stat"
 #define PAGE_SIZE 4096
 
 namespace qdpcec {
@@ -85,40 +89,93 @@ static const char *get_event_value(const char *uevent_data, int length, const ch
 static int uevent_init(int *uevent_fd);
 
 /*
-* Kernel can't report initial HPD state, because when HDMI
-* driver is initialized HAL has not yet created cec driver's
-* adapter devnode. HDMI HPD state can't be reported without
-* adapter devnode, so we should get HDMI initial HPD state
-* through HDMI HPD state node when cec adapter just finished
-* initialization.
-*/
-static bool get_hpd_state_from_node()
+ * Check HPD state by reading adapter info from CEC node and querying
+ * the corresponding DRM connector status.
+ */
+static bool get_hpd_state_from_node(int target_cec_device)
 {
-   int ret = -1, fd = -1;
-   char buf[2];
-   ALOGI("%s", __func__);
-   memset(buf, 0, sizeof(buf));
-   fd = open(HDMI_HPD_STATE_PATH, O_RDONLY);
-   if (fd < 0) {
-       ALOGE("%s(): Open cec hpd state failed!", __func__);
-       ALOGE("%s(): Error code: %d, %s\n", __func__, errno, strerror(errno));
-       return false;
-   }
-   ret = read(fd, buf, sizeof(buf));
-   close(fd);
-   if (ret < 0) {
-       ALOGE("Read hdmi hpd state failed\n");
-       return false;
-   }
-   if(!strcmp(buf, "1")) {
-       return true;
-   } else if (!strcmp(buf, "0")) {
-       return false;
-   }
-   ALOGE("%s can't get hdmi status HDMI_NOT_CONNECTED\n", __func__);
-   return false;
-}
+    int fd = -1;
+    struct cec_caps caps = {};
+    char cec_dev_path[MAX_PATH_LENGTH] = {};
+    char status_path[MAX_PATH_LENGTH] = {};
 
+    if (target_cec_device < 0 || target_cec_device >= MAX_CEC_DEVICES) {
+        ALOGE("%s: CEC device number greater than maximum allowed", __func__);
+        return false;
+    }
+
+    snprintf(cec_dev_path, sizeof(cec_dev_path), "%s%d", CEC_PATH_BASE, target_cec_device);
+
+    if (access(cec_dev_path, F_OK) != 0) {
+        ALOGE("%s: CEC device %s does not exist", __func__, cec_dev_path);
+        return false;
+    }
+
+    fd = open(cec_dev_path, O_RDONLY|O_CLOEXEC);
+    if (fd < 0) {
+        ALOGE("%s: Failed to open %s: %s", __func__, cec_dev_path, strerror(errno));
+        return false;
+    }
+
+    if (ioctl(fd, CEC_ADAP_G_CAPS, &caps) < 0) {
+        ALOGE("%s: ioctl CEC_ADAP_G_CAPS failed: %s", __func__, strerror(errno));
+        close(fd);
+        return false;
+    }
+    close(fd);
+
+    // TODO: Create dynamic card number instead of card0 
+    const char* connector_prefix = nullptr;
+    if (strcasestr(caps.name, "hdmi") || strcasestr(caps.driver, "hdmi")) {
+        connector_prefix = "card0-HDMI";
+    } else if (strcasestr(caps.name, "dsi") || strcasestr(caps.driver, "dsi") ||
+               strcasestr(caps.name, "lt9611") || strcasestr(caps.driver, "lt9611")) {
+        connector_prefix = "card0-DSI";
+    } else if (strcasestr(caps.name, "dp") || strcasestr(caps.driver, "dp") ||
+               strcasestr(caps.name, "displayport") || strcasestr(caps.driver, "displayport")) {
+        connector_prefix = "card0-DP";
+    } else {
+        ALOGE("%s: Cannot determine connector type from CEC adapter (name='%s', driver='%s')",
+              __func__, caps.name, caps.driver);
+        return false;
+    }
+
+    DIR* dir = opendir("/sys/class/drm");
+    if (!dir) {
+        ALOGE("%s: Failed to open /sys/class/drm: %s", __func__, strerror(errno));
+        return false;
+    }
+
+    bool is_connected = false;
+    struct dirent* entry;
+
+    while ((entry = readdir(dir)) != nullptr) {
+        if (strstr(entry->d_name, connector_prefix) == entry->d_name) {
+            snprintf(status_path, sizeof(status_path), "/sys/class/drm/%s/status", entry->d_name);
+
+            std::ifstream status_file(status_path);
+            if (status_file.is_open()) {
+                std::string status;
+                std::getline(status_file, status);
+                status_file.close();
+
+                ALOGI("%s: Read status '%s' from %s", __func__, status.c_str(), status_path);
+
+                if (status == "connected") {
+                    is_connected = true;
+                    break;
+                }
+            }
+        }
+    }
+    closedir(dir);
+
+    ALOGI("%s: CEC device %d (name='%s', driver='%s') is %s",
+          __func__, target_cec_device, caps.name, caps.driver,
+          is_connected ? "connected" : "disconnected/unknown");
+
+    return is_connected;
+}
 
 static int cec_add_logical_address(const struct hdmi_cec_device* dev,
         cec_logical_address_t addr)
@@ -602,7 +659,7 @@ static int cec_init_context(cec_context_t *ctx, int hardware_intf)
     ctx->version = 0x6;
     ctx->vendor_id = 0xA47733;
     cec_clear_logical_address((hdmi_cec_device_t*)ctx);
-    ctx->node.is_connected = get_hpd_state_from_node();
+    ctx->node.is_connected = get_hpd_state_from_node(hardware_intf);
 
     return 0;
 }

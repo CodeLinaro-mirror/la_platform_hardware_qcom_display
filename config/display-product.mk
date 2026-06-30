@@ -148,6 +148,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.lcd_density=160
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),sun)
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.hardware.hdmi_cec=pluggable
+endif
+
 ifeq ($(TARGET_BOARD_PLATFORM),holi)
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.secure_preview_buffer_format=420_sp \
