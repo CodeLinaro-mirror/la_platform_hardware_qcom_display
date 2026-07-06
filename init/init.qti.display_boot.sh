@@ -97,7 +97,7 @@ case "$target" in
     #SOC ID for shikra varaints
     case "$soc_hwid" in
       759 | 758 | 756)
-        setprop vendor.display.target.version 6
+        setprop vendor.display.target.version 7
         setprop vendor.display.enable_rotator_ui 0
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
