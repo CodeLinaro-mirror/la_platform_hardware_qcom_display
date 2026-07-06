@@ -331,7 +331,7 @@ constexpr AIMapper_MetadataTypeDescription describeQTI(int64_t type, const char 
 Error QtiMapper5::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 63> sSupportedMetadaTypes{
+  static constexpr std::array<AIMapper_MetadataTypeDescription, 64> sSupportedMetadaTypes{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -412,6 +412,7 @@ Error QtiMapper5::listSupportedMetadataTypes(
                   true),
       describeQTI(SnapMetadataType::ANAMORPHIC_COMPRESSION_METADATA, "anamorphic compression data",
                   true, true),
+      describeQTI(SnapMetadataType::ROI_RECT_METADATA, "ROI Rectangle metadata", true, true),
   };
   *outDescriptionList = sSupportedMetadaTypes.data();
   *outNumberOfDescriptions = sSupportedMetadaTypes.size();
