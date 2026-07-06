@@ -236,6 +236,8 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
 
   ALOGV("%s: destroyLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
         in_layer, in_display);
+
+  std::lock_guard<std::mutex> cmd_lock(m_command_mutex_);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
   drawcycle_->LayerStackUpdated(in_display);
@@ -1983,6 +1985,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBlockingRegion(
 void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
     int64_t display, int64_t layer, const std::vector<int32_t> &slotsToClear) {
   auto error = Error::None;
+  mClient.drawcycle_->WaitForDrawCycleToComplete(display);
   for (auto &slot : slotsToClear) {
     SnapHandle *layerBuffer = nullptr;
     lookupBuffer(display, layer, BufferCache::LAYER_BUFFERS, slot, true, &layerBuffer);
