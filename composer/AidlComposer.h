@@ -74,7 +74,7 @@ class AidlComposer : public BnComposer {
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
   std::shared_ptr<SDMDisplaySettingsIntf> settings_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
-  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle_;
   std::shared_ptr<SDMDisplayLayerBuilderIntf> layers_;
   std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
 

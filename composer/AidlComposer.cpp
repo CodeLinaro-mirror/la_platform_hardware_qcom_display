@@ -43,7 +43,11 @@ AidlComposer::AidlComposer(const shared_ptr<QtiComposer3Client> &extensions)
   caps_ = sdm_factory->CreateCapsIntf();
   settings_ = sdm_factory->CreateSettingsIntf();
   lifecycle_ = sdm_factory->CreateLifeCycleIntf();
-  drawcycle_ = sdm_factory->CreateDrawCycleIntf();
+  drawcycle_ =
+#ifdef COMPOSER3_V3
+      reinterpret_pointer_cast<SDMDisplayDrawCycleIntfV>
+#endif
+      (sdm_factory->CreateDrawCycleIntf());
   layers_ = sdm_factory->CreateLayerBuilderIntf();
   sideband_ = sdm_factory->CreateSideBandIntf();
 
