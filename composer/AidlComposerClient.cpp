@@ -822,6 +822,8 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
       aidl_return->push_back(DisplayCapability::SUSPEND);
       aidl_return->push_back(DisplayCapability::DOZE);
     }
+  } else if (HwcDisplayConnectionType::EXTERNAL == display_conn_type) {
+    aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
   }
 
   return ScopedAStatus::ok();
