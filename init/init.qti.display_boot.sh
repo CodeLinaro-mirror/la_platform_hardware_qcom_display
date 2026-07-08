@@ -73,6 +73,7 @@ case "$target" in
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.composer_driven_hdcp 0
         setprop vendor.display.enable_power_save_mode_for_video 1
+        setprop vendor.display.enable_brightness_drm_prop 1
         ;;
     esac
     ;;
