@@ -523,6 +523,7 @@ case "$target" in
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_privacy_layers 1
+        setprop vendor.display.disable_llcbc_support 1
         ;;
     esac
     ;;
