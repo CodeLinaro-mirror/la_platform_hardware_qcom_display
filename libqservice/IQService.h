@@ -57,7 +57,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) 2023, 2025-2026 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -142,6 +142,8 @@ public:
       SET_STANDBY_MODE = 66,                   // Set standby mode
       SET_PRIVACY_REGIONS = 67,                // Set PrivacyRegions on given layers in frame
       SET_FRAME_DUMP_STREAMING_CONFIG = 69,    // Provides frame dump support in streaming mode
+      SET_RGB_HISTOGRAM_CONFIG = 70,           // Set rgb histogram config
+      SET_QRTC_FEATURE_CONFIG = 71,            // Set QRTC feature config
       COMMAND_LIST_END = 400,
     };
 

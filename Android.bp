@@ -14,7 +14,6 @@ soong_config_module_type {
         "ubwcp_headers",
         "snapallocext_enabled",
         "neo",
-        "lsr_target",
         "enable_demura"
     ],
     properties: [
@@ -154,9 +153,6 @@ qtidisplay_cc_defaults {
         },
         neo: {
             cflags: ["-DTARGET_INCLUDES_NEO"],
-        },
-        lsr_target: {
-            cflags: ["-DTARGET_USES_LSR", "-DLSR_API"],
         },
         var3 : {
             enabled: false,
