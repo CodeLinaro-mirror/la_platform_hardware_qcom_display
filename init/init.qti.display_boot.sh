@@ -97,7 +97,7 @@ case "$target" in
     #SOC ID for shikra varaints
     case "$soc_hwid" in
       759 | 758 | 756)
-        setprop vendor.display.target.version 6
+        setprop vendor.display.target.version 7
         setprop vendor.display.enable_rotator_ui 0
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
@@ -215,6 +215,11 @@ case "$target" in
            setprop vendor.display.enable_inline_writeback 0
         else
            setprop vendor.display.enable_inline_writeback 1
+        fi
+        #SOC ID for 737 is no display
+        if [ "$soc_hwid" -eq 737 ]; then
+            setprop vendor.display.enable_null_display 1
+            setprop vendor.display.null_display_resolution 64x64
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
@@ -578,6 +583,7 @@ case "$target" in
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_privacy_layers 1
+        setprop vendor.display.disable_llcbc_support 1
         ;;
     esac
     ;;

@@ -149,7 +149,7 @@ int AmbientDataCaptureAIDL::InitImageAlgoAdapter(
     return EX_TRANSACTION_FAILED;
   }
 
-  init_input->config_json = "";  //TODO : use configBlob->data here.
+  init_input->config_json = configBlob->data;
   init_input->callback = OnImageAlgoEmit;
   init_input->cookie = this;
   ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSInit, init_payload, nullptr);
@@ -575,7 +575,7 @@ int AmbientDataCaptureAIDL::AddCWBMetadata(SnapHandle *handle, int32_t display_t
   SnapCWBMetadata set_cwbMetadata = {};
   set_cwbMetadata.capture_metadata.cwb_timestamp = systemTime(SYSTEM_TIME_MONOTONIC);
   set_cwbMetadata.capture_metadata.cwb_rotation = static_cast<int32_t>(display_rotation);
-  set_cwbMetadata.capture_metadata.cwb_sensitive_layer = true;
+  set_cwbMetadata.capture_metadata.cwb_sensitive_layer = false;
 
   set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.smart_selection_score = 0;
   set_cwbMetadata.algo_metadata.smart_selection_algo_metadata.selected = false;
