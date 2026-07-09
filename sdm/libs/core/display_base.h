@@ -152,6 +152,7 @@ class DisplayBase : public DisplayInterface {
   virtual bool CanSkipValidate();
   virtual DisplayError GetRefreshRate(uint32_t *refresh_rate) { return kErrorNotSupported; }
   virtual DisplayError ReconfigureDisplay();
+  virtual DisplayError SetupVRRConfig() { return kErrorNotSupported; }
 
  protected:
   const char *kBt2020Pq = "bt2020_pq";
