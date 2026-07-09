@@ -876,6 +876,13 @@ DisplayError DisplayBuiltIn::GetRefreshRate(uint32_t *refresh_rate) {
   return kErrorNone;
 }
 
+DisplayError DisplayBuiltIn::SetupVRRConfig() {
+  // Returning kErrorNotSupported as the qsync feature is not supported.
+  // Update the code once the support is enabled from kernel driver
+  // and validated end-to-end.
+  return kErrorNotSupported;
+}
+
 DisplayError DisplayBuiltIn::SetActiveConfig(uint32_t index) {
   deferred_config_.MarkDirty();
   return DisplayBase::SetActiveConfig(index);

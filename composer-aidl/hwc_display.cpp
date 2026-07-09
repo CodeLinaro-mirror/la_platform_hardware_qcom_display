@@ -1094,6 +1094,8 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
   out_configs->clear();
   out_configs->reserve(variable_config_map_.size());
   DisplayConfigFixedInfo fixed_info = {};
+
+  bool enable_vrr = display_intf_->SetupVRRConfig() == sdm::kErrorNone;
   display_intf_->GetConfig(&fixed_info);
   sdm::DisplayClass display_class = GetDisplayClass();
   for (const auto &[config_id, variable_config] : variable_config_map_) {
@@ -1115,13 +1117,15 @@ HWC3::Error HWCDisplay::GetDisplayConfigurations(std::vector<DisplayConfiguratio
       display_configuration.hdrOutputType = OutputType::SYSTEM;
     }
 #endif
-    display_configuration.vrrConfig = {
-        static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
-    DLOGI(
-        "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, minFrameInterval= "
-        "%d",
-        config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
-        display_configuration.vrrConfig->minFrameIntervalNs);
+    if(enable_vrr) {
+      display_configuration.vrrConfig = {
+          static_cast<int32_t>((1000.f / static_cast<float>(variable_config.fps)) * 1000000)};
+      DLOGI(
+          "GetDisplayConfigurations ConfigId[%d] vsyncPeriod= %d, configGroup= %d, minFrameInterval= "
+          "%d",
+          config_id, variable_config.vsync_period_ns, display_configuration.configGroup,
+          display_configuration.vrrConfig->minFrameIntervalNs);
+    }
     out_configs->emplace_back(display_configuration);
   }
   return HWC3::Error::None;

@@ -870,6 +870,12 @@ class DisplayInterface {
       @return \link boolean \endlink
   */
   virtual bool CanSkipValidate() = 0;
+  /*! @brief Method to Setup the Variable Refresh Rate configuration
+
+    @return \link DisplayError \endlink
+   */
+  virtual DisplayError SetupVRRConfig() = 0;
+
 
  protected:
   virtual ~DisplayInterface() { }
