@@ -238,6 +238,8 @@ qticomposer3_cc_defaults {
                     "-DCOMPOSER3_V5",
                     "-DCOMPOSER3_V4",
                     "-DCOMPOSER3_V3",
+                    "-DIDISPLAYCONFIG_18",
+                    "-DIDISPLAYCONFIG_17",
                     "-DIDISPLAYCONFIG_16",
                     "-DIDISPLAYCONFIG_15",
                     "-DIDISPLAYCONFIG_14",
@@ -290,7 +292,7 @@ qticomposer3_cc_defaults {
         composer_version: {
             v3_5: {
                 shared_libs: [
-                    "vendor.qti.hardware.display.config-V16-ndk",
+                    "vendor.qti.hardware.display.config-V18-ndk",
                 ],
             },
             v3_4_lsr: {

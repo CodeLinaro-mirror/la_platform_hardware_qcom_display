@@ -125,7 +125,7 @@ using ::vendor::qti::hardware::display::snapalloc::ISnapMapper;
 
 typedef vendor_qti_hardware_display_common_cwb_metadata SnapCWBMetadata;
 
-constexpr static int max_enqueue_count = 11;
+constexpr static int max_enqueue_count = 10;
 constexpr static int timeout_ms = 30000;
 
 // TODO : this struct will be translated to aidl
@@ -217,6 +217,7 @@ class AmbientDataCaptureAIDL : public BnAmbientDataCapture, public SDMSideBandCo
   int InitImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
   int DeInitImageAlgoAdapter();
   int FlushAllImageAlgoAdapter();
+  int FlushSelectedImageAlgoAdapter();
   int EnqueueImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
   int CreateEnqueuePayload(SnapHandle *handle, sdm::GenericPayload &enq_payload);
   // Emit callback invoked by SmartSelection pipeline when frames are selected/rejected.
