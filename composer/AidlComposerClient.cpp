@@ -293,7 +293,8 @@ ScopedAStatus AidlComposerClient::createVirtualDisplay(int32_t in_width, int32_t
 ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_layer) {
   {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+    if (in_display < 0 || in_display >= sdm::kNumDisplays ||
+        mDisplayData.find(in_display) == mDisplayData.end()) {
       return TO_BINDER_STATUS(INT32(Error::BadDisplay));
     }
   }
@@ -348,7 +349,8 @@ ScopedAStatus AidlComposerClient::executeCommands(const std::vector<DisplayComma
   int64_t displayId = in_commands[0].display;  // Use per-display lock
   {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+    if (displayId < 0 || displayId >= sdm::kNumDisplays ||
+        mDisplayData.find(displayId) == mDisplayData.end()) {
       ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
       CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
       std::vector<CommandResultPayload> results;
@@ -379,7 +381,8 @@ ScopedAStatus AidlComposerClient::executeQtiExtendedCommands(
   int64_t displayId = in_commands[0].display;  // Use per-display lock
   {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-    if (mDisplayData.find(displayId) == mDisplayData.end()) {
+    if (displayId < 0 || displayId >= sdm::kNumDisplays ||
+        mDisplayData.find(displayId) == mDisplayData.end()) {
       ALOGW("%s: Unknown display id=%" PRId64 ", rejecting command batch", __FUNCTION__, displayId);
       CommandError error = CommandError{static_cast<int32_t>(displayId), INT32(Error::BadDisplay)};
       std::vector<CommandResultPayload> results;
