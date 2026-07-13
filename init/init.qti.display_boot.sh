@@ -326,11 +326,13 @@ case "$target" in
     "taro")
     #Set property to differentiate Waipio
     #SOC ID for Waipio is 457
+    #SOC ID for Waipio is 482
+    #SOC ID for Waipio is 552
     #SOC ID for Cape MSM is 530
     #SOC ID for Cape APQ is 531
     #SOC ID for Cape 4g is 540
     case "$soc_hwid" in
-        457)
+        457|482|552)
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
