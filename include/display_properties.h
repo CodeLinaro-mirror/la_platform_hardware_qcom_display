@@ -28,9 +28,9 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
 *
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -211,6 +211,14 @@
 // Property to set desired libscale optimization mode on destination
 #define SCALING_DEST_OPT_MODE                DISPLAY_PROP("scaling_dest_opt_mode")
 
+/* Property DISPLAY_REBOOT_STRATEGY:
+ * Display framework reboot strategy to keep the SF and HWC in sync.
+ *   0: Default behaviour (Reboot framework on first DSI-HDMI connection)
+ *   1: DSI always, reboot everytime DSI-HDMI connected
+ *   2: Any Once, reboot framework once on any display connection (DSI-HDMI, DP)
+ *   3: No framework reboot
+ */
+#define DISPLAY_REBOOT_STRATEGY         DISPLAY_PROP("display_reboot_strategy")
 
 // Add all vendor.display properties above
 
@@ -235,6 +243,7 @@
 #define WINDOW_RECT_PROP                     DISPLAY_PROP("window_rect")
 #define WINDOW_RECT_PROP_SECONDARY           DISPLAY_PROP("window_rect_secondary")
 #define ENABLE_WINDOW_RECT_MASK              DISPLAY_PROP("enable_window_rect_mask")
+#define DISABLE_RC_OFFSET_FLIP               DISPLAY_PROP("disable_rc_offset_flip")
 #define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
 #define DISABLE_IDLE_FPS_SWITCH              DISPLAY_PROP("disable_idle_fps_switch")
@@ -247,6 +256,8 @@
 #define WAIT_FOR_PRIMARY_DISPLAY             DISPLAY_PROP("wait_for_primary_display")
 #define ENABLE_ASYNC_POWER_OFF_WAIT          DISPLAY_PROP("enable_async_power_off_wait")
 #define FORCE_GPU_COMPOSITION                DISPLAY_PROP("force_gpu_composition")
+#define ENABLE_PRIMARY_HOTPLUG_TO_SF         "ro.surface_flinger.update_device_product_info_on_hotplug_reconnect"
+
 
 // Add all other.properties above
 // End of property

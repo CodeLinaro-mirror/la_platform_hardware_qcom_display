@@ -16,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
+*/
 
 #ifndef __HWC_SESSION_H__
 #define __HWC_SESSION_H__
@@ -55,6 +54,7 @@
 #include "hwc_display.h"
 #include "hwc_display_builtin.h"
 #include "hwc_display_pluggable.h"
+#include "hwc_display_dummy.h"
 #include "hwc_display_virtual.h"
 #include "hwc_display_pluggable_test.h"
 #include "hwc_color_manager.h"
@@ -143,6 +143,21 @@ class HWCSession : public HWCUEvent,
   enum CwbConfigFlag {
     kCwbFlagPuAsCwbROI,
     kCwbFlagAvoidRefresh,
+  };
+
+  enum DisplayRebootStrategy {
+    kRebootStrategyDefault,
+    kRebootStrategyOnceDSI = kRebootStrategyDefault,
+    kRebootStrategyAlwaysDSI,
+    kRebootStrategyAnyOnce,
+    kRebootStrategyNoReboot,
+  };
+
+  enum ComposerSetupMode {
+    kCompSetupModeDefault,
+    kCompSetupModePrimary = kCompSetupModeDefault,
+    kCompSetupModeNonPrimary,
+    kCompSetupModeNoDisplay,
   };
 
   HWCSession();
@@ -263,6 +278,7 @@ class HWCSession : public HWCUEvent,
                                       HwcClientTargetProperty *outClientTargetProperty);
   HWC3::Error SetDemuraState(Display display, int32_t state);
   HWC3::Error SetDemuraConfig(Display display, int32_t demura_idx);
+  bool IsPluggablePrimary() const;
 
   // Layer functions
   HWC3::Error SetLayerBuffer(Display display, LayerId layer, buffer_handle_t buffer,
@@ -427,10 +443,12 @@ class HWCSession : public HWCUEvent,
   void InitSupportedDisplaySlots();
   int GetDisplayIndex(int dpy);
   int CreatePrimaryDisplay();
+  void CreateDummyDisplay(hwc2_display_t client_id);
   int HandleBuiltInDisplays();
   int HandlePluggableDisplays(bool delay_hotplug);
   int HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool delay_hotplug);
   int HandleDisconnectedDisplays(HWDisplaysInfo *hw_displays_info);
+  int RecreatePluggablePrimaryDisplay(HWDisplaysInfo *hw_displays_info);
   void DestroyDisplay(DisplayMapInfo *map_info);
   void DestroyDisplayLocked(DisplayMapInfo *map_info);
   void DestroyPluggableDisplay(DisplayMapInfo *map_info);
@@ -460,6 +478,9 @@ class HWCSession : public HWCUEvent,
   bool HasHDRSupport(HWCDisplay *hwc_display);
   void PostInit();
   int GetDispTypeFromPhysicalId(uint64_t physical_disp_id, DispType *disp_type);
+  int SetBestNullDisplayResolution();
+  bool IsFrameworkRebootRequired(bool is_primary);
+
 #ifdef PROFILE_COVERAGE_DATA
   android::status_t DumpCodeCoverage(const android::Parcel *input_parcel);
 #endif
@@ -568,6 +589,7 @@ class HWCSession : public HWCUEvent,
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = nullptr;
   HWCSocketHandler socket_handler_;
+  bool null_display_active_ = false;
   bool hdmi_is_primary_ = false;
   bool is_composer_up_ = false;
   std::mutex mutex_lum_;
@@ -596,6 +618,7 @@ class HWCSession : public HWCUEvent,
   std::mutex callbacks_lock_;
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
   uint64_t callback_client_id_ = 0;
+  bool async_powermode_ = false;
   bool async_vds_creation_ = false;
   bool tui_state_transition_[HWCCallbacks::kNumDisplays] = {};
   std::bitset<HWCCallbacks::kNumDisplays> display_ready_;
@@ -606,7 +629,6 @@ class HWCSession : public HWCUEvent,
   Locker primary_display_lock_;
   std::map<Display, DisplayMapInfo *> map_active_displays_;
   vector<HWDisplayInfo> virtual_display_list_ = {};
-  std::map<hwc2_display_t, std::future<int>> commit_done_future_;
   std::mutex tui_handler_lock_;
   std::future<int> tui_event_handler_future_;
   std::future<int> tui_callback_handler_future_;
@@ -623,8 +645,14 @@ class HWCSession : public HWCUEvent,
   // it up to terminate it before terminating hwc.
   void HpdThreadBottom();
   std::thread hpd_thread_;
-
   std::vector<Display> pending_hotplugs_{};
+  std::map<hwc2_display_t, std::future<int>> commit_done_future_;
+  bool pluggable_is_primary_ = false;
+  bool pluggable_primary_connected_ = false;
+  DisplayConfigVariableInfo primary_config_ = {};
+  int composer_setup_mode_ = kCompSetupModeDefault;
+  int display_reboot_strategy_ = kRebootStrategyDefault;
+  int send_primary_hotplug_to_sf_ = 0;
 };
 
 }  // namespace sdm

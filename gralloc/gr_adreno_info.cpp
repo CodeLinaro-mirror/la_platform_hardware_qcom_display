@@ -51,6 +51,9 @@ using std::fstream;
 namespace gralloc {
 
 AdrenoMemInfo *AdrenoMemInfo::s_instance = nullptr;
+bool AdrenoMemInfo::gpu_node_present_ = false;
+bool AdrenoMemInfo::gpu_node_checked_ = false;
+
 char kgsl_path[] = "/dev/kgsl-3d0";
 
 AdrenoMemInfo *AdrenoMemInfo::GetInstance() {
@@ -63,6 +66,17 @@ AdrenoMemInfo *AdrenoMemInfo::GetInstance() {
   return s_instance;
 }
 
+bool AdrenoMemInfo::IsGpuNodePresent() {
+  if (gpu_node_checked_)
+    return gpu_node_present_;
+
+  fstream fs(kgsl_path, fstream::in);
+  gpu_node_present_ = fs.is_open();
+  gpu_node_checked_ = true;
+
+  return gpu_node_present_;
+}
+
 AdrenoMemInfo::AdrenoMemInfo() {
   char property[PROPERTY_VALUE_MAX];
   property_get(DISABLE_UBWC_PROP, property, "0");
@@ -71,8 +85,7 @@ AdrenoMemInfo::AdrenoMemInfo() {
     gfx_ubwc_disable_ = true;
   }
 
-  fstream fs(kgsl_path, fstream::in);
-  if (!fs.is_open()) {
+  if (!IsGpuNodePresent()) {
     return;
   }
 

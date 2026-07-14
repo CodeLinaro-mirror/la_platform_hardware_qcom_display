@@ -2653,6 +2653,9 @@ bool DisplayBase::IsValidCwbRoi(const LayerRect &roi, const LayerRect &full_fram
 
 DisplayError DisplayBase::ValidateCwbConfigInfo(std::shared_ptr<CwbConfig> cwb_config,
                                                 const LayerBufferFormat &format) {
+  if (!cwb_config) {
+    return kErrorParameters;
+  }
   CwbTapPoint &tap_point = cwb_config->tap_point;
   if (tap_point < CwbTapPoint::kLmTapPoint || tap_point > CwbTapPoint::kDemuraTapPoint) {
     DLOGE("Invalid CWB tappoint. %d ", tap_point);
