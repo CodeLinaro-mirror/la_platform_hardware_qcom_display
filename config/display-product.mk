@@ -294,7 +294,7 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
         else
             $(call soong_config_set, qtidisplay, composer_version, v3_5 )
         endif
-    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun DEV))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
       $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
