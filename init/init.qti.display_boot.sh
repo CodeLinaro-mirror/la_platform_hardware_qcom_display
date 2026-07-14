@@ -358,9 +358,12 @@ case "$target" in
         setprop vendor.display.enable_qsync_idle 1
         setprop vendor.display.disable_cwb_idle_fallback 1
         ;;
-        506|547)
+        506|547|548|564)
         # Set property for Diwali
         # SOC ID for Diwali is 506
+        # SOC ID for Diwali is 547
+        # SOC ID for Diwali is 548
+        # SOC ID for Diwali is 564
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
