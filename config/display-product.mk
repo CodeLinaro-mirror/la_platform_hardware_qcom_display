@@ -270,6 +270,7 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
         endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+      $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 # AFTER FRC
 else
@@ -287,6 +288,7 @@ else
       endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+      $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 endif
 
