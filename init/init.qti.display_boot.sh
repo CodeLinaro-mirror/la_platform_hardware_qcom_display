@@ -516,7 +516,6 @@ case "$target" in
         setprop vendor.display.perf.version 4
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.disable_gpu_color_convert 0
-        setprop vendor.gralloc.allow_camera_preview_write 1
         setprop vendor.display.cpu_cluster_boost_mask 6
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
