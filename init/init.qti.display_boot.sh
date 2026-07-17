@@ -35,12 +35,16 @@ target=`getprop ro.board.platform`
 platform_subtype_id=0
 if [ -f /sys/devices/soc1/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc1/soc_id`
+    revision=`cat /sys/devices/soc1/revision`
 elif [ -f /sys/devices/system/soc/soc1/id ]; then
     soc_hwid=`cat /sys/devices/system/soc/soc1/id`
+    revision=`cat /sys/devices/system/soc/soc1/revision`
 elif [ -f /sys/devices/soc0/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc0/soc_id`
+    revision=`cat /sys/devices/soc0/revision`
 else
     soc_hwid=`cat /sys/devices/system/soc/soc0/id`
+    revision=`cat /sys/devices/system/soc/soc0/revision`
 fi
 
 if [ -f /sys/devices/soc1/platform_subtype_id ]; then
@@ -76,7 +80,7 @@ case "$target" in
         setprop vendor.display.enable_power_save_mode_for_video 1
         setprop vendor.display.enable_brightness_drm_prop 1
         #SOC ID 761 (coast.1.0) do not support UCSC
-        if [ "$soc_hwid" -eq 761 ]; then
+        if [ "$soc_hwid" -eq 761 ] && [ "$revision" = "1.0" ]; then
             setprop vendor.display.render_sysui_as_srgb 1
             setprop vendor.display.disable_ucsc_tonemap 1
         fi
