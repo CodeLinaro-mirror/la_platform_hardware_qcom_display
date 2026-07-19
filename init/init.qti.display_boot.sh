@@ -57,8 +57,9 @@ case "$target" in
     # SOC ID for Art H is 760
     # SOC ID for Pebble is 735
     # SOC ID for Pebble APQ is 741
+    # SOC ID for Coast is 761
     case "$soc_hwid" in
-      707|708|755|760|735|741)
+      707|708|755|760|735|741|761)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -74,6 +75,11 @@ case "$target" in
         setprop vendor.display.composer_driven_hdcp 0
         setprop vendor.display.enable_power_save_mode_for_video 1
         setprop vendor.display.enable_brightness_drm_prop 1
+        #SOC ID 761 (coast.1.0) do not support UCSC
+        if [ "$soc_hwid" -eq 761 ]; then
+            setprop vendor.display.render_sysui_as_srgb 1
+            setprop vendor.display.disable_ucsc_tonemap 1
+        fi
         ;;
     esac
     ;;
