@@ -202,6 +202,7 @@ SOONG_CONFIG_qtidisplay_smmu_proxy := false
 SOONG_CONFIG_qtidisplay_ubwcp_headers := true
 SOONG_CONFIG_qtidisplay_composer_version := v3_2
 SOONG_CONFIG_qtidisplay_mapper_ext := true
+SOONG_CONFIG_qtidisplay_gralloc_version := v7
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -220,19 +221,20 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
       PRODUCT_PROPERTY_OVERRIDES += persist.sys.display.enable_on_connect.external=true
       PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_hw_recovery=1
-      ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun 17))
-        SOONG_CONFIG_qtidisplay_gralloc_version := v7
+      ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+        SOONG_CONFIG_qtidisplay_gralloc_version := lt_v7
       endif
     endif
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream 15))
       SOONG_CONFIG_qtidisplay_composer_version := v3_3
+      SOONG_CONFIG_qtidisplay_gralloc_version := lt_v7
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16 CinnamonBun 17))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
       PRODUCT_PROPERTY_OVERRIDES += persist.sys.display.enable_on_connect.external=true
       PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_hw_recovery=1
-      ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun 17))
-        SOONG_CONFIG_qtidisplay_gralloc_version := v7
+      ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16))
+        SOONG_CONFIG_qtidisplay_gralloc_version := lt_v7
       endif
     endif
 endif
