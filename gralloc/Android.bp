@@ -352,14 +352,14 @@ soong_config_module_type {
         "gralloc_version",
     ],
     properties: [
-         "shared_libs",
-         "cflags",
+        "shared_libs",
+        "cflags",
     ],
 }
 
 soong_config_string_variable {
     name: "gralloc_version",
-    values: ["v7"],
+    values: ["lt_v7", "v7"],
 }
 
 qtigralloc_cc_defaults {
