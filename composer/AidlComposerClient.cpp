@@ -120,7 +120,48 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   composer_driven_hdcp_ = (value == 1);
   ALOGV("composer_driven_hdcp_: %d", composer_driven_hdcp_);
 
+  getSupportedOverlayProperties();
+
   return true;
+}
+
+void AidlComposerClient::getSupportedOverlayProperties() {
+  // All individually supported properties by hardware
+  supported_pixel_formats_ = {PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,
+                              PixelFormat::RGB_888,      PixelFormat::RGB_565,
+                              PixelFormat::BGRA_8888,    PixelFormat::YV12,
+                              PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
+
+  if (!disable_fp16_support_) {
+    supported_pixel_formats_.push_back(PixelFormat::RGBA_FP16);
+  }
+
+  supported_dataspace_standards_ = {Dataspace::STANDARD_BT709,     Dataspace::STANDARD_BT601_625,
+                                    Dataspace::STANDARD_BT601_525, Dataspace::STANDARD_BT2020,
+                                    Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
+
+  supported_dataspace_transfers_ = {Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2,
+                                    Dataspace::TRANSFER_SMPTE_170M, Dataspace::TRANSFER_LINEAR};
+
+  if (!disable_hdr_gamma_support_) {
+    supported_dataspace_transfers_.push_back(Dataspace::TRANSFER_ST2084);
+    supported_dataspace_transfers_.push_back(Dataspace::TRANSFER_HLG);
+  }
+
+  supported_dataspace_ranges_ = {Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
+                                 Dataspace::RANGE_EXTENDED};
+
+#ifdef COMPOSER3_V4
+  // only 3d lut is currently supported
+  LutProperties lut_prop;
+  lut_prop.dimension = LutProperties::Dimension::THREE_D;
+  lut_prop.size = INT32(sdm::kLutDim);
+  lut_prop.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+
+  if (!disable_luts_overlay_support_) {
+    supported_lut_props_.push_back(lut_prop);
+  }
+#endif
 }
 
 ::android::status_t AidlComposerClient::notifyCallback(uint32_t command,
@@ -172,6 +213,14 @@ AidlComposerClient::~AidlComposerClient() {
   }
 
   mDisplayData.clear();
+
+  supported_pixel_formats_.clear();
+  supported_dataspace_standards_.clear();
+  supported_dataspace_transfers_.clear();
+  supported_dataspace_ranges_.clear();
+#ifdef COMPOSER3_V4
+  supported_lut_props_.clear();
+#endif
 
   mHandleImporter.cleanup();
 
@@ -552,14 +601,7 @@ ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
                                                        const HdcpLevels &in_levels) {
-  {
-    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-    auto dpy = mDisplayData.find(in_display);
-    if (dpy == mDisplayData.end()) {
-      ALOGE("HDCP negotiation failed for display %d: Display not found!", in_display);
-      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
-    }
-  }
+  Error ret = Error::None;
 
   int connected_level_int;
   switch (in_levels.connectedLevel) {
@@ -583,9 +625,31 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
       break;
   }
 
-  if (connected_level_int == -1) {
-    ALOGE("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
-    return TO_BINDER_STATUS(INT32(Error::BadParameter));
+  // check for both bad display and bad parameter simultaneously so the
+  // error code is not overwritten
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto dpy = mDisplayData.find(in_display);
+    if (dpy == mDisplayData.end()) {
+      ALOGW("HDCP negotiation failed for display %" PRId64 ": Display not found!", in_display);
+      ret = Error::BadDisplay;
+    } else if (connected_level_int == -1) {
+      ALOGW("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
+      ret = Error::BadParameter;
+    }
+  }
+
+  // send invalid levels to SF on fail
+  if (ret != Error::None) {
+    if (callback_) {
+      HdcpLevels invalidLevels = {.connectedLevel = HdcpLevel::HDCP_UNKNOWN,
+                                  .maxLevel = HdcpLevel::HDCP_UNKNOWN};
+      callback_->onHdcpLevelsChanged(in_display, invalidLevels);
+    } else {
+      ALOGW("%s: Callback not registered, cannot notify HDCP failure for display %" PRId64,
+            __FUNCTION__, in_display);
+    }
+    return TO_BINDER_STATUS(INT32(ret));
   }
 
   // TODO(user): b/516707332. Until this content encryption check is added in SF,
@@ -595,7 +659,7 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
     if (callback_) {
       callback_->onHdcpLevelsChanged(in_display, in_levels);
     }
-    return ScopedAStatus::ok();
+    return TO_BINDER_STATUS(INT32(ret));
   }
 
   auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
@@ -851,58 +915,25 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 }
 
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
-  // All individually supported properties by hardware
-  static bool overlay_values_init = false;
-  static std::vector<PixelFormat> pixel_formats{
-      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,   PixelFormat::RGB_888,
-      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
-      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
-
-  if (!disable_fp16_support_ && !overlay_values_init) {
-    pixel_formats.push_back(PixelFormat::RGBA_FP16);
-  }
-
-  static std::vector<Dataspace> dataspace_standards{
-      Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
-      Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
-
-  static std::vector<Dataspace> dataspace_transfers{
-      Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2, Dataspace::TRANSFER_SMPTE_170M,
-      Dataspace::TRANSFER_LINEAR};
-
-  if (!disable_hdr_gamma_support_ && !overlay_values_init) {
-    dataspace_transfers.push_back(Dataspace::TRANSFER_ST2084);
-    dataspace_transfers.push_back(Dataspace::TRANSFER_HLG);
-  }
-  overlay_values_init = true;
-
-  static std::vector<Dataspace> dataspace_ranges{Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
-                                                 Dataspace::RANGE_EXTENDED};
-  static bool mixed_colorspaces_support = true;
+  bool mixed_colorspaces_support = true;
 
   OverlayProperties::SupportedBufferCombinations supported_combination;
 
   // Combination 1 - All support pixel formats work for all supported colorspaces
   // Since all pixel formats work for all colorspaces only 1 entry is required
-  supported_combination.pixelFormats = std::move(pixel_formats);
-  supported_combination.standards = std::move(dataspace_standards);
-  supported_combination.transfers = std::move(dataspace_transfers);
-  supported_combination.ranges = std::move(dataspace_ranges);
+  supported_combination.pixelFormats = supported_pixel_formats_;
+  supported_combination.standards = supported_dataspace_standards_;
+  supported_combination.transfers = supported_dataspace_transfers_;
+  supported_combination.ranges = supported_dataspace_ranges_;
 
   aidl_return->combinations.emplace_back(supported_combination);
   aidl_return->supportMixedColorSpaces = mixed_colorspaces_support;
 
 #ifdef COMPOSER3_V4
-  // only 3d lut is currently supported
-  LutProperties supported_lut_props;
-  supported_lut_props.dimension = LutProperties::Dimension::THREE_D;
-  supported_lut_props.size = INT32(sdm::kLutDim);
-  supported_lut_props.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
-
-  if (!disable_luts_overlay_support_) {
+  if (!supported_lut_props_.empty()) {
     // initialize optional vector
     aidl_return->lutProperties.emplace();
-    aidl_return->lutProperties->emplace_back(supported_lut_props);
+    aidl_return->lutProperties->assign(supported_lut_props_.begin(), supported_lut_props_.end());
   }
 #endif
 
@@ -1396,7 +1427,7 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  displayCmd.display);
 #ifdef COMPOSER3_V5
   ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
-                 displayCmd.display, *displayCmd.activeConfig);
+                 displayCmd.display, *displayCmd.activeConfig, performing_commit);
 #endif
 #ifdef COMPOSER3_V3
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
@@ -2265,7 +2296,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
 
 #ifdef COMPOSER3_V5
 void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
-    int64_t display, const ActiveConfigCommand &config) {
+    int64_t display, const ActiveConfigCommand &config, bool performing_commit) {
   sdm::SDMVsyncPeriodChangeConstraints constraints = {0, config.seamlessRequired};
   sdm::SDMVsyncPeriodChangeTimeline timeline{};
 
@@ -2278,6 +2309,27 @@ void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
 
   if (error != sdm::kErrorNone) {
     writeError(__FUNCTION__, display, Error::BadConfig);
+    return;
+  }
+
+  // Workaround for VTS test behavior: VTS sends a setActiveConfig display
+  // command without a following present/validate, so the mode change stays
+  // pending in SDM/DRM. Force an explicit commit here to apply the config
+  // change immediately. In normal SurfaceFlinger usage, a present/validate
+  // always follows.
+  if (!performing_commit) {
+    bool validate_only = false;
+    bool needsCommit = false;
+    uint32_t types_count = 0;
+    uint32_t reqs_count = 0;
+    shared_ptr<Fence> presentFence = nullptr;
+
+    auto err = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
+                                                   &types_count, &reqs_count, &needsCommit);
+    if (err != sdm::kErrorNone && err != sdm::kErrorNeedsCommit) {
+      ALOGW("%s: Forced CommitOrPrepare failed", __FUNCTION__);
+      return;
+    }
   }
 }
 #endif

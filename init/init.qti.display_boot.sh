@@ -65,7 +65,6 @@ case "$target" in
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
-        setprop vendor.display.disable_pu_ds 1
         setprop vendor.display.force_gpu_composition 0
         setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
@@ -73,6 +72,7 @@ case "$target" in
         setprop vendor.display.disable_noise_layer 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.composer_driven_hdcp 0
+        setprop vendor.display.enable_power_save_mode_for_video 1
         ;;
     esac
     ;;
