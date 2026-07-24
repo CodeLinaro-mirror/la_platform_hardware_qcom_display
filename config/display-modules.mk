@@ -36,7 +36,7 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             modetest \
                             libdisplayconfig.qti
 
-    ifneq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+    ifneq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar shikra), $(TARGET_BOARD_PLATFORM))
         DISPLAY_MODULES_HARDWARE += libhwfenceclient
     endif
     ifneq ($(TARGET_BOARD_PLATFORM),vienna)
