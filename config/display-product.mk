@@ -270,6 +270,10 @@ $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
 $(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 $(call soong_config_set, qtidisplay, enable_demura, true )
 
+# Config for using different idle timeout value on vienna
+$(call soong_config_set, qtidisplay, idle_timeout, false )
+
+
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
 # PLATFORM_VERSION contains the version number of the current Android version.
@@ -388,6 +392,10 @@ else
     endif
 endif
 
+
+ifeq ($(TARGET_SUPPORTS_WEARABLES),true)
+    $(call soong_config_set, qtidisplay, idle_timeout, true )
+endif
 
 
 
