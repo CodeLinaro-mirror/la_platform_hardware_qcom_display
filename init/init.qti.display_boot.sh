@@ -194,6 +194,7 @@ case "$target" in
         fi
         # Enable null display for Hamoa QCB and set Hamoa-specific properties
         if [ "$soc_hwid" -eq 555 ]; then
+          setprop vendor.gralloc.camera_preview_uses_usb_hal 1
           if [ "$platform_subtype_id" -eq 43 ]; then
             setprop vendor.display.enable_null_display 1
           fi
