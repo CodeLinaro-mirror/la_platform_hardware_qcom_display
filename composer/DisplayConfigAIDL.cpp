@@ -644,7 +644,7 @@ ScopedAStatus DisplayConfigAIDL::setVirtualDispType(VirtualDispType type) {
   auto ret = sideband_->SetVirtualDispType(disp_type);
   if (ret != sdm::kErrorNone) {
     ALOGW("%s: Failed to set virtual disp type: %d ret: %d", __FUNCTION__, disp_type, ret);
-    return ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
+    return ScopedAStatus(AStatus_fromExceptionCode(EX_TRANSACTION_FAILED));
   }
 
   return ScopedAStatus::ok();
