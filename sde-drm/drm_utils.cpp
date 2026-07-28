@@ -27,7 +27,14 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <drm/drm_fourcc.h>
+#include <drm_logger.h>
 #include <drm_utils.h>
 #include <regex>
 #include <sstream>
@@ -42,6 +49,8 @@ using std::stringstream;
 using std::regex;
 using std::pair;
 using std::vector;
+
+#define __CLASS__ "DRMUtils"
 
 namespace sde_drm {
 
@@ -104,13 +113,31 @@ void Tokenize(const std::string &str, std::vector<std::string> *tokens, char del
 
 void AddProperty(drmModeAtomicReqPtr req, uint32_t object_id, uint32_t property_id, uint64_t value,
                  bool cache, std::unordered_map<uint32_t, uint64_t> &prop_val_map) {
+  if (!property_id) {
+    return;
+  }
+
 #ifndef SDM_VIRTUAL_DRIVER
   auto it = prop_val_map.find(property_id);
+  bool update_cache = false;
   if (it == prop_val_map.end() || it->second != value)
 #endif
-    drmModeAtomicAddProperty(req, object_id, property_id, value);
+  {
+    int ret = drmModeAtomicAddProperty(req, object_id, property_id, value);
+    if (ret < 0) {
+      DRM_LOGE("Atomic add failed ret=%d object_id=%u property_id=%u value=%llu cache=%d",
+               ret, object_id, property_id, static_cast<unsigned long long>(value), cache);
+    } else {
 #ifndef SDM_VIRTUAL_DRIVER
-  if (cache)
+      update_cache = true;
+#endif
+    }
+  }
+#ifndef SDM_VIRTUAL_DRIVER
+  // Cache only successfully added properties. Future atomic requests can skip
+  // re-adding unchanged values, while failed/missing properties are not cached
+  // as if they were programmed.
+  if (cache && update_cache)
     prop_val_map[property_id] = value;
 #endif
 }

@@ -22,10 +22,18 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_INFO_INTERFACE_H__
 #define __HW_INFO_INTERFACE_H__
 
 #include <inttypes.h>
+#include <bitset>
+#include <vector>
 #include <core/core_interface.h>
 #include <private/hw_info_types.h>
 
@@ -33,13 +41,15 @@ namespace sdm {
 
 class HWInfoInterface {
  public:
-  static DisplayError Create(HWInfoInterface **intf);
+  static DisplayError Create(std::vector<HWInfoInterface*> *intfs, std::bitset<8> core_ids);
   static DisplayError Destroy(HWInfoInterface *intf);
   virtual DisplayError Init() = 0;
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) = 0;
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) = 0;
+  virtual uint32_t GetCoreId() = 0;
+  virtual bool HasSPIConnector() = 0;
 
  protected:
   virtual ~HWInfoInterface() { }

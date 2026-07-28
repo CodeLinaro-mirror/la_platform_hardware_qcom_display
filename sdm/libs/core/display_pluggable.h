@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DISPLAY_PLUGGABLE_H__
 #define __DISPLAY_PLUGGABLE_H__
 
@@ -36,10 +42,11 @@ namespace sdm {
 
 class DisplayPluggable : public DisplayBase, HWEventHandler {
  public:
-  DisplayPluggable(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+  DisplayPluggable(DisplayEventHandler *event_handler,
+                   std::vector<HWInfoInterface*> hw_info_intf,
                    BufferAllocator *buffer_allocator, CompManager *comp_manager);
   DisplayPluggable(int32_t display_id, DisplayEventHandler *event_handler,
-                   HWInfoInterface *hw_info_intf, BufferAllocator *buffer_allocator,
+                   std::vector<HWInfoInterface*> hw_info_intf, BufferAllocator *buffer_allocator,
                    CompManager *comp_manager);
   virtual DisplayError Init();
   virtual DisplayError Prepare(LayerStack *layer_stack);

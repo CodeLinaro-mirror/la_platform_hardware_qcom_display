@@ -28,39 +28,9 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <dlfcn.h>
@@ -153,20 +123,20 @@ static InlineRotationVersion GetInRotVersion(sde_drm::InlineRotationVersion drm_
   }
 }
 
-HWResourceInfo *HWInfoDRM::hw_resource_ = nullptr;
+HWInfoDRM::HWInfoDRM(uint32_t core_id) : core_id_(core_id) {}
 
 DisplayError HWInfoDRM::Init() {
   default_mode_ = (DRMLibLoader::GetInstance()->IsLoaded() == false);
   if (!default_mode_) {
     DRMMaster *drm_master = {};
     int dev_fd = -1;
-    DRMMaster::GetInstance(&drm_master);
+    DRMMaster::GetInstance(&drm_master, core_id_);
     if (!drm_master) {
       DLOGE("Failed to acquire DRMMaster instance");
       return kErrorCriticalResource;
     }
     drm_master->GetHandle(&dev_fd);
-
+    dev_fd_ = dev_fd;
     DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
     if (!drm_lib_loader) {
       DLOGE("Failed to acquire DRMLibLoader instance");
@@ -176,7 +146,7 @@ DisplayError HWInfoDRM::Init() {
 
     if (!drm_mgr_intf_) {
       DRMLibLoader::Destroy();
-      DRMMaster::DestroyInstance();
+      DRMMaster::DestroyInstance(core_id_);
       DLOGE("Failed to get DRMManagerInterface");
       return kErrorCriticalResource;
     }
@@ -191,14 +161,14 @@ void HWInfoDRM::Deinit() {
 
   if (drm_mgr_intf_) {
     DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
-    if (drm_lib_loader) {
-      drm_lib_loader->FuncDestroyDRMManager()();
+    if (drm_lib_loader && dev_fd_ >= 0) {
+      drm_lib_loader->FuncDestroyDRMManager()(dev_fd_);
     }
     drm_mgr_intf_ = nullptr;
   }
 
   DRMLibLoader::Destroy();
-  DRMMaster::DestroyInstance();
+  DRMMaster::DestroyInstance(core_id_);
 }
 
 HWInfoDRM::~HWInfoDRM() {
@@ -515,7 +485,8 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
     }
     hw_resource->hw_pipes.push_back(std::move(pipe_caps));
   }
-  hw_resource->has_excl_rect = planes[0].second.has_excl_rect;
+  // Guard: SPI/virtual cores have zero HW planes.
+  hw_resource->has_excl_rect = !planes.empty() && planes[0].second.has_excl_rect;
 }
 
 void HWInfoDRM::PopulatePipeCaps(const sde_drm::DRMPlaneTypeInfo &info,
@@ -882,9 +853,11 @@ DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
   for (auto &iter : conns_info) {
     HWDisplayInfo hw_info = {};
     hw_info.display_id =
-        ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 : (int32_t)(iter.first);
+        ((0 == iter.first) || (iter.first > INT32_MAX)) ? -1 :
+        (int32_t)DisplayId(core_id_, (uint32_t)iter.first).GetDisplayId();
     switch (iter.second.type) {
       case DRM_MODE_CONNECTOR_DSI:
+      case DRM_MODE_CONNECTOR_SPI:
         hw_info.display_type = kBuiltIn;
         break;
       case DRM_MODE_CONNECTOR_TV:
@@ -962,6 +935,12 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
     }
   }
 
+  // For virtual cores (core_id_ > 0), fall back to connector scan if no DSI encoder found.
+  // card1/SPI may expose a SPI connector rather than a DSI encoder.
+  if (core_id_ > 0 && max_displays_builtin == 0 && HasSPIConnector()) {
+    max_displays_builtin++;
+  }
+
   switch (type) {
     case kBuiltIn:
       *max_displays = max_displays_builtin;
@@ -994,6 +973,29 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
   log_once = kTagDisplay;
 
   return kErrorNone;
+}
+
+bool HWInfoDRM::HasSPIConnector() {
+  if (spi_checked_) {
+    return has_spi_connector_;
+  }
+  has_spi_connector_ = false;
+  if (!drm_mgr_intf_) {
+    // default_mode_ (headless/no-DRM-driver) leaves drm_mgr_intf_ null; treat as no SPI.
+    spi_checked_ = true;
+    return has_spi_connector_;
+  }
+  sde_drm::DRMConnectorsInfo conns_info = {};
+  if (!drm_mgr_intf_->GetConnectorsInfo(&conns_info)) {
+    for (const auto &iter : conns_info) {
+      if (iter.second.type == DRM_MODE_CONNECTOR_SPI) {
+        has_spi_connector_ = true;
+        break;
+      }
+    }
+  }
+  spi_checked_ = true;
+  return has_spi_connector_;
 }
 
 }  // namespace sdm

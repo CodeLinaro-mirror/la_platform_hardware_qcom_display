@@ -28,39 +28,9 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #define __STDC_FORMAT_MACROS
@@ -168,7 +138,7 @@ static PPBlock GetPPBlock(const HWToneMapLut &lut_type) {
 }
 
 static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
-                         uint64_t *drm_format_modifier) {
+                         uint64_t *drm_format_modifier, bool is_spi_display = false) {
   switch (format) {
     case kFormatRGBA8888:
       *drm_format = DRM_FORMAT_ABGR8888;
@@ -203,7 +173,10 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
       *drm_format = DRM_FORMAT_RGB888;
       break;
     case kFormatRGB565:
-      *drm_format = DRM_FORMAT_BGR565;
+      // Existing SDE planes expect this SDM RGB565 format as DRM_FORMAT_BGR565.
+      // The SPI simple-pipe plane advertises DRM_FORMAT_RGB565 only, so keep
+      // the legacy mapping for DSI/SDE and use RGB565 only for the SPI display.
+      *drm_format = is_spi_display ? DRM_FORMAT_RGB565 : DRM_FORMAT_BGR565;
       break;
     case kFormatBGR565:
       *drm_format = DRM_FORMAT_RGB565;
@@ -306,13 +279,13 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
 class FrameBufferObject : public LayerBufferObject {
  public:
   explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format,
-                             uint32_t width, uint32_t height)
-    :fb_id_(fb_id), format_(format), width_(width), height_(height) {
+                             uint32_t width, uint32_t height, uint32_t core_id = 0)
+    :fb_id_(fb_id), format_(format), width_(width), height_(height), core_id_(core_id) {
   }
 
   ~FrameBufferObject() {
     DRMMaster *master;
-    DRMMaster::GetInstance(&master);
+    DRMMaster::GetInstance(&master, core_id_);
     int ret = master->RemoveFbId(fb_id_);
     if (ret < 0) {
       DLOGE("Removing fb_id %d failed with error %d", fb_id_, errno);
@@ -328,6 +301,7 @@ class FrameBufferObject : public LayerBufferObject {
   LayerBufferFormat format_;
   uint32_t width_;
   uint32_t height_;
+  uint32_t core_id_ = 0;
 };
 
 HWDeviceDRM::Registry::Registry(BufferAllocator *buffer_allocator) :
@@ -364,7 +338,7 @@ void HWDeviceDRM::Registry::Register(HWLayers *hw_layers) {
 
 int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id) {
   DRMMaster *master = nullptr;
-  DRMMaster::GetInstance(&master);
+  DRMMaster::GetInstance(&master, core_id_);
   int ret = -1;
 
   if (!master) {
@@ -375,10 +349,18 @@ int HWDeviceDRM::Registry::CreateFbId(const LayerBuffer &buffer, uint32_t *fb_id
   DRMBuffer layout{};
   AllocatedBufferInfo buf_info{};
   buf_info.fd = layout.fd = buffer.planes[0].fd;
-  buf_info.aligned_width = layout.width = buffer.width;
-  buf_info.aligned_height = layout.height = buffer.height;
+  buf_info.aligned_width = buffer.width;
+  buf_info.aligned_height = buffer.height;
+  // SPI panels are driven by a simple pipe with no scaling/cropping, so the DRM FB must be
+  // exactly the panel's unaligned resolution -- the aligned (padded) buffer dims used for
+  // every other display would leave a garbage border visible on screen. Other display types
+  // keep using the aligned buffer dims, unchanged from prior behavior.
+  layout.width = is_spi_display_ && buffer.unaligned_width ? buffer.unaligned_width :
+                 buffer.width;
+  layout.height = is_spi_display_ && buffer.unaligned_height ? buffer.unaligned_height :
+                  buffer.height;
   buf_info.format = buffer.format;
-  GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier);
+  GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier, is_spi_display_);
   buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset, &layout.num_planes);
   ret = master->CreateFbId(layout, fb_id);
   if (ret < 0) {
@@ -421,7 +403,7 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, const LayerBuffer &buf
   if (CreateFbId(buffer, &fb_id) >= 0) {
     // Create and cache the fb_id in map
     layer->buffer_map->buffer_map[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
-        buffer.format, buffer.width, buffer.height);
+        buffer.format, buffer.width, buffer.height, core_id_);
   }
 }
 
@@ -454,7 +436,7 @@ void HWDeviceDRM::Registry::MapOutputBufferToFbId(LayerBuffer *output_buffer) {
   uint32_t fb_id = 0;
   if (CreateFbId(*output_buffer, &fb_id) >= 0) {
     output_buffer_map_[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
-        output_buffer->format, output_buffer->width, output_buffer->height);
+        output_buffer->format, output_buffer->width, output_buffer->height, core_id_);
   }
 }
 
@@ -490,7 +472,7 @@ HWDeviceDRM::HWDeviceDRM(BufferAllocator *buffer_allocator, HWInfoInterface *hw_
 DisplayError HWDeviceDRM::Init() {
   int ret = 0;
   DRMMaster *drm_master = {};
-  DRMMaster::GetInstance(&drm_master);
+  DRMMaster::GetInstance(&drm_master, hw_info_intf_->GetCoreId());
   drm_master->GetHandle(&dev_fd_);
   DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
 
@@ -518,6 +500,9 @@ DisplayError HWDeviceDRM::Init() {
   }
 
   display_id_ = static_cast<int32_t>(token_.conn_id);
+
+  // Set core_id in registry so buffer operations use the correct DRM device.
+  registry_.SetCoreId(hw_info_intf_->GetCoreId());
 
   ret = drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
   if (ret) {
@@ -554,6 +539,7 @@ DisplayError HWDeviceDRM::Init() {
 
   InitializeConfigs();
   PopulateHWPanelInfo();
+  registry_.SetIsSpiDisplay(hw_panel_info_.port == kPortSPI);
   UpdateMixerAttributes();
 
   // TODO(user): In future, remove has_qseed3 member, add version and pass version to constructor
@@ -850,12 +836,92 @@ DisplayError HWDeviceDRM::GetDisplayIdentificationData(uint8_t *out_port, uint32
   *out_port = token_.hw_port;
   std::vector<uint8_t> &edid = connector_info_.edid;
 
+  // True if a standard 128-byte EDID base block already carries a tag-0xFC (Monitor
+  // Name) display descriptor, i.e. AOSP's parseDisplayIdentificationData() can already
+  // derive a name from it without our synthesis below.
+  auto has_monitor_name_descriptor = [](const std::vector<uint8_t> &e) {
+    if (e.size() < 126) {
+      return false;
+    }
+    static const uint32_t kDescriptorOffsets[] = {54, 72, 90, 108};
+    for (uint32_t offset : kDescriptorOffsets) {
+      if (e[offset] == 0x00 && e[offset + 1] == 0x00 && e[offset + 3] == 0xFC) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // DSI panels keep their real EDID untouched: the DSI kernel driver
+  // (dsi_connector_get_modes() in dsi_drm.c) already populates connector_info_.edid via
+  // drm_connector_update_edid_property() with a kernel-synthesized EDID carrying the
+  // devicetree panel name (e.g. "ili9883c 720p") under descriptor tag 0xFE ("Unspecified
+  // ASCII"). We must not override that here -- SF and any other real EDID consumer should
+  // see exactly what the kernel/panel reports for DSI.
+  //
+  // SPI panels have no physical EDID chip and no kernel-side synthesis, so
+  // connector_info_.edid is empty for them, and AOSP's parseDisplayIdentificationData()
+  // only surfaces a name (Edid::displayName / DisplayIdentificationInfo::name) from a
+  // tag-0xFC (Monitor Name) descriptor. So, SPI-only, synthesize a minimal EDID carrying
+  // one so SurfaceFlinger can identify this display by name -- "SPI Display" lets SF
+  // detect "SPI" and set GRALLOC_USAGE_PRIVATE_3 on its framebuffer target buffers
+  // (contiguous heap required by SPI controller DMA). Skipped if the SPI connector
+  // somehow already carries a real tag-0xFC descriptor.
+  //
+  // Format: standard 128-byte EDID, QCM vendor (0x44 0x6D), text descriptor tag 0xFC
+  // (Monitor Name). Product code bytes [10:11] are set to both bytes of token_.conn_id
+  // so that each connector produces a unique manufacturer+product ID, preventing
+  // SurfaceFlinger from treating two SPI panels as the same display.
+  // Checksum (byte 127) is computed so sum of all 128 bytes mod 256 == 0.
+  if (hw_panel_info_.port == kPortSPI && !has_monitor_name_descriptor(edid)) {
+    // Both bytes of conn_id used as product code to ensure uniqueness per connector.
+    const uint8_t prod_lo = static_cast<uint8_t>(token_.conn_id & 0xFF);
+    const uint8_t prod_hi = static_cast<uint8_t>((token_.conn_id >> 8) & 0xFF);
+
+    uint8_t blob[128] = {
+      0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,  // EDID header
+      0x44, 0x6D,                                      // manufacturer: QCM
+      prod_lo, prod_hi,                                // product code: conn_id low+high bytes (unique per connector)
+      0x01, 0x00, 0x00, 0x00,                          // serial, week, year
+      0x1B, 0x10, 0x01, 0x03, 0x80, 0x00, 0x00, 0x78,  // version, basic params
+      0x0A, 0x0D, 0xC9, 0xA0, 0x57, 0x47, 0x98, 0x27,  // chromaticity
+      0x12, 0x48, 0x4C, 0x00, 0x00, 0x00,              // timings
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,  // standard timings
+      0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+      0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,  // descriptor 1: unused
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,  // descriptor 2: unused
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      // descriptor 3: tag 0xFC (monitor name) = "SPI Display\n "
+      0x00, 0x00, 0x00, 0xFC, 0x00,
+      0x53, 0x50, 0x49,                                // "SPI"
+      0x20, 0x44, 0x69, 0x73, 0x70, 0x6C, 0x61, 0x79,  // " Display"
+      0x0A, 0x20,                                      // LF + pad
+      0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,  // descriptor 4: unused
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00,  // extension count
+      0x00,  // checksum placeholder
+    };
+    // Compute checksum: byte 127 = (256 - sum(bytes[0..126])) % 256
+    uint32_t sum = 0;
+    for (int i = 0; i < 127; i++) sum += blob[i];
+    blob[127] = static_cast<uint8_t>((256 - (sum % 256)) % 256);
+    // Cache into connector_info_.edid so subsequent calls use the unified path below.
+    edid.assign(blob, blob + sizeof(blob));
+  }
+
+  if (edid.empty()) {
+    if (hw_panel_info_.port == kPortDefault) {
+      DLOGW("EDID blob is empty and hw_panel_info_.port is uninitialized (kPortDefault); "
+            "GetDisplayIdentificationData called before PopulateHWPanelInfo?");
+    } else {
+      DLOGE("EDID blob is empty, no data to return");
+    }
+    return kErrorDriverData;
+  }
+
   if (out_data == nullptr) {
     *out_data_size = (uint32_t)(edid.size());
-    if (*out_data_size == 0) {
-      DLOGE("EDID blob is empty, no data to return");
-      return kErrorDriverData;
-    }
   } else {
     *out_data_size = std::min(*out_data_size, (uint32_t)(edid.size()));
     memcpy(out_data, edid.data(), *out_data_size);
@@ -899,6 +965,12 @@ void HWDeviceDRM::GetHWDisplayPortAndMode() {
     case DRM_MODE_CONNECTOR_DisplayPort:
       hw_panel_info_.port = kPortDP;
       interface_str_ = "DisplayPort";
+      break;
+    case DRM_MODE_CONNECTOR_SPI:
+      // Per-connector counterpart of HWInfoDRM::HasSPIConnector() (core-level
+      // scan); CompManager::RegisterDisplay() cross-checks the two agree.
+      hw_panel_info_.port = kPortSPI;
+      interface_str_ = "SPI";
       break;
   }
 
@@ -1421,8 +1493,11 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayers *hw_layers,
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_QSYNC_MODE, token_.conn_id, mode);
   }
 
-  // dpps commit feature ops doesn't use the obj id, set it as -1
-  drm_atomic_intf_->Perform(DRMOps::DPPS_COMMIT_FEATURE, -1, ((validate) ? 1 : 0));
+  // dpps commit feature ops doesn't use the obj id, set it as -1.
+  // DPPS resources are DSI-only; skip this path for SPI/simple-pipe DRM devices.
+  if (hw_panel_info_.port != kPortSPI) {
+    drm_atomic_intf_->Perform(DRMOps::DPPS_COMMIT_FEATURE, -1, ((validate) ? 1 : 0));
+  }
   if (!validate) {
     drm_atomic_intf_->Perform(DRMOps::COMMIT_PANEL_FEATURES, 0 /* argument is not used */);
   }
@@ -1604,7 +1679,7 @@ DisplayError HWDeviceDRM::DefaultCommit(HWLayers *hw_layers) {
   }
 
   DRMMaster *master = nullptr;
-  int ret = DRMMaster::GetInstance(&master);
+  int ret = DRMMaster::GetInstance(&master, hw_info_intf_->GetCoreId());
   if (ret < 0) {
     DLOGE("Failed to acquire DRMMaster instance");
     return kErrorResources;

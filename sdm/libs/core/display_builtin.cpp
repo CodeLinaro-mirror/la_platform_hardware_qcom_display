@@ -21,39 +21,12 @@
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <utils/constants.h>
@@ -79,13 +52,14 @@
 
 namespace sdm {
 
-DisplayBuiltIn::DisplayBuiltIn(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayBuiltIn::DisplayBuiltIn(DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(kBuiltIn, event_handler, kDeviceBuiltIn, buffer_allocator,
                 comp_manager, hw_info_intf) {}
 
 DisplayBuiltIn::DisplayBuiltIn(int32_t display_id, DisplayEventHandler *event_handler,
-                               HWInfoInterface *hw_info_intf,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(display_id, kBuiltIn, event_handler, kDeviceBuiltIn,
                 buffer_allocator, comp_manager, hw_info_intf) {}
@@ -100,20 +74,29 @@ static uint64_t GetTimeInMs(struct timespec ts) {
 DisplayError DisplayBuiltIn::Init() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kBuiltIn, hw_info_intf_,
-                                           buffer_allocator_, &hw_intf_);
-  if (error != kErrorNone) {
-    DLOGE("Failed to create hardware interface on. Error = %d", error);
-    return error;
+  DisplayId display_id_obj(display_id_);
+  dpu_core_mux_ = DPUCoreMux::CreateCoreMux(display_id_obj, kBuiltIn,
+                                             hw_info_intf_, buffer_allocator_);
+  if (!dpu_core_mux_) {
+    DLOGE("Failed to create DPUCoreMux for display %d", display_id_);
+    return kErrorUndefined;
   }
+  dpu_core_mux_->GetHWInterface(&hw_intf_);  // hw_intf_ = this display's DPU core HWInterface
+                                             // (core0 for DSI, core1 for SPI)
 
   if (-1 == display_id_) {
-    hw_intf_->GetDisplayId(&display_id_);
+    dpu_core_mux_->GetDisplayId(&display_id_);
   }
 
-  error = DisplayBase::Init();
+  DisplayError error = DisplayBase::Init();
   if (error != kErrorNone) {
+    dpu_core_mux_->DeInit();
+    delete dpu_core_mux_;
+    dpu_core_mux_ = nullptr;
+    // DisplayBase::Init() failed before taking ownership of hw_intf_ (the
+    // primary core's HWInterface), so it must be destroyed here.
     HWInterface::Destroy(hw_intf_);
+    hw_intf_ = nullptr;
     return error;
   }
 
@@ -145,8 +128,11 @@ DisplayError DisplayBuiltIn::Init() {
                                     &hw_events_intf_);
   if (error != kErrorNone) {
     DisplayBase::Deinit();
-    HWInterface::Destroy(hw_intf_);
+    // hw_intf_ is owned by DisplayBase after Init(); don't destroy it separately here.
     DLOGE("Failed to create hardware events interface on. Error = %d", error);
+    dpu_core_mux_->DeInit();
+    delete dpu_core_mux_;
+    dpu_core_mux_ = nullptr;
   }
 
   current_refresh_rate_ = hw_panel_info_.max_fps;
@@ -157,16 +143,21 @@ DisplayError DisplayBuiltIn::Init() {
   Debug::Get()->GetProperty(DEFER_FPS_FRAME_COUNT, &value);
   deferred_config_.frame_count = (value > 0) ? UINT32(value) : 0;
 
-error = CreatePanelfeatures();
-  if (error != kErrorNone) {
-    DLOGE("Failed to setup panel feature factory, error: %d", error);
-  } else {
-    // Get status of RC enablement property. Default RC is disabled.
-    int rc_prop_value = 0;
-    Debug::GetProperty(ENABLE_ROUNDED_CORNER, &rc_prop_value);
-    rc_enable_prop_ = rc_prop_value ? true : false;
-    DLOGI("RC feature %s.", rc_enable_prop_ ? "enabled" : "disabled");
+  DisplayPort port = kPortDefault;
+  GetDisplayPort(&port);
+  if (port != kPortSPI) {
+    error = CreatePanelfeatures();
+    if (error != kErrorNone) {
+      DLOGE("Failed to setup panel feature factory, error: %d", error);
+    } else {
+      // Get status of RC enablement property. Default RC is disabled.
+      int rc_prop_value = 0;
+      Debug::GetProperty(ENABLE_ROUNDED_CORNER, &rc_prop_value);
+      rc_enable_prop_ = rc_prop_value ? true : false;
+      DLOGI("RC feature %s.", rc_enable_prop_ ? "enabled" : "disabled");
+    }
   }
+
   value = 0;
   DebugHandler::Get()->GetProperty(DISABLE_DYNAMIC_FPS, &value);
   disable_dyn_fps_ = (value == 1);
@@ -189,6 +180,15 @@ DisplayError DisplayBuiltIn::Deinit() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
   dpps_info_.Deinit();
+
+  // Destroy SECONDARY core HWInterfaces only.
+  // PRIMARY (core_ids_[0]) is owned by DisplayBase via hw_intf_ and is not touched here.
+  if (dpu_core_mux_) {
+    dpu_core_mux_->DeInit();
+    delete dpu_core_mux_;
+    dpu_core_mux_ = nullptr;
+  }
+
   return DisplayBase::Deinit();
 }
 
@@ -1405,8 +1405,11 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
 
+  // hw_info_intf_[0] is single display's HWInfoInterface
   HWResourceInfo hw_resource_info = HWResourceInfo();
-  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+  if (!hw_info_intf_.empty()) {
+    hw_info_intf_[0]->GetHWResourceInfo(&hw_resource_info);
+  }
 
   fixed_info->hdr_supported = hw_resource_info.has_hdr;
   // Built-in displays always support HDR10+ when the target supports HDR
@@ -1421,6 +1424,20 @@ DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
 
   return kErrorNone;
+}
+
+DisplayError DisplayBuiltIn::SetCompositionState(LayerComposition composition_type, bool enable) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  // SPI displays have no hardware composition path, so GPU composition must always remain enabled.
+  DisplayPort port = kPortDefault;
+  GetDisplayPort(&port);
+  if (port == kPortSPI && composition_type == kCompositionGPU && !enable) {
+    DLOGW("Refusing to disable GPU composition on SPI display: no alternative composition path.");
+    return kErrorNotSupported;
+  }
+
+  return DisplayBase::SetCompositionState(composition_type, enable);
 }
 
 }  // namespace sdm
