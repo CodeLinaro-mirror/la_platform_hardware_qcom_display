@@ -74,6 +74,33 @@ static void PopulateBufferFromLuts(std::vector<float> &buffer, uint32_t size, Co
   }
 }
 
+static void PopulateLutsFromBuffer(std::vector<float> &buffer, uint32_t size, Color10Bit *entries) {
+  uint32_t buf_idx = 0;
+  const char color[] = {'R', 'G', 'B'};
+  constexpr size_t num_channels = sizeof(color) / sizeof(color[0]);
+  for (size_t order = 0; order < num_channels; order++) {
+    for (uint32_t x = 0; x < size; x++) {
+      for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t z = 0; z < size; z++) {
+          // SF generates luts in the order of R G B with B incrementing first followed by G and R
+          // HWC requires luts in the reverse order where R increments first followed by G and B
+          // We generate reverse index here to send data in the required order
+          uint32_t index = x + y * size + z * size * size;
+          uint32_t data = UINT32(buffer.at(buf_idx) * 1023);
+          if (color[order] == 'R') {
+            entries[index].R = data;
+          } else if (color[order] == 'G') {
+            entries[index].G = data;
+          } else if (color[order] == 'B') {
+            entries[index].B = data;
+          }
+          buf_idx++;
+        }
+      }
+    }
+  }
+}
+
 ComposerHandleImporter mHandleImporter;
 
 BufferCacheEntry::BufferCacheEntry() : mHandle(nullptr) {}
@@ -2137,11 +2164,18 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
 #ifdef COMPOSER3_V4
 void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int64_t layer,
                                                             const Luts &luts) {
-  // TODO(user): Translate Luts to Lut3d once supported, refer to populateDisplayLuts
-  // to reverse operation and AOSP LutShader.cpp to read luts from fd through mmap
   Lut3d lut_3d;
-  lut_3d.validLutEntries = luts.pfd.get() >= 0;
+  auto error = translateLayerLuts(luts, &lut_3d);
+  if (error != Error::None) {
+    writeError(__FUNCTION__, display, error);
+    return;
+  }
+
   auto err = mClient.layer_builder_->SetLayerLuts(display, layer, &lut_3d);
+  // delete valid lutEntries after setting it on the layer
+  if (lut_3d.validLutEntries) {
+    delete[] lut_3d.lutEntries;
+  }
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, display, Error::BadConfig);
   }
@@ -2503,6 +2537,52 @@ Error AidlComposerClient::CommandEngine::getBufferLuts(
   if (err != sdm::kErrorNone) {
     return Error::BadConfig;
   }
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::translateLayerLuts(const Luts &luts, Lut3d *lut_3d) {
+  auto fd = luts.pfd.get();
+  lut_3d->validLutEntries = fd >= 0;
+  lut_3d->validGridEntries = false;  // currently not supported
+  if (!lut_3d->validLutEntries) {
+    return Error::None;
+  }
+
+  std::vector<float> buffer;
+  auto &offsets = luts.offsets;
+  auto &final_lut_prop = luts.lutProperties[offsets->size() - 1];
+  int final_size = offsets->at(offsets->size() - 1);
+  lut_3d->dim = final_lut_prop.size;
+  int final_lut_size = lut_3d->dim;
+
+  // only one 3d lut is supported so we accept the final lut if it is 3D or return error
+  if (offsets->size() > 1) {
+    ALOGW("Multiple luts received for layer which is not supported");
+    return Error::Unsupported;
+  } else if (final_lut_prop.dimension == LutProperties::Dimension::THREE_D) {
+    final_lut_size = lut_3d->dim * lut_3d->dim * lut_3d->dim * 3;
+  } else {
+    ALOGW("1D LUT received for layer which is not supported");
+    return Error::Unsupported;
+  }
+  final_size += final_lut_size;
+  size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
+
+  // decode the shared memory of luts
+  float *ptr = (float *)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (ptr == MAP_FAILED) {
+    ALOGE("MAP_FAILED: fd %d", fd);
+    return Error::BadConfig;
+  }
+
+  buffer = std::vector<float>(ptr, ptr + final_size);
+  munmap(ptr, buffer_size);
+
+  lut_3d->lutEntries = new Color10Bit[lut_3d->dim * lut_3d->dim * lut_3d->dim];
+
+  // TODO(user): take correct lut_size when multiple luts will be supported
+  PopulateLutsFromBuffer(buffer, lut_3d->dim, lut_3d->lutEntries);
 
   return Error::None;
 }
