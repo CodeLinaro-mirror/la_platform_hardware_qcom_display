@@ -25,9 +25,21 @@
 #include <android/binder_ibinder_platform.h>
 
 #include <sync/sync.h>
+#include <cutils/ashmem.h>
 
 #include "hwc_parcel.h"
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <dirent.h>
 #include <fcntl.h>
+#include <fstream>
+#include <iterator>
+#include <memory>
+#include <string>
+#include <unistd.h>
+#include <xf86drm.h>
+#include <xf86drmMode.h>
 
 namespace aidl {
 namespace vendor {
@@ -38,6 +50,217 @@ namespace composer3 {
 
 using MetadataType = vendor_qti_hardware_display_common_MetadataType;
 using sdm::HWCParcel;
+
+namespace {
+
+constexpr const char *kDrmClassPath = "/sys/class/drm";
+constexpr const char *kDrmDevPath = "/dev/dri";
+constexpr const char *kConnectorCapabilitiesProp = "capabilities";
+constexpr const char *kPanelOrientationPrefix = "panel orientation=";
+
+bool ReadTextFile(const std::string &path, std::string *out) {
+  if (!out) {
+    return false;
+  }
+
+  std::ifstream file(path);
+  if (!file.good()) {
+    return false;
+  }
+
+  std::getline(file, *out);
+  return true;
+}
+
+bool ReadBinaryFile(const std::string &path, std::vector<uint8_t> *out) {
+  if (!out) {
+    return false;
+  }
+
+  std::ifstream file(path, std::ios::binary);
+  if (!file.good()) {
+    return false;
+  }
+
+  std::string data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  out->assign(data.begin(), data.end());
+  return true;
+}
+
+bool ReadUint32File(const std::string &path, uint32_t *value) {
+  if (!value) {
+    return false;
+  }
+
+  std::string text;
+  if (!ReadTextFile(path, &text)) {
+    return false;
+  }
+
+  char *end = nullptr;
+  unsigned long parsed = strtoul(text.c_str(), &end, 10);
+  if (end == text.c_str()) {
+    return false;
+  }
+
+  *value = UINT32(parsed);
+  return true;
+}
+
+bool GetDrmCardDevicePath(const std::string &connector_name, std::string *path) {
+  if (!path || connector_name.rfind("card", 0) != 0) {
+    return false;
+  }
+
+  size_t dash_pos = connector_name.find('-');
+  if (dash_pos == std::string::npos || dash_pos <= strlen("card")) {
+    return false;
+  }
+
+  for (size_t i = strlen("card"); i < dash_pos; i++) {
+    if (!std::isdigit(connector_name[i])) {
+      return false;
+    }
+  }
+
+  *path = std::string(kDrmDevPath) + "/" + connector_name.substr(0, dash_pos);
+  return true;
+}
+
+bool ParsePanelOrientation(const std::string &capabilities, std::string *orientation) {
+  if (!orientation) {
+    return false;
+  }
+
+  size_t pos = capabilities.find(kPanelOrientationPrefix);
+  if (pos == std::string::npos) {
+    return false;
+  }
+
+  pos += strlen(kPanelOrientationPrefix);
+  size_t end = capabilities.find('\n', pos);
+  if (end == std::string::npos) {
+    end = capabilities.find('\0', pos);
+  }
+  if (end == std::string::npos) {
+    end = capabilities.size();
+  }
+
+  *orientation = capabilities.substr(pos, end - pos);
+  return true;
+}
+
+bool ReadDrmConnectorPanelOrientation(const std::string &card_path, uint32_t connector_id,
+                                      std::string *orientation) {
+  if (!orientation) {
+    return false;
+  }
+
+  int fd = open(card_path.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    ALOGW("Failed to open DRM card %s: %s", card_path.c_str(), strerror(errno));
+    return false;
+  }
+
+  std::unique_ptr<drmModeObjectProperties, decltype(&drmModeFreeObjectProperties)> props(
+      drmModeObjectGetProperties(fd, connector_id, DRM_MODE_OBJECT_CONNECTOR),
+      drmModeFreeObjectProperties);
+  if (!props) {
+    ALOGW("Failed to get DRM connector properties card=%s connector=%u", card_path.c_str(),
+          connector_id);
+    close(fd);
+    return false;
+  }
+
+  bool found = false;
+  for (uint32_t i = 0; i < props->count_props; i++) {
+    std::unique_ptr<drmModePropertyRes, decltype(&drmModeFreeProperty)> property(
+        drmModeGetProperty(fd, props->props[i]), drmModeFreeProperty);
+    if (!property || strcmp(property->name, kConnectorCapabilitiesProp) != 0) {
+      continue;
+    }
+
+    uint32_t blob_id = UINT32(props->prop_values[i]);
+    std::unique_ptr<drmModePropertyBlobRes, decltype(&drmModeFreePropertyBlob)> blob(
+        drmModeGetPropertyBlob(fd, blob_id), drmModeFreePropertyBlob);
+    if (!blob || !blob->data || !blob->length) {
+      break;
+    }
+
+    std::string capabilities(static_cast<const char *>(blob->data), blob->length);
+    found = ParsePanelOrientation(capabilities, orientation);
+    break;
+  }
+
+  close(fd);
+  return found;
+}
+
+Transform GetTransformFromPanelOrientation(const std::string &orientation) {
+  if (orientation == "rot 90") {
+    return Transform::ROT_90;
+  }
+  if (orientation == "rot 270") {
+    return Transform::ROT_270;
+  }
+
+  return Transform::NONE;
+}
+
+bool IsSfPhysicalOrientation(const std::string &orientation) {
+  return orientation == "rot 90" || orientation == "rot 270";
+}
+
+bool GetPanelOrientationFromDrmEdid(const std::vector<uint8_t> &display_edid,
+                                    std::string *connector_name,
+                                    std::string *orientation) {
+  if (display_edid.empty() || !orientation) {
+    return false;
+  }
+
+  DIR *dir = opendir(kDrmClassPath);
+  if (!dir) {
+    ALOGW("Failed to open %s: %s", kDrmClassPath, strerror(errno));
+    return false;
+  }
+
+  bool found = false;
+  while (dirent *entry = readdir(dir)) {
+    std::string name(entry->d_name);
+    if (name.rfind("card", 0) != 0 || name.find('-') == std::string::npos) {
+      continue;
+    }
+
+    std::string sysfs_path = std::string(kDrmClassPath) + "/" + name;
+    std::string status;
+    if (!ReadTextFile(sysfs_path + "/status", &status) || status != "connected") {
+      continue;
+    }
+
+    std::vector<uint8_t> edid;
+    if (!ReadBinaryFile(sysfs_path + "/edid", &edid) || edid != display_edid) {
+      continue;
+    }
+
+    std::string card_path;
+    uint32_t connector_id = 0;
+    if (!GetDrmCardDevicePath(name, &card_path) ||
+        !ReadUint32File(sysfs_path + "/connector_id", &connector_id)) {
+      continue;
+    }
+
+    found = ReadDrmConnectorPanelOrientation(card_path, connector_id, orientation);
+    if (found && connector_name) {
+      *connector_name = name;
+    }
+    break;
+  }
+
+  closedir(dir);
+  return found;
+}
+
+}  // namespace
 
 ComposerHandleImporter mHandleImporter;
 
@@ -67,7 +290,7 @@ void BufferCacheEntry::clear() {
 bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
                               std::shared_ptr<SDMDisplaySettingsIntf> settings,
                               std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-                              std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+                              std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
                               std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
                               std::shared_ptr<SDMDisplaySideBandIntf> sideband) {
   if (!caps || !settings || !lifecycle || !drawcycle || !layers) {
@@ -93,6 +316,11 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
     mCommandEngine = nullptr;
     return false;
   }
+
+  int value = 0;
+  sideband_->GetProperty(DISABLE_QUERY_LUTS, &value);
+  disable_query_luts_ = (value == 1);
+  ALOGV("disable_query_luts_: %d", disable_query_luts_);
 
   return true;
 }
@@ -486,8 +714,62 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
-ScopedAStatus AidlComposerClient::getLuts(int64_t displayId, const std::vector<Buffer> &,
-                                          std::vector<Luts> *) {
+ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buffer> &buffers,
+                                          std::vector<Luts> *aidl_return) {
+  if (disable_query_luts_) {
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+
+  uint32_t num_elements = buffers.size();
+  std::vector<SnapHandle *> requested_buffers;
+  for (uint32_t i = 0; i < num_elements; i++) {
+    SnapHandle *layerBuffer = sdm::ConvertToSnapHandle(*buffers.at(i).handle);
+    if (!mHandleImporter.importBuffer(layerBuffer)) {
+      ALOGE("%s: Snapmapper retain failed.", __FUNCTION__);
+      return TO_BINDER_STATUS(INT32(Error::NoResources));
+    }
+    requested_buffers.emplace_back(layerBuffer);
+  }
+
+  auto requested_luts = std::make_unique<std::vector<Lut3d *>>();
+  aidl_return->resize(num_elements);
+
+  auto error = mCommandEngine->getBufferLuts(display, requested_buffers, requested_luts);
+  // Free all imported buffers after getting luts
+  for (auto buffer : requested_buffers) {
+    mHandleImporter.freeBuffer(buffer);
+  }
+
+  if (error != Error::None) {
+    return TO_BINDER_STATUS(INT32(error));
+  }
+
+  auto it = requested_luts->begin();
+  for (uint32_t i = 0; i < num_elements; i++) {
+    int32_t fd = -1;
+    if (it != requested_luts->end()) {
+      // populateDisplayLuts will return error if the lut pointer we pass is nullptr
+      // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
+      if (*it != nullptr) {
+        error = mCommandEngine->populateDisplayLuts(*it, false /* reset_luts */,
+                                                    &(aidl_return->at(i)), &fd);
+        if (error != Error::None) {
+          return TO_BINDER_STATUS(INT32(error));
+        }
+      }
+      it++;
+    }
+
+    if (fd == -1) {
+      ALOGI("%s: Resetting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(fd));
+    } else {
+      ALOGI("%s: Setting LUTs on client for buffer on display-%lu", __FUNCTION__, display);
+      aidl_return->at(i).pfd = std::move(::ndk::ScopedFileDescriptor(dup(fd)));
+      close(fd);
+    }
+  }
+
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 #endif
@@ -540,6 +822,8 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
       aidl_return->push_back(DisplayCapability::SUSPEND);
       aidl_return->push_back(DisplayCapability::DOZE);
     }
+  } else if (HwcDisplayConnectionType::EXTERNAL == display_conn_type) {
+    aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
   }
 
   return ScopedAStatus::ok();
@@ -661,7 +945,42 @@ ScopedAStatus AidlComposerClient::getDisplayPhysicalOrientation(int64_t in_displ
   if (!aidl_return)
     return TO_BINDER_STATUS(INT32(Error::BadParameter));
 
-  // TODO: Add getDisplayPhysicalOrientation support in hwc_session
+  *aidl_return = Transform::NONE;
+
+  uint8_t port = 0;
+  uint32_t size = 0;
+  auto error = caps_->GetDisplayIdentificationData(in_display, &port, &size, nullptr);
+  if (error != sdm::kErrorNone || size == 0) {
+    ALOGW("No display identification data for physical orientation display=%lld err=%d size=%u",
+          static_cast<long long>(in_display), error, size);
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+
+  std::vector<uint8_t> edid(size);
+  error = caps_->GetDisplayIdentificationData(in_display, &port, &size, edid.data());
+  if (error != sdm::kErrorNone) {
+    ALOGW("Failed to read display identification data for orientation display=%lld err=%d",
+          static_cast<long long>(in_display), error);
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+  edid.resize(size);
+
+  std::string connector_name;
+  std::string panel_orientation;
+  if (!GetPanelOrientationFromDrmEdid(edid, &connector_name, &panel_orientation)) {
+    ALOGW("No DRM panel orientation found for display=%lld port=%u",
+          static_cast<long long>(in_display), port);
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+
+  *aidl_return = GetTransformFromPanelOrientation(panel_orientation);
+  if (!IsSfPhysicalOrientation(panel_orientation) && panel_orientation != "none") {
+    ALOGI("Ignoring connector %s panel orientation '%s' for SF physical orientation",
+          connector_name.c_str(), panel_orientation.c_str());
+  }
+  ALOGI("Display %lld connector %s panel orientation '%s' physical transform=%d",
+        static_cast<long long>(in_display), connector_name.c_str(), panel_orientation.c_str(),
+        INT32(*aidl_return));
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
@@ -700,6 +1019,7 @@ ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_retu
       PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,    PixelFormat::RGB_888,
       PixelFormat::RGB_565,      PixelFormat::BGRA_8888,    PixelFormat::YV12,
       PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102, PixelFormat::RGBA_FP16};
+
   static std::vector<Dataspace> dataspace_standards{
       Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
       Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
@@ -1395,6 +1715,7 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
   uint32_t typesCount = 0;
   uint32_t reqsCount = 0;
   bool validate_only = false;
+  // TODO(user): remove typesCount and reqsCount as these are no longer used
   auto status = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
                                                     &typesCount, &reqsCount, &needsCommit);
   if (needsCommit) {
@@ -1402,12 +1723,12 @@ void AidlComposerClient::CommandEngine::executePresentOrValidateDisplay(
       ALOGE("%s: CommitOrPrepare failed %d", __FUNCTION__, status);
     }
     // Implement post validation. Getcomptypes etc;
-    postValidateDisplay(display, typesCount, reqsCount);
+    postValidateDisplay(display);
     mWriter->setPresentOrValidateResult(display, PresentOrValidate::Result::Validated);
   } else {
     if (status == sdm::kErrorNeedsCommit) {
       // Perform post validate.
-      auto error = postValidateDisplay(display, typesCount, reqsCount);
+      auto error = postValidateDisplay(display);
       if (error == Error::None) {
         mClient.drawcycle_->AcceptDisplayChanges(display);
       }
@@ -1451,20 +1772,34 @@ void AidlComposerClient::CommandEngine::executePresentDisplay(int64_t display) {
 void AidlComposerClient::CommandEngine::executeSetLayerCursorPosition(int64_t display,
                                                                       int64_t layer,
                                                                       const Point &cursorPosition) {
+  sdm::DisplayError err = sdm::kErrorNone;
+  std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
+  auto dpy = mClient.mDisplayData.find(display);
+
   if (mClient.layer_builder_->GetDeviceSelectedCompositionType(display, layer) !=
       sdm::SDMCompositionType::COMP_CURSOR) {
     writeError(__FUNCTION__, Error::BadConfig);
     return;
   }
 
-  auto err =
-      mClient.settings_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  if (dpy != mClient.mDisplayData.end() && dpy->second.Layers.find(layer) !=
+      dpy->second.Layers.end()) {
+    err = mClient.settings_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  } else {
+    ALOGW("Layer %ld has already been freed by destroy call", layer);
+  }
+
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, Error::BadConfig);
     return;
   }
-
-  mClient.layer_builder_->SetCursorPosition(display, layer, cursorPosition.x, cursorPosition.y);
+  if (dpy != mClient.mDisplayData.end() && dpy->second.Layers.find(layer) !=
+      dpy->second.Layers.end()) {
+    err = mClient.layer_builder_->SetCursorPosition(display, layer, cursorPosition.x,
+                                                    cursorPosition.y);
+  } else {
+    ALOGW("Layer %ld has already been freed by destroy call", layer);
+  }
 }
 
 void AidlComposerClient::CommandEngine::executeSetLayerBuffer(int64_t display, int64_t layer,
@@ -1762,7 +2097,7 @@ Error AidlComposerClient::CommandEngine::validateDisplay(int64_t display) {
     return Error::BadConfig;
   }
 
-  return postValidateDisplay(display, types_count, reqs_count);
+  return postValidateDisplay(display);
 }
 
 Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
@@ -1799,69 +2134,254 @@ Error AidlComposerClient::CommandEngine::postPresentDisplay(int64_t display,
   return Error::None;
 }
 
-Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display, uint32_t &types_count,
-                                                             uint32_t &reqs_count) {
-  std::vector<sdm::LayerId> changedLayers;
-  std::vector<Composition> compositionTypes;
+Error AidlComposerClient::CommandEngine::setChangedCompositionTypes(int64_t display) {
   std::vector<sdm::LayerId> requestedLayers;
-  std::vector<int32_t> requestMasks;
-  ClientTargetProperty clientTargetProperty;
-  changedLayers.resize(types_count);
-  compositionTypes.resize(types_count);
+  std::vector<Composition> compositionTypes;
+  uint32_t num_elements = 0;
+
   auto err =
-      mClient.drawcycle_->GetChangedCompositionTypes(display, &types_count, nullptr, nullptr);
+      mClient.drawcycle_->GetChangedCompositionTypes(display, &num_elements, nullptr, nullptr);
   if (err != sdm::kErrorNone) {
     return Error::BadConfig;
   }
 
-  err = mClient.drawcycle_->GetChangedCompositionTypes(
-      display, &types_count, changedLayers.data(),
-      reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
+  requestedLayers.resize(num_elements);
+  compositionTypes.resize(num_elements);
 
+  err = mClient.drawcycle_->GetChangedCompositionTypes(
+      display, &num_elements, requestedLayers.data(),
+      reinterpret_cast<std::underlying_type<Composition>::type *>(compositionTypes.data()));
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
     return static_cast<Error>(err);
   }
 
+  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(requestedLayers),
+                                      compositionTypes);
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayRequests(int64_t display) {
+  std::vector<sdm::LayerId> requestedLayers;
+  std::vector<int32_t> requestMasks;
   int32_t display_reqs = 0;
-  err =
-      mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count, nullptr, nullptr);
+  uint32_t num_elements = 0;
+
+  auto err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &num_elements, nullptr,
+                                                    nullptr);
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
     return Error::BadConfig;
   }
 
-  requestedLayers.resize(reqs_count);
-  requestMasks.resize(reqs_count);
-  err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &reqs_count,
+  requestedLayers.resize(num_elements);
+  requestMasks.resize(num_elements);
+
+  err = mClient.drawcycle_->GetDisplayRequests(display, &display_reqs, &num_elements,
                                                requestedLayers.data(), requestMasks.data());
   if (err != sdm::kErrorNone) {
-    changedLayers.clear();
-    compositionTypes.clear();
-
-    requestedLayers.clear();
-    requestMasks.clear();
+    return Error::BadConfig;
   }
 
+  mWriter->setDisplayRequests(display, display_reqs,
+                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setClientTargetProperty(int64_t display) {
+  ClientTargetProperty clientTargetProperty;
   sdm::SDMClientTargetProperty client_property{};
-  err = mClient.settings_->GetClientTargetProperty(display, &client_property);
+  static constexpr float kBrightness = 1.f;
+  DimmingStage dimmingStage = DimmingStage::NONE;
+
+  auto err = mClient.settings_->GetClientTargetProperty(display, &client_property);
   if (err != sdm::kErrorNone) {
-    // todo: reset to default values
     return Error::BadConfig;
   }
 
   clientTargetProperty.dataspace = static_cast<Dataspace>(client_property.dataspace);
   clientTargetProperty.pixelFormat = static_cast<PixelFormat>(client_property.pixel_format);
 
-  mWriter->setChangedCompositionTypes(display, static_cast<std::vector<int64_t>>(changedLayers),
-                                      compositionTypes);
-  mWriter->setDisplayRequests(display, display_reqs,
-                              static_cast<std::vector<int64_t>>(requestedLayers), requestMasks);
-  static constexpr float kBrightness = 1.f;
-  DimmingStage dimmingStage = DimmingStage::NONE;
   mWriter->setClientTargetProperty(display, clientTargetProperty, kBrightness, dimmingStage);
+
+  return Error::None;
+}
+
+#ifdef COMPOSER3_V4
+Error AidlComposerClient::CommandEngine::getBufferLuts(
+    uint64_t display, const std::vector<SnapHandle *> &buffers,
+    std::unique_ptr<std::vector<Lut3d *>> &out_luts) {
+  auto err = mClient.drawcycle_->GetBufferLuts(display, buffers, out_luts);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
+  }
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, bool reset_luts,
+                                                             Luts *luts, int32_t *lut_fd) {
+  if (!lut_3d) {
+    return Error::BadConfig;
+  }
+
+  // reset luts on client
+  if (lut_3d->lutEntries == nullptr) {
+    return Error::None;
+  }
+
+  // initialize optional vector
+  luts->offsets.emplace();
+  // a single zero offset is set since only one lut is present
+  // TODO(user): modify when multiple luts need to be supported for a single layer, eg: gridEntries
+  luts->offsets->emplace_back(INT32(0));
+
+  uint32_t num_offsets = luts->offsets->size();
+  for (auto count = 0; count < num_offsets; count++) {
+    LutProperties lutProperties = {};
+    // only 3d lut is currently supported
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.dimension = LutProperties::Dimension::THREE_D;
+    lutProperties.size = INT32(lut_3d->dim);
+    // although sampling_keys is a vector, framework only supports taking the first value
+    // RGB sampling is fixed for 3d lut
+    // TODO(user): modify when 1d lut needs to be supported
+    lutProperties.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+    luts->lutProperties.emplace_back(lutProperties);
+  }
+
+  // calculate size of buffer
+  uint32_t final_size = 0;
+  for (auto count = 0; count < num_offsets - 1; count++) {
+    // size of lut is equal to offset of next lut
+    final_size += luts->offsets->at(count + 1);
+  }
+
+  // calculate the size of last lut
+  uint32_t exponent =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t channels =
+      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
+  uint32_t lut_size = std::pow(luts->lutProperties[num_offsets - 1].size, exponent);
+  final_size += lut_size * channels;
+  size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
+
+  // use `ashmem_create_region` to create a shared memory segment
+  int32_t fd = ashmem_create_region("display_luts", buffer_size);
+  if (fd < 0 || !ashmem_valid(fd)) {
+    ALOGE("Couldn't create ashmem region: fd %d", fd);
+    return Error::BadConfig;
+  }
+
+  void *data = mmap(nullptr, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (data == MAP_FAILED) {
+    ALOGE("MAP_FAILED: fd %d", fd);
+    close(fd);
+    return Error::BadConfig;
+  }
+
+  // convert 3d lut entries to 1d normalized float buffer
+  std::vector<float> buffer;
+  buffer.reserve(final_size);
+  // TODO(user): take correct lut_size when multiple luts will be supported
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].G) / 1023.f);
+  }
+  for (auto index = 0; index < lut_size; index++) {
+    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].B) / 1023.f);
+  }
+
+  if (data) {
+    std::memcpy((float *)data, buffer.data(), buffer_size);
+  }
+
+  munmap(data, buffer_size);
+  buffer.clear();
+  if (reset_luts) {
+    lut_3d->validLutEntries = false;
+    lut_3d->validGridEntries = false;
+  }
+
+  *lut_fd = fd;
+
+  return Error::None;
+}
+
+Error AidlComposerClient::CommandEngine::setDisplayLuts(int64_t display) {
+  auto requested_luts = std::make_unique<std::vector<std::pair<sdm::LayerId, Lut3d *>>>();
+  std::vector<::ndk::ScopedFileDescriptor> requestedFds;
+  std::vector<int64_t> requestedLayers;
+  std::vector<Luts> requestedLuts;
+
+  auto err = mClient.drawcycle_->GetDisplayLuts(display, requested_luts);
+  if (err != sdm::kErrorNone) {
+    return Error::BadConfig;
+  }
+
+  uint32_t num_elements = requested_luts->size();
+  if (!num_elements) {
+    return Error::None;
+  }
+
+  requestedLuts.resize(num_elements);
+  auto it = requested_luts->begin();
+  for (uint32_t i = 0; i < num_elements; i++, it++) {
+    int32_t fd = -1;
+    requestedLayers.emplace_back(static_cast<int64_t>(it->first));
+    auto error = populateDisplayLuts(it->second, true /* reset_luts */, &requestedLuts[i], &fd);
+    if (error != Error::None) {
+      return error;
+    }
+
+    if (fd == -1) {
+      ALOGI("%s: Resetting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(fd));
+    } else {
+      ALOGI("%s: Setting LUTs on client for layer %lu on display-%lu", __FUNCTION__,
+            requestedLayers.back(), display);
+      requestedFds.emplace_back(::ndk::ScopedFileDescriptor(dup(fd)));
+      close(fd);
+    }
+  }
+
+  mWriter->setDisplayLuts(display, requestedLayers, requestedLuts, std::move(requestedFds));
+
+  return Error::None;
+}
+#endif
+
+Error AidlComposerClient::CommandEngine::postValidateDisplay(int64_t display) {
+  auto error = setChangedCompositionTypes(display);
+  if (error != Error::None) {
+    return error;
+  }
+
+  error = setDisplayRequests(display);
+  if (error != Error::None) {
+    // clear mCommandsResults on error
+    reset();
+    return error;
+  }
+
+  error = setClientTargetProperty(display);
+  if (error != Error::None) {
+    reset();
+    return error;
+  }
+
+#ifdef COMPOSER3_V4
+  if (!(mClient.disable_query_luts_)) {
+    error = setDisplayLuts(display);
+    if (error != Error::None) {
+      reset();
+      return error;
+    }
+  }
+#endif
 
   return Error::None;
 }

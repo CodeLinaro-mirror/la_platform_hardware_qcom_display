@@ -15,8 +15,8 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -51,7 +51,7 @@
 #include "sdm_display_intf_caps.h"
 #include "sdm_display_intf_settings.h"
 #include "sdm_display_intf_lifecycle.h"
-#include "sdm_display_intf_drawcycle.h"
+#include "sdm_display_intf_drawcycle_v2.h"
 #include "sdm_display_intf_layer_builder.h"
 #include "sdm_display_intf_sideband.h"
 
@@ -106,7 +106,6 @@ using aidl::android::hardware::graphics::composer3::HdrCapabilities;
 using aidl::android::hardware::graphics::composer3::IComposerCallback;
 using aidl::android::hardware::graphics::composer3::LayerBrightness;
 #ifdef COMPOSER3_V4
-using aidl::android::hardware::graphics::composer3::Luts;
 using aidl::android::hardware::graphics::composer3::OutputType;
 #endif
 using aidl::android::hardware::graphics::composer3::OverlayProperties;
@@ -137,7 +136,6 @@ using std::shared_ptr;
 
 using sdm::SDMCompositorCbIntf;
 using sdm::SDMDisplayCapsIntf;
-using sdm::SDMDisplayDrawCycleIntf;
 using sdm::SDMDisplayLifeCycleIntf;
 using sdm::SDMDisplaySettingsIntf;
 using sdm::SDMDisplaySideBandIntf;
@@ -147,6 +145,13 @@ using sdm::QServiceBackend;
 
 using sdm::DisplayConfigVariableInfo;
 using sdm::SDMDisplayLayerBuilderIntf;
+
+#ifdef COMPOSER3_V3
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntfV2
+#else
+#define SDMDisplayDrawCycleIntfV SDMDisplayDrawCycleIntf
+#endif
+using sdm::SDMDisplayDrawCycleIntfV;
 
 using ::vendor::qti::hardware::display::snapalloc::SnapHandle;
 using SnapError = ::vendor::qti::hardware::display::snapalloc::Error;
@@ -179,7 +184,7 @@ class AidlComposerClient : public BnComposerClient,
   bool init(std::shared_ptr<SDMDisplayCapsIntf> caps,
             std::shared_ptr<SDMDisplaySettingsIntf> settings,
             std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle,
-            std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle,
+            std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle,
             std::shared_ptr<SDMDisplayLayerBuilderIntf> layers,
             std::shared_ptr<SDMDisplaySideBandIntf> sideband);
 
@@ -231,7 +236,8 @@ class AidlComposerClient : public BnComposerClient,
   ScopedAStatus startHdcpNegotiation(
       int64_t in_display, const aidl::android::hardware::drm::HdcpLevels &in_levels) override;
 
-  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &, std::vector<Luts> *);
+  ScopedAStatus getLuts(int64_t display, const std::vector<Buffer> &buffers,
+                        std::vector<Luts> *aidl_return) override;
 #endif
 
   ScopedAStatus getDisplayCapabilities(int64_t in_display,
@@ -306,6 +312,8 @@ class AidlComposerClient : public BnComposerClient,
 
  private:
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
+  bool disable_fp16_support_ = false;
+  bool disable_query_luts_ = false;
 
   struct LayerBuffers {
     std::vector<BufferCacheEntry> Buffers;
@@ -334,6 +342,11 @@ class AidlComposerClient : public BnComposerClient,
                      std::vector<CommandResultPayload> *aidl_return);
     Error validateDisplay(int64_t display);
     Error presentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
+#ifdef COMPOSER3_V4
+    Error populateDisplayLuts(Lut3d *lut_3d, bool reset_luts, Luts *luts, int32_t *lut_fd);
+    Error getBufferLuts(uint64_t display, const std::vector<SnapHandle *> &buffers,
+                        std::unique_ptr<std::vector<Lut3d *>> &out_luts);
+#endif
 
     void reset() { mWriter->reset(); }
 
@@ -439,7 +452,13 @@ class AidlComposerClient : public BnComposerClient,
       return updateBuffer(display, layer, BufferCache::LAYER_SIDEBAND_STREAMS, 0, false, handle);
     }
     Error postPresentDisplay(int64_t display, shared_ptr<Fence> *presentFence);
-    Error postValidateDisplay(int64_t display, uint32_t &types_count, uint32_t &reqs_count);
+    Error postValidateDisplay(int64_t display);
+    Error setChangedCompositionTypes(int64_t display);
+    Error setDisplayRequests(int64_t display);
+    Error setClientTargetProperty(int64_t display);
+#ifdef COMPOSER3_V4
+    Error setDisplayLuts(int64_t display);
+#endif
 
     void GetSDMRectFromRect(const Rect *rect, sdm::SDMRegion *region) {
       for (int i = 0; i < region->num_rects; i++) {
@@ -452,7 +471,7 @@ class AidlComposerClient : public BnComposerClient,
   std::shared_ptr<SDMDisplayCapsIntf> caps_;
   std::shared_ptr<SDMDisplaySettingsIntf> settings_;
   std::shared_ptr<SDMDisplayLifeCycleIntf> lifecycle_;
-  std::shared_ptr<SDMDisplayDrawCycleIntf> drawcycle_;
+  std::shared_ptr<SDMDisplayDrawCycleIntfV> drawcycle_;
   std::shared_ptr<SDMDisplayLayerBuilderIntf> layer_builder_;
   std::shared_ptr<SDMDisplaySideBandIntf> sideband_;
 
