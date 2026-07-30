@@ -318,6 +318,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_BGR_565},
           {{.format = SnapPixelFormat::RGBA_FP16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            static_cast<int>(PixelFormat::RGBA_FP16)},
+          {{.format = SnapPixelFormat::RGB_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGB_888},
           {{.format = SnapPixelFormat::RGB_565, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            static_cast<int>(PixelFormat::RGB_565)},
           {{.format = SnapPixelFormat::YV12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -612,6 +614,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::BGR_565},
           {{.format = SnapPixelFormat::RGBA_FP16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::RGBA_FP16},
+          {{.format = SnapPixelFormat::RGB_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           SnapPixelFormat::RGB_888},
           {{.format = SnapPixelFormat::RGB_565, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::RGB_565},
           {{.format = SnapPixelFormat::YV12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -1140,7 +1144,6 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
       static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
       static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
-      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGB_888),
   };
 
   const std::unordered_map<vendor_qti_hardware_display_common_PixelFormatModifier, int> kBatchSize_{
@@ -1658,6 +1661,8 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            HAL_PIXEL_FORMAT_BGR_565},
           {{.format = SnapPixelFormat::RGBA_FP16, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            static_cast<int>(PixelFormat::RGBA_FP16)},
+          {{.format = SnapPixelFormat::RGB_888, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
+           HAL_PIXEL_FORMAT_RGB_888},
           {{.format = SnapPixelFormat::RGB_565, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            static_cast<int>(PixelFormat::RGB_565)},
           {{.format = SnapPixelFormat::YV12, .modifier = PIXEL_FORMAT_MODIFIER_NONE},
@@ -1985,7 +1990,6 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
       static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::R_16_UINT),
       static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RG_1616_UINT),
       static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGBA_10101010),
-      static_cast<int>(aidl::android::hardware::graphics::common::PixelFormat::RGB_888),
   };
 
   typedef SnapError (GrallocSnapHelperLegacy::*MetadataHelper)(
