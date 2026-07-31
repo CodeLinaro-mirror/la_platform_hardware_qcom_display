@@ -28,7 +28,18 @@
 #include <cutils/ashmem.h>
 
 #include "hwc_parcel.h"
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <dirent.h>
 #include <fcntl.h>
+#include <fstream>
+#include <iterator>
+#include <memory>
+#include <string>
+#include <unistd.h>
+#include <xf86drm.h>
+#include <xf86drmMode.h>
 
 namespace aidl {
 namespace vendor {
@@ -39,6 +50,217 @@ namespace composer3 {
 
 using MetadataType = vendor_qti_hardware_display_common_MetadataType;
 using sdm::HWCParcel;
+
+namespace {
+
+constexpr const char *kDrmClassPath = "/sys/class/drm";
+constexpr const char *kDrmDevPath = "/dev/dri";
+constexpr const char *kConnectorCapabilitiesProp = "capabilities";
+constexpr const char *kPanelOrientationPrefix = "panel orientation=";
+
+bool ReadTextFile(const std::string &path, std::string *out) {
+  if (!out) {
+    return false;
+  }
+
+  std::ifstream file(path);
+  if (!file.good()) {
+    return false;
+  }
+
+  std::getline(file, *out);
+  return true;
+}
+
+bool ReadBinaryFile(const std::string &path, std::vector<uint8_t> *out) {
+  if (!out) {
+    return false;
+  }
+
+  std::ifstream file(path, std::ios::binary);
+  if (!file.good()) {
+    return false;
+  }
+
+  std::string data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  out->assign(data.begin(), data.end());
+  return true;
+}
+
+bool ReadUint32File(const std::string &path, uint32_t *value) {
+  if (!value) {
+    return false;
+  }
+
+  std::string text;
+  if (!ReadTextFile(path, &text)) {
+    return false;
+  }
+
+  char *end = nullptr;
+  unsigned long parsed = strtoul(text.c_str(), &end, 10);
+  if (end == text.c_str()) {
+    return false;
+  }
+
+  *value = UINT32(parsed);
+  return true;
+}
+
+bool GetDrmCardDevicePath(const std::string &connector_name, std::string *path) {
+  if (!path || connector_name.rfind("card", 0) != 0) {
+    return false;
+  }
+
+  size_t dash_pos = connector_name.find('-');
+  if (dash_pos == std::string::npos || dash_pos <= strlen("card")) {
+    return false;
+  }
+
+  for (size_t i = strlen("card"); i < dash_pos; i++) {
+    if (!std::isdigit(connector_name[i])) {
+      return false;
+    }
+  }
+
+  *path = std::string(kDrmDevPath) + "/" + connector_name.substr(0, dash_pos);
+  return true;
+}
+
+bool ParsePanelOrientation(const std::string &capabilities, std::string *orientation) {
+  if (!orientation) {
+    return false;
+  }
+
+  size_t pos = capabilities.find(kPanelOrientationPrefix);
+  if (pos == std::string::npos) {
+    return false;
+  }
+
+  pos += strlen(kPanelOrientationPrefix);
+  size_t end = capabilities.find('\n', pos);
+  if (end == std::string::npos) {
+    end = capabilities.find('\0', pos);
+  }
+  if (end == std::string::npos) {
+    end = capabilities.size();
+  }
+
+  *orientation = capabilities.substr(pos, end - pos);
+  return true;
+}
+
+bool ReadDrmConnectorPanelOrientation(const std::string &card_path, uint32_t connector_id,
+                                      std::string *orientation) {
+  if (!orientation) {
+    return false;
+  }
+
+  int fd = open(card_path.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    ALOGW("Failed to open DRM card %s: %s", card_path.c_str(), strerror(errno));
+    return false;
+  }
+
+  std::unique_ptr<drmModeObjectProperties, decltype(&drmModeFreeObjectProperties)> props(
+      drmModeObjectGetProperties(fd, connector_id, DRM_MODE_OBJECT_CONNECTOR),
+      drmModeFreeObjectProperties);
+  if (!props) {
+    ALOGW("Failed to get DRM connector properties card=%s connector=%u", card_path.c_str(),
+          connector_id);
+    close(fd);
+    return false;
+  }
+
+  bool found = false;
+  for (uint32_t i = 0; i < props->count_props; i++) {
+    std::unique_ptr<drmModePropertyRes, decltype(&drmModeFreeProperty)> property(
+        drmModeGetProperty(fd, props->props[i]), drmModeFreeProperty);
+    if (!property || strcmp(property->name, kConnectorCapabilitiesProp) != 0) {
+      continue;
+    }
+
+    uint32_t blob_id = UINT32(props->prop_values[i]);
+    std::unique_ptr<drmModePropertyBlobRes, decltype(&drmModeFreePropertyBlob)> blob(
+        drmModeGetPropertyBlob(fd, blob_id), drmModeFreePropertyBlob);
+    if (!blob || !blob->data || !blob->length) {
+      break;
+    }
+
+    std::string capabilities(static_cast<const char *>(blob->data), blob->length);
+    found = ParsePanelOrientation(capabilities, orientation);
+    break;
+  }
+
+  close(fd);
+  return found;
+}
+
+Transform GetTransformFromPanelOrientation(const std::string &orientation) {
+  if (orientation == "rot 90") {
+    return Transform::ROT_90;
+  }
+  if (orientation == "rot 270") {
+    return Transform::ROT_270;
+  }
+
+  return Transform::NONE;
+}
+
+bool IsSfPhysicalOrientation(const std::string &orientation) {
+  return orientation == "rot 90" || orientation == "rot 270";
+}
+
+bool GetPanelOrientationFromDrmEdid(const std::vector<uint8_t> &display_edid,
+                                    std::string *connector_name,
+                                    std::string *orientation) {
+  if (display_edid.empty() || !orientation) {
+    return false;
+  }
+
+  DIR *dir = opendir(kDrmClassPath);
+  if (!dir) {
+    ALOGW("Failed to open %s: %s", kDrmClassPath, strerror(errno));
+    return false;
+  }
+
+  bool found = false;
+  while (dirent *entry = readdir(dir)) {
+    std::string name(entry->d_name);
+    if (name.rfind("card", 0) != 0 || name.find('-') == std::string::npos) {
+      continue;
+    }
+
+    std::string sysfs_path = std::string(kDrmClassPath) + "/" + name;
+    std::string status;
+    if (!ReadTextFile(sysfs_path + "/status", &status) || status != "connected") {
+      continue;
+    }
+
+    std::vector<uint8_t> edid;
+    if (!ReadBinaryFile(sysfs_path + "/edid", &edid) || edid != display_edid) {
+      continue;
+    }
+
+    std::string card_path;
+    uint32_t connector_id = 0;
+    if (!GetDrmCardDevicePath(name, &card_path) ||
+        !ReadUint32File(sysfs_path + "/connector_id", &connector_id)) {
+      continue;
+    }
+
+    found = ReadDrmConnectorPanelOrientation(card_path, connector_id, orientation);
+    if (found && connector_name) {
+      *connector_name = name;
+    }
+    break;
+  }
+
+  closedir(dir);
+  return found;
+}
+
+}  // namespace
 
 ComposerHandleImporter mHandleImporter;
 
@@ -600,6 +822,8 @@ ScopedAStatus AidlComposerClient::getDisplayCapabilities(
       aidl_return->push_back(DisplayCapability::SUSPEND);
       aidl_return->push_back(DisplayCapability::DOZE);
     }
+  } else if (HwcDisplayConnectionType::EXTERNAL == display_conn_type) {
+    aidl_return->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
   }
 
   return ScopedAStatus::ok();
@@ -721,7 +945,42 @@ ScopedAStatus AidlComposerClient::getDisplayPhysicalOrientation(int64_t in_displ
   if (!aidl_return)
     return TO_BINDER_STATUS(INT32(Error::BadParameter));
 
-  // TODO: Add getDisplayPhysicalOrientation support in hwc_session
+  *aidl_return = Transform::NONE;
+
+  uint8_t port = 0;
+  uint32_t size = 0;
+  auto error = caps_->GetDisplayIdentificationData(in_display, &port, &size, nullptr);
+  if (error != sdm::kErrorNone || size == 0) {
+    ALOGW("No display identification data for physical orientation display=%lld err=%d size=%u",
+          static_cast<long long>(in_display), error, size);
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+
+  std::vector<uint8_t> edid(size);
+  error = caps_->GetDisplayIdentificationData(in_display, &port, &size, edid.data());
+  if (error != sdm::kErrorNone) {
+    ALOGW("Failed to read display identification data for orientation display=%lld err=%d",
+          static_cast<long long>(in_display), error);
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+  edid.resize(size);
+
+  std::string connector_name;
+  std::string panel_orientation;
+  if (!GetPanelOrientationFromDrmEdid(edid, &connector_name, &panel_orientation)) {
+    ALOGW("No DRM panel orientation found for display=%lld port=%u",
+          static_cast<long long>(in_display), port);
+    return TO_BINDER_STATUS(INT32(Error::None));
+  }
+
+  *aidl_return = GetTransformFromPanelOrientation(panel_orientation);
+  if (!IsSfPhysicalOrientation(panel_orientation) && panel_orientation != "none") {
+    ALOGI("Ignoring connector %s panel orientation '%s' for SF physical orientation",
+          connector_name.c_str(), panel_orientation.c_str());
+  }
+  ALOGI("Display %lld connector %s panel orientation '%s' physical transform=%d",
+        static_cast<long long>(in_display), connector_name.c_str(), panel_orientation.c_str(),
+        INT32(*aidl_return));
   return TO_BINDER_STATUS(INT32(Error::None));
 }
 
