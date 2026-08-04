@@ -255,9 +255,11 @@ AidlComposerClient::~AidlComposerClient() {
   for (const auto &dpy : mDisplayData) {
     ALOGW("%s: Destroying client resources for display %" PRIu64, __FUNCTION__, dpy.first);
 
+    drawcycle_->AcquireDisplayLock(dpy.first, false /*release_lock */);
     for (const auto &ly : dpy.second.Layers) {
       layer_builder_->DestroyLayer(dpy.first, ly.first);
     }
+    drawcycle_->AcquireDisplayLock(dpy.first, true /*release_lock */);
 
     if (dpy.second.IsVirtual) {
       destroyVirtualDisplay(dpy.first);
@@ -302,7 +304,9 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
     // The display entry may have already been removed by onHotplug.
     if (dpy != mDisplayData.end()) {
       sdm::LayerId layer = 0;
+      drawcycle_->AcquireDisplayLock(in_display, false /*release_lock */);
       auto error = layer_builder_->CreateLayer(in_display, &layer);
+      drawcycle_->AcquireDisplayLock(in_display, true /*release_lock */);
       ALOGV("%s: CreateLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
             layer, in_display);
       if (error == sdm::kErrorNone) {
@@ -364,7 +368,9 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
 
   std::lock_guard<std::mutex> lock(m_display_command_mutex_[in_display]);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
+  drawcycle_->AcquireDisplayLock(in_display, false /*release_lock */);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
+  drawcycle_->AcquireDisplayLock(in_display, true /*release_lock */);
   drawcycle_->LayerStackUpdated(in_display);
 
   auto ret = Error::None;
@@ -1973,7 +1979,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
   if (cmd == LayerLifecycleBatchCommandType::CREATE) {
     ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
+    mClient.drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
     auto error = mClient.layer_builder_->CreateLayer(display, &layer);
+    mClient.drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
     if (error == sdm::kErrorNone) {
       mClient.drawcycle_->LayerStackUpdated(display);
       std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
@@ -1988,7 +1996,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
     ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
     mClient.drawcycle_->WaitForDrawCycleToComplete(display);
+    mClient.drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
     auto error = mClient.layer_builder_->DestroyLayer(display, layer);
+    mClient.drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
     mClient.drawcycle_->LayerStackUpdated(display);
 
     if (error == sdm::kErrorNone) {
@@ -2231,7 +2241,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerVisibleRegion(
 
 void AidlComposerClient::CommandEngine::executeSetLayerZOrder(int64_t display, int64_t layer,
                                                               const ZOrder &zOrder) {
+  mClient.drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
   auto err = mClient.layer_builder_->SetLayerZOrder(display, layer, zOrder.z);
+  mClient.drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, display, Error::BadConfig);
   }
