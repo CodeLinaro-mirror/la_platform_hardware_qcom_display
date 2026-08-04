@@ -236,6 +236,7 @@ case "$target" in
         if [ "$soc_hwid" -eq 737 ]; then
             setprop vendor.display.enable_null_display 1
             setprop vendor.display.null_display_resolution 64x64
+            setprop service.sf.prime_shader_cache 0
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
