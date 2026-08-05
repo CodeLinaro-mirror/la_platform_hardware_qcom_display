@@ -37,6 +37,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <map>
+#include <vector>
 
 namespace aidl {
 namespace vendor {

@@ -35,6 +35,7 @@
 #include <log/log.h>
 #include <config/device_interface.h>
 #include <map>
+#include <mutex>
 #include <utility>
 #include <string>
 #include <vector>
