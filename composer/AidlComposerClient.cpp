@@ -40,6 +40,40 @@ namespace composer3 {
 using MetadataType = vendor_qti_hardware_display_common_MetadataType;
 using sdm::HWCParcel;
 
+static uint32_t GetColorComponent(const Color10Bit &data, char color) {
+  switch (color) {
+    case 'R':
+      return data.R;
+    case 'G':
+      return data.G;
+    case 'B':
+      return data.B;
+    case 'A':
+      return data.A;
+  }
+
+  return 0;
+}
+
+static void PopulateBufferFromLuts(std::vector<float> &buffer, uint32_t size, Color10Bit *entries) {
+  const char color[] = {'R', 'G', 'B'};
+  constexpr size_t num_channels = sizeof(color) / sizeof(color[0]);
+  for (size_t order = 0; order < num_channels; order++) {
+    for (uint32_t x = 0; x < size; x++) {
+      for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t z = 0; z < size; z++) {
+          // SF requires luts in the order of R G B where B increments first followed by G and R
+          // HWC generates luts in the reverse order with R incrementing first followed by G and B
+          // We generate reverse index here to send data in the required order
+          uint32_t index = x + y * size + z * size * size;
+          float data = FLOAT(GetColorComponent(entries[index], color[order])) / 1023.f;
+          buffer.emplace_back(data);
+        }
+      }
+    }
+  }
+}
+
 ComposerHandleImporter mHandleImporter;
 
 BufferCacheEntry::BufferCacheEntry() : mHandle(nullptr) {}
@@ -2179,19 +2213,13 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, bool
   }
 
   // calculate size of buffer
-  uint32_t final_size = 0;
-  for (auto count = 0; count < num_offsets - 1; count++) {
-    // size of lut is equal to offset of next lut
-    final_size += luts->offsets->at(count + 1);
-  }
+  int final_lut_size = luts->lutProperties[num_offsets - 1].size;
+  int final_size = luts->offsets->at(num_offsets - 1);
 
-  // calculate the size of last lut
-  uint32_t exponent =
-      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
-  uint32_t channels =
-      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
-  uint32_t lut_size = std::pow(luts->lutProperties[num_offsets - 1].size, exponent);
-  final_size += lut_size * channels;
+  if (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) {
+    final_lut_size = final_lut_size * final_lut_size * final_lut_size * 3;
+  }
+  final_size += final_lut_size;
   size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
 
   // use `ashmem_create_region` to create a shared memory segment
@@ -2212,15 +2240,7 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, bool
   std::vector<float> buffer;
   buffer.reserve(final_size);
   // TODO(user): take correct lut_size when multiple luts will be supported
-  for (auto index = 0; index < lut_size; index++) {
-    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
-  }
-  for (auto index = 0; index < lut_size; index++) {
-    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].G) / 1023.f);
-  }
-  for (auto index = 0; index < lut_size; index++) {
-    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].B) / 1023.f);
-  }
+  PopulateBufferFromLuts(buffer, lut_3d->dim, lut_3d->lutEntries);
 
   if (data) {
     std::memcpy((float *)data, buffer.data(), buffer_size);
