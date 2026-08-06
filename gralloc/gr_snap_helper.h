@@ -811,6 +811,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::NV12_UBWC_MIPMAP},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
            SnapPixelFormat::TP10_UBWC_MIPMAP},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_4R},
+           SnapPixelFormat::YCbCr_420_SP_4R_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
