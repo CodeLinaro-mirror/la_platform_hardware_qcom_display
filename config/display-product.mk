@@ -218,12 +218,16 @@ SOONG_CONFIG_qtidisplay_mapper_ext := true
 ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16 CinnamonBun 17))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
+      PRODUCT_PROPERTY_OVERRIDES += persist.sys.display.enable_on_connect.external=true
+      PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_hw_recovery=1
     endif
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), VanillaIceCream 15))
       SOONG_CONFIG_qtidisplay_composer_version := v3_3
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), Baklava 16 CinnamonBun 17))
       SOONG_CONFIG_qtidisplay_composer_version := v3_4
+      PRODUCT_PROPERTY_OVERRIDES += persist.sys.display.enable_on_connect.external=true
+      PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_hw_recovery=1
     endif
 endif
 
@@ -291,6 +295,3 @@ endif
 
 
 QMAA_ENABLED_HAL_MODULES += display
-
-# Properties using default value:
-#    vendor.display.disable_hw_recovery=0
