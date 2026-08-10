@@ -82,6 +82,7 @@ case "$target" in
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.disable_fbt_for_cwb_fallback 1
         setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 1
+        setprop vendor.display.disable_demura_opt_singlelm 1
         #SOC ID 761 (coast.1.0) do not support UCSC
         if [ "$soc_hwid" -eq 761 ] && [ "$revision" = "1.0" ]; then
             setprop vendor.display.render_sysui_as_srgb 1
