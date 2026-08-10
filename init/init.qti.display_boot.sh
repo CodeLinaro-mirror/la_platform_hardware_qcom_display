@@ -227,6 +227,7 @@ case "$target" in
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_client_control_cwb_refresh 1
         if [ "$soc_hwid" -eq 736 ] || [ "$soc_hwid" -eq 737 ]; then
            setprop vendor.display.enable_inline_writeback 0
         else
