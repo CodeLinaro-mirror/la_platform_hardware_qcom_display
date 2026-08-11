@@ -36,14 +36,16 @@
 #include <log/log.h>
 #include "color_extensions.h"
 
+static bool enable_logs = false;
+
 namespace qtigralloc {
 
 using android::hardware::graphics::mapper::V4_0::IMapper;
 
 static sp<IMapper> getInstance() {
-  ALOGE(
-      "QtiGralloc uses the deprecated QtiMapper4, please switch to using QtiMapper5 supported "
-      "API.");
+  ALOGE_IF(enable_logs,
+           "QtiGralloc uses the deprecated QtiMapper4, please switch to using QtiMapper5 supported "
+           "API.");
   static sp<IMapper> mapper = IMapper::getService();
   return mapper;
 }
