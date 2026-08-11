@@ -553,7 +553,7 @@ DisplayError HWDeviceDRM::Init() {
   }
 
   if (!connector_info_.is_connected || connector_info_.modes.empty()) {
-    DLOGW("Device removal detected on connector id %u. Connector status %s and %d modes.",
+    DLOGW("Device removal detected on connector id %u. Connector status %s and %zu modes.",
           token_.conn_id, connector_info_.is_connected ? "connected":"disconnected",
           connector_info_.modes.size());
     drm_mgr_intf_->DestroyAtomicReq(drm_atomic_intf_);
@@ -1383,9 +1383,9 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_);
   }
 
-  DLOGI_IF(kTagDriverConfig, "%s::%s System Clock=%d Hz, Core: AB=%llu Bps, IB=%llu Bps, " \
-           "LLCC: AB=%llu Bps, IB=%llu Bps, DRAM AB=%llu Bps, IB=%llu Bps, "\
-           "Rot: Bw=%llu Bps, Clock=%d Hz", validate ? "Validate" : "Commit", device_name_,
+  DLOGI_IF(kTagDriverConfig, "%s::%s System Clock=%d Hz, Core: AB=%" PRIu64 " Bps, IB=%" PRIu64 " Bps, " \
+           "LLCC: AB=%" PRIu64 " Bps, IB=%" PRIu64 " Bps, DRAM AB=%" PRIu64 " Bps, IB=%" PRIu64 " Bps, "\
+           "Rot: Bw=%" PRIu64 " Bps, Clock=%d Hz", validate ? "Validate" : "Commit", device_name_,
            qos_data.clock_hz, qos_data.core_ab_bps, qos_data.core_ib_bps, qos_data.llcc_ab_bps,
            qos_data.llcc_ib_bps, qos_data.dram_ab_bps, qos_data.dram_ib_bps,
            qos_data.rot_prefill_bw_bps, qos_data.rot_clock_hz);
@@ -1587,8 +1587,8 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
 
     if (current_time < future_timestamp) {
       uint64_t sleep_period = future_timestamp - current_time;
-      DLOGI_IF(kTagDriverConfig, "current_time: %llu, future_timestamp: %llu, sleep_period: %llu,"
-              "vsync_period: %llu", current_time, future_timestamp, sleep_period, vsync_period);
+      DLOGI_IF(kTagDriverConfig, "current_time: %" PRIu64 ", future_timestamp: %" PRIu64 ", sleep_period: %" PRIu64 ","
+              "vsync_period: %" PRIu64, current_time, future_timestamp, sleep_period, vsync_period);
       usleep(UINT32(sleep_period / 1000));
     }
   }
@@ -2206,7 +2206,7 @@ void HWDeviceDRM::SetDGMCscV1(const HWCsc &dgm_csc, sde_drm_csc_v1 *csc_v1) {
   uint32_t i = 0;
   for (i = 0; i < MAX_CSC_MATRIX_COEFF_SIZE; i++) {
     csc_v1->ctm_coeff[i] = dgm_csc.ctm_coeff[i];
-    DLOGV_IF(kTagDriverConfig, " DGM csc_v1[%d] = %d", i, csc_v1->ctm_coeff[i]);
+    DLOGV_IF(kTagDriverConfig, " DGM csc_v1[%d] = %lld", i, csc_v1->ctm_coeff[i]);
   }
   for (i = 0; i < MAX_CSC_BIAS_SIZE; i++) {
     csc_v1->pre_bias[i] = dgm_csc.pre_bias[i];

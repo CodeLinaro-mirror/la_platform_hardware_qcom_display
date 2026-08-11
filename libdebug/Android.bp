@@ -1,13 +1,19 @@
 cc_library_shared {
 
     name: "libdisplaydebug",
-    defaults: ["display_defaults"],
+    defaults: ["display_defaults", "dlog_defaults"],
     sanitize: {
         integer_overflow: true,
     },
     vendor: true,
 
-    shared_libs: ["libdl"],
+    shared_libs: [
+        "libdl",
+        "libdlog",
+    ],
+    header_libs: [
+        "dlog_headers",
+    ],
     cflags: [
         "-DLOG_TAG=\"SDM\"",
         "-Wall",

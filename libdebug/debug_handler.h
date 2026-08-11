@@ -32,8 +32,16 @@
 
 #include <bitset>
 
+#ifdef ENABLE_DLOG
+#include "dlog.h"
+
+// GNU statement expression to make UPL_LOG usable in expressions (ternary operators, etc)
+#define DLOG(method, format, ...) \
+  ({UPL_LOG(method, __CLASS__ "::%s: " format, __FUNCTION__, ##__VA_ARGS__); (void)0;})
+#else
 #define DLOG(method, format, ...) \
   display::DebugHandler::Get()->method(__CLASS__ "::%s: " format, __FUNCTION__, ##__VA_ARGS__)
+#endif
 
 #define DLOG_IF(tag, method, format, ...) \
   if (display::DebugHandler::GetLogMask()[tag]) { \

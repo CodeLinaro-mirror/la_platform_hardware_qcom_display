@@ -1,6 +1,6 @@
 cc_library_shared {
     name: "libsdmcore",
-    defaults: ["display_defaults"],
+    defaults: ["display_defaults", "dlog_defaults"],
     sanitize: {
         integer_overflow: true,
     },
