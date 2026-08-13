@@ -36,11 +36,15 @@ ifneq ($(TARGET_IS_HEADLESS),true)
                             modetest \
                             libdisplayconfig.qti
 
-    ifneq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+    ifneq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar shikra), $(TARGET_BOARD_PLATFORM))
         DISPLAY_MODULES_HARDWARE += libhwfenceclient
     endif
     ifneq ($(TARGET_BOARD_PLATFORM),vienna)
         DISPLAY_MODULES_HARDWARE += vendor.qti.hardware.display.demura-service
     endif
 
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),sun)
+        DISPLAY_MODULES_HARDWARE += hdmi_cec.pluggable
 endif

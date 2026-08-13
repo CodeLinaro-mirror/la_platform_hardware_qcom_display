@@ -159,8 +159,78 @@ int AmbientDataCaptureAIDL::InitImageAlgoAdapter(
     imagealgo_adapter_.reset();
     return ret;
   }
-
   ALOGI("%s: ImageAlgo SmartSelection adapter initialized", __FUNCTION__);
+
+  sdm::GenericPayload release_payload;
+  imagealgo::SmartSelectionSetBufferReleaseCallbackInput *release_input = nullptr;
+  release_payload.CreatePayload(release_input);
+  if (!release_input) {
+    ALOGW("%s: ImageAlgo CreatePayload for SetBufferReleaseCallback failed, continuing",
+          __FUNCTION__);
+  } else {
+    release_input->callback = OnImageAlgoBufferRelease;
+    release_input->cookie = this;
+    int cb_ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSSetBufferReleaseCallback,
+                                                release_payload, nullptr);
+    ALOGI("%s: ImageAlgo SetBufferReleaseCallback ret=%d", __FUNCTION__, cb_ret);
+  }
+
+  sdm::GenericPayload threshold_cb_payload;
+  imagealgo::SmartSelectionSetQueueThresholdCallbackInput *threshold_cb_input = nullptr;
+  threshold_cb_payload.CreatePayload(threshold_cb_input);
+  if (!threshold_cb_input) {
+    ALOGW("%s: ImageAlgo CreatePayload for SetQueueThresholdCallback failed, continuing",
+          __FUNCTION__);
+  } else {
+    threshold_cb_input->callback = OnImageAlgoQueueThreshold;
+    threshold_cb_input->cookie = this;
+    int cb_ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSSetQueueThresholdCallback,
+                                                threshold_cb_payload, nullptr);
+    ALOGI("%s: ImageAlgo SetQueueThresholdCallback ret=%d", __FUNCTION__, cb_ret);
+  }
+
+  return ret;
+}
+
+int AmbientDataCaptureAIDL::ReconfigImageAlgoAdapter(
+    const std::optional<std::vector<uint8_t>> &algoConfigsBlob) {
+  if (!algoConfigsBlob.has_value()) {
+    ALOGE("%s: algoConfigsBlob parameter is null", __FUNCTION__);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  // Reinterpret the blob as ADCAlgoConfigsStructBlob struct
+  const ADCAlgoConfigsStructBlob *configBlob =
+      reinterpret_cast<const ADCAlgoConfigsStructBlob *>(algoConfigsBlob->data());
+  if (configBlob && configBlob->dataSize > 0 && configBlob->dataSize <= ALGO_CONFIG_SIZE) {
+    ALOGI("%s: ImageAlgo adapter config_json set", __FUNCTION__);
+  } else {
+    ALOGE("%s: Invalid blob data (dataSize=%zu)", __FUNCTION__,
+          configBlob ? configBlob->dataSize : 0);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  std::shared_ptr<imagealgo::SmartSelectionIntf> local_adapter;
+  {
+    std::lock_guard<decltype(imagealgo_lock_)> algo_lock(imagealgo_lock_);
+    local_adapter = imagealgo_adapter_;
+  }
+  if (!local_adapter) {
+    ALOGI("%s: ImageAlgo adapter is not initialized", __FUNCTION__);
+    return EX_NONE;
+  }
+
+  sdm::GenericPayload reconf_payload;
+  std::string *reconf_json = nullptr;
+  reconf_payload.CreatePayload(reconf_json);
+  if (!reconf_json) {
+    ALOGE("%s: ImageAlgo CreatePayload for Reconfig failed", __FUNCTION__);
+    return EX_TRANSACTION_FAILED;
+  }
+  *reconf_json = configBlob->data;
+
+  int ret = local_adapter->ProcessOps(imagealgo::kSSReconfigure, reconf_payload, nullptr);
+  ALOGI("%s: ImageAlgo kSSReconfigure ret=%d", __FUNCTION__, ret);
   return ret;
 }
 
@@ -172,28 +242,22 @@ int AmbientDataCaptureAIDL::DeInitImageAlgoAdapter() {
     return EX_NONE;
   }
 
+  sdm::GenericPayload flush_payload;
+  int ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSFlushAll, flush_payload, nullptr);
+  ALOGI("%s: ImageAlgo FlushAll ret=%d", __FUNCTION__, ret);
+
   sdm::GenericPayload wait_payload;
   imagealgo::SmartSelectionWaitInput *wait_input = nullptr;
   wait_payload.CreatePayload(wait_input);
   if (wait_input) {
     wait_input->timeout_ms = timeout_ms;
   }
+  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSWaitUntilIdle, wait_payload, nullptr);
+  ALOGI("%s: ImageAlgo WaitUntilIdle (pre-deinit) ret=%d", __FUNCTION__, ret);
 
-  int ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSWaitUntilIdle, wait_payload, nullptr);
-  ALOGI("%s: ImageAlgo WaitUntilIdle (pre-flush) for ret=%d", __FUNCTION__, ret);
-
-  sdm::GenericPayload flush_payload;
-  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSFlushAll, flush_payload, nullptr);
-  ALOGI("%s: ImageAlgo FlushAll for ret=%d", __FUNCTION__, ret);
-
-  sdm::GenericPayload wait2_payload;
-  imagealgo::SmartSelectionWaitInput *wait2_input = nullptr;
-  wait2_payload.CreatePayload(wait2_input);
-  if (wait2_input) {
-    wait2_input->timeout_ms = timeout_ms;
-  }
-  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSWaitUntilIdle, wait2_payload, nullptr);
-  ALOGI("%s: ImageAlgo WaitUntilIdle (post-flush) for ret=%d", __FUNCTION__, ret);
+  sdm::GenericPayload deinit_payload;
+  ret = imagealgo_adapter_->ProcessOps(imagealgo::kSSDeinit, deinit_payload, nullptr);
+  ALOGI("%s: ImageAlgo kSSDeinit ret=%d", __FUNCTION__, ret);
 
   imagealgo_adapter_->Deinit();
   imagealgo_adapter_.reset();
@@ -201,71 +265,47 @@ int AmbientDataCaptureAIDL::DeInitImageAlgoAdapter() {
   return ret;
 }
 
-int AmbientDataCaptureAIDL::FlushSelectedImageAlgoAdapter() {
+int AmbientDataCaptureAIDL::FlushConfigImageAlgoAdapter(
+    const std::optional<std::vector<uint8_t>> &algoConfigsBlob) {
+  if (!algoConfigsBlob.has_value()) {
+    ALOGE("%s: algoConfigsBlob parameter is null", __FUNCTION__);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  // Reinterpret the blob as ADCAlgoConfigsStructBlob struct
+  const ADCAlgoConfigsStructBlob *configBlob =
+      reinterpret_cast<const ADCAlgoConfigsStructBlob *>(algoConfigsBlob->data());
+  if (configBlob && configBlob->dataSize > 0 && configBlob->dataSize <= ALGO_CONFIG_SIZE) {
+    ALOGI("%s: ImageAlgo adapter config_json set", __FUNCTION__);
+  } else {
+    ALOGE("%s: Invalid blob data (dataSize=%zu)", __FUNCTION__,
+          configBlob ? configBlob->dataSize : 0);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
   std::shared_ptr<imagealgo::SmartSelectionIntf> local_adapter;
-  std::string app_name;
   {
     std::lock_guard<decltype(imagealgo_lock_)> algo_lock(imagealgo_lock_);
     local_adapter = imagealgo_adapter_;
-    app_name = imagealgo_app_name_;
   }
   if (!local_adapter) {
     ALOGI("%s: ImageAlgo adapter is not initialized", __FUNCTION__);
     return EX_NONE;
   }
 
-  int selected_count = -1;
-  sdm::GenericPayload query_payload;
-  sdm::GenericPayload query_out_payload;
-  imagealgo::SmartSelectionQuerySelectorInput *query_input = nullptr;
-  imagealgo::SmartSelectionQuerySelectorOutput *query_output = nullptr;
-  query_payload.CreatePayload(query_input);
-  query_out_payload.CreatePayload(query_output);
-  if (query_input) {
-    query_input->app_name = app_name;
+  sdm::GenericPayload flush_by_config_payload;
+  std::string *flush_filter = nullptr;
+  flush_by_config_payload.CreatePayload(flush_filter);
+  if (!flush_filter) {
+    ALOGE("%s: ImageAlgo CreatePayload for FlushConfig failed", __FUNCTION__);
+    return EX_TRANSACTION_FAILED;
   }
+  *flush_filter = configBlob->data;
 
-  int ret = local_adapter->ProcessOps(imagealgo::kSSQuerySelectorStatus, query_payload,
-                                      &query_out_payload);
-  selected_count = (query_output && ret == 0) ? query_output->selected_count : -1;
-  ALOGI("%s: ImageAlgo QuerySelectorStatus for app=%s: ret=%d selected_count=%d", __FUNCTION__,
-        app_name.c_str(), ret, selected_count);
-
-  if (selected_count <= 0) {
-    return ret;
-  }
-
-  sdm::GenericPayload flush_sel_payload;
-  imagealgo::SmartSelectionFlushSelectedInput *flush_sel_input = nullptr;
-  flush_sel_payload.CreatePayload(flush_sel_input);
-  if (flush_sel_input) {
-    flush_sel_input->app_name = app_name;
-  }
-
-  ret = local_adapter->ProcessOps(imagealgo::kSSFlushSelected, flush_sel_payload, nullptr);
-  ALOGI("%s: ImageAlgo FlushSelected for app=%s: ret=%d (flushed %d selected frames)", __FUNCTION__,
-        app_name.c_str(), ret, selected_count);
-
-  sdm::GenericPayload verify_payload;
-  sdm::GenericPayload verify_out_payload;
-  imagealgo::SmartSelectionQuerySelectorInput *verify_input = nullptr;
-  imagealgo::SmartSelectionQuerySelectorOutput *verify_output = nullptr;
-  verify_payload.CreatePayload(verify_input);
-  verify_out_payload.CreatePayload(verify_output);
-  if (verify_input) {
-    verify_input->app_name = app_name;
-  }
-
-  int retq = local_adapter->ProcessOps(imagealgo::kSSQuerySelectorStatus, verify_payload,
-                                       &verify_out_payload);
-  int remaining = (verify_output && retq == 0) ? verify_output->selected_count : -1;
-  ALOGI("%s: ImageAlgo QuerySelectorStatus after FlushSelected: ret=%d remaining=%d (expected 0)",
-        __FUNCTION__, retq, remaining);
-  if (remaining != 0) {
-    ALOGW("%s: ImageAlgo QuerySelectorStatus after FlushSelected: expected 0 but got %d",
-          __FUNCTION__, remaining);
-  }
-  return (ret != 0) ? ret : retq;
+  int ret =
+      local_adapter->ProcessOps(imagealgo::kSSFlushByConfig, flush_by_config_payload, nullptr);
+  ALOGI("%s: ImageAlgo kSSFlushByConfig ret=%d", __FUNCTION__, ret);
+  return ret;
 }
 
 int AmbientDataCaptureAIDL::FlushAllImageAlgoAdapter() {
@@ -292,6 +332,84 @@ int AmbientDataCaptureAIDL::FlushAllImageAlgoAdapter() {
   sdm::GenericPayload flush_payload;
   ret = local_adapter->ProcessOps(imagealgo::kSSFlushAll, flush_payload, nullptr);
   ALOGI("%s: ImageAlgo FlushAll for ret=%d", __FUNCTION__, ret);
+  return ret;
+}
+
+int AmbientDataCaptureAIDL::DeleteConfigImageAlgoAdapter(
+    const std::optional<std::vector<uint8_t>> &algoConfigsBlob) {
+  if (!algoConfigsBlob.has_value()) {
+    ALOGE("%s: algoConfigsBlob parameter is null", __FUNCTION__);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  // Reinterpret the blob as ADCAlgoConfigsStructBlob struct
+  const ADCAlgoConfigsStructBlob *configBlob =
+      reinterpret_cast<const ADCAlgoConfigsStructBlob *>(algoConfigsBlob->data());
+  if (configBlob && configBlob->dataSize > 0 && configBlob->dataSize <= ALGO_CONFIG_SIZE) {
+    ALOGI("%s: ImageAlgo adapter config_json set", __FUNCTION__);
+  } else {
+    ALOGE("%s: Invalid blob data (dataSize=%zu)", __FUNCTION__,
+          configBlob ? configBlob->dataSize : 0);
+    return EX_ILLEGAL_ARGUMENT;
+  }
+
+  std::shared_ptr<imagealgo::SmartSelectionIntf> local_adapter;
+  {
+    std::lock_guard<decltype(imagealgo_lock_)> algo_lock(imagealgo_lock_);
+    local_adapter = imagealgo_adapter_;
+  }
+  if (!local_adapter) {
+    ALOGI("%s: ImageAlgo adapter is not initialized", __FUNCTION__);
+    return EX_NONE;
+  }
+
+  sdm::GenericPayload delete_by_config_payload;
+  sdm::GenericPayload delete_by_config_out;
+  std::string *delete_filter = nullptr;
+  imagealgo::SmartSelectionDeleteResult *delete_result = nullptr;
+  delete_by_config_payload.CreatePayload(delete_filter);
+  delete_by_config_out.CreatePayload(delete_result);
+  if (!delete_filter) {
+    ALOGE("%s: ImageAlgo CreatePayload for DeleteConfig failed", __FUNCTION__);
+    return EX_TRANSACTION_FAILED;
+  }
+  *delete_filter = configBlob->data;
+
+  int ret = local_adapter->ProcessOps(imagealgo::kSSDeleteByConfig, delete_by_config_payload,
+                                      &delete_by_config_out);
+  ALOGI("%s: ImageAlgo DeleteByConfig for ret=%d deleted=%zu", __FUNCTION__, ret,
+        delete_result ? delete_result->deleted_frames.size() : 0);
+  return ret;
+}
+
+int AmbientDataCaptureAIDL::DeleteAllImageAlgoAdapter() {
+  std::shared_ptr<imagealgo::SmartSelectionIntf> local_adapter;
+  {
+    std::lock_guard<decltype(imagealgo_lock_)> algo_lock(imagealgo_lock_);
+    local_adapter = imagealgo_adapter_;
+  }
+  if (!local_adapter) {
+    ALOGI("%s: ImageAlgo adapter is not initialized", __FUNCTION__);
+    return EX_NONE;
+  }
+
+  sdm::GenericPayload wait_payload;
+  imagealgo::SmartSelectionWaitInput *wait_input = nullptr;
+  wait_payload.CreatePayload(wait_input);
+  if (wait_input) {
+    wait_input->timeout_ms = timeout_ms;
+  }
+
+  int ret = local_adapter->ProcessOps(imagealgo::kSSWaitUntilIdle, wait_payload, nullptr);
+  ALOGI("%s: ImageAlgo WaitUntilIdle (pre-delete) ret=%d", __FUNCTION__, ret);
+
+  sdm::GenericPayload delete_all_payload;
+  sdm::GenericPayload delete_all_out;
+  imagealgo::SmartSelectionDeleteResult *delete_all_result = nullptr;
+  delete_all_out.CreatePayload(delete_all_result);
+  ret = local_adapter->ProcessOps(imagealgo::kSSDeleteAll, delete_all_payload, &delete_all_out);
+  ALOGI("%s: ImageAlgo DeleteAll ret=%d deleted=%zu", __FUNCTION__, ret,
+        delete_all_result ? delete_all_result->deleted_frames.size() : 0);
   return ret;
 }
 
@@ -375,12 +493,28 @@ ScopedAStatus AmbientDataCaptureAIDL::setAlgoConfig(const ADCAlgoConfigs &algoCo
           ret = InitImageAlgoAdapter(algoConfigs.algoConfigsBlob);
           break;
         }
+        case AlgoConfigCommandType::RECONFIG: {
+          ret = ReconfigImageAlgoAdapter(algoConfigs.algoConfigsBlob);
+          break;
+        }
         case AlgoConfigCommandType::ENQUEUE: {
           ret = EnqueueImageAlgoAdapter(algoConfigs.algoConfigsBlob);
           break;
         }
+        case AlgoConfigCommandType::FLUSH_CONFIG: {
+          ret = FlushConfigImageAlgoAdapter(algoConfigs.algoConfigsBlob);
+          break;
+        }
         case AlgoConfigCommandType::FLUSH_ALL: {
           ret = FlushAllImageAlgoAdapter();
+          break;
+        }
+        case AlgoConfigCommandType::DELETE_CONFIG: {
+          ret = DeleteConfigImageAlgoAdapter(algoConfigs.algoConfigsBlob);
+          break;
+        }
+        case AlgoConfigCommandType::DELETE_ALL: {
+          ret = DeleteAllImageAlgoAdapter();
           break;
         }
         case AlgoConfigCommandType::DEINIT: {
@@ -396,8 +530,7 @@ ScopedAStatus AmbientDataCaptureAIDL::setAlgoConfig(const ADCAlgoConfigs &algoCo
     default:
       break;
   }
-  return ((ret == EX_NONE) ? ScopedAStatus::ok()
-                           : ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT)));
+  return ((ret == EX_NONE) ? ScopedAStatus::ok() : ScopedAStatus(AStatus_fromExceptionCode(ret)));
 }
 
 int AmbientDataCaptureAIDL::EnqueueImageAlgoAdapter(
@@ -711,14 +844,6 @@ void AmbientDataCaptureAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
   }
 
   int ret = 0;
-  if (ss_enqueue_count_ >= max_enqueue_count) {
-    ret = FlushSelectedImageAlgoAdapter();
-    if (ret != 0) {
-      ALOGI("%s: ImageAlgo flushSelected failed for enqueue count %d", __FUNCTION__,
-            ss_enqueue_count_.load());
-    }
-  }
-
   // Enqueue the captured CWB buffer to the SmartSelection adapter.
   sdm::GenericPayload enq_payload;
   ret = CreateEnqueuePayload(handle, enq_payload);
@@ -739,7 +864,78 @@ void AmbientDataCaptureAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
     NotifyOutputBuffer(status, hdl);
     return;
   }
-  ss_enqueue_count_++;
+}
+
+void AmbientDataCaptureAIDL::OnImageAlgoBufferRelease(
+    const imagealgo::SmartSelectionBufferReleaseEvent *event, void *cookie) {
+  if (!event || !cookie)
+    return;
+  AmbientDataCaptureAIDL *self = static_cast<AmbientDataCaptureAIDL *>(cookie);
+  ALOGI("%s: ImageAlgo buffer release: self=%p type=%d buffer=%p frame_cookie=%p", __FUNCTION__,
+        self, static_cast<int>(event->type), event->buffer, event->cookie);
+}
+
+void AmbientDataCaptureAIDL::OnImageAlgoQueueThreshold(
+    const imagealgo::SmartSelectionQueueThresholdEvent *event, void *cookie) {
+  if (!event || !cookie)
+    return;
+  AmbientDataCaptureAIDL *self = static_cast<AmbientDataCaptureAIDL *>(cookie);
+  ALOGI(
+      "%s: ImageAlgo queue threshold: self=%p app=%s user=%s size=%zu threshold=%zu crossed=%d "
+      "ts=%" PRId64,
+      __FUNCTION__, self, event->app_name.c_str(), event->user_id.c_str(),
+      event->current_queue_size, event->threshold, event->threshold_crossed, event->timestamp_ms);
+
+  if (!event->threshold_crossed) {
+    return;
+  }
+
+  std::shared_ptr<imagealgo::SmartSelectionIntf> local_adapter;
+  {
+    std::lock_guard<decltype(imagealgo_lock_)> algo_lock(self->imagealgo_lock_);
+    local_adapter = self->imagealgo_adapter_;
+  }
+  if (!local_adapter) {
+    ALOGI("%s: ImageAlgo queue threshold: adapter unavailable not initialized", __FUNCTION__);
+    return;
+  }
+
+  sdm::GenericPayload flush_sel_payload;
+  imagealgo::SmartSelectionFlushSelectedInput *flush_sel_input = nullptr;
+  flush_sel_payload.CreatePayload(flush_sel_input);
+  if (!flush_sel_input) {
+    ALOGE("%s: ImageAlgo CreatePayload for FlushSelected failed, continue", __FUNCTION__);
+    return;
+  }
+  flush_sel_input->app_name = event->app_name;
+  flush_sel_input->user_id = event->user_id;
+
+  int ret = local_adapter->ProcessOps(imagealgo::kSSFlushSelected, flush_sel_payload, nullptr);
+
+  sdm::GenericPayload verify_payload;
+  sdm::GenericPayload verify_out_payload;
+  imagealgo::SmartSelectionQuerySelectorInput *verify_input = nullptr;
+  imagealgo::SmartSelectionQuerySelectorOutput *verify_output = nullptr;
+  verify_payload.CreatePayload(verify_input);
+  verify_out_payload.CreatePayload(verify_output);
+  if (!verify_input) {
+    ALOGE("%s: ImageAlgo CreatePayload for QuerySelected failed, continue", __FUNCTION__);
+    return;
+  }
+  verify_input->app_name = event->app_name;
+
+  int retq = local_adapter->ProcessOps(imagealgo::kSSQuerySelectorStatus, verify_payload,
+                                       &verify_out_payload);
+  int remaining = (verify_output && retq == 0) ? verify_output->selected_count : -1;
+  ALOGI(
+      "%s: ImageAlgo threshold-triggered FlushSelected: ret=%d app=%s user=%s remaining=%d "
+      "(expected 0)",
+      __FUNCTION__, ret, event->app_name.c_str(), event->user_id.c_str(), remaining);
+  if (remaining != 0) {
+    ALOGW("%s: ImageAlgo threshold-triggered FlushSelected did not fully drain selector queue: %d",
+          __FUNCTION__, remaining);
+  }
+  return;
 }
 
 void AmbientDataCaptureAIDL::OnImageAlgoEmit(const imagealgo::SmartSelectionEmitResult *result,
@@ -781,9 +977,6 @@ void AmbientDataCaptureAIDL::ProcessImageAlgoResult(void *hdl, bool frame_select
     if (it != cwb_callbacks_.end()) {
       std::tie(display_type, callback) = it->second;
       cwb_callbacks_.erase(it);
-      if (ss_enqueue_count_ > 0) {
-        ss_enqueue_count_--;
-      }
     }
   }
 

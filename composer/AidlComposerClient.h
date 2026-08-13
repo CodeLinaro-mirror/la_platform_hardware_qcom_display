@@ -377,6 +377,7 @@ class AidlComposerClient : public BnComposerClient,
     Error populateDisplayLuts(Lut3d *lut_3d, bool reset_luts, Luts *luts, int32_t *lut_fd);
     Error getBufferLuts(uint64_t display, const std::vector<SnapHandle *> &buffers,
                         std::unique_ptr<std::vector<Lut3d *>> &out_luts);
+    Error translateLayerLuts(const Luts &luts, Lut3d *lut_3d);
 #endif
 
    private:
