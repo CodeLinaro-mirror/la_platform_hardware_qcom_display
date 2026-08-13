@@ -1063,10 +1063,6 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH, 2},
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH, 4},
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH, 8},
-      {PIXEL_FORMAT_MODIFIER_LINEAR_FLEX, 1},
-      {PIXEL_FORMAT_MODIFIER_FLEX_2_BATCH, 2},
-      {PIXEL_FORMAT_MODIFIER_FLEX_4_BATCH, 4},
-      {PIXEL_FORMAT_MODIFIER_FLEX_8_BATCH, 8},
   };
 
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(
