@@ -1865,6 +1865,86 @@ SnapError GrallocSnapHelper::SMPTE2094_10Helper(SnapHandle *hnd, uint32_t aidl_s
   return error;
 }
 
+#ifdef GRALLOC_COMMON_V7
+SnapError GrallocSnapHelper::SMPTE2094_50Helper(SnapHandle *hnd, uint32_t aidl_size,
+                                                void *gralloc_in_set, void *gralloc_out_get,
+                                                SnapDescriptor *buf_des, bool check_metadata_set,
+                                                int32_t *mapper_return) {
+  auto error = SnapError::BAD_VALUE;
+  if (gralloc_out_get != nullptr) {
+    SnapSMPTE2094_50Metadata snap_smpte2094_50_metadata = {};
+    void *snap_out_get = aidl_size ? &snap_smpte2094_50_metadata : gralloc_out_get;
+    error = snapmapper_->GetMetadata(*hnd, SnapMetadataType::SMPTE2094_50, snap_out_get);
+    if (aidl_size) {
+      if (snap_smpte2094_50_metadata.size) {
+        uint64_t payload_len = snap_smpte2094_50_metadata.size;
+        constexpr size_t MAX_PAYLOAD_SIZE = sizeof(snap_smpte2094_50_metadata.metadataPayload);
+        if (payload_len == 0 || payload_len > MAX_PAYLOAD_SIZE) {
+          ALOGW("%s: SMPTE2094_50 size %" PRIu64
+                " is invalid (valid range: 1-%zu), encoding nullopt",
+                __func__, payload_len, MAX_PAYLOAD_SIZE);
+          *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_50>(
+              std::nullopt, gralloc_out_get, *mapper_return);
+        } else {
+          std::vector<uint8_t> smpte2094_50_payload;
+          smpte2094_50_payload.resize(payload_len);
+          memcpy(smpte2094_50_payload.data(), &snap_smpte2094_50_metadata.metadataPayload,
+                 payload_len);
+          *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_50>(
+              smpte2094_50_payload, gralloc_out_get, *mapper_return);
+        }
+      } else {
+        // size is 0: metadata not set, encode nullopt so client gets correct required size
+        *mapper_return = Mapper5Encode<StandardMetadataType::SMPTE2094_50>(
+            std::nullopt, gralloc_out_get, *mapper_return);
+      }
+      if (*mapper_return < 0) {
+        return SnapError::BAD_VALUE;
+      }
+    }
+  } else if (gralloc_in_set != nullptr) {
+    SnapSMPTE2094_50Metadata snap_converted_smpte2094_50_metadata = {};
+    if (aidl_size) {
+      std::optional<std::vector<uint8_t>> smpte2094_50_payload = {};
+      auto decoded_result =
+          Mapper5Decode<StandardMetadataType::SMPTE2094_50>(gralloc_in_set, aidl_size);
+      if (!decoded_result.has_value()) {
+        return SnapError::UNSUPPORTED;
+      }
+      smpte2094_50_payload = *decoded_result;
+      if (smpte2094_50_payload != std::nullopt) {
+        constexpr size_t MAX_PAYLOAD_SIZE =
+            sizeof(snap_converted_smpte2094_50_metadata.metadataPayload);
+        if (smpte2094_50_payload->size() > MAX_PAYLOAD_SIZE) {
+          ALOGW("SMPTE 2094-50 metadata too large! Size: %zu, Max: %zu",
+                smpte2094_50_payload->size(), MAX_PAYLOAD_SIZE);
+        }
+        // Cap copy size to prevent buffer overflow; use uint64_t for size field
+        size_t copy_size = std::min(smpte2094_50_payload->size(), MAX_PAYLOAD_SIZE);
+        snap_converted_smpte2094_50_metadata.size = static_cast<uint64_t>(copy_size);
+        memcpy(&snap_converted_smpte2094_50_metadata.metadataPayload, smpte2094_50_payload->data(),
+               copy_size);
+      } else {
+        // nullopt decoded: clear the metadata
+        snap_converted_smpte2094_50_metadata.size = 0;
+      }
+    } else {
+      // aidl_size == 0 with non-null pointer means nullopt (empty bytestream encoding)
+      snap_converted_smpte2094_50_metadata.size = 0;
+    }
+    error = snapmapper_->SetMetadata(*hnd, SnapMetadataType::SMPTE2094_50,
+                                     &snap_converted_smpte2094_50_metadata);
+  } else if (gralloc_in_set == nullptr && aidl_size == 1) {
+    // Handling for when std::nullopt is passed in with expectation to invalidate the metadata
+    SnapSMPTE2094_50Metadata snap_smpte2094_50_metadata = {};
+    snap_smpte2094_50_metadata.size = 0;
+    error =
+        snapmapper_->SetMetadata(*hnd, SnapMetadataType::SMPTE2094_50, &snap_smpte2094_50_metadata);
+  }
+  return error;
+}
+#endif
+
 SnapError GrallocSnapHelper::MasteringDisplayHelper(SnapHandle *hnd, uint32_t aidl_size,
                                                     void *gralloc_in_set, void *gralloc_out_get,
                                                     SnapDescriptor *buf_des,
@@ -3291,6 +3371,11 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferDescriptor gr_desc
         .value = GetPixelFormatModifierValue(gr_desc.GetAdditionalOptions(),
                                              static_cast<uint64_t>(snap_fmt_desc.modifier))};
     snap_desc.additionalOptions.emplace_back(modifier);
+    auto heap_type_opt = GetHeapNameOptValue(gr_desc.GetAdditionalOptions());
+    if (heap_type_opt != -1) {
+      SnapKeyValuePair heap_opt = {.key = "heap_type", .value = heap_type_opt};
+      snap_desc.additionalOptions.emplace_back(heap_opt);
+    }
     ALOGD_IF(enable_logs_,
              "%s gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
              "usage %" PRIu64 " name from gralloc descriptor %s snap_desc %s",
@@ -3341,6 +3426,11 @@ SnapError GrallocSnapHelper::GetSnapDescriptor(gralloc::BufferInfo gr_desc,
         .value = GetPixelFormatModifierValue(gr_desc.additional_options,
                                              static_cast<uint64_t>(snap_fmt_desc.modifier))};
     snap_desc.additionalOptions.emplace_back(modifier);
+    auto heap_type_opt = GetHeapNameOptValue(gr_desc.additional_options);
+    if (heap_type_opt != -1) {
+      SnapKeyValuePair heap_opt = {.key = "heap_type", .value = heap_type_opt};
+      snap_desc.additionalOptions.emplace_back(heap_opt);
+    }
 
     ALOGD_IF(enable_logs_,
              "%s gr format %d gr usage %" PRIu64 " snap format %d snap modifier %d snap "
@@ -3370,11 +3460,12 @@ int GrallocSnapHelper::GetSnapFlatFormat(SnapFormatDescriptor snap_fmt_desc, Sna
                                          SnapPixelFormat *snap_format) {
   if (snap_to_flat_format_.find(snap_fmt_desc) != snap_to_flat_format_.end()) {
     *snap_format = snap_to_flat_format_.at(snap_fmt_desc);
-  } else if ((usage & SnapUsage::QTI_ALLOC_UBWC) &&
+  } else if (((usage & SnapUsage::QTI_ALLOC_UBWC) || (usage & SnapUsage::QTI_ALLOC_UBWC_4R)) &&
              (snap_to_flat_ubwc_format_.find(snap_fmt_desc) != snap_to_flat_ubwc_format_.end())) {
     *snap_format = snap_to_flat_ubwc_format_.at(snap_fmt_desc);
   } else {
-    ALOGW("%s: No map for format: 0x%x", __FUNCTION__, snap_fmt_desc.format);
+    ALOGW("%s: No map for format: 0x%x, modifier %d", __FUNCTION__, snap_fmt_desc.format,
+          (int)snap_fmt_desc.modifier);
     return SnapError::BAD_VALUE;
   }
 
@@ -3408,6 +3499,19 @@ uint64_t GrallocSnapHelper::GetGrallocUsage(SnapUsage snap_usage) {
   }
 
   return gralloc_usage;
+}
+
+uint64_t GrallocSnapHelper::GetHeapNameOptValue(std::vector<ExtendableType> additional_options) {
+  for (auto opt : additional_options) {
+    if (std::strcmp(opt.name.c_str(), "heap_type") == 0) {
+      uint64_t heap_type = opt.value;
+      if (heap_type > SnapHeapType::HEAP_NONE && heap_type < SnapHeapType::HEAP_MAX) {
+        return heap_type;
+      }
+    }
+  }
+
+  return -1;
 }
 
 // LEGACY (MAPPER4 COMPATIBLE) IMPLEMENTATION
