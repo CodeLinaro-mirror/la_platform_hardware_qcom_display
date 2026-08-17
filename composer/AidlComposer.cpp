@@ -117,12 +117,15 @@ binder_status_t AidlComposer::dump(int fd, const char ** /*args*/, uint32_t /*nu
 }
 
 ScopedAStatus AidlComposer::getCapabilities(std::vector<Capability> *aidl_return) {
-  const std::array<Capability, 3> all_caps = {{
+  const std::array<Capability, 4> all_caps = {{
       Capability::SIDEBAND_STREAM,
 #ifdef COMPOSER3_V3
       Capability::LAYER_LIFECYCLE_BATCH_COMMAND,
 #endif
       Capability::PRESENT_FENCE_IS_NOT_RELIABLE,
+#ifdef COMPOSER3_V5
+      Capability::DISPLAY_COMMAND_CONFIG_CHANGE,
+#endif
   }};
 
   uint32_t count = 0;

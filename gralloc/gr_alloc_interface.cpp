@@ -26,6 +26,11 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <utils/debug.h>
 #include <utils/utils.h>
@@ -40,8 +45,12 @@ namespace gralloc {
 
 AllocInterface *AllocInterface::GetInstance() {
   // Detect DMABUF Heaps usage
-  char property[PROPERTY_VALUE_MAX];
-  if (property_get(USE_DMA_BUF_HEAPS_PROP, property, NULL) > 0) {
+  static bool use_dma_buf_heaps = [] {
+    char property[PROPERTY_VALUE_MAX];
+    return property_get(USE_DMA_BUF_HEAPS_PROP, property, NULL) > 0;
+  }();
+
+  if (use_dma_buf_heaps) {
     return DmaManager::GetInstance();
   } else {
     return DmaLegacyManager::GetInstance();

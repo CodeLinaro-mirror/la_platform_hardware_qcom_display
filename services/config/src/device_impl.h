@@ -75,6 +75,7 @@
 #include <string>
 #include <vector>
 #include <shared_mutex>
+#include <mutex>
 
 #include "opcode_types.h"
 

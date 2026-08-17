@@ -15,9 +15,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -123,11 +123,29 @@ NativeHandle AIDLNativeHandleFromSnapHandle(SnapHandle *snap_buffer_handle,
 }
 
 native_handle_t *SnapHandleToLegacyHandle(const SnapHandle *snap_handle) {
-  native_handle_t *handle = native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
-  for (size_t i = 0; i < snap_handle->num_fds; ++i) {
-    handle->data[i] = fcntl(snap_handle->buffer_data[i], F_DUPFD_CLOEXEC, 0);
+  if (!snap_handle) {
+    ALOGE("%s: snap_handle is null", __FUNCTION__);
+    return nullptr;
   }
-  for (size_t i = snap_handle->num_fds; i < snap_handle->num_fds + snap_handle->num_ints; ++i) {
+
+  native_handle_t *handle = native_handle_create(snap_handle->num_fds, snap_handle->num_ints);
+  if (!handle) {
+    ALOGE("%s: native_handle_create failed", __FUNCTION__);
+    return nullptr;
+  }
+
+  for (int i = 0; i < snap_handle->num_fds; ++i) {
+    handle->data[i] = fcntl(snap_handle->buffer_data[i], F_DUPFD_CLOEXEC, 0);
+    if (handle->data[i] < 0) {
+      ALOGE("%s: failed to dup fd at index %d", __FUNCTION__, i);
+      handle->numFds = i;
+      native_handle_close(handle);
+      native_handle_delete(handle);
+      return nullptr;
+    }
+  }
+
+  for (int i = snap_handle->num_fds; i < snap_handle->num_fds + snap_handle->num_ints; ++i) {
     handle->data[i] = snap_handle->buffer_data[i];
   }
   return handle;
