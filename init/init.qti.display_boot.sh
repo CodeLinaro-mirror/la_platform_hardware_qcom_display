@@ -531,8 +531,9 @@ case "$target" in
     "malabar")
     #SOC ID for Malabar is 733
     #SOC ID for Malabar APQ variant is 757
+    #SOC ID for Malabar WBC is 800
     case "$soc_hwid" in
-      733|757)
+      733|757|800)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 5
