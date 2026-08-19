@@ -1,6 +1,8 @@
 # Display product definitions
 include hardware/qcom/display/config/display-modules.mk
 
+BUILD_DISPLAY_TECHPACK_SOURCE := true
+BUILD_DISPLAY_TECHPACK_SOURCE_VARIANT := true
 PRODUCT_PACKAGES += $(DISPLAY_MODULES_HARDWARE)
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)

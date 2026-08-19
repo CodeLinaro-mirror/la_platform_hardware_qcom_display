@@ -26,8 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -140,10 +139,13 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
                              void *_Nonnull outData, size_t outDataSize, bool isStandard);
   Error SetMetadataPrivate(buffer_handle_t _Nonnull bufferHandle, int64_t metadataType,
                            const void *_Nonnull metadata, size_t metadataSize, bool isStandard);
-  size_t GetExpectedSize(uint64_t metadata_type);
+  size_t GetExpectedSize(native_handle_t *_Nonnull bufferHandle, uint64_t metadata_type);
 
   gralloc::GrallocSnapHelper *_Nullable snap_helper_ = nullptr;
   bool snap_alloc_enable_ = false;
+
+  std::list<uint64_t> batch_mode_metadata_types_ = {
+      static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA)};
 
   std::unordered_map<uint64_t, size_t> type_to_size_{
       {static_cast<uint64_t>(SnapMetadataType::BUFFER_ID), sizeof(uint64_t)},
