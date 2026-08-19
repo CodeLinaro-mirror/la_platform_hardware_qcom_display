@@ -44,6 +44,7 @@
 #include <private/hw_interface.h>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -134,7 +135,8 @@ class HWEventsDRM : public HWEventsInterface {
   uint32_t power_event_index_ = UINT32_MAX;
   uint32_t vm_release_event_index_ = UINT32_MAX;
   std::bitset<HW_EVENT_MAX> registered_hw_events_ = {};
-  static HWEventsDRM *hw_events_drm_;
+  static std::mutex instances_mutex_;
+  static std::set<HWEventsDRM *> valid_instances_;
 };
 
 }  // namespace sdm
