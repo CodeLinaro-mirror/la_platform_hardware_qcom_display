@@ -82,6 +82,7 @@ case "$target" in
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.disable_fbt_for_cwb_fallback 1
         setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 1
+        setprop vendor.display.disable_demura_opt_singlelm 1
         #SOC ID 761 (coast.1.0) do not support UCSC
         if [ "$soc_hwid" -eq 761 ] && [ "$revision" = "1.0" ]; then
             setprop vendor.display.render_sysui_as_srgb 1
@@ -156,8 +157,9 @@ case "$target" in
     # Soc Id for khaje is 518
     # Soc Id for khaje APQ is 561
     # Soc Id for khaje Gaming is 585 and IOT is 586
+    # Soc Id for khaje SMP is 762
     case "$soc_hwid" in
-        518|561|585|586)
+        518|561|585|586|762)
         # Set property for khaje
         setprop vendor.display.disable_layer_stitch 1
         setprop vendor.display.enable_rounded_corner 1
@@ -227,6 +229,7 @@ case "$target" in
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_client_control_cwb_refresh 1
         if [ "$soc_hwid" -eq 736 ] || [ "$soc_hwid" -eq 737 ]; then
            setprop vendor.display.enable_inline_writeback 0
         else

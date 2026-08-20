@@ -892,6 +892,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            TP10_UBWC_FLEX_4_BATCH},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH},
            TP10_UBWC_FLEX_8_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_4R},
+           SnapPixelFormat::YCbCr_420_SP_4R_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -1182,6 +1184,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH, 2},
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH, 4},
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH, 8},
+      {PIXEL_FORMAT_MODIFIER_LINEAR_FLEX, 1},
+      {PIXEL_FORMAT_MODIFIER_FLEX_2_BATCH, 2},
+      {PIXEL_FORMAT_MODIFIER_FLEX_4_BATCH, 4},
+      {PIXEL_FORMAT_MODIFIER_FLEX_8_BATCH, 8},
   };
 
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(
