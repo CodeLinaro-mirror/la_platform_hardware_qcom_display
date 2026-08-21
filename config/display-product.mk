@@ -69,7 +69,6 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/display_id_sample.xml:$(TARGE
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.demo.hdmirotationlock=false \
     persist.sys.sf.color_saturation=1.0 \
-    persist.sys.sf.color_mode=9 \
     debug.sf.hw=0 \
     debug.egl.hw=0 \
     debug.sf.latch_unsignaled=0 \
@@ -127,6 +126,12 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.gralloc.secure_preview_only=1
     PRODUCT_PROPERTY_OVERRIDES += vendor.display.enable_rounded_corner=1
     PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_rounded_corner_thread=0
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),taro)
+PRODUCT_PROPERTY_OVERRIDES += 	persist.sys.sf.color_mode=7
+else
+PRODUCT_PROPERTY_OVERRIDES += persist.sys.sf.color_mode=9
 endif
 
 ifneq ($(PLATFORM_VERSION), 10)
