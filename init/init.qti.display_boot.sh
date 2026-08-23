@@ -91,6 +91,7 @@ case "$target" in
     setprop vendor.display.enable_dpps_dynamic_fps 0
     setprop vendor.display.vds_allow_hwc 1
     setprop vendor.gralloc.use_uncached_heap 1
+    setprop vendor.display.disable_llcbc_support 1
     # Set property to differentiate bengal and khaje
     # Soc Id for khaje is 518
     # Soc Id for khaje APQ is 561
@@ -522,6 +523,7 @@ case "$target" in
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_privacy_layers 1
+        setprop vendor.display.disable_llcbc_support 1
         ;;
     esac
     ;;
@@ -538,7 +540,7 @@ case "$target" in
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.enable_spec_fence 1
-        setprop vendor.display.thermal.version 1
+        setprop vendor.display.thermal.version 3
         setprop vendor.display.enable_rc_support 1
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.disable_gpu_color_convert 0
