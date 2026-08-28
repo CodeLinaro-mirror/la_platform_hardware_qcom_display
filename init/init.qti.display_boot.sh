@@ -85,8 +85,9 @@ case "$target" in
     ;;
     "pitti")
     # SOC ID for Pitti is 623
+    # SOC ID for Pitti IOT is 788
     case "$soc_hwid" in
-      623)
+      623|788)
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.target.version 5
