@@ -2,4 +2,4 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = libqservice libqdutils dp_cec
+SUBDIRS = libqservice libqdutils dp_cec libfecservice
