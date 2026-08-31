@@ -51,6 +51,7 @@ AC_CONFIG_FILES([ \
         Makefile \
         libqservice/Makefile \
         libqdutils/Makefile \
+        libfecservice/Makefile \
         dp_cec/Makefile
         ])
 AC_OUTPUT

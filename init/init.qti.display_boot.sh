@@ -62,8 +62,10 @@ case "$target" in
     # SOC ID for Pebble is 735
     # SOC ID for Pebble APQ is 741
     # SOC ID for Coast is 761
+    # SOC ID for Pebble CQS quadcore is 793
+    # SOC ID for Pebble CQS hexacore is 794
     case "$soc_hwid" in
-      707|708|755|760|735|741|761)
+      707|708|755|760|735|741|761|793|794)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -157,8 +159,9 @@ case "$target" in
     # Soc Id for khaje is 518
     # Soc Id for khaje APQ is 561
     # Soc Id for khaje Gaming is 585 and IOT is 586
+    # Soc Id for khaje SMP is 762
     case "$soc_hwid" in
-        518|561|585|586)
+        518|561|585|586|762)
         # Set property for khaje
         setprop vendor.display.disable_layer_stitch 1
         setprop vendor.display.enable_rounded_corner 1
