@@ -113,8 +113,8 @@ AdrenoMemInfo::AdrenoMemInfo() {
   }
   char property[PROPERTY_VALUE_MAX];
   property_get(DISABLE_UBWC_PROP, property, "0");
-  if (!(strncmp(property, "1", PROPERTY_VALUE_MAX)) ||
-      !(strncmp(property, "true", PROPERTY_VALUE_MAX))) {
+  if (!(strncmp(property, "1", sizeof("1")))||
+      !(strncmp(property, "true", sizeof("true")))) {
      gfx_ubwc_disable_ = true;
   }
 }
@@ -225,6 +225,8 @@ ADRENOPIXELFORMAT AdrenoMemInfo::GetGpuPixelFormat(int hal_format) {
       return ADRENO_PIXELFORMAT_B8G8R8A8_UNORM;
     case HAL_PIXEL_FORMAT_RGB_888:
       return ADRENO_PIXELFORMAT_R8G8B8;
+    case HAL_PIXEL_FORMAT_BGR_888:
+      return ADRENO_PIXELFORMAT_B8G8R8_UNORM;
     case HAL_PIXEL_FORMAT_RGB_565:
       return ADRENO_PIXELFORMAT_B5G6R5;
     case HAL_PIXEL_FORMAT_BGR_565:
