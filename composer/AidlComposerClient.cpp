@@ -774,8 +774,10 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buf
       // populateDisplayLuts will return error if the lut pointer we pass is nullptr
       // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
       if (*it != nullptr) {
+        drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
         error = mCommandEngine->populateDisplayLuts(*it, false /* reset_luts */,
                                                     &(aidl_return->at(i)), &fd);
+        drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
         if (error != Error::None) {
           return TO_BINDER_STATUS(INT32(error));
         }
