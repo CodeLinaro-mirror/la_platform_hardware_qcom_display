@@ -78,7 +78,6 @@ AIMapper_Error GetFromBufferDescriptor(BufferDescriptorInfo aidl_desc,
 static AIMapper *_Nullable GetMapperInstance() {
   static AIMapper *mapper = nullptr;
   if (mapper) {
-    ALOGI("Using previously loaded IMapper library.");
     return mapper;
   }
 
