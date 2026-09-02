@@ -28,9 +28,8 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -242,6 +241,30 @@ HWC2::Error HWCDisplayBuiltIn::PreValidateDisplay(bool *exit_validate) {
 
   // Fill in the remaining blanks in the layers and add them to the SDM layerstack
   BuildLayerStack();
+
+  bool composer_readback_pending = false;
+  {
+    std::lock_guard<std::mutex> lock(cwb_mutex_);
+    for (const auto &cwb_buffer : cwb_buffer_map_) {
+      if (cwb_buffer.second == kCWBClientComposer) {
+        composer_readback_pending = true;
+        break;
+      }
+    }
+  }
+
+  bool all_solid_color = !layer_set_.empty();
+  for (auto hwc_layer : layer_set_) {
+    if (hwc_layer->GetClientRequestedCompositionType() != HWC2::Composition::SolidColor) {
+      all_solid_color = false;
+      break;
+    }
+  }
+
+  if (composer_readback_pending && all_solid_color) {
+    DLOGI("Forcing client composition for an all-solid-color stack during composer readback");
+    MarkLayersForClientComposition();
+  }
 
   // Check for scaling layers during Doze mode
   ValidateUiScaling();
