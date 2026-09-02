@@ -1,4 +1,17 @@
 # Display product definitions
+ifeq ($(TARGET_SDV_ENABLED),true)
+$(call soong_config_set,qtidisplay,target_sdv_enabled,true)
+endif
+
+# gralloc stack and display config needed by vendor components (e.g. EVS, codec) in SDV builds
+PRODUCT_PACKAGES += \
+    libqdMetaData \
+    libgralloc.qti \
+    libgrallocutils \
+    libmapperutils \
+    libdisplayconfig.qti
+
+ifneq ($(TARGET_SDV_ENABLED),true)
 PRODUCT_PACKAGES += \
     android.hardware.graphics.composer@2.4-impl \
     vendor.qti.hardware.display.allocator-service \
@@ -9,11 +22,8 @@ PRODUCT_PACKAGES += \
     libqdMetaData.vendor \
     libdisplayconfig.vendor \
     libdisplayconfig.qti.vendor \
-    libqdMetaData \
     libqdMetaData.system \
     libdisplayconfig \
-    libgralloc.qti \
-    libdisplayconfig.qti \
     libdrmutils \
     vendor.display.config@1.0.vendor \
     vendor.display.config@1.1.vendor \
@@ -28,10 +38,10 @@ PRODUCT_PACKAGES += \
     vendor.display.config@1.10.vendor \
     vendor.display.config@2.0.vendor \
     mapper.qti \
-    libmapperutils \
     modetest \
     modetest_drm \
     vendor.qti.hardware.display.snapalloc-impl
+endif # TARGET_SDV_ENABLED
 
 ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16 CinnamonBun 17, $(PLATFORM_VERSION)))
 $(warning "Android-U compiling AIDL")
@@ -63,6 +73,7 @@ $(call soong_config_set,display_config_grallocutils,graphics_common_ndk, version
 endif
 
 ifneq ($(TARGET_IS_HEADLESS),true)
+ifneq ($(TARGET_SDV_ENABLED),true)
 ifneq ( ,$(filter U UpsideDownCake 14 V VanillaIceCream 15 Baklava 16 CinnamonBun 17, $(PLATFORM_VERSION)))
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.composer-service
@@ -72,9 +83,11 @@ else
 PRODUCT_PACKAGES += \
     android.hardware.graphics.composer@2.4-service
 endif
+endif # TARGET_SDV_ENABLED
 endif #TARGET_IS_HEADLESS
 
 #Enable AIDL Hal for S
+ifneq ($(TARGET_SDV_ENABLED),true)
 ifeq ($(ENABLE_MEMTRACK_AIDL_HAL),true)
 PRODUCT_PACKAGES += \
     android.hardware.memtrack-service.example
@@ -83,6 +96,7 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 endif
+endif # TARGET_SDV_ENABLED
 
 #QDCM calibration xml file for 2k panel
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_nt35597_cmd_mode_dsi_truly_panel_with_DSC.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_nt35597_cmd_mode_dsi_truly_panel_with_DSC.xml
@@ -230,5 +244,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.dataspace_saturation_matrix=1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0
 
 ifneq ($(TARGET_HAS_LOW_RAM),true)
+ifneq ($(TARGET_SDV_ENABLED),true)
 PRODUCT_PACKAGES += ppd
+endif # TARGET_SDV_ENABLED
 endif

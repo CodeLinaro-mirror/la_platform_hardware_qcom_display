@@ -162,6 +162,7 @@ cc_binary {
     name: "vendor.qti.hardware.display.composer-service",
     defaults: [
         "disp_config_idl_composer_defaults",
+        "qtidisplay_sdv_defaults",
         "dlog_defaults",
     ],
     sanitize:{

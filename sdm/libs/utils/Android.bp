@@ -2,7 +2,7 @@
 cc_library_shared {
 
     name: "libsdmutils",
-    defaults: ["display_defaults", "dlog_defaults"],
+    defaults: ["display_defaults", "dlog_defaults", "qtidisplay_sdv_defaults"],
     sanitize: {
         integer_overflow: true,
     },
