@@ -561,9 +561,15 @@ DisplayError DisplayBase::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t
         cwb_config->cwb_full_rect.right = display_config.x_pixels;
         cwb_config->cwb_full_rect.bottom = display_config.y_pixels;
         LayerRect cwb_roi = cwb_config->cwb_roi;
-        if (pu_as_cwb_roi) {
-          *x_pixels = display_config.x_pixels;
-          *y_pixels = display_config.y_pixels;
+
+        HWPanelInfo hw_panel_info;
+        error = hw_intf_->GetHWPanelInfo(&hw_panel_info);
+        if (error != kErrorNone) {
+          return error;
+        }
+        if (pu_as_cwb_roi || !hw_panel_info.has_cwb_crop) {
+        *x_pixels = display_config.x_pixels;
+        *y_pixels = display_config.y_pixels;
         } else if (IsValidCwbRoi(cwb_roi, cwb_config->cwb_full_rect)) {
           *x_pixels = cwb_roi.right - cwb_roi.left;
           *y_pixels = cwb_roi.bottom - cwb_roi.top;
@@ -581,9 +587,15 @@ DisplayError DisplayBase::GetCwbBufferResolution(CwbConfig *cwb_config, uint32_t
       cwb_config->cwb_full_rect.right = display_config.x_pixels;
       cwb_config->cwb_full_rect.bottom = display_config.y_pixels;
       LayerRect cwb_roi = cwb_config->cwb_roi;
-      if (pu_as_cwb_roi) {
-        *x_pixels = display_config.x_pixels;
-        *y_pixels = display_config.y_pixels;
+
+      HWPanelInfo hw_panel_info;
+      error = hw_intf_->GetHWPanelInfo(&hw_panel_info);
+      if (error != kErrorNone) {
+        return error;
+      }
+      if (pu_as_cwb_roi || !hw_panel_info.has_cwb_crop) {
+      *x_pixels = display_config.x_pixels;
+      *y_pixels = display_config.y_pixels;
       } else if (IsValidCwbRoi(cwb_roi, cwb_config->cwb_full_rect)) {
         *x_pixels = cwb_roi.right - cwb_roi.left;
         *y_pixels = cwb_roi.bottom - cwb_roi.top;
