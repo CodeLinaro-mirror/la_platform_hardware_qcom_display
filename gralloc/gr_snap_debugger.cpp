@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+#include <cstdlib>
+
 #include <cutils/properties.h>
 
 #include "gr_snap_debugger.h"
