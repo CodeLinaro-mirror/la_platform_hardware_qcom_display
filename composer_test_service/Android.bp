@@ -11,6 +11,7 @@ cc_binary {
         "qti_kernel_headers",
         "qti_display_kernel_headers",
         "device_kernel_headers",
+        "common_interface_headers",
     ],
     cflags: [
         "-Wno-missing-field-initializers",
