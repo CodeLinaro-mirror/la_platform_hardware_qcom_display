@@ -77,7 +77,8 @@ case "$target" in
     setprop vendor.display.enable_spec_fence 1
     setprop vendor.display.thermal.version 1
     setprop vendor.display.enable_rc_support 1
-    setprop vendor.display.target.version 6
+    setprop vendor.display.target.version 5
+    setprop vendor.display.perf.version 2
     setprop vendor.display.enable_qsync_idle 0
     setprop vendor.display.disable_mitigated_fps 1
     setprop vendor.display.secure_preview_buffer_format 420_sp
@@ -96,8 +97,9 @@ case "$target" in
     # Soc Id for khaje is 518
     # Soc Id for khaje APQ is 561
     # Soc Id for khaje Gaming is 585 and IOT is 586
+    # Soc Id for khaje SMP is 762
     case "$soc_hwid" in
-        518|561|585|586)
+        518|561|585|586|762)
         # Set property for khaje
         setprop vendor.display.disable_layer_stitch 1
         setprop vendor.display.enable_rounded_corner 1
@@ -521,13 +523,13 @@ case "$target" in
         setprop vendor.display.perf.version 4
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.disable_gpu_color_convert 0
-        setprop vendor.gralloc.allow_camera_preview_write 1
         setprop vendor.display.cpu_cluster_boost_mask 6
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_privacy_layers 1
+        setprop vendor.display.disable_llcbc_support 1
         ;;
     esac
     ;;

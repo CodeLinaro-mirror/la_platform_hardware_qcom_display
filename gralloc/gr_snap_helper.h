@@ -538,6 +538,15 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::YCBCR_P010_HEIF},
           {{.format = SnapPixelFormat::YCBCR_P010, .modifier = PIXEL_FORMAT_MODIFIER_1K_ALIGNED},
            SnapPixelFormat::YCBCR_P010_1024},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_2_BATCH},
+           HAL_PIXEL_FORMAT_NV12_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_4_BATCH},
+           HAL_PIXEL_FORMAT_NV12_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_8_BATCH},
+           HAL_PIXEL_FORMAT_NV12_FLEX_8_BATCH},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -765,6 +774,15 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {{.format = SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR,
             .modifier = PIXEL_FORMAT_MODIFIER_NONE},
            SnapPixelFormat::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_2_BATCH},
+           SnapPixelFormat::NV12_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_4_BATCH},
+           SnapPixelFormat::NV12_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_8_BATCH},
+           SnapPixelFormat::NV12_FLEX_8_BATCH},
       };
 
   std::unordered_map<SnapFormatDescriptor, SnapPixelFormat, SnapFormatDescriptorHash>
@@ -793,6 +811,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::NV12_UBWC_MIPMAP},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
            SnapPixelFormat::TP10_UBWC_MIPMAP},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_4R},
+           SnapPixelFormat::YCbCr_420_SP_4R_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -1045,6 +1065,10 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_2_BATCH, 2},
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_4_BATCH, 4},
       {PIXEL_FORMAT_MODIFIER_UBWC_FLEX_8_BATCH, 8},
+      {PIXEL_FORMAT_MODIFIER_LINEAR_FLEX, 1},
+      {PIXEL_FORMAT_MODIFIER_FLEX_2_BATCH, 2},
+      {PIXEL_FORMAT_MODIFIER_FLEX_4_BATCH, 4},
+      {PIXEL_FORMAT_MODIFIER_FLEX_8_BATCH, 8},
   };
 
   typedef SnapError (GrallocSnapHelper::*MetadataHelper)(
@@ -1622,6 +1646,15 @@ class GrallocSnapHelperLegacy : public GrallocSnapHelperIntf {
            static_cast<int>(SnapPixelFormat::P010_MIPMAP)},
           {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_MIPMAP},
            static_cast<int>(SnapPixelFormat::NV12_MIPMAP)},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_2_BATCH},
+           HAL_PIXEL_FORMAT_NV12_FLEX_2_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_4_BATCH},
+           HAL_PIXEL_FORMAT_NV12_FLEX_4_BATCH},
+          {{.format = SnapPixelFormat::YCbCr_420_SP,
+            .modifier = PIXEL_FORMAT_MODIFIER_FLEX_8_BATCH},
+           HAL_PIXEL_FORMAT_NV12_FLEX_8_BATCH},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
