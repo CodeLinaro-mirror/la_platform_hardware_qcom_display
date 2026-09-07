@@ -694,10 +694,26 @@ void DisplayBuiltIn::PreCommit(LayerStack *layer_stack) {
 
   // Enabling auto refresh is async and needs to happen before commit ioctl
   if (hw_panel_info_.mode == kModeCommand) {
-    bool enable = (app_layer_count == 1) && layer_stack->flags.single_buffered_layer_present;
-    bool need_refresh = layer_stack->flags.single_buffered_layer_present && (app_layer_count > 1);
+    uint32_t frame_cnt = 0;
+    uint32_t curr_panel_self_refresh_rate = 0;
+    uint32_t mode_refresh_rate = 0;
+    DisplayError error = hw_intf_->GetModePanelSelfRefreshRate(&curr_panel_self_refresh_rate,
+                                                               &mode_refresh_rate);
+    if (error == kErrorNone && curr_panel_self_refresh_rate && mode_refresh_rate) {
+      // Autorefresh frame count is based on panel scan frames. For example, if panel
+      // self refresh is 240 Hz and current mode is 60 fps, MDP should refresh GRAM
+      // once every 4 panel scans.
+      frame_cnt = (curr_panel_self_refresh_rate + mode_refresh_rate - 1) / mode_refresh_rate;
+    } else {
+      frame_cnt = ((app_layer_count == 1) &&
+                   layer_stack->flags.single_buffered_layer_present) ? 1 : 0;
+    }
+    DisplayError ar_err = hw_intf_->SetAutoRefresh(frame_cnt);
+    if (ar_err != kErrorNone) {
+      DLOGE("Failed to set auto refresh frame count %u, err %d", frame_cnt, ar_err);
+    }
 
-    hw_intf_->SetAutoRefresh(enable);
+    bool need_refresh = layer_stack->flags.single_buffered_layer_present && (app_layer_count > 1);
     if (need_refresh) {
       event_handler_->Refresh();
     }
