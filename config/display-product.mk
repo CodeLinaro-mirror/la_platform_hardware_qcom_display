@@ -269,7 +269,7 @@ $(call soong_config_set, qtidisplay, hy33, false )
 $(call soong_config_set, qtidisplay, llvmcov, false )
 $(call soong_config_set, qtidisplay, smmu_proxy, false )
 $(call soong_config_set, qtidisplay, ubwcp_headers, true )
-$(call soong_config_set, qtidisplay, composer_version, v3_5 )
+$(call soong_config_set, qtidisplay, composer_version, v3_6 )
 $(call soong_config_set, qtidisplay, gralloc_version, v7 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
@@ -308,7 +308,7 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
             $(call soong_config_set, qtidisplay, gralloc_version, v7 )
         endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun DEV))
-      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+      $(call soong_config_set, qtidisplay, composer_version, v3_6 )
       $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 # AFTER FRC
@@ -331,6 +331,9 @@ else
       endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+      $(call soong_config_set, qtidisplay, gralloc_version, v7 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 18))
+      $(call soong_config_set, qtidisplay, composer_version, v3_6 )
       $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 endif
