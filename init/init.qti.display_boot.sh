@@ -128,6 +128,24 @@ case "$target" in
         ;;
     esac
     ;;
+    "sa2390")
+    #SOC ID for sa2390 variants (same SoC family as shikra)
+    case "$soc_hwid" in
+      759 | 758 | 756)
+        setprop vendor.display.target.version 7
+        setprop vendor.display.enable_rotator_ui 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.gralloc.disable_ubwc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
+        ;;
+    esac
+    ;;
     "bengal")
     setprop vendor.gralloc.use_dma_buf_heaps 1
     setprop vendor.gralloc.hw_supports_ubwcp 0
