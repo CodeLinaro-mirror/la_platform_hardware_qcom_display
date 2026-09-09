@@ -3626,6 +3626,31 @@ DisplayError HWDeviceDRM::SetPPConfig(void *payload, size_t size) {
 
 DisplayError HWDeviceDRM::CancelDeferredPowerMode() {
   DLOGI("Pending state reset %d on CRTC: %u", pending_power_state_, token_.crtc_id);
+  const bool canceling_deferred_doze =
+      (pending_power_state_ == kPowerStateDoze ||
+       pending_power_state_ == kPowerStateDozeSuspend);
+
+  if (canceling_deferred_doze) {
+    DLOGI("clear doze switch - doze_poms_switch_done=%d "
+          "pending_poms_switch=%d", doze_poms_switch_done_, pending_poms_switch_);
+
+    // Drop stale CMD switch request.
+    if (panel_mode_changed_ & DRM_MODE_FLAG_CMD_MODE_PANEL) {
+      DLOGI("clear stale CMD panel_mode_changed=0x%x", panel_mode_changed_);
+      panel_mode_changed_ = 0;
+      // Reset mode index if it was changed by SetDisplayMode(kModeCommand)
+      if (switch_mode_valid_ && current_mode_index_ == cmd_mode_index_) {
+        current_mode_index_ = video_mode_index_;
+        connector_info_.modes[current_mode_index_].cur_panel_mode = DRM_MODE_FLAG_VID_MODE_PANEL;
+        PopulateHWPanelInfo();
+      }
+    }
+
+    // Clear DOZE panel-switch.
+    doze_poms_switch_done_ = false;
+    pending_poms_switch_ = false;
+  }
+
   pending_power_state_ = kPowerStateNone;
 
   return kErrorNone;
