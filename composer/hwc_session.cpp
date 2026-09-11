@@ -18,40 +18,10 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *    * Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *
- *    * Redistributions in binary form must reproduce the above
- *      copyright notice, this list of conditions and the following
- *      disclaimer in the documentation and/or other materials provided
- *      with the distribution.
- *
- *    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 
 #include <QService.h>
 #include <binder/Parcel.h>
@@ -81,6 +51,7 @@
 #include "hwc_buffer_allocator.h"
 #include "hwc_session.h"
 #include "hwc_debugger.h"
+#include <display_properties.h>
 
 #define __CLASS__ "HWCSession"
 
@@ -304,8 +275,20 @@ void HWCSession::InitSupportedDisplaySlots() {
     return;
   }
 
+  int core_id_mask = 0x1;  // default: core0 only, single-DPU, backward compatible
+  Debug::Get()->GetProperty(CORE_ID_MASK, &core_id_mask);
+  // Sanitize: negative or out-of-range values default to single-DPU to prevent UB
+  // when passing to bitset<8> constructor (negative int becomes very large unsigned long).
+  // Upper bound is 0x3 (core0|core1), not 0xFF: DisplayId (hw_info_types.h) only encodes
+  // core_id 0 or 1, so higher core_id bits can never be honored correctly.
+  if (core_id_mask <= 0 || core_id_mask > 0x3) {
+    DLOGW("Invalid core_id_mask=0x%x, defaulting to 0x1", core_id_mask);
+    core_id_mask = 0x1;
+  }
+  std::bitset<8> core_ids(static_cast<unsigned long>(core_id_mask));
+
   DisplayError error = CoreInterface::CreateCore(&buffer_allocator_, nullptr,
-                                                 &socket_handler_, &core_intf_);
+                                                 &socket_handler_, &core_intf_, core_ids);
   if (error != kErrorNone) {
     DLOGE("Failed to create CoreInterface");
     return;

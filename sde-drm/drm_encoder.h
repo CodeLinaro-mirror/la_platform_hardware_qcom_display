@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_ENCODER_H__
 #define __DRM_ENCODER_H__
 
@@ -92,6 +98,7 @@ class DRMEncoderManager {
 
  private:
   int fd_ = -1;
+  uint8_t core_id_mask_ = 0;  // cached at Init(), bits 5-4 of hw_port for this DRM device
   std::map<uint32_t, std::unique_ptr<DRMEncoder>> encoder_pool_{};
   int GetDisplayTypeCode(uint32_t encoder_type);
 };

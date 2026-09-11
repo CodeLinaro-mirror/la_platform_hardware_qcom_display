@@ -28,39 +28,9 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <stdint.h>
@@ -424,7 +394,9 @@ int DRMConnectorManager::Reserve(DRMDisplayType disp_type, DRMDisplayToken *toke
     if (conn.second->GetStatus() == DRMStatus::FREE) {
       uint32_t conn_type;
       conn.second->GetType(&conn_type);
-      if ((disp_type == DRMDisplayType::PERIPHERAL && conn_type == DRM_MODE_CONNECTOR_DSI) ||
+      if ((disp_type == DRMDisplayType::PERIPHERAL &&
+           (conn_type == DRM_MODE_CONNECTOR_DSI ||
+            conn_type == DRM_MODE_CONNECTOR_SPI)) ||
           (disp_type == DRMDisplayType::VIRTUAL && conn_type == DRM_MODE_CONNECTOR_VIRTUAL) ||
           (disp_type == DRMDisplayType::TV && IsTVConnector(conn_type))) {
         if (conn.second->IsConnected()) {
@@ -484,6 +456,31 @@ void DRMConnectorManager::Free(DRMDisplayToken *token) {
 
 #undef __CLASS__
 #define __CLASS__ "DRMConnector"
+
+// DSI/SDE connectors expose Qualcomm private connector properties, while the
+// SPI panel is a DRM simple-pipe connector and only exposes standard KMS
+// properties such as CRTC_ID. Mark CRTC_ID as required; treat SDE/private
+// properties as optional so SPI can use the common atomic path without queuing
+// invalid property IDs.
+static bool AddConnectorProperty(drmModeAtomicReq *req, uint32_t obj_id, uint32_t prop_id,
+                                 uint64_t value, const char *op, bool required) {
+  if (!prop_id) {
+    if (required) {
+      DRM_LOGE("Missing required connector property op=%s obj=%u value=%llu", op,
+               obj_id, static_cast<unsigned long long>(value));
+    }
+    return !required;
+  }
+
+  int ret = drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+  if (ret < 0) {
+    DRM_LOGE("Connector atomic add failed op=%s obj=%u prop=%u value=%llu ret=%d",
+             op, obj_id, prop_id, static_cast<unsigned long long>(value), ret);
+    return false;
+  }
+
+  return true;
+}
 
 DRMConnector::~DRMConnector() {
   if (drm_connector_) {
@@ -863,7 +860,8 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
   switch (code) {
     case DRMOps::CONNECTOR_SET_CRTC: {
       uint32_t crtc = va_arg(args, uint32_t);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::CRTC_ID), crtc);
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::CRTC_ID);
+      AddConnectorProperty(req, obj_id, prop_id, crtc, "SET_CRTC", true /* required */);
       DRM_LOGD("Connector %d: Setting CRTC %d", obj_id, crtc);
     } break;
 
@@ -871,26 +869,30 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       int64_t *fence = va_arg(args, int64_t *);
       *fence = -1;
       uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::RETIRE_FENCE);
-      drmModeAtomicAddProperty(req, obj_id, prop_id, reinterpret_cast<uint64_t>(fence));
+      AddConnectorProperty(req, obj_id, prop_id, reinterpret_cast<uint64_t>(fence),
+                           "GET_RETIRE_FENCE", false /* required */);
     } break;
 
     case DRMOps::CONNECTOR_SET_OUTPUT_RECT: {
       DRMRect rect = va_arg(args, DRMRect);
-      drmModeAtomicAddProperty(req, obj_id,
-                               prop_mgr_.GetPropertyId(DRMProperty::DST_X), rect.left);
-      drmModeAtomicAddProperty(req, obj_id,
-                               prop_mgr_.GetPropertyId(DRMProperty::DST_Y), rect.top);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::DST_W),
-                               rect.right - rect.left);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::DST_H),
-                               rect.bottom - rect.top);
+      AddConnectorProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::DST_X), rect.left,
+                           "SET_OUTPUT_RECT_DST_X", false /* required */);
+      AddConnectorProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::DST_Y), rect.top,
+                           "SET_OUTPUT_RECT_DST_Y", false /* required */);
+      AddConnectorProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::DST_W),
+                           rect.right - rect.left, "SET_OUTPUT_RECT_DST_W",
+                           false /* required */);
+      AddConnectorProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::DST_H),
+                           rect.bottom - rect.top, "SET_OUTPUT_RECT_DST_H",
+                           false /* required */);
       DRM_LOGD("Connector %d: Setting dst [x,y,w,h][%d,%d,%d,%d]", obj_id, rect.left,
                   rect.top, (rect.right - rect.left), (rect.bottom - rect.top));
     } break;
 
     case DRMOps::CONNECTOR_SET_OUTPUT_FB_ID: {
       uint32_t fb_id = va_arg(args, uint32_t);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::FB_ID), fb_id);
+      AddConnectorProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::FB_ID), fb_id,
+                           "SET_OUTPUT_FB_ID", false /* required */);
       DRM_LOGD("Connector %d: Setting fb_id %d", obj_id, fb_id);
     } break;
 
@@ -914,7 +916,9 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
           DRM_LOGE("Invalid power mode %d to set on connector %d", drm_power_mode, obj_id);
           break;
       }
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::LP), power_mode);
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::LP);
+      AddConnectorProperty(req, obj_id, prop_id, power_mode, "SET_POWER_MODE",
+                           false /* required */);
       DRM_LOGD("Connector %d: Setting power_mode %d", obj_id, power_mode);
     } break;
 
@@ -926,17 +930,18 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
 
     case DRMOps::CONNECTOR_SET_AUTOREFRESH: {
       uint32_t enable = va_arg(args, uint32_t);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::AUTOREFRESH),
-                               enable);
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::AUTOREFRESH);
+      AddConnectorProperty(req, obj_id, prop_id, enable, "SET_AUTOREFRESH",
+                           false /* required */);
       DRM_LOGD("Connector %d: Setting autorefresh %d", obj_id, enable);
     } break;
 
     case DRMOps::CONNECTOR_SET_FB_SECURE_MODE: {
       int secure_mode = va_arg(args, int);
       uint32_t fb_secure_mode = (secure_mode == (int)DRMSecureMode::SECURE) ? SECURE : NON_SECURE;
-      drmModeAtomicAddProperty(req, obj_id,
-                               prop_mgr_.GetPropertyId(DRMProperty::FB_TRANSLATION_MODE),
-                               fb_secure_mode);
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::FB_TRANSLATION_MODE);
+      AddConnectorProperty(req, obj_id, prop_id, fb_secure_mode, "SET_FB_SECURE_MODE",
+                           false /* required */);
       DRM_LOGD("Connector %d: Setting FB secure mode %d", obj_id, fb_secure_mode);
     } break;
 
@@ -948,8 +953,9 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
 
     case DRMOps::CONNECTOR_SET_HDR_METADATA: {
       drm_msm_ext_hdr_metadata *hdr_metadata = va_arg(args, drm_msm_ext_hdr_metadata *);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::HDR_METADATA),
-                               reinterpret_cast<uint64_t>(hdr_metadata));
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::HDR_METADATA);
+      AddConnectorProperty(req, obj_id, prop_id, reinterpret_cast<uint64_t>(hdr_metadata),
+                           "SET_HDR_METADATA", false /* required */);
     } break;
 
     case DRMOps::CONNECTOR_SET_QSYNC_MODE: {
@@ -958,15 +964,17 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       }
       int drm_qsync_mode = va_arg(args, int);
       uint32_t qsync_mode = static_cast<uint32_t>(drm_qsync_mode);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::QSYNC_MODE),
-                               qsync_mode);
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::QSYNC_MODE);
+      AddConnectorProperty(req, obj_id, prop_id, qsync_mode, "SET_QSYNC_MODE",
+                           false /* required */);
       DRM_LOGD("Connector %d: Setting Qsync mode %d", obj_id, qsync_mode);
     } break;
 
     case DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL: {
       uint32_t topology_control = va_arg(args, uint32_t);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::TOPOLOGY_CONTROL),
-                               topology_control);
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::TOPOLOGY_CONTROL);
+      AddConnectorProperty(req, obj_id, prop_id, topology_control, "SET_TOPOLOGY_CONTROL",
+                           false /* required */);
     } break;
 
     case DRMOps::CONNECTOR_SET_FRAME_TRIGGER: {
@@ -993,11 +1001,8 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       }
       if (frame_trigger_mode >= 0) {
         uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::FRAME_TRIGGER);
-        int ret = drmModeAtomicAddProperty(req, obj_id, prop_id, frame_trigger_mode);
-        if (ret < 0) {
-          DRM_LOGE("AtomicAddProperty failed obj_id 0x%x, prop_id %d mode %d ret %d",
-                   obj_id, prop_id, frame_trigger_mode, ret);
-        } else {
+        if (AddConnectorProperty(req, obj_id, prop_id, frame_trigger_mode, "SET_FRAME_TRIGGER",
+                                 false /* required */)) {
           DRM_LOGD("Connector %d: Setting frame trigger mode %d", obj_id, frame_trigger_mode);
         }
       }
@@ -1012,11 +1017,8 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       colorspace = GetColorspace(drm_colorspace);
       if (colorspace >= 0) {
         uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::COLORSPACE);
-        int ret = drmModeAtomicAddProperty(req, obj_id, prop_id, colorspace);
-        if (ret < 0) {
-          DRM_LOGE("AtomicAddProperty failed obj_id 0x%x, prop_id %d mode %d ret %d",
-                   obj_id, prop_id, colorspace, ret);
-        } else {
+        if (AddConnectorProperty(req, obj_id, prop_id, colorspace, "SET_COLORSPACE",
+                                 false /* required */)) {
           DRM_LOGD("Connector %d: Setting colorspace %d", obj_id, colorspace);
         }
       } else {
@@ -1030,11 +1032,8 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
       }
       uint64_t drm_bit_clk_rate = va_arg(args, uint64_t);
       uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::DYN_BIT_CLK);
-      int ret = drmModeAtomicAddProperty(req, obj_id, prop_id, drm_bit_clk_rate);
-      if (ret < 0) {
-        DRM_LOGE("AtomicAddProperty failed obj_id 0x%x, prop_id %d, bit_clk_rate %" PRIu64
-                 " ret %d", obj_id, prop_id, drm_bit_clk_rate, ret);
-      } else {
+      if (AddConnectorProperty(req, obj_id, prop_id, drm_bit_clk_rate, "SET_DYN_BIT_CLK",
+                               false /* required */)) {
         DRM_LOGD("Connector %d: Setting dynamic bit clk rate %" PRIu64, obj_id, drm_bit_clk_rate);
       }
     } break;
@@ -1044,8 +1043,9 @@ void DRMConnector::Perform(DRMOps code, drmModeAtomicReq *req, va_list args) {
         return;
       }
       uint32_t drm_panel_mode = va_arg(args, uint32_t);
-      drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::PANEL_MODE),
-                               drm_panel_mode);
+      uint32_t prop_id = prop_mgr_.GetPropertyId(DRMProperty::PANEL_MODE);
+      AddConnectorProperty(req, obj_id, prop_id, drm_panel_mode, "SET_PANEL_MODE",
+                           false /* required */);
       DRM_LOGD("Connector %d: Setting Panel mode 0x%x", obj_id, drm_panel_mode);
     } break;
 
@@ -1062,7 +1062,8 @@ void DRMConnector::SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_r
     return;
   }
   if (!num_roi || !conn_rois) {
-    drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::ROI_V1), 0);
+    AddConnectorProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::ROI_V1), 0,
+                         "SET_ROI", false /* required */);
     DRM_LOGD("Connector ROI is set to NULL to indicate full frame update");
     return;
   }
@@ -1079,8 +1080,8 @@ void DRMConnector::SetROI(drmModeAtomicReq *req, uint32_t obj_id, uint32_t num_r
     DRM_LOGD("Conn %d, ROI[l,t,b,r][%d %d %d %d]", obj_id,
              roi_v1.roi[i].x1,roi_v1.roi[i].y1,roi_v1.roi[i].x2,roi_v1.roi[i].y2);
   }
-  drmModeAtomicAddProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::ROI_V1),
-                           reinterpret_cast<uint64_t>(&roi_v1));
+  AddConnectorProperty(req, obj_id, prop_mgr_.GetPropertyId(DRMProperty::ROI_V1),
+                       reinterpret_cast<uint64_t>(&roi_v1), "SET_ROI", false /* required */);
 #endif
 }
 

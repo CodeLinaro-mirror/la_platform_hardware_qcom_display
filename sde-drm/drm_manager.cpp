@@ -27,7 +27,14 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <drm_logger.h>
+#include <utils/multi_core_instantiator.h>
 
 #include <string.h>
 #include "drm_atomic_req.h"
@@ -52,8 +59,8 @@ int GetDRMManager(int fd, sde_drm::DRMManagerInterface **intf) {
   return 0;
 }
 
-int DestroyDRMManager() {
-  sde_drm::DRMManager::Destroy();
+int DestroyDRMManager(int fd) {
+  sde_drm::DRMManager::Destroy(fd);
   return 0;
 }
 
@@ -63,29 +70,51 @@ namespace sde_drm {
 
 #define __CLASS__ "DRMManager"
 
-DRMManager *DRMManager::s_drm_instance = NULL;
+sdm::MultiCoreInstance<int, DRMManager*> DRMManager::s_drm_instance;
 mutex DRMManager::s_lock;
+
+static bool HasDsiConnector(int fd, drmModeRes *resource) {
+  if (fd < 0 || !resource) {
+    return false;
+  }
+
+  for (int i = 0; i < resource->count_connectors; i++) {
+    drmModeConnector *conn = drmModeGetConnector(fd, resource->connectors[i]);
+    if (conn && conn->connector_type == DRM_MODE_CONNECTOR_DSI) {
+      drmModeFreeConnector(conn);
+      return true;
+    }
+    drmModeFreeConnector(conn);
+  }
+
+  return false;
+}
 
 DRMManager *DRMManager::GetInstance(int fd) {
   lock_guard<mutex> lock(s_lock);
-  if (!s_drm_instance) {
-    s_drm_instance = new DRMManager();
+  auto iter = s_drm_instance.Find(fd);
+  if (iter == s_drm_instance.End()) {
+    DRMManager *drm_manager = new DRMManager();
 
-    int ret = s_drm_instance ? s_drm_instance->Init(fd) : DRM_ERR_INVALID;
+    int ret = drm_manager ? drm_manager->Init(fd) : DRM_ERR_INVALID;
     if (ret) {
-      delete s_drm_instance;
-      s_drm_instance = nullptr;
+      delete drm_manager;
+      drm_manager = nullptr;
+      return drm_manager;
     }
+
+    s_drm_instance[fd] = drm_manager;
   }
 
-  return s_drm_instance;
+  return s_drm_instance[fd];
 }
 
-void DRMManager::Destroy() {
+void DRMManager::Destroy(int fd) {
   lock_guard<mutex> lock(s_lock);
-  if (s_drm_instance) {
-    delete s_drm_instance;
-    s_drm_instance = nullptr;
+  auto iter = s_drm_instance.Find(fd);
+  if (iter != s_drm_instance.End()) {
+    delete iter->second;
+    s_drm_instance.Erase(iter);
   }
 }
 
@@ -130,8 +159,12 @@ int DRMManager::Init(int drm_fd) {
   plane_mgr_->Init();
 
   dpps_mgr_intf_ = GetDppsManagerIntf();
-  if (dpps_mgr_intf_)
+  has_dsi_connector_ = HasDsiConnector(fd_, resource);
+  if (dpps_mgr_intf_ && has_dsi_connector_) {
     dpps_mgr_intf_->Init(fd_, resource);
+  } else if (dpps_mgr_intf_) {
+    DRM_LOGI("Skipping DPPS init: no DSI connector on DRM fd %d", fd_);
+  }
 
   panel_feature_mgr_intf_ = GetPanelFeatureManagerIntf();
   if (!panel_feature_mgr_intf_) {
@@ -381,7 +414,7 @@ int DRMManager::UnsetScalerLUT() {
 }
 
 void DRMManager::GetDppsFeatureInfo(DRMDppsFeatureInfo *info) {
-  if (dpps_mgr_intf_)
+  if (dpps_mgr_intf_ && has_dsi_connector_)
     dpps_mgr_intf_->GetDppsFeatureInfo(info);
 }
 

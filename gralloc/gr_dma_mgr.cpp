@@ -27,11 +27,11 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 
 #define DEBUG 0
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
@@ -261,6 +261,13 @@ void DmaManager::GetHeapInfo(uint64_t usage, bool sensor_flag, bool use_uncached
     }
   }
 
+  // SurfaceFlinger marks the SPI display framebuffer target with
+  // GRALLOC_USAGE_PRIVATE_3. Route only those buffers to qcom,display so the
+  // SPI simple-pipe path gets physically contiguous display memory; normal UI
+  // and DSI buffers continue to use the default heap selected above.
+  if (usage & GRALLOC_USAGE_PRIVATE_3) {
+    heap_name = "qcom,display";
+  }
 
 #endif
 
