@@ -541,12 +541,13 @@ void HWCSession::GetCapabilities(uint32_t *outCount, int32_t *outCapabilities) {
   if (Debug::Get()->GetProperty(DISABLE_SKIP_VALIDATE_PROP, &value) == kErrorNone) {
     disable_skip_validate = (value == 1);
   }
-  uint32_t count = 1 + (disable_skip_validate ? 0 : 1);
+  uint32_t count = 2 + (disable_skip_validate ? 0 : 1);
 
   if (outCapabilities != nullptr && (*outCount >= count)) {
     outCapabilities[0] = HWC2_CAPABILITY_SKIP_CLIENT_COLOR_TRANSFORM;
+    outCapabilities[1] = HWC2_CAPABILITY_PRESENT_FENCE_IS_NOT_RELIABLE;
     if (!disable_skip_validate) {
-      outCapabilities[1] = HWC2_CAPABILITY_SKIP_VALIDATE;
+      outCapabilities[2] = HWC2_CAPABILITY_SKIP_VALIDATE;
     }
   }
   *outCount = count;
