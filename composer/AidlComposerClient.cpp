@@ -774,8 +774,10 @@ ScopedAStatus AidlComposerClient::getLuts(int64_t display, const std::vector<Buf
       // populateDisplayLuts will return error if the lut pointer we pass is nullptr
       // getLuts passes buffer and expects some value, so we skip below call to send invalid fd
       if (*it != nullptr) {
+        drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
         error = mCommandEngine->populateDisplayLuts(*it, false /* reset_luts */,
                                                     &(aidl_return->at(i)), &fd);
+        drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
         if (error != Error::None) {
           return TO_BINDER_STATUS(INT32(error));
         }
@@ -1494,7 +1496,7 @@ void AidlComposerClient::CommandEngine::executeDisplayCommmands(const DisplayCom
                  displayCmd.display);
 #ifdef COMPOSER3_V5
   ExecuteCommand(displayCmd.activeConfig, &CommandEngine::executeSetActiveConfigWithSeamless,
-                 displayCmd.display, *displayCmd.activeConfig, performing_commit);
+                 displayCmd.display, *displayCmd.activeConfig);
 #endif
 #ifdef COMPOSER3_V3
   ExecuteCommand(displayCmd.validateDisplay, &CommandEngine::executeValidateDisplay,
@@ -2376,7 +2378,7 @@ void AidlComposerClient::CommandEngine::executeSetLayerBufferSlotsToClear(
 
 #ifdef COMPOSER3_V5
 void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
-    int64_t display, const ActiveConfigCommand &config, bool performing_commit) {
+    int64_t display, const ActiveConfigCommand &config) {
   sdm::SDMVsyncPeriodChangeConstraints constraints = {0, config.seamlessRequired};
   sdm::SDMVsyncPeriodChangeTimeline timeline{};
 
@@ -2389,27 +2391,6 @@ void AidlComposerClient::CommandEngine::executeSetActiveConfigWithSeamless(
 
   if (error != sdm::kErrorNone) {
     writeError(__FUNCTION__, display, Error::BadConfig);
-    return;
-  }
-
-  // Workaround for VTS test behavior: VTS sends a setActiveConfig display
-  // command without a following present/validate, so the mode change stays
-  // pending in SDM/DRM. Force an explicit commit here to apply the config
-  // change immediately. In normal SurfaceFlinger usage, a present/validate
-  // always follows.
-  if (!performing_commit) {
-    bool validate_only = false;
-    bool needsCommit = false;
-    uint32_t types_count = 0;
-    uint32_t reqs_count = 0;
-    shared_ptr<Fence> presentFence = nullptr;
-
-    auto err = mClient.drawcycle_->CommitOrPrepare(display, validate_only, &presentFence,
-                                                   &types_count, &reqs_count, &needsCommit);
-    if (err != sdm::kErrorNone && err != sdm::kErrorNeedsCommit) {
-      ALOGW("%s: Forced CommitOrPrepare failed", __FUNCTION__);
-      return;
-    }
   }
 }
 #endif

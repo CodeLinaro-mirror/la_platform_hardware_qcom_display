@@ -128,7 +128,7 @@ typedef vendor_qti_hardware_display_common_cwb_metadata SnapCWBMetadata;
 constexpr static int timeout_ms = 3000;
 
 // TODO : this struct will be translated to aidl
-#define ALGO_CONFIG_SIZE 4096
+#define ALGO_CONFIG_SIZE 16384
 struct ADCAlgoConfigsStructBlob {
   /*
    * @brief blob

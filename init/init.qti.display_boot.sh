@@ -62,8 +62,10 @@ case "$target" in
     # SOC ID for Pebble is 735
     # SOC ID for Pebble APQ is 741
     # SOC ID for Coast is 761
+    # SOC ID for Pebble CQS quadcore is 793
+    # SOC ID for Pebble CQS hexacore is 794
     case "$soc_hwid" in
-      707|708|755|760|735|741|761)
+      707|708|755|760|735|741|761|793|794)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -110,6 +112,24 @@ case "$target" in
     ;;
     "shikra")
     #SOC ID for shikra varaints
+    case "$soc_hwid" in
+      759 | 758 | 756)
+        setprop vendor.display.target.version 7
+        setprop vendor.display.enable_rotator_ui 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.gralloc.disable_ubwc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
+        ;;
+    esac
+    ;;
+    "sa2390")
+    #SOC ID for sa2390 variants (same SoC family as shikra)
     case "$soc_hwid" in
       759 | 758 | 756)
         setprop vendor.display.target.version 7

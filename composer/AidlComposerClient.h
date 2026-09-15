@@ -462,8 +462,7 @@ class AidlComposerClient : public BnComposerClient,
 #endif
 
 #ifdef COMPOSER3_V5
-    void executeSetActiveConfigWithSeamless(int64_t display, const ActiveConfigCommand &config,
-                                            bool performing_commit);
+    void executeSetActiveConfigWithSeamless(int64_t display, const ActiveConfigCommand &config);
 #endif
 
     // Commands from extensions (QtiComposer3Client)
