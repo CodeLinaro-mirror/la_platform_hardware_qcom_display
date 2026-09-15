@@ -30,7 +30,7 @@
 /*
 * Changes from Qualcomm Innovation Center are provided under the following license:
 *
-* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
@@ -906,6 +906,7 @@ struct DRMModeInfo {
   std::vector<DRMSubModeInfo> sub_modes;
   uint32_t qsync_min_fps;
   uint32_t curr_bpp_mode;
+  uint32_t curr_panel_self_refresh_rate;
 };
 
 /* Per Connector Info*/
