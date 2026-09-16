@@ -811,6 +811,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
            SnapPixelFormat::NV12_UBWC_MIPMAP},
           {{.format = SnapPixelFormat::TP10, .modifier = PIXEL_FORMAT_MODIFIER_UBWC_MIPMAP},
            SnapPixelFormat::TP10_UBWC_MIPMAP},
+          {{.format = SnapPixelFormat::YCbCr_420_SP, .modifier = PIXEL_FORMAT_MODIFIER_4R},
+           SnapPixelFormat::YCbCr_420_SP_4R_UBWC},
       };
 
   std::unordered_map<uint64_t, SnapFormatDescriptor> gralloc_to_snap_format_;
@@ -915,6 +917,8 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
       {GRALLOC_USAGE_PRIVATE_UBWC_L_8_TO_5, SnapUsage::QTI_ALLOC_UBWC_L_8_TO_5},
       {GRALLOC_USAGE_PRIVATE_UBWC_L_2_TO_1, SnapUsage::QTI_ALLOC_UBWC_L_2_TO_1},
       {(uint64_t)SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO, SnapUsage::QTI_PRIVATE_MULTI_VIEW_INFO},
+      {(uint64_t)SnapUsage::GPU_SUBSAMPLE_ENABLED, SnapUsage::GPU_SUBSAMPLE_ENABLED},
+      {(uint64_t)SnapUsage::GPU_SUBSAMPLE_OFFSET_ENABLED, SnapUsage::GPU_SUBSAMPLE_OFFSET_ENABLED},
   };
 
   std::unordered_map<SnapUsage, uint64_t> snap_to_gralloc_usage_;
