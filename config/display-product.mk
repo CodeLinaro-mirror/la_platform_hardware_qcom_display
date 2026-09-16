@@ -260,7 +260,7 @@ ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_neo := true
 endif
 
-ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), taro monaco neo61 vienna malabar), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_hw_fence_disabled := true
 endif
 
