@@ -61,11 +61,12 @@ case "$target" in
     # SOC ID for Art H is 760
     # SOC ID for Pebble is 735
     # SOC ID for Pebble APQ is 741
-    # SOC ID for Coast is 761
     # SOC ID for Pebble CQS quadcore is 793
     # SOC ID for Pebble CQS hexacore is 794
+    # SOC ID for Coast is 761
+    # SOC ID for Coast APQ is 797
     case "$soc_hwid" in
-      707|708|755|760|735|741|761|793|794)
+      707|708|755|760|735|741|793|794)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -85,10 +86,30 @@ case "$target" in
         setprop vendor.display.disable_fbt_for_cwb_fallback 1
         setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 1
         setprop vendor.display.disable_demura_opt_singlelm 1
-        #SOC ID 761 (coast.1.0) do not support UCSC
-        if [ "$soc_hwid" -eq 761 ] && [ "$revision" = "1.0" ]; then
-            setprop vendor.display.render_sysui_as_srgb 1
-            setprop vendor.display.disable_ucsc_tonemap 1
+        ;;
+      761|797)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.force_gpu_composition 0
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.disable_noise_layer 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.composer_driven_hdcp 0
+        setprop vendor.display.enable_power_save_mode_for_video 1
+        setprop vendor.display.core_id_mask 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.disable_fbt_for_cwb_fallback 0
+        setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 0
+        setprop vendor.display.disable_demura_opt_singlelm 1
+        if [ "$revision" = "1.0" ]; then
+           setprop vendor.display.render_sysui_as_srgb 1
+           setprop vendor.display.disable_ucsc_tonemap 1
         fi
         ;;
     esac
