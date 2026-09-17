@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __HW_INFO_DRM_H__
 #define __HW_INFO_DRM_H__
 
@@ -43,12 +49,15 @@ namespace sdm {
 
 class HWInfoDRM: public HWInfoInterface {
  public:
+  explicit HWInfoDRM(uint32_t core_id = 0);
   virtual DisplayError Init();
   virtual ~HWInfoDRM();
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info);
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
+  virtual uint32_t GetCoreId() { return core_id_; }
+  virtual bool HasSPIConnector();
 
  private:
   void Deinit();
@@ -72,11 +81,15 @@ class HWInfoDRM: public HWInfoInterface {
 
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};
   bool default_mode_ = false;
+  uint32_t core_id_ = 0;
+  int dev_fd_ = -1;
+  bool has_spi_connector_ = false;
+  bool spi_checked_ = false;
 
   static const int kMaxStringLength = 1024;
   static const int kKiloUnit = 1000;
 
-  static HWResourceInfo *hw_resource_;
+  HWResourceInfo *hw_resource_ = nullptr;
 };
 
 }  // namespace sdm

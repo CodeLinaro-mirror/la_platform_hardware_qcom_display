@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __RESOURCE_DEFAULT_H__
 #define __RESOURCE_DEFAULT_H__
 
@@ -37,7 +43,8 @@ namespace sdm {
 class ResourceDefault : public ResourceInterface {
  public:
   static DisplayError CreateResourceDefault(const HWResourceInfo &hw_resource_info,
-                                            ResourceInterface **resource_intf);
+                                            ResourceInterface **resource_intf,
+                                            bool is_spi_display = false);
   static DisplayError DestroyResourceDefault(ResourceInterface *resource_intf);
   virtual DisplayError RegisterDisplay(int32_t display_id, DisplayType type,
                                        const HWDisplayAttributes &display_attributes,
@@ -115,7 +122,7 @@ class ResourceDefault : public ResourceInterface {
     HWBlockContext() : is_in_use(false) { }
   };
 
-  explicit ResourceDefault(const HWResourceInfo &hw_res_info);
+  explicit ResourceDefault(const HWResourceInfo &hw_res_info, bool is_spi_display = false);
   DisplayError Init();
   DisplayError Deinit();
   uint32_t NextPipe(PipeType pipe_type, HWBlockType hw_block_type);
@@ -150,6 +157,7 @@ class ResourceDefault : public ResourceInterface {
   HWBlockContext hw_block_ctx_[kHWBlockMax];
   std::vector<SourcePipe> src_pipes_;
   uint32_t num_pipe_ = 0;
+  bool is_spi_display_ = false;
 };
 
 }  // namespace sdm

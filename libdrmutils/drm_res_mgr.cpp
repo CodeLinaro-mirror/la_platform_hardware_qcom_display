@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <errno.h>
 
 #include "drm_master.h"
@@ -106,7 +112,10 @@ int DRMResMgr::Init() {
   DRMMaster *master = nullptr;
   int dev_fd = -1;
 
-  int ret = DRMMaster::GetInstance(&master);
+  // DRMResMgr is the process-wide resource enumerator for the primary MSM DRM
+  // device. Secondary DRM devices are opened through per-core DRMMaster users;
+  // keeping this on core0 preserves the existing DSI/SDE resource view.
+  int ret = DRMMaster::GetInstance(&master, 0);
   if (ret < 0) {
     return ret;
   }

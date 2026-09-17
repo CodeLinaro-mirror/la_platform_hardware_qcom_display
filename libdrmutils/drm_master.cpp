@@ -28,41 +28,16 @@
 */
 
 /*
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted (subject to the limitations in the
-disclaimer below) provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-    * Neither the name of Qualcomm Innovation Center, Inc. nor the
-      names of its contributors may be used to endorse or promote
-      products derived from this software without specific prior
-      written permission.
-
-NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
-INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
-THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
-USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <unistd.h>
+#include <thread>
+#include <chrono>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 // Intentionally included after xf86 headers so that they in-turn include libdrm version of drm.h
@@ -86,39 +61,72 @@ using std::fill;
 
 namespace drm_utils {
 
-DRMMaster *DRMMaster::s_instance = nullptr;
+sdm::MultiCoreInstance<uint32_t, DRMMaster*> DRMMaster::s_instance;
 mutex DRMMaster::s_lock;
 
-int DRMMaster::GetInstance(DRMMaster **master) {
-  lock_guard<mutex> obj(s_lock);
-
-  if (!s_instance) {
-    s_instance = new DRMMaster();
-    if (s_instance->Init() < 0) {
-      delete s_instance;
-      s_instance = nullptr;
-      return -ENODEV;
+int DRMMaster::GetInstance(DRMMaster **master, uint32_t core_id) {
+  {
+    lock_guard<mutex> obj(s_lock);
+    auto iter = s_instance.Find(core_id);
+    if (iter != s_instance.End()) {
+      *master = iter->second;
+      return 0;
     }
   }
 
-  *master = s_instance;
-  return 0;
-}
-
-void DRMMaster::DestroyInstance() {
-  lock_guard<mutex> obj(s_lock);
-  delete s_instance;
-  s_instance = nullptr;
-}
-
-int DRMMaster::Init() {
-  dev_fd_ = drmOpen("msm_drm", nullptr);
-  if (dev_fd_ < 0) {
-    DRM_LOGE("drmOpen failed with error %d", dev_fd_);
+  // Init() below may block for up to MAX_RETRY*100ms waiting for the DRM
+  // device node to appear; run it without holding s_lock so a slow-to-
+  // enumerate core_id doesn't stall GetInstance()/DestroyInstance() calls
+  // for other core_ids.
+  DRMMaster *new_master = new DRMMaster();
+  if (new_master->Init(core_id) < 0) {
+    delete new_master;
     return -ENODEV;
   }
 
+  lock_guard<mutex> obj(s_lock);
+  auto iter = s_instance.Find(core_id);
+  if (iter != s_instance.End()) {
+    // Another thread raced us and already created this core's instance.
+    delete new_master;
+    *master = iter->second;
+    return 0;
+  }
+  s_instance[core_id] = new_master;
+  *master = new_master;
   return 0;
+}
+
+void DRMMaster::DestroyInstance(uint32_t core_id) {
+  lock_guard<mutex> obj(s_lock);
+  auto iter = s_instance.Find(core_id);
+  if (iter != s_instance.End()) {
+    delete iter->second;
+    s_instance.Erase(iter);
+  }
+}
+
+int DRMMaster::Init(uint32_t core_id) {
+  lock_guard<mutex> obj(lock_);
+  for (uint8_t retry = 0; retry <= MAX_RETRY; retry++) {
+    int fd = -1;
+    if (core_id == 0) {
+      fd = drmOpen("msm_drm", nullptr);
+    } else {
+      snprintf(path_, sizeof(path_), "/dev/dri/card%d", core_id);
+      fd = open(path_, O_RDWR | O_CLOEXEC, 0);
+    }
+    if (fd >= 0) {
+      dev_fd_ = fd;
+      core_id_ = core_id;
+      return 0;
+    }
+    if (retry < MAX_RETRY) {
+      DRM_LOGW("open failed for core_id=%u, retry %d", core_id, retry);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+  return -ENODEV;
 }
 
 DRMMaster::~DRMMaster() {
@@ -128,6 +136,7 @@ DRMMaster::~DRMMaster() {
 
 int DRMMaster::CreateFbId(const DRMBuffer &drm_buffer, uint32_t *fb_id) {
   uint32_t gem_handle = 0;
+
   int ret = drmPrimeFDToHandle(dev_fd_, drm_buffer.fd, &gem_handle);
   if (ret) {
     DRM_LOGE("drmPrimeFDToHandle failed with error %d", ret);

@@ -23,15 +23,15 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- */
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
 
 #ifndef __HW_INFO_TYPES_H__
 #define __HW_INFO_TYPES_H__
 
+#include <cassert>
 #include <stdint.h>
 #include <core/display_interface.h>
 #include <core/core_interface.h>
@@ -827,6 +827,76 @@ struct HWMixerAttributes {
   bool IsValid() {
     return (width > 0 && height > 0);
   }
+};
+
+#define CONN_ID_SIZE        24
+#define CONN_1_SHIFT_BITS   12
+#define CONN_BIT_MASK       0x000FFFFFF
+
+class DisplayId {
+ public:
+  DisplayId() { }
+
+  DisplayId(uint32_t core_id, uint32_t conn_id) : conn_id_data_(conn_id) {
+    // Encoding supports core 0 and 1 only: each core occupies 12 bits of the
+    // 24-bit connector field (bits 11:0 for core0, bits 23:12 for core1).
+    assert(core_id <= 1 && "DisplayId only supports core_id 0 or 1");
+    if (core_id > 1) {
+      // Release builds compile out the assert above; clamp to core0 instead
+      // of shifting by >=24 bits, which is undefined behavior on a 32-bit
+      // operand and would otherwise silently corrupt the encoded display id.
+      core_id = 0;
+    }
+    core_id_bitset_ = std::bitset<8>(1u << core_id);
+    /* bits 24-31 --> core_id bitset
+            12-23 --> connector 1 (core1)
+             0-11 --> connector 0 (core0) */
+    // Mask conn_id to this core's 12-bit slot before shifting, so a connector id
+    // greater than 0xFFF cannot bleed into the other core's bits (or, for core1,
+    // be silently truncated without any indication).
+    display_id_ = static_cast<int32_t>(
+                  (core_id_bitset_.to_ulong() << CONN_ID_SIZE) |
+                  (((conn_id_data_ & 0xFFF) << (core_id * CONN_1_SHIFT_BITS)) & CONN_BIT_MASK));
+  }
+
+  explicit DisplayId(uint32_t display_id) : display_id_(display_id) {
+    uint32_t core_id = (display_id_) < 0 ? 0 : ((display_id_) >> CONN_ID_SIZE);
+    core_id_bitset_ = std::bitset<8>(core_id);
+    conn_id_data_ = (display_id_) < 0 ? 0 : ((display_id_) & CONN_BIT_MASK);
+  }
+
+  inline uint32_t GetDisplayId() {
+    return display_id_;
+  }
+
+  inline uint32_t GetCoreIdMap() {
+    return core_id_bitset_.to_ulong();
+  }
+
+  inline uint32_t GetConnId(uint32_t core_id) {
+    if (conn_id_data_ == -1) {
+      return conn_id_data_;
+    }
+    uint32_t conn_id_mask = (0xFFF << (core_id * 12));
+    return ((conn_id_data_ & conn_id_mask) >> (core_id * 12));
+  }
+
+  inline uint32_t GetBaseCoreId() {
+    uint32_t pos = 0;
+    uint32_t coreid_map = core_id_bitset_.to_ulong();
+    while (coreid_map && !(coreid_map & 1)) {
+      coreid_map = coreid_map >> 1;
+      pos++;
+    }
+    return pos;
+  }
+
+  ~DisplayId() {}
+
+ private:
+  int32_t display_id_ = -1;
+  std::bitset<8> core_id_bitset_ = 0;
+  int32_t conn_id_data_ = -1;
 };
 
 }  // namespace sdm

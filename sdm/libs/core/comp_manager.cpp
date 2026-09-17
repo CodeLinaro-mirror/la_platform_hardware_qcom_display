@@ -22,9 +22,16 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <core/buffer_allocator.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
+#include <private/hw_info_types.h>
 #include <set>
 #include <string>
 #include <vector>
@@ -36,19 +43,43 @@
 
 namespace sdm {
 
-DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
+DisplayError CompManager::Init(const std::vector<HWResourceInfo> &hw_res_info,
+                               const std::vector<HWInfoInterface*> &hw_info_intf,
                                ExtensionInterface *extension_intf,
                                BufferAllocator *buffer_allocator,
                                SocketHandler *socket_handler) {
   SCOPE_LOCK(locker_);
 
+  if (hw_res_info.empty()) {
+    return kErrorParameters;
+  }
+
   DisplayError error = kErrorNone;
 
+  // Identify virtual cores using actual core_id from HWInfoInterface.
+  // IMPORTANT: loop index i != core_id when core_ids bitset has gaps (e.g. core_ids=0x2
+  // gives hw_res_info[0] for core1, not core0). Use GetCoreId() from hw_info_intf to
+  // get the real core_id for each resource entry.
+  const HWResourceInfo *real_hw_res = nullptr;
+  for (uint32_t i = 0; i < hw_res_info.size() && i < hw_info_intf.size(); i++) {
+    const auto &res = hw_res_info[i];
+    uint32_t actual_core_id = hw_info_intf[i]->GetCoreId();
+    hw_res_info_by_core_[actual_core_id] = res;
+    bool has_spi = hw_info_intf[i]->HasSPIConnector();
+    if (has_spi) {
+      virtual_cores_mask_ |= (1u << actual_core_id);
+    } else if (!real_hw_res) {
+      real_hw_res = &res;
+    }
+  }
+  if (!real_hw_res) real_hw_res = &hw_res_info[0];  // fallback
+
+  // Pass only real dpu's resource
   if (extension_intf) {
-    error = extension_intf->CreateResourceExtn(hw_res_info, buffer_allocator, &resource_intf_);
+    error = extension_intf->CreateResourceExtn(*real_hw_res, buffer_allocator, &resource_intf_);
     extension_intf->CreateDppsControlExtn(&dpps_ctrl_intf_, socket_handler);
   } else {
-    error = ResourceDefault::CreateResourceDefault(hw_res_info, &resource_intf_);
+    error = ResourceDefault::CreateResourceDefault(*real_hw_res, &resource_intf_);
   }
 
   if (error != kErrorNone) {
@@ -58,7 +89,7 @@ DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
     return error;
   }
 
-  hw_res_info_ = hw_res_info;
+  hw_res_info_ = *real_hw_res;   // single struct stored (core0 only)
   buffer_allocator_ = buffer_allocator;
   extension_intf_ = extension_intf;
 
@@ -93,8 +124,22 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     return kErrorMemory;
   }
 
+  DisplayId disp_id_obj(display_id);
+  bool is_virtual_core = (disp_id_obj.GetCoreIdMap() & virtual_cores_mask_) != 0;
+  if (is_virtual_core != (hw_panel_info.port == kPortSPI)) {
+    // HasSPIConnector() (core-level, feeds virtual_cores_mask_) and
+    // connector_info_.type (per-connector, feeds hw_panel_info.port in
+    // hw_device_drm.cpp) are two independent "is this SPI" mechanisms that
+    // are expected to always agree; a mismatch means a core hosts both a
+    // DSI and an SPI connector, which is not currently supported.
+    DLOGW("is-SPI mismatch for display %d: core-level=%d, panel-level=%d",
+          display_id, is_virtual_core, hw_panel_info.port == kPortSPI);
+  }
+
+  // GPU-only strategy for virtual cores
+  ExtensionInterface *strategy_ext = is_virtual_core ? nullptr : extension_intf_;
   Strategy *&strategy = display_comp_ctx->strategy;
-  strategy = new Strategy(extension_intf_, buffer_allocator_, display_id, type,
+  strategy = new Strategy(strategy_ext, buffer_allocator_, display_id, type,
                           hw_res_info_, hw_panel_info, mixer_attributes, display_attributes,
                           fb_config);
   if (!strategy) {
@@ -110,37 +155,73 @@ DisplayError CompManager::RegisterDisplay(int32_t display_id, DisplayType type,
     return error;
   }
 
+  // For SPI displays, the shared resource_intf_ may point to ResourceExtn
+  // which has no zero-pipe support. Create a dedicated ResourceDefault
+  // instance for this display so it takes the open-source pipe-allocation path, seeded
+  // with this core's actual reported HWResourceInfo (its drm_simple_display_pipe plane
+  // classifies as a real pipe. See ResourceDefault's is_spi_display_ single-pipe path.
+  if (is_virtual_core) {
+    uint32_t core_id = disp_id_obj.GetBaseCoreId();
+    auto iter = hw_res_info_by_core_.find(core_id);
+    const HWResourceInfo &spi_hw_res =
+        (iter != hw_res_info_by_core_.end()) ? iter->second : HWResourceInfo();
+    error = ResourceDefault::CreateResourceDefault(spi_hw_res, &display_comp_ctx->own_resource_intf,
+                                                   true /* is_spi_display */);
+    if (error != kErrorNone) {
+      strategy->Deinit();
+      delete strategy;
+      delete display_comp_ctx;
+      display_comp_ctx = NULL;
+      return error;
+    }
+  }
+
+  // ResourceImpl uses display_id as hw_block_id for pipe allocation. It expects
+  // the raw DRM connector ID, not our encoded DisplayId. Decode before passing.
+  int32_t raw_display_id = (int32_t)disp_id_obj.GetConnId(disp_id_obj.GetBaseCoreId());
   error =
-      resource_intf_->RegisterDisplay(display_id, type, display_attributes, hw_panel_info,
-                                      mixer_attributes, &display_comp_ctx->display_resource_ctx);
+      GetResourceIntf(display_comp_ctx)->RegisterDisplay(raw_display_id, type, display_attributes,
+                                                         hw_panel_info, mixer_attributes,
+                                                         &display_comp_ctx->display_resource_ctx);
   if (error != kErrorNone) {
     strategy->Deinit();
     delete strategy;
+    if (display_comp_ctx->own_resource_intf) {
+      ResourceDefault::DestroyResourceDefault(display_comp_ctx->own_resource_intf);
+    }
     delete display_comp_ctx;
     display_comp_ctx = NULL;
     return error;
   }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultClk,
-                                  display_comp_ctx->display_resource_ctx, default_clk_hz);
-  if (error != kErrorNone) {
-    strategy->Deinit();
-    delete strategy;
-    resource_intf_->UnregisterDisplay(display_comp_ctx->display_resource_ctx);
-    delete display_comp_ctx;
-    display_comp_ctx = NULL;
-    return error;
-  }
+  if (!is_virtual_core) {
+    error = GetResourceIntf(display_comp_ctx)->Perform(ResourceInterface::kCmdGetDefaultClk,
+                                    display_comp_ctx->display_resource_ctx, default_clk_hz);
+    if (error != kErrorNone) {
+      strategy->Deinit();
+      delete strategy;
+      GetResourceIntf(display_comp_ctx)->UnregisterDisplay(display_comp_ctx->display_resource_ctx);
+      if (display_comp_ctx->own_resource_intf) {
+        ResourceDefault::DestroyResourceDefault(display_comp_ctx->own_resource_intf);
+      }
+      delete display_comp_ctx;
+      display_comp_ctx = NULL;
+      return error;
+    }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdDedicatePipes,
-                                  display_comp_ctx->display_resource_ctx);
-  if (error != kErrorNone) {
-    strategy->Deinit();
-    delete strategy;
-    resource_intf_->UnregisterDisplay(display_comp_ctx->display_resource_ctx);
-    delete display_comp_ctx;
-    display_comp_ctx = NULL;
-    return error;
+    error = GetResourceIntf(display_comp_ctx)->Perform(ResourceInterface::kCmdDedicatePipes,
+                                    display_comp_ctx->display_resource_ctx);
+    if (error != kErrorNone) {
+      strategy->Deinit();
+      delete strategy;
+      GetResourceIntf(display_comp_ctx)->UnregisterDisplay(display_comp_ctx->display_resource_ctx);
+      if (display_comp_ctx->own_resource_intf) {
+        ResourceDefault::DestroyResourceDefault(display_comp_ctx->own_resource_intf);
+      }
+      delete display_comp_ctx;
+      display_comp_ctx = NULL;
+      return error;
+    }
   }
 
   registered_displays_.insert(display_id);
@@ -173,7 +254,14 @@ DisplayError CompManager::UnregisterDisplay(Handle display_ctx) {
     return kErrorParameters;
   }
 
-  resource_intf_->UnregisterDisplay(display_comp_ctx->display_resource_ctx);
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    resource_intf->UnregisterDisplay(display_comp_ctx->display_resource_ctx);
+  }
+
+  if (display_comp_ctx->own_resource_intf) {
+    ResourceDefault::DestroyResourceDefault(display_comp_ctx->own_resource_intf);
+    display_comp_ctx->own_resource_intf = nullptr;
+  }
 
   Strategy *&strategy = display_comp_ctx->strategy;
   strategy->Deinit();
@@ -198,7 +286,9 @@ DisplayError CompManager::CheckEnforceSplit(Handle comp_handle,
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(comp_handle);
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdCheckEnforceSplit,
+  auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx);
+  if (!resource_intf) { return kErrorNone; }
+  error = resource_intf->Perform(ResourceInterface::kCmdCheckEnforceSplit,
                                   display_comp_ctx->display_resource_ctx, new_refresh_rate);
   return error;
 }
@@ -216,22 +306,25 @@ DisplayError CompManager::ReconfigureDisplay(Handle comp_handle,
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(comp_handle);
 
-  error = resource_intf_->ReconfigureDisplay(display_comp_ctx->display_resource_ctx,
-                                             display_attributes, hw_panel_info, mixer_attributes);
-  if (error != kErrorNone) {
-    return error;
-  }
+  error = kErrorNone;
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    error = resource_intf->ReconfigureDisplay(display_comp_ctx->display_resource_ctx,
+                                               display_attributes, hw_panel_info, mixer_attributes);
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdGetDefaultClk,
-                                  display_comp_ctx->display_resource_ctx, default_clk_hz);
-  if (error != kErrorNone) {
-    return error;
-  }
+    error = resource_intf->Perform(ResourceInterface::kCmdGetDefaultClk,
+                                    display_comp_ctx->display_resource_ctx, default_clk_hz);
+    if (error != kErrorNone) {
+      return error;
+    }
 
-  error = resource_intf_->Perform(ResourceInterface::kCmdCheckEnforceSplit,
-                                  display_comp_ctx->display_resource_ctx, display_attributes.fps);
-  if (error != kErrorNone) {
-    return error;
+    error = resource_intf->Perform(ResourceInterface::kCmdCheckEnforceSplit,
+                                    display_comp_ctx->display_resource_ctx, display_attributes.fps);
+    if (error != kErrorNone) {
+      return error;
+    }
   }
 
   if (display_comp_ctx->strategy) {
@@ -313,8 +406,9 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
 
   PrepareStrategyConstraints(display_ctx, hw_layers);
 
-  // Select a composition strategy, and try to allocate resources for it.
-  resource_intf_->Start(display_resource_ctx);
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    resource_intf->Start(display_resource_ctx);
+  }
 
   bool exit = false;
   uint32_t &count = display_comp_ctx->remaining_strategies;
@@ -327,14 +421,20 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
     }
 
     if (!exit) {
-      error = resource_intf_->Prepare(display_resource_ctx, hw_layers);
+      if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+        error = resource_intf->Prepare(display_resource_ctx, hw_layers);
+      } else {
+        error = kErrorNone;
+      }
       // Exit if successfully prepared resource, else try next strategy.
       exit = (error == kErrorNone);
     }
   }
 
   if (error != kErrorNone) {
-    resource_intf_->Stop(display_resource_ctx, hw_layers);
+    if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+      resource_intf->Stop(display_resource_ctx, hw_layers);
+    }
     if (safe_mode_ && display_comp_ctx->first_cycle_) {
       DLOGW("Composition strategies exhausted for display = %d on first cycle",
             display_comp_ctx->display_type);
@@ -344,9 +444,11 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
     return error;
   }
 
-  error = resource_intf_->Stop(display_resource_ctx, hw_layers);
-  if (error != kErrorNone) {
-    DLOGE("Resource stop failed for display = %d", display_comp_ctx->display_type);
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    error = resource_intf->Stop(display_resource_ctx, hw_layers);
+    if (error != kErrorNone) {
+      DLOGE("Resource stop failed for display = %d", display_comp_ctx->display_type);
+    }
   }
   return error;
 }
@@ -361,9 +463,11 @@ DisplayError CompManager::PostPrepare(Handle display_ctx, HWLayers *hw_layers) {
 
   display_comp_ctx->strategy->Stop();
 
-  error = resource_intf_->PostPrepare(display_resource_ctx, hw_layers);
-  if (error != kErrorNone) {
-    return error;
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    error = resource_intf->PostPrepare(display_resource_ctx, hw_layers);
+    if (error != kErrorNone) {
+      return error;
+    }
   }
 
   return kErrorNone;
@@ -375,7 +479,9 @@ DisplayError CompManager::Commit(Handle display_ctx, HWLayers *hw_layers) {
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
-  return resource_intf_->Commit(display_comp_ctx->display_resource_ctx, hw_layers);
+  auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx);
+  if (!resource_intf) { return kErrorNone; }
+  return resource_intf->Commit(display_comp_ctx->display_resource_ctx, hw_layers);
 }
 
 DisplayError CompManager::ReConfigure(Handle display_ctx, HWLayers *hw_layers) {
@@ -387,16 +493,18 @@ DisplayError CompManager::ReConfigure(Handle display_ctx, HWLayers *hw_layers) {
   Handle &display_resource_ctx = display_comp_ctx->display_resource_ctx;
 
   DisplayError error = kErrorUndefined;
-  resource_intf_->Start(display_resource_ctx);
-  error = resource_intf_->Prepare(display_resource_ctx, hw_layers);
+  auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx);
+  if (resource_intf) resource_intf->Start(display_resource_ctx);
+  if (resource_intf) error = resource_intf->Prepare(display_resource_ctx, hw_layers);
+  else error = kErrorNone;
 
   if (error != kErrorNone) {
     DLOGE("Reconfigure failed for display = %d", display_comp_ctx->display_type);
   }
 
-  resource_intf_->Stop(display_resource_ctx, hw_layers);
-  if (error != kErrorNone) {
-      error = resource_intf_->PostPrepare(display_resource_ctx, hw_layers);
+  if (resource_intf) resource_intf->Stop(display_resource_ctx, hw_layers);
+  if (error != kErrorNone && resource_intf) {
+      error = resource_intf->PostPrepare(display_resource_ctx, hw_layers);
   }
 
   return error;
@@ -409,9 +517,12 @@ DisplayError CompManager::PostCommit(Handle display_ctx, HWLayers *hw_layers) {
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
-  error = resource_intf_->PostCommit(display_comp_ctx->display_resource_ctx, hw_layers);
-  if (error != kErrorNone) {
-    return error;
+  error = kErrorNone;
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    error = resource_intf->PostCommit(display_comp_ctx->display_resource_ctx, hw_layers);
+    if (error != kErrorNone) {
+      return error;
+    }
   }
 
   display_comp_ctx->idle_fallback = false;
@@ -430,7 +541,9 @@ void CompManager::Purge(Handle display_ctx) {
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
-  resource_intf_->Purge(display_comp_ctx->display_resource_ctx);
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    resource_intf->Purge(display_comp_ctx->display_resource_ctx);
+  }
 
   display_comp_ctx->strategy->Purge();
 }
@@ -478,8 +591,10 @@ void CompManager::ProcessIdlePowerCollapse(Handle display_ctx) {
           reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   if (display_comp_ctx) {
-    resource_intf_->Perform(ResourceInterface::kCmdResetLUT,
-                            display_comp_ctx->display_resource_ctx);
+    if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+      resource_intf->Perform(ResourceInterface::kCmdResetLUT,
+                              display_comp_ctx->display_resource_ctx);
+    }
   }
 }
 
@@ -491,8 +606,10 @@ DisplayError CompManager::SetMaxMixerStages(Handle display_ctx, uint32_t max_mix
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   if (display_comp_ctx) {
-    error = resource_intf_->SetMaxMixerStages(display_comp_ctx->display_resource_ctx,
-                                              max_mixer_stages);
+    if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+      error = resource_intf->SetMaxMixerStages(display_comp_ctx->display_resource_ctx,
+                                                max_mixer_stages);
+    }
   }
 
   return error;
@@ -517,7 +634,9 @@ DisplayError CompManager::ValidateAndSetCursorPosition(Handle display_ctx, HWLay
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
   Handle &display_resource_ctx = display_comp_ctx->display_resource_ctx;
-  return resource_intf_->ValidateAndSetCursorPosition(display_resource_ctx, hw_layers, x, y,
+  auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx);
+  if (!resource_intf) { return kErrorNone; }
+  return resource_intf->ValidateAndSetCursorPosition(display_resource_ctx, hw_layers, x, y,
                                                       &display_comp_ctx->fb_config);
 }
 
@@ -545,7 +664,9 @@ DisplayError CompManager::SetDetailEnhancerData(Handle display_ctx,
     return kErrorResources;
   }
 
-  return resource_intf_->SetDetailEnhancerData(display_comp_ctx->display_resource_ctx, de_data);
+  auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx);
+  if (!resource_intf) { return kErrorNone; }
+  return resource_intf->SetDetailEnhancerData(display_comp_ctx->display_resource_ctx, de_data);
 }
 
 DisplayError CompManager::SetCompositionState(Handle display_ctx,
@@ -581,8 +702,10 @@ bool CompManager::SetDisplayState(Handle display_ctx, DisplayState state,
   DisplayCompositionContext *display_comp_ctx =
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
-  resource_intf_->Perform(ResourceInterface::kCmdSetDisplayState,
-                          display_comp_ctx->display_resource_ctx, state);
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    resource_intf->Perform(ResourceInterface::kCmdSetDisplayState,
+                            display_comp_ctx->display_resource_ctx, state);
+  }
 
   switch (state) {
   case kStateOff:
@@ -592,8 +715,10 @@ bool CompManager::SetDisplayState(Handle display_ctx, DisplayState state,
 
   case kStateOn:
   case kStateDoze:
-    resource_intf_->Perform(ResourceInterface::kCmdDedicatePipes,
-                            display_comp_ctx->display_resource_ctx);
+    if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+      resource_intf->Perform(ResourceInterface::kCmdDedicatePipes,
+                              display_comp_ctx->display_resource_ctx);
+    }
     powered_on_displays_.insert(display_comp_ctx->display_id);
     break;
 
@@ -608,7 +733,9 @@ bool CompManager::SetDisplayState(Handle display_ctx, DisplayState state,
   bool inactive = (state == kStateOff) || (state == kStateDozeSuspend);
   UpdateStrategyConstraints(display_comp_ctx->is_primary_panel, inactive);
 
-  resource_intf_->UpdateSyncHandle(display_comp_ctx->display_resource_ctx, sync_handle);
+  if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+    resource_intf->UpdateSyncHandle(display_comp_ctx->display_resource_ctx, sync_handle);
+  }
 
   return true;
 }
@@ -652,8 +779,10 @@ void CompManager::HandleSecureEvent(Handle display_ctx, SecureEvent secure_event
   // non secure memory is unavailable. So this results in smmu page fault when rotator tries to
   // access the non secure memory.
   if (secure_event == kSecureDisplayEnd) {
-    resource_intf_->Perform(ResourceInterface::kCmdDisableRotatorOneFrame,
-                            display_comp_ctx->display_resource_ctx);
+    if (auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx)) {
+      resource_intf->Perform(ResourceInterface::kCmdDisableRotatorOneFrame,
+                              display_comp_ctx->display_resource_ctx);
+    }
   }
 }
 
@@ -680,7 +809,11 @@ bool CompManager::CheckResourceState(Handle display_ctx) {
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
   bool res_wait_needed = false;
 
-  resource_intf_->Perform(ResourceInterface::kCmdGetResourceStatus,
+  auto *resource_intf = GetResourceIntfIfValid(display_comp_ctx);
+  if (!resource_intf) {
+    return false;
+  }
+  resource_intf->Perform(ResourceInterface::kCmdGetResourceStatus,
                           display_comp_ctx->display_resource_ctx, &res_wait_needed);
   return res_wait_needed;
 }
