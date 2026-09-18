@@ -92,12 +92,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_dpps_dynamic_fps=1 \
     debug.sf.disable_client_composition_cache=1 \
     debug.sf.enable_gl_backpressure=1 \
-    debug.sf.enable_advanced_sf_phase_offset=1 \
     vendor.display.vds_allow_hwc=1 \
-    debug.sf.use_phase_offsets_as_durations=1 \
-    debug.sf.late.app.duration=13666666 \
-    debug.sf.early.app.duration=13666666 \
-    debug.sf.earlyGl.app.duration=13666666 \
     vendor.display.enable_async_vds_creation=1 \
     vendor.display.enable_rounded_corner=1 \
     vendor.display.disable_3d_adaptive_tm=1 \
@@ -110,8 +105,32 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.graphics.game_default_frame_rate.disabled=1 \
     vendor.display.enable_display_extensions=1 \
     vendor.gralloc.enable_snapalloc=1 \
-    vendor.display.disable_fp16_support=1
+    vendor.display.disable_fp16_support=1 \
+    vendor.display.disable_luts_overlay_support=1
+ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.enable_advanced_sf_phase_offset=1 \
+    debug.sf.use_phase_offsets_as_durations=1 \
+    debug.sf.late.app.duration=13666666 \
+    debug.sf.early.app.duration=13666666 \
+    debug.sf.earlyGl.app.duration=13666666
+endif
 
+# Begin Android XR
+# On Android XR, we don't want negative SurfaceFlinger phase offsets, because
+# they do not make sense and because they lead to problems such as "early present".
+# PRODUCT_PROPERTY_OVERRIDES += \
+#    debug.sf.enable_advanced_sf_phase_offset=1 \
+#    debug.sf.use_phase_offsets_as_durations=1 \
+#    debug.sf.late.app.duration=13666666 \
+#    debug.sf.early.app.duration=13666666 \
+#    debug.sf.earlyGl.app.duration=13666666 \
+#    debug.sf.early.sf.duration=10500000 \
+#    debug.sf.earlyGl.sf.duration=10500000 \
+#    debug.sf.late.sf.duration=10500000
+# End Android XR
+
+ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.early.sf.duration=15555555 \
@@ -122,6 +141,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.early.sf.duration=10500000 \
     debug.sf.earlyGl.sf.duration=10500000 \
     debug.sf.late.sf.duration=10500000
+endif
 endif
 
 # Enable offline rotator for Bengal, Khaje and Monaco
@@ -145,6 +165,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_posted_start_dyn=1 \
     vendor.display.enhance_idle_time=1 \
     vendor.display.lcd_density=160
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),sun)
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.hardware.hdmi_cec=pluggable
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),holi)
@@ -171,6 +196,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.has_HDR_display=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.use_color_management=true
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.wcg_composition_dataspace=143261696
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
+ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
       ro.surface_flinger.use_content_detection_for_refresh_rate=false
@@ -179,6 +205,7 @@ else
       ro.surface_flinger.use_content_detection_for_refresh_rate=true
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.set_touch_timer_ms=200
+endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
 ifeq ($(TARGET_QCOM_IOT_LOW_RAM), true)
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -197,6 +224,11 @@ ifeq ($(filter $(TARGET_BOARD_PLATFORM), chora malabar), $(TARGET_BOARD_PLATFORM
 endif
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.clear_slots_with_set_layer_buffer=false
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.game_default_frame_rate_override=60
+
+ifeq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
+# VRR
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.enable_frame_rate_override=false
+endif
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
 # Recovery is enabled, logging is enabled
@@ -238,10 +270,15 @@ $(call soong_config_set, qtidisplay, llvmcov, false )
 $(call soong_config_set, qtidisplay, smmu_proxy, false )
 $(call soong_config_set, qtidisplay, ubwcp_headers, true )
 $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+$(call soong_config_set, qtidisplay, gralloc_version, v7 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
 $(call soong_config_set, qtidisplay, snapallocext_enabled, true)
 $(call soong_config_set, qtidisplay, enable_demura, true )
+
+# Config for using different idle timeout value on vienna
+$(call soong_config_set, qtidisplay, idle_timeout, false )
+
 
 # Two key build properties: PLATFORM_VERSION_CODENAME and PLATFORM_VERSION.
 # PLATFORM_VERSION_CODENAME holds the string codename of the current Android version.
@@ -261,31 +298,40 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
         ifeq ($(TARGET_DEFINES_MXR_CONFIG),true)
             ifeq ($(filter $(TARGET_BOARD_PLATFORM), seraph), $(TARGET_BOARD_PLATFORM))
                 $(call soong_config_set, qtidisplay, composer_version, v3_4_lsr )
+                $(call soong_config_set, qtidisplay, gralloc_version, lt_v7 )
             else
                 $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+                $(call soong_config_set, qtidisplay, gralloc_version, lt_v7 )
             endif
         else
             $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+            $(call soong_config_set, qtidisplay, gralloc_version, v7 )
         endif
-    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun))
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun DEV))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+      $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 # AFTER FRC
 else
     ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 14))
       $(call soong_config_set, qtidisplay, composer_version, v3_2 )
       $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
+      $(call soong_config_set, qtidisplay, gralloc_version, lt_v7 )
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 15))
       $(call soong_config_set, qtidisplay, composer_version, v3_3 )
       $(call soong_config_set, qtidisplay, snapallocext_enabled, false)
+      $(call soong_config_set, qtidisplay, gralloc_version, lt_v7 )
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 16))
       ifeq ($(filter $(TARGET_BOARD_PLATFORM), seraph), $(TARGET_BOARD_PLATFORM))
         $(call soong_config_set, qtidisplay, composer_version, v3_4_lsr )
+        $(call soong_config_set, qtidisplay, gralloc_version, lt_v7 )
       else
         $(call soong_config_set, qtidisplay, composer_version, v3_4 )
+        $(call soong_config_set, qtidisplay, gralloc_version, lt_v7 )
       endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+      $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 endif
 
@@ -306,7 +352,7 @@ ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, neo, true )
 endif
 
-ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar hamoa), $(TARGET_BOARD_PLATFORM))
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar hamoa shikra), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, hw_fence_disabled, true )
 endif
 
@@ -357,8 +403,14 @@ else
         $(call soong_config_set, qtidisplay, hy11, true )
         $(call soong_config_set, qtidisplay, hy22, true )
     endif
-    
 endif
+
+
+ifeq ($(TARGET_SUPPORTS_WEARABLES),true)
+    $(call soong_config_set, qtidisplay, idle_timeout, true )
+endif
+
+
 
 QMAA_ENABLED_HAL_MODULES += display
 

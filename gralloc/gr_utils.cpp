@@ -1192,7 +1192,7 @@ Error GetColorSpaceFromColorMetaData(ColorMetaData color_metadata, uint32_t *col
     default:
       err = Error::UNSUPPORTED;
       *color_space = 0;
-      ALOGW("Unknown Color primary = %d", color_metadata.colorPrimaries);
+      ALOGW_IF(DEBUG, "Unknown Color primary = %d", color_metadata.colorPrimaries);
       break;
   }
   return err;
@@ -1213,7 +1213,7 @@ void GetColorSpaceFromMetadata(private_handle_t *hnd, int *color_space) {
         *color_space = (color_metadata.range) ? HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
         break;
       default:
-        ALOGW("Unknown Color primary = %d", color_metadata.colorPrimaries);
+        ALOGW_IF(DEBUG, "Unknown Color primary = %d", color_metadata.colorPrimaries);
         break;
     }
   } else if (GetMetaDataValue(hnd, QTI_COLORSPACE, color_space) != Error::NONE) {

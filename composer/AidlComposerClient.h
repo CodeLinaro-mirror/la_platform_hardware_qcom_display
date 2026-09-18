@@ -333,6 +333,8 @@ class AidlComposerClient : public BnComposerClient,
   SpAIBinder createBinder() override;
 
  private:
+  void getSupportedOverlayProperties();
+
   std::unordered_map<int64_t, std::shared_ptr<IDisplayConfigCallback>> callback_clients_;
   bool disable_fp16_support_ = false;
   bool disable_hdr_gamma_support_ = false;
@@ -375,6 +377,7 @@ class AidlComposerClient : public BnComposerClient,
     Error populateDisplayLuts(Lut3d *lut_3d, bool reset_luts, Luts *luts, int32_t *lut_fd);
     Error getBufferLuts(uint64_t display, const std::vector<SnapHandle *> &buffers,
                         std::unique_ptr<std::vector<Lut3d *>> &out_luts);
+    Error translateLayerLuts(const Luts &luts, Lut3d *lut_3d);
 #endif
 
    private:
@@ -599,6 +602,13 @@ class AidlComposerClient : public BnComposerClient,
   std::unique_ptr<CommandEngine> mCommandEngine;
   std::function<void()> mOnClientDestroyed;
   std::unordered_map<sdm::Display, DisplayData> mDisplayData;
+  std::vector<PixelFormat> supported_pixel_formats_;
+  std::vector<Dataspace> supported_dataspace_standards_;
+  std::vector<Dataspace> supported_dataspace_transfers_;
+  std::vector<Dataspace> supported_dataspace_ranges_;
+#ifdef COMPOSER3_V4
+  std::vector<LutProperties> supported_lut_props_;
+#endif
 };
 
 }  // namespace composer3

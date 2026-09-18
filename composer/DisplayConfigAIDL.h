@@ -82,6 +82,8 @@
 #include "gl_color_convert.h"
 #include "gl_layer_stitch.h"
 
+#include <IFECService.h>
+
 namespace aidl::vendor::qti::hardware::display::config {
 class DisplayConfigAIDL;
 }
@@ -312,6 +314,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
   void DestroyLayerStitch(uint64_t display);
 
   sdm::nsecs_t SystemTime(int clock);
+  sdm::DisplayError SendFeatenablerCommand(sdm::FeatenablerCommand cmd);
 
  private:
   ScopedAStatus setCWBOutputBufferInternal(
@@ -359,6 +362,7 @@ class DisplayConfigAIDL : public BnDisplayConfig, public SDMSideBandCompositorCb
                              std::vector<double>>>>
       dynamic_cac_v2_data_;
   bool dynamic_cac_data_populated_ = false;
+  sp<IFECService> featenab_client_ = nullptr;
 };
 
 }  // namespace config

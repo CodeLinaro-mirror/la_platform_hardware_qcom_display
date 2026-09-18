@@ -9,8 +9,10 @@
 #include <log/log.h>
 #include <cutils/properties.h>
 #include <dlfcn.h>
+#include <climits>
 #include <mutex>
 #include <fstream>
+#include <unistd.h>
 
 #include "gr_adreno_info.h"
 #include "gr_utils.h"
@@ -25,6 +27,9 @@ namespace gralloc {
 
 AdrenoMemInfo *AdrenoMemInfo::s_instance = nullptr;
 const char kgsl_path[] = "/dev/kgsl-3d0";
+
+#define KGSL_NODE_ACCESS_MAX_RETRY_DEFAULT 1
+#define KGSL_NODE_ACCESS_RETRY_INTERVAL_MS_DEFAULT 0
 
 AdrenoMemInfo *AdrenoMemInfo::GetInstance() {
   static mutex s_lock;
@@ -43,8 +48,38 @@ AdrenoMemInfo::AdrenoMemInfo() {
     gfx_ubwc_disable_ = true;
   }
 
-  fstream fs(kgsl_path, fstream::in);
-  if (!fs.is_open()) {
+  // Check if kgsl device node exists before attempting GPU library load
+  int max_retry_count = KGSL_NODE_ACCESS_MAX_RETRY_DEFAULT;
+  int retry_interval = KGSL_NODE_ACCESS_RETRY_INTERVAL_MS_DEFAULT;
+
+  char kgsl_prop[PROPERTY_VALUE_MAX];
+  if (property_get(KGSL_MAX_RETRY_COUNT_PROP, kgsl_prop, NULL) > 0) {
+    int val = atoi(kgsl_prop);
+    if (val > 0) {
+      max_retry_count = val;
+    }
+  }
+
+  if (property_get(KGSL_RETRY_INTERVAL_MS_PROP, kgsl_prop, NULL) > 0) {
+    int val = atoi(kgsl_prop);
+    if ((val > 0) && (val <= (INT_MAX / 1000))) {
+      retry_interval = val;
+    }
+  }
+
+  bool kgsl_found = false;
+  for (int retry_count = 0; retry_count < max_retry_count; retry_count++) {
+    fstream fs(kgsl_path, fstream::in);
+    if (fs.is_open()) {
+      kgsl_found = true;
+      break;
+    }
+    ALOGI("kgsl device not ready, retry %d/%d", retry_count + 1, max_retry_count);
+    usleep(static_cast<useconds_t>(retry_interval) * 1000);
+  }
+
+  if (!kgsl_found) {
+    ALOGE("kgsl device %s not available after %d retries", kgsl_path, max_retry_count);
     return;
   }
 

@@ -35,12 +35,16 @@ target=`getprop ro.board.platform`
 platform_subtype_id=0
 if [ -f /sys/devices/soc1/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc1/soc_id`
+    revision=`cat /sys/devices/soc1/revision`
 elif [ -f /sys/devices/system/soc/soc1/id ]; then
     soc_hwid=`cat /sys/devices/system/soc/soc1/id`
+    revision=`cat /sys/devices/system/soc/soc1/revision`
 elif [ -f /sys/devices/soc0/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc0/soc_id`
+    revision=`cat /sys/devices/soc0/revision`
 else
     soc_hwid=`cat /sys/devices/system/soc/soc0/id`
+    revision=`cat /sys/devices/system/soc/soc0/revision`
 fi
 
 if [ -f /sys/devices/soc1/platform_subtype_id ]; then
@@ -57,15 +61,17 @@ case "$target" in
     # SOC ID for Art H is 760
     # SOC ID for Pebble is 735
     # SOC ID for Pebble APQ is 741
+    # SOC ID for Coast is 761
+    # SOC ID for Pebble CQS quadcore is 793
+    # SOC ID for Pebble CQS hexacore is 794
     case "$soc_hwid" in
-      707|708|755|760|735|741)
+      707|708|755|760|735|741|761|793|794)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
-        setprop vendor.display.disable_pu_ds 1
         setprop vendor.display.force_gpu_composition 0
         setprop vendor.display.enable_spec_fence 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
@@ -73,6 +79,17 @@ case "$target" in
         setprop vendor.display.disable_noise_layer 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.composer_driven_hdcp 0
+        setprop vendor.display.enable_power_save_mode_for_video 1
+        setprop vendor.display.core_id_mask 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.disable_fbt_for_cwb_fallback 1
+        setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 1
+        setprop vendor.display.disable_demura_opt_singlelm 1
+        #SOC ID 761 (coast.1.0) do not support UCSC
+        if [ "$soc_hwid" -eq 761 ] && [ "$revision" = "1.0" ]; then
+            setprop vendor.display.render_sysui_as_srgb 1
+            setprop vendor.display.disable_ucsc_tonemap 1
+        fi
         ;;
     esac
     ;;
@@ -97,7 +114,7 @@ case "$target" in
     #SOC ID for shikra varaints
     case "$soc_hwid" in
       759 | 758 | 756)
-        setprop vendor.display.target.version 6
+        setprop vendor.display.target.version 7
         setprop vendor.display.enable_rotator_ui 0
         setprop vendor.display.thermal.version 1
         setprop vendor.gralloc.enable_snapalloc 1
@@ -107,6 +124,7 @@ case "$target" in
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.gralloc.disable_ubwc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
         ;;
     esac
     ;;
@@ -121,7 +139,8 @@ case "$target" in
     setprop vendor.display.enable_spec_fence 1
     setprop vendor.display.thermal.version 1
     setprop vendor.display.enable_rc_support 1
-    setprop vendor.display.target.version 6
+    setprop vendor.display.target.version 5
+    setprop vendor.display.perf.version 2
     setprop vendor.display.enable_qsync_idle 0
     setprop vendor.display.disable_mitigated_fps 1
     setprop vendor.display.secure_preview_buffer_format 420_sp
@@ -140,8 +159,9 @@ case "$target" in
     # Soc Id for khaje is 518
     # Soc Id for khaje APQ is 561
     # Soc Id for khaje Gaming is 585 and IOT is 586
+    # Soc Id for khaje SMP is 762
     case "$soc_hwid" in
-        518|561|585|586)
+        518|561|585|586|762)
         # Set property for khaje
         setprop vendor.display.disable_layer_stitch 1
         setprop vendor.display.enable_rounded_corner 1
@@ -185,6 +205,7 @@ case "$target" in
         fi
         # Enable null display for Hamoa QCB and set Hamoa-specific properties
         if [ "$soc_hwid" -eq 555 ]; then
+          setprop vendor.gralloc.camera_preview_uses_usb_hal 1
           if [ "$platform_subtype_id" -eq 43 ]; then
             setprop vendor.display.enable_null_display 1
           fi
@@ -210,10 +231,17 @@ case "$target" in
         setprop vendor.gralloc.enable_snapalloc 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_spec_fence 0
+        setprop vendor.display.enable_client_control_cwb_refresh 1
         if [ "$soc_hwid" -eq 736 ] || [ "$soc_hwid" -eq 737 ]; then
            setprop vendor.display.enable_inline_writeback 0
         else
            setprop vendor.display.enable_inline_writeback 1
+        fi
+        #SOC ID for 737 is no display
+        if [ "$soc_hwid" -eq 737 ]; then
+            setprop vendor.display.enable_null_display 1
+            setprop vendor.display.null_display_resolution 64x64
+            setprop service.sf.prime_shader_cache 0
         fi
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
@@ -570,13 +598,13 @@ case "$target" in
         setprop vendor.display.perf.version 4
         setprop vendor.display.enable_inline_writeback 0
         setprop vendor.display.disable_gpu_color_convert 0
-        setprop vendor.gralloc.allow_camera_preview_write 1
         setprop vendor.display.cpu_cluster_boost_mask 6
         setprop vendor.display.enable_optimal_refresh_rate 1
         setprop vendor.display.refresh_rate_changeable 1
         setprop vendor.display.enable_brightness_drm_prop 1
         setprop vendor.display.enable_idle_content_fps_hint 1
         setprop vendor.display.enable_privacy_layers 1
+        setprop vendor.display.disable_llcbc_support 1
         ;;
     esac
     ;;

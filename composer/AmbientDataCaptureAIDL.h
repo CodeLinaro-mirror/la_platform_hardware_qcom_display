@@ -125,8 +125,7 @@ using ::vendor::qti::hardware::display::snapalloc::ISnapMapper;
 
 typedef vendor_qti_hardware_display_common_cwb_metadata SnapCWBMetadata;
 
-constexpr static int max_enqueue_count = 11;
-constexpr static int timeout_ms = 30000;
+constexpr static int timeout_ms = 3000;
 
 // TODO : this struct will be translated to aidl
 #define ALGO_CONFIG_SIZE 4096
@@ -211,17 +210,24 @@ class AmbientDataCaptureAIDL : public BnAmbientDataCapture, public SDMSideBandCo
   // imagealgointegration SmartSelection adapter (optional).
   std::shared_ptr<imagealgo::SmartSelectionIntf> imagealgo_adapter_ = nullptr;
   std::string imagealgo_app_name_;
-  std::atomic<uint32_t> ss_enqueue_count_{0};
   std::mutex imagealgo_lock_;
 
   int InitImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
+  int ReconfigImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
   int DeInitImageAlgoAdapter();
+  int FlushConfigImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
   int FlushAllImageAlgoAdapter();
+  int DeleteConfigImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
+  int DeleteAllImageAlgoAdapter();
   int EnqueueImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
   int CreateEnqueuePayload(SnapHandle *handle, sdm::GenericPayload &enq_payload);
   // Emit callback invoked by SmartSelection pipeline when frames are selected/rejected.
   static void OnImageAlgoEmit(const imagealgo::SmartSelectionEmitResult *result, void *cookie);
   void ProcessImageAlgoResult(void *hdl, bool frame_selected);
+  static void OnImageAlgoQueueThreshold(const imagealgo::SmartSelectionQueueThresholdEvent *event,
+                                        void *cookie);
+  static void OnImageAlgoBufferRelease(const imagealgo::SmartSelectionBufferReleaseEvent *event,
+                                       void *cookie);
 
   int GetSnapInstance();
   int AddCWBMetadata(SnapHandle *handle, int32_t display_type);

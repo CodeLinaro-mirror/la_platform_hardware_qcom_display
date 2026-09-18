@@ -40,6 +40,67 @@ namespace composer3 {
 using MetadataType = vendor_qti_hardware_display_common_MetadataType;
 using sdm::HWCParcel;
 
+static uint32_t GetColorComponent(const Color10Bit &data, char color) {
+  switch (color) {
+    case 'R':
+      return data.R;
+    case 'G':
+      return data.G;
+    case 'B':
+      return data.B;
+    case 'A':
+      return data.A;
+  }
+
+  return 0;
+}
+
+static void PopulateBufferFromLuts(std::vector<float> &buffer, uint32_t size, Color10Bit *entries) {
+  const char color[] = {'R', 'G', 'B'};
+  constexpr size_t num_channels = sizeof(color) / sizeof(color[0]);
+  for (size_t order = 0; order < num_channels; order++) {
+    for (uint32_t x = 0; x < size; x++) {
+      for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t z = 0; z < size; z++) {
+          // SF requires luts in the order of R G B where B increments first followed by G and R
+          // HWC generates luts in the reverse order with R incrementing first followed by G and B
+          // We generate reverse index here to send data in the required order
+          uint32_t index = x + y * size + z * size * size;
+          float data = FLOAT(GetColorComponent(entries[index], color[order])) / 1023.f;
+          buffer.emplace_back(data);
+        }
+      }
+    }
+  }
+}
+
+static void PopulateLutsFromBuffer(std::vector<float> &buffer, uint32_t size, Color10Bit *entries) {
+  uint32_t buf_idx = 0;
+  const char color[] = {'R', 'G', 'B'};
+  constexpr size_t num_channels = sizeof(color) / sizeof(color[0]);
+  for (size_t order = 0; order < num_channels; order++) {
+    for (uint32_t x = 0; x < size; x++) {
+      for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t z = 0; z < size; z++) {
+          // SF generates luts in the order of R G B with B incrementing first followed by G and R
+          // HWC requires luts in the reverse order where R increments first followed by G and B
+          // We generate reverse index here to send data in the required order
+          uint32_t index = x + y * size + z * size * size;
+          uint32_t data = UINT32(buffer.at(buf_idx) * 1023);
+          if (color[order] == 'R') {
+            entries[index].R = data;
+          } else if (color[order] == 'G') {
+            entries[index].G = data;
+          } else if (color[order] == 'B') {
+            entries[index].B = data;
+          }
+          buf_idx++;
+        }
+      }
+    }
+  }
+}
+
 ComposerHandleImporter mHandleImporter;
 
 BufferCacheEntry::BufferCacheEntry() : mHandle(nullptr) {}
@@ -120,7 +181,48 @@ bool AidlComposerClient::init(std::shared_ptr<SDMDisplayCapsIntf> caps,
   composer_driven_hdcp_ = (value == 1);
   ALOGV("composer_driven_hdcp_: %d", composer_driven_hdcp_);
 
+  getSupportedOverlayProperties();
+
   return true;
+}
+
+void AidlComposerClient::getSupportedOverlayProperties() {
+  // All individually supported properties by hardware
+  supported_pixel_formats_ = {PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,
+                              PixelFormat::RGB_888,      PixelFormat::RGB_565,
+                              PixelFormat::BGRA_8888,    PixelFormat::YV12,
+                              PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
+
+  if (!disable_fp16_support_) {
+    supported_pixel_formats_.push_back(PixelFormat::RGBA_FP16);
+  }
+
+  supported_dataspace_standards_ = {Dataspace::STANDARD_BT709,     Dataspace::STANDARD_BT601_625,
+                                    Dataspace::STANDARD_BT601_525, Dataspace::STANDARD_BT2020,
+                                    Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
+
+  supported_dataspace_transfers_ = {Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2,
+                                    Dataspace::TRANSFER_SMPTE_170M, Dataspace::TRANSFER_LINEAR};
+
+  if (!disable_hdr_gamma_support_) {
+    supported_dataspace_transfers_.push_back(Dataspace::TRANSFER_ST2084);
+    supported_dataspace_transfers_.push_back(Dataspace::TRANSFER_HLG);
+  }
+
+  supported_dataspace_ranges_ = {Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
+                                 Dataspace::RANGE_EXTENDED};
+
+#ifdef COMPOSER3_V4
+  // only 3d lut is currently supported
+  LutProperties lut_prop;
+  lut_prop.dimension = LutProperties::Dimension::THREE_D;
+  lut_prop.size = INT32(sdm::kLutDim);
+  lut_prop.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
+
+  if (!disable_luts_overlay_support_) {
+    supported_lut_props_.push_back(lut_prop);
+  }
+#endif
 }
 
 ::android::status_t AidlComposerClient::notifyCallback(uint32_t command,
@@ -153,9 +255,11 @@ AidlComposerClient::~AidlComposerClient() {
   for (const auto &dpy : mDisplayData) {
     ALOGW("%s: Destroying client resources for display %" PRIu64, __FUNCTION__, dpy.first);
 
+    drawcycle_->AcquireDisplayLock(dpy.first, false /*release_lock */);
     for (const auto &ly : dpy.second.Layers) {
       layer_builder_->DestroyLayer(dpy.first, ly.first);
     }
+    drawcycle_->AcquireDisplayLock(dpy.first, true /*release_lock */);
 
     if (dpy.second.IsVirtual) {
       destroyVirtualDisplay(dpy.first);
@@ -172,6 +276,14 @@ AidlComposerClient::~AidlComposerClient() {
   }
 
   mDisplayData.clear();
+
+  supported_pixel_formats_.clear();
+  supported_dataspace_standards_.clear();
+  supported_dataspace_transfers_.clear();
+  supported_dataspace_ranges_.clear();
+#ifdef COMPOSER3_V4
+  supported_lut_props_.clear();
+#endif
 
   mHandleImporter.cleanup();
 
@@ -192,7 +304,9 @@ ScopedAStatus AidlComposerClient::createLayer(int64_t in_display, int32_t in_buf
     // The display entry may have already been removed by onHotplug.
     if (dpy != mDisplayData.end()) {
       sdm::LayerId layer = 0;
+      drawcycle_->AcquireDisplayLock(in_display, false /*release_lock */);
       auto error = layer_builder_->CreateLayer(in_display, &layer);
+      drawcycle_->AcquireDisplayLock(in_display, true /*release_lock */);
       ALOGV("%s: CreateLayer called out of LLCBC group for layer %" PRId64 " on display-%" PRId64 ".", __FUNCTION__,
             layer, in_display);
       if (error == sdm::kErrorNone) {
@@ -254,7 +368,9 @@ ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_la
 
   std::lock_guard<std::mutex> lock(m_display_command_mutex_[in_display]);
   drawcycle_->WaitForDrawCycleToComplete(in_display);
+  drawcycle_->AcquireDisplayLock(in_display, false /*release_lock */);
   auto error = layer_builder_->DestroyLayer(in_display, in_layer);
+  drawcycle_->AcquireDisplayLock(in_display, true /*release_lock */);
   drawcycle_->LayerStackUpdated(in_display);
 
   auto ret = Error::None;
@@ -552,14 +668,7 @@ ScopedAStatus AidlComposerClient::getMaxLayerPictureProfiles(int64_t in_display,
 
 ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
                                                        const HdcpLevels &in_levels) {
-  {
-    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-    auto dpy = mDisplayData.find(in_display);
-    if (dpy == mDisplayData.end()) {
-      ALOGE("HDCP negotiation failed for display %d: Display not found!", in_display);
-      return TO_BINDER_STATUS(INT32(Error::BadDisplay));
-    }
-  }
+  Error ret = Error::None;
 
   int connected_level_int;
   switch (in_levels.connectedLevel) {
@@ -583,9 +692,31 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
       break;
   }
 
-  if (connected_level_int == -1) {
-    ALOGE("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
-    return TO_BINDER_STATUS(INT32(Error::BadParameter));
+  // check for both bad display and bad parameter simultaneously so the
+  // error code is not overwritten
+  {
+    std::lock_guard<std::mutex> lock(m_display_data_mutex_);
+    auto dpy = mDisplayData.find(in_display);
+    if (dpy == mDisplayData.end()) {
+      ALOGW("HDCP negotiation failed for display %" PRId64 ": Display not found!", in_display);
+      ret = Error::BadDisplay;
+    } else if (connected_level_int == -1) {
+      ALOGW("Unexpected encryption value: %d!", static_cast<int>(in_levels.connectedLevel));
+      ret = Error::BadParameter;
+    }
+  }
+
+  // send invalid levels to SF on fail
+  if (ret != Error::None) {
+    if (callback_) {
+      HdcpLevels invalidLevels = {.connectedLevel = HdcpLevel::HDCP_UNKNOWN,
+                                  .maxLevel = HdcpLevel::HDCP_UNKNOWN};
+      callback_->onHdcpLevelsChanged(in_display, invalidLevels);
+    } else {
+      ALOGW("%s: Callback not registered, cannot notify HDCP failure for display %" PRId64,
+            __FUNCTION__, in_display);
+    }
+    return TO_BINDER_STATUS(INT32(ret));
   }
 
   // TODO(user): b/516707332. Until this content encryption check is added in SF,
@@ -595,7 +726,7 @@ ScopedAStatus AidlComposerClient::startHdcpNegotiation(int64_t in_display,
     if (callback_) {
       callback_->onHdcpLevelsChanged(in_display, in_levels);
     }
-    return ScopedAStatus::ok();
+    return TO_BINDER_STATUS(INT32(ret));
   }
 
   auto error = drawcycle_->MinHdcpEncryptionLevelChanged(in_display, connected_level_int);
@@ -851,58 +982,25 @@ ScopedAStatus AidlComposerClient::getMaxVirtualDisplayCount(int32_t *aidl_return
 }
 
 ScopedAStatus AidlComposerClient::getOverlaySupport(OverlayProperties *aidl_return) {
-  // All individually supported properties by hardware
-  static bool overlay_values_init = false;
-  static std::vector<PixelFormat> pixel_formats{
-      PixelFormat::RGBA_8888,    PixelFormat::RGBX_8888,   PixelFormat::RGB_888,
-      PixelFormat::RGB_565,      PixelFormat::BGRA_8888,   PixelFormat::YV12,
-      PixelFormat::YCRCB_420_SP, PixelFormat::RGBA_1010102};
-
-  if (!disable_fp16_support_ && !overlay_values_init) {
-    pixel_formats.push_back(PixelFormat::RGBA_FP16);
-  }
-
-  static std::vector<Dataspace> dataspace_standards{
-      Dataspace::STANDARD_BT709,  Dataspace::STANDARD_BT601_625, Dataspace::STANDARD_BT601_525,
-      Dataspace::STANDARD_BT2020, Dataspace::STANDARD_ADOBE_RGB, Dataspace::STANDARD_DCI_P3};
-
-  static std::vector<Dataspace> dataspace_transfers{
-      Dataspace::TRANSFER_SRGB, Dataspace::TRANSFER_GAMMA2_2, Dataspace::TRANSFER_SMPTE_170M,
-      Dataspace::TRANSFER_LINEAR};
-
-  if (!disable_hdr_gamma_support_ && !overlay_values_init) {
-    dataspace_transfers.push_back(Dataspace::TRANSFER_ST2084);
-    dataspace_transfers.push_back(Dataspace::TRANSFER_HLG);
-  }
-  overlay_values_init = true;
-
-  static std::vector<Dataspace> dataspace_ranges{Dataspace::RANGE_FULL, Dataspace::RANGE_LIMITED,
-                                                 Dataspace::RANGE_EXTENDED};
-  static bool mixed_colorspaces_support = true;
+  bool mixed_colorspaces_support = true;
 
   OverlayProperties::SupportedBufferCombinations supported_combination;
 
   // Combination 1 - All support pixel formats work for all supported colorspaces
   // Since all pixel formats work for all colorspaces only 1 entry is required
-  supported_combination.pixelFormats = std::move(pixel_formats);
-  supported_combination.standards = std::move(dataspace_standards);
-  supported_combination.transfers = std::move(dataspace_transfers);
-  supported_combination.ranges = std::move(dataspace_ranges);
+  supported_combination.pixelFormats = supported_pixel_formats_;
+  supported_combination.standards = supported_dataspace_standards_;
+  supported_combination.transfers = supported_dataspace_transfers_;
+  supported_combination.ranges = supported_dataspace_ranges_;
 
   aidl_return->combinations.emplace_back(supported_combination);
   aidl_return->supportMixedColorSpaces = mixed_colorspaces_support;
 
 #ifdef COMPOSER3_V4
-  // only 3d lut is currently supported
-  LutProperties supported_lut_props;
-  supported_lut_props.dimension = LutProperties::Dimension::THREE_D;
-  supported_lut_props.size = INT32(sdm::kLutDim);
-  supported_lut_props.samplingKeys.push_back(LutProperties::SamplingKey::RGB);
-
-  if (!disable_luts_overlay_support_) {
+  if (!supported_lut_props_.empty()) {
     // initialize optional vector
     aidl_return->lutProperties.emplace();
-    aidl_return->lutProperties->emplace_back(supported_lut_props);
+    aidl_return->lutProperties->assign(supported_lut_props_.begin(), supported_lut_props_.end());
   }
 #endif
 
@@ -1881,7 +1979,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
   if (cmd == LayerLifecycleBatchCommandType::CREATE) {
     ALOGV("%s: LayerLifecycleBatchCommandType::CREATE layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
+    mClient.drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
     auto error = mClient.layer_builder_->CreateLayer(display, &layer);
+    mClient.drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
     if (error == sdm::kErrorNone) {
       mClient.drawcycle_->LayerStackUpdated(display);
       std::lock_guard<std::mutex> lock(mClient.m_display_data_mutex_);
@@ -1896,7 +1996,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerLifecycleBatchCommandType
     ALOGV("%s: LayerLifecycleBatchCommandType::DESTROY layer %" PRId64 " for display-%" PRId64 ".", __FUNCTION__,
           layer, display);
     mClient.drawcycle_->WaitForDrawCycleToComplete(display);
+    mClient.drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
     auto error = mClient.layer_builder_->DestroyLayer(display, layer);
+    mClient.drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
     mClient.drawcycle_->LayerStackUpdated(display);
 
     if (error == sdm::kErrorNone) {
@@ -2072,11 +2174,18 @@ void AidlComposerClient::CommandEngine::executeSetLayerPlaneAlpha(int64_t displa
 #ifdef COMPOSER3_V4
 void AidlComposerClient::CommandEngine::executeSetLayerLuts(int64_t display, int64_t layer,
                                                             const Luts &luts) {
-  // TODO(user): Translate Luts to Lut3d once supported, refer to populateDisplayLuts
-  // to reverse operation and AOSP LutShader.cpp to read luts from fd through mmap
   Lut3d lut_3d;
-  lut_3d.validLutEntries = luts.pfd.get() >= 0;
+  auto error = translateLayerLuts(luts, &lut_3d);
+  if (error != Error::None) {
+    writeError(__FUNCTION__, display, error);
+    return;
+  }
+
   auto err = mClient.layer_builder_->SetLayerLuts(display, layer, &lut_3d);
+  // delete valid lutEntries after setting it on the layer
+  if (lut_3d.validLutEntries) {
+    delete[] lut_3d.lutEntries;
+  }
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, display, Error::BadConfig);
   }
@@ -2132,7 +2241,9 @@ void AidlComposerClient::CommandEngine::executeSetLayerVisibleRegion(
 
 void AidlComposerClient::CommandEngine::executeSetLayerZOrder(int64_t display, int64_t layer,
                                                               const ZOrder &zOrder) {
+  mClient.drawcycle_->AcquireDisplayLock(display, false /*release_lock */);
   auto err = mClient.layer_builder_->SetLayerZOrder(display, layer, zOrder.z);
+  mClient.drawcycle_->AcquireDisplayLock(display, true /*release_lock */);
   if (err != sdm::kErrorNone) {
     writeError(__FUNCTION__, display, Error::BadConfig);
   }
@@ -2421,6 +2532,52 @@ Error AidlComposerClient::CommandEngine::getBufferLuts(
   return Error::None;
 }
 
+Error AidlComposerClient::CommandEngine::translateLayerLuts(const Luts &luts, Lut3d *lut_3d) {
+  auto fd = luts.pfd.get();
+  lut_3d->validLutEntries = fd >= 0;
+  lut_3d->validGridEntries = false;  // currently not supported
+  if (!lut_3d->validLutEntries) {
+    return Error::None;
+  }
+
+  std::vector<float> buffer;
+  auto &offsets = luts.offsets;
+  auto &final_lut_prop = luts.lutProperties[offsets->size() - 1];
+  int final_size = offsets->at(offsets->size() - 1);
+  lut_3d->dim = final_lut_prop.size;
+  int final_lut_size = lut_3d->dim;
+
+  // only one 3d lut is supported so we accept the final lut if it is 3D or return error
+  if (offsets->size() > 1) {
+    ALOGW("Multiple luts received for layer which is not supported");
+    return Error::Unsupported;
+  } else if (final_lut_prop.dimension == LutProperties::Dimension::THREE_D) {
+    final_lut_size = lut_3d->dim * lut_3d->dim * lut_3d->dim * 3;
+  } else {
+    ALOGW("1D LUT received for layer which is not supported");
+    return Error::Unsupported;
+  }
+  final_size += final_lut_size;
+  size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
+
+  // decode the shared memory of luts
+  float *ptr = (float *)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (ptr == MAP_FAILED) {
+    ALOGE("MAP_FAILED: fd %d", fd);
+    return Error::BadConfig;
+  }
+
+  buffer = std::vector<float>(ptr, ptr + final_size);
+  munmap(ptr, buffer_size);
+
+  lut_3d->lutEntries = new Color10Bit[lut_3d->dim * lut_3d->dim * lut_3d->dim];
+
+  // TODO(user): take correct lut_size when multiple luts will be supported
+  PopulateLutsFromBuffer(buffer, lut_3d->dim, lut_3d->lutEntries);
+
+  return Error::None;
+}
+
 Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, bool reset_luts,
                                                              Luts *luts, int32_t *lut_fd) {
   if (!lut_3d) {
@@ -2453,19 +2610,13 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, bool
   }
 
   // calculate size of buffer
-  uint32_t final_size = 0;
-  for (auto count = 0; count < num_offsets - 1; count++) {
-    // size of lut is equal to offset of next lut
-    final_size += luts->offsets->at(count + 1);
-  }
+  int final_lut_size = luts->lutProperties[num_offsets - 1].size;
+  int final_size = luts->offsets->at(num_offsets - 1);
 
-  // calculate the size of last lut
-  uint32_t exponent =
-      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
-  uint32_t channels =
-      (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) ? 3 : 1;
-  uint32_t lut_size = std::pow(luts->lutProperties[num_offsets - 1].size, exponent);
-  final_size += lut_size * channels;
+  if (luts->lutProperties[num_offsets - 1].dimension == LutProperties::Dimension::THREE_D) {
+    final_lut_size = final_lut_size * final_lut_size * final_lut_size * 3;
+  }
+  final_size += final_lut_size;
   size_t buffer_size = static_cast<size_t>(final_size) * sizeof(float);
 
   // use `ashmem_create_region` to create a shared memory segment
@@ -2486,15 +2637,7 @@ Error AidlComposerClient::CommandEngine::populateDisplayLuts(Lut3d *lut_3d, bool
   std::vector<float> buffer;
   buffer.reserve(final_size);
   // TODO(user): take correct lut_size when multiple luts will be supported
-  for (auto index = 0; index < lut_size; index++) {
-    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].R) / 1023.f);
-  }
-  for (auto index = 0; index < lut_size; index++) {
-    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].G) / 1023.f);
-  }
-  for (auto index = 0; index < lut_size; index++) {
-    buffer.emplace_back(static_cast<float>(lut_3d->lutEntries[index].B) / 1023.f);
-  }
+  PopulateBufferFromLuts(buffer, lut_3d->dim, lut_3d->lutEntries);
 
   if (data) {
     std::memcpy((float *)data, buffer.data(), buffer_size);
