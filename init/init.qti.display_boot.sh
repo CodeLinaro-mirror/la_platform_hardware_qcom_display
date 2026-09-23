@@ -299,6 +299,7 @@ case "$target" in
     #SOC ID for Sun APQ is 639
     #SOC ID for CQ8750S is 705
     #SOC ID for CQ8725S is 706
+    setprop vendor.display.perf.version 3
     case "$soc_hwid" in
       618|639|705|706)
         setprop vendor.display.enable_fb_scaling 0
