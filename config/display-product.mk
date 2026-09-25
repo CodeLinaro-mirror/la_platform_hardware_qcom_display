@@ -149,9 +149,16 @@ PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.sf.color_mode=7
 else
 PRODUCT_PROPERTY_OVERRIDES += \
-    debug.sf.enable_hwc_vds=1 \
-    vendor.display.vds_allow_hwc=0 \
     persist.sys.sf.color_mode=9
+    ifeq ($(shell [ $(PLATFORM_VERSION) -gt 12 ] && echo true),true)
+        PRODUCT_PROPERTY_OVERRIDES += \
+        debug.sf.enable_hwc_vds=0 \
+        vendor.display.vds_allow_hwc=1
+    else
+        PRODUCT_PROPERTY_OVERRIDES += \
+        debug.sf.enable_hwc_vds=1 \
+        vendor.display.vds_allow_hwc=0
+    endif
 endif
 
 #Set WCG properties
