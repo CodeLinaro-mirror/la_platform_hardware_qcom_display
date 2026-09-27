@@ -28,8 +28,8 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -100,6 +100,7 @@ void HWCBufferSyncHandler::GetSyncInfo(int fd, std::ostringstream *os) {
 
   struct sync_fence_info *fence_info = sync_get_fence_info(file_info);
   if (!fence_info) {
+    sync_file_info_free(file_info);
     return;
   }
 
@@ -110,6 +111,7 @@ void HWCBufferSyncHandler::GetSyncInfo(int fd, std::ostringstream *os) {
     *os << ", obj_name: " << fence_info[i].obj_name;
     *os << ", ts: " << fence_info[i].timestamp_ns;
   }
+  sync_file_info_free(file_info);
 }
 
 uint64_t HWCBufferSyncHandler::GetSignalTime(int fd) {
@@ -122,16 +124,20 @@ uint64_t HWCBufferSyncHandler::GetSignalTime(int fd) {
   struct sync_fence_info *fence_info = sync_get_fence_info(file_info);
   if (!fence_info) {
     DLOGW("Null fence_info, fd: %d!", fd);
+    sync_file_info_free(file_info);
     return 0;
   }
 
+  uint64_t timestamp = 0;
   for (size_t i = 0; i < file_info->num_fences; i++) {
     if (fence_info[i].status == 1) {
-      return fence_info[i].timestamp_ns;
+      timestamp = fence_info[i].timestamp_ns;
+      break;
     }
   }
 
-  return 0;
+  sync_file_info_free(file_info);
+  return timestamp;
 }
 
 }  // namespace sdm
