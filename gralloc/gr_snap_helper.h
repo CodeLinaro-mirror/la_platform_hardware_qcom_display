@@ -6,6 +6,7 @@
 #ifndef __GR_SNAP_HELPER_H__
 #define __GR_SNAP_HELPER_H__
 
+#include <cstdint>
 #include <functional>
 #include <list>
 
@@ -61,6 +62,21 @@
 
 #include "gr_buf_descriptor.h"
 #include "gr_snap_debugger.h"
+#ifdef GRALLOC_COMMON_V7
+#if defined(__has_include) && __has_include(<SMPTE2094_50.h>)
+#include <SMPTE2094_50.h>
+#else
+constexpr uint32_t QTI_SMPTE2094_50_METADATA_SIZE_BYTES = 1024 * 42;
+
+typedef struct vendor_qti_hardware_display_common_SMPTE2094_50Metadata {
+  uint64_t size;
+  uint8_t metadataPayload[QTI_SMPTE2094_50_METADATA_SIZE_BYTES];
+} vendor_qti_hardware_display_common_SMPTE2094_50Metadata;
+#endif
+
+constexpr vendor_qti_hardware_display_common_MetadataType QTI_SMPTE2094_50_METADATA_TYPE =
+    static_cast<vendor_qti_hardware_display_common_MetadataType>(24);
+#endif
 
 namespace aidl::android::hardware::graphics::allocator {
 class AllocationResult;
@@ -120,6 +136,9 @@ using SnapVideoTranscodeStatsMetadata =
 using SnapVideoTimestampInfo = vendor_qti_hardware_display_common_VideoTimestampInfo;
 using SnapVideoHistogramMetadata = vendor_qti_hardware_display_common_VideoHistogramMetadata;
 using SnapCustomContentMetadata = vendor_qti_hardware_display_common_CustomContentMetadata;
+#ifdef GRALLOC_COMMON_V7
+using SnapSMPTE2094_50Metadata = vendor_qti_hardware_display_common_SMPTE2094_50Metadata;
+#endif
 using SnapAnamorphicMetadata = vendor_qti_hardware_display_common_QtiAnamorphicMetadata;
 using SnapROIRectMetadata = vendor_qti_hardware_display_common_ROIRectMetadata;
 
@@ -1101,6 +1120,11 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
                                   void *gralloc_out_get = nullptr,
                                   SnapDescriptor *buf_des = nullptr, bool check_metadata_set = true,
                                   int32_t *mapper_return = nullptr);
+#ifdef GRALLOC_COMMON_V7
+  SnapError SMPTE2094_50Helper(SnapHandle *, uint32_t aidl_size, void *gralloc_in_set = nullptr,
+                               void *gralloc_out_get = nullptr, SnapDescriptor *buf_des = nullptr,
+                               bool check_metadata_set = true, int32_t *mapper_return = nullptr);
+#endif
   SnapError MatrixCoefficientsHelper(SnapHandle *, uint32_t aidl_size,
                                      void *gralloc_in_set = nullptr,
                                      void *gralloc_out_get = nullptr,
@@ -1222,6 +1246,11 @@ class GrallocSnapHelper : public GrallocSnapHelperIntf {
           {static_cast<vendor_qti_hardware_display_common_MetadataType>(
                StandardMetadataType::SMPTE2094_40),
            &GrallocSnapHelper::DynamicMetadataHelper},
+#ifdef GRALLOC_COMMON_V7
+          {static_cast<vendor_qti_hardware_display_common_MetadataType>(
+               StandardMetadataType::SMPTE2094_50),
+           &GrallocSnapHelper::SMPTE2094_50Helper},
+#endif
           {COLOR_REMAPPING_INFO, &GrallocSnapHelper::ColorRemappingInfoHelper},
           {HEAP_NAME, &GrallocSnapHelper::HeapNameHelper},
           {IS_UBWC, &GrallocSnapHelper::IsUBWCHelper},
