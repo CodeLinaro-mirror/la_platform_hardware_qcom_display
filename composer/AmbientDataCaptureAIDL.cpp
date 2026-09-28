@@ -35,6 +35,7 @@
 #include <android/binder_manager.h>
 #include <utils/Timers.h>
 #include <dlfcn.h>
+#include <cutils/properties.h>
 
 #include "AmbientDataCaptureAIDL.h"
 
@@ -96,6 +97,9 @@ AmbientDataCaptureAIDL::~AmbientDataCaptureAIDL() {
 
 int AmbientDataCaptureAIDL::InitImageAlgoAdapter(
     const std::optional<std::vector<uint8_t>> &algoConfigsBlob) {
+  smart_selection_limit_ = property_get_int32("vendor.display.adc.smart_selection_limit", 50);
+  ALOGI("%s: Smart selection limit set to %d", __FUNCTION__, smart_selection_limit_);
+
   std::lock_guard<decltype(imagealgo_lock_)> lock_guard(imagealgo_lock_);
   if (imagealgo_adapter_) {
     ALOGI("%s: ImageAlgo SmartSelection adapter already initialized", __FUNCTION__);
@@ -864,6 +868,20 @@ void AmbientDataCaptureAIDL::NotifyCWBStatus(int32_t status, void *hdl) {
     NotifyOutputBuffer(status, hdl);
     return;
   }
+
+  int32_t current_count = ++enqueued_buffer_count_;
+  if (smart_selection_limit_ > 0 && current_count >= smart_selection_limit_) {
+    ALOGI("%s: Enqueued buffer count (%d) reached limit (%d), triggering flushSelected",
+          __FUNCTION__, current_count, smart_selection_limit_);
+
+    sdm::GenericPayload flush_sel_payload;
+    imagealgo::SmartSelectionFlushSelectedInput *flush_sel_input = nullptr;
+    flush_sel_payload.CreatePayload(flush_sel_input);
+    if (flush_sel_input) {
+      flush_sel_input->app_name = imagealgo_app_name_;
+      local_adapter->ProcessOps(imagealgo::kSSFlushSelected, flush_sel_payload, nullptr);
+    }
+  }
 }
 
 void AmbientDataCaptureAIDL::OnImageAlgoBufferRelease(
@@ -968,6 +986,9 @@ void AmbientDataCaptureAIDL::ProcessImageAlgoResult(void *hdl, bool frame_select
     ALOGE("%s: Null buffer handle is detected to notify!", __FUNCTION__);
     return;
   }
+
+  enqueued_buffer_count_--;
+
   std::shared_ptr<IAmbientDataCaptureCallback> callback = nullptr;
   int32_t display_type = 0;
 

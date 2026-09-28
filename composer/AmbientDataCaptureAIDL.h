@@ -52,6 +52,7 @@
 #include <debug_callback_intf.h>
 #include <ISnapMapper.h>
 #include <CWBMetadata.h>
+#include <atomic>
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
 #include <aidl/android/hardware/graphics/composer3/IComposer.h>
@@ -211,6 +212,9 @@ class AmbientDataCaptureAIDL : public BnAmbientDataCapture, public SDMSideBandCo
   std::shared_ptr<imagealgo::SmartSelectionIntf> imagealgo_adapter_ = nullptr;
   std::string imagealgo_app_name_;
   std::mutex imagealgo_lock_;
+
+  std::atomic<int32_t> enqueued_buffer_count_{0};
+  int32_t smart_selection_limit_ = 50;
 
   int InitImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
   int ReconfigImageAlgoAdapter(const std::optional<std::vector<uint8_t>> &algoConfigsBlob);
