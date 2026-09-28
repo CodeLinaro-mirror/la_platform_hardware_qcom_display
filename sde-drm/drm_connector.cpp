@@ -767,6 +767,7 @@ void DRMConnector::ParseModeProperties(uint64_t blob_id, DRMConnectorInfo *info)
   const string preferred_submode_string = "preferred_submode_idx=";
   const string qsync_min_fps = "qsync_min_fps=";
   const string bpp_mode = "bpp_mode=";
+  const string panel_self_refresh_rate = "panel_self_refresh_rate=";
 
   DRMModeInfo *mode_item = &info->modes.at(0);
   DRMSubModeInfo *submode_item = NULL;
@@ -872,6 +873,9 @@ void DRMConnector::ParseModeProperties(uint64_t blob_id, DRMConnectorInfo *info)
       submode_item->panel_compression_mode = std::stoi(string(line, compression_mode.length()));
     } else if (line.find(qsync_min_fps) != string::npos) {
       mode_item->qsync_min_fps = std::stoi(string(line, qsync_min_fps.length()));
+    } else if (line.find(panel_self_refresh_rate) != string::npos) {
+      mode_item->curr_panel_self_refresh_rate =
+              std::stoi(string(line, panel_self_refresh_rate.length()));
     } else if (line.find(bpp_mode) != string::npos) {
       if (!submode_item) {
         DRMSubModeInfo submode = {};
