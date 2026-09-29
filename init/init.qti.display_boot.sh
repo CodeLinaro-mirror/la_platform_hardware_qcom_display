@@ -107,6 +107,7 @@ case "$target" in
         setprop vendor.display.disable_fbt_for_cwb_fallback 0
         setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 0
         setprop vendor.display.disable_demura_opt_singlelm 1
+        setprop vendor.display.enable_early_wakeup_node 1
         if [ "$revision" = "1.0" ]; then
            setprop vendor.display.render_sysui_as_srgb 1
            setprop vendor.display.disable_ucsc_tonemap 1
