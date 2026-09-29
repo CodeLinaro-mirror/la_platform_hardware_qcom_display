@@ -291,11 +291,11 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   DLOGI("Has QSEED3 = %d", hw_resource->has_qseed3);
   DLOGI("Has UBWC = %d", hw_resource->has_ubwc);
   DLOGI("Has Concurrent Writeback = %d", hw_resource->has_concurrent_writeback);
-  DLOGI("Has Src Tonemap = %d", hw_resource->src_tone_map);
+  DLOGI("Has Src Tonemap = %lu", hw_resource->src_tone_map.to_ulong());
   DLOGI("Max Low Bw = %" PRIu64 "", hw_resource->max_bandwidth_low);
-  DLOGI("Max High Bw = % " PRIu64 "", hw_resource->max_bandwidth_high);
+  DLOGI("Max High Bw = %" PRIu64 "", hw_resource->max_bandwidth_high);
   DLOGI("Max Pipe Bw = %" PRIu64 " KBps", hw_resource->max_pipe_bw);
-  DLOGI("MaxSDEClock = % " PRIu64 " Hz", hw_resource->max_sde_clk);
+  DLOGI("MaxSDEClock = %u Hz", hw_resource->max_sde_clk);
   DLOGI("Clock Fudge Factor = %f", hw_resource->clk_fudge_factor);
   DLOGI("Prefill factors:");
   DLOGI("\tTiled_NV12 = %d", hw_resource->macrotile_nv12_factor);
@@ -318,7 +318,7 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
 
     DLOGI("Has Support for multiple bw limits shown below");
     for (int index = 0; index < kBwModeMax; index++) {
-      DLOGI("Mode-index=%d  total_bw_limit=%d and pipe_bw_limit=%d", index,
+      DLOGI("Mode-index=%d  total_bw_limit=%" PRIu64 " and pipe_bw_limit=%" PRIu64, index,
             hw_resource->dyn_bw_info.total_bw_limit[index],
             hw_resource->dyn_bw_info.pipe_bw_limit[index]);
     }
@@ -481,7 +481,7 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
     pipe_caps.master_pipe_id = pipe_obj.second.master_plane_id;
     pipe_caps.block_sec_ui = pipe_obj.second.block_sec_ui;
     pipe_caps.hw_block_mask = pipe_obj.second.hw_block_mask;
-    DLOGI("Adding %s Pipe : Id %d, master_pipe_id : Id %d block_sec_ui: %d hw_block_mask: 0x%x",
+    DLOGI("Adding %s Pipe : Id %d, master_pipe_id : Id %d block_sec_ui: %d hw_block_mask: 0x%lx",
           name.c_str(), pipe_obj.first, pipe_obj.second.master_plane_id,
           pipe_obj.second.block_sec_ui, pipe_obj.second.hw_block_mask.to_ulong());
     pipe_caps.inverse_pma = pipe_obj.second.inverse_pma;
@@ -718,7 +718,7 @@ DisplayError HWInfoDRM::GetHWRotatorInfo(HWResourceInfo *hw_resource) {
   }
 
   DLOGI("V4L2 Rotator: Count = %d, Downscale = %d, Min_downscale = %f," \
-        "Downscale_compression = %d, Max_line_width = %d", hw_resource->hw_rot_info.num_rotator,
+        "Downscale_compression = %d, Max_line_width = %" PRIu64, hw_resource->hw_rot_info.num_rotator,
         hw_resource->hw_rot_info.has_downscale, hw_resource->hw_rot_info.min_downscale,
         hw_resource->hw_rot_info.downscale_compression, hw_resource->hw_rot_info.max_line_width);
 
