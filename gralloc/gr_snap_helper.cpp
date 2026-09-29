@@ -59,6 +59,9 @@ static SnapHandle *SnapHandleFromCNativeHandle(native_handle_t *native_handle,
   SnapHandle *snap_handle = vendor::qti::hardware::display::snapalloc::snap_handle_create(
       native_handle->numFds, native_handle->numInts);
 
+  if (!snap_handle)
+    return nullptr;
+
   for (size_t i = 0; i < native_handle->numFds; i++) {
     int fd = native_handle->data[i];
     snap_handle->buffer_data[i] = pass_fd_ownership ? fd : fcntl(fd, F_DUPFD_CLOEXEC, 0);

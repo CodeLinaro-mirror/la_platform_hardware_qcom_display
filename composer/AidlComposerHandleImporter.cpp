@@ -56,6 +56,7 @@ void ComposerHandleImporter::initialize() {
   void *snap_impl_lib_ = ::dlopen(snapalloc_lib_name.c_str(), RTLD_NOW);
   if (!snap_impl_lib_) {
     ALOGE("Dlopen error for snapalloc impl: %s", dlerror());
+    return;
   }
 
   std::shared_ptr<ISnapMapper> (*LINK_FETCH_ISnapMapper)(DebugCallbackIntf *) = nullptr;
