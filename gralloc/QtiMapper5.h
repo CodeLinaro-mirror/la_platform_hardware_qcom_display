@@ -210,6 +210,9 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40), sizeof(SnapDynamicMetadata)},
       {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_10),
        sizeof(SnapCustomContentMetadata)},
+#ifdef GRALLOC_COMMON_V7
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_50), sizeof(SnapSMPTE2094_50Metadata)},
+#endif
       {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO),
        sizeof(SnapColorRemappingInfo)},
       {static_cast<uint64_t>(SnapMetadataType::MATRIX_COEFFICIENTS),

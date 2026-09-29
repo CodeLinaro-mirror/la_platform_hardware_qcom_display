@@ -377,6 +377,7 @@ class AidlComposerClient : public BnComposerClient,
     Error populateDisplayLuts(Lut3d *lut_3d, bool reset_luts, Luts *luts, int32_t *lut_fd);
     Error getBufferLuts(uint64_t display, const std::vector<SnapHandle *> &buffers,
                         std::unique_ptr<std::vector<Lut3d *>> &out_luts);
+    Error translateLayerLuts(const Luts &luts, Lut3d *lut_3d);
 #endif
 
    private:
@@ -461,8 +462,7 @@ class AidlComposerClient : public BnComposerClient,
 #endif
 
 #ifdef COMPOSER3_V5
-    void executeSetActiveConfigWithSeamless(int64_t display, const ActiveConfigCommand &config,
-                                            bool performing_commit);
+    void executeSetActiveConfigWithSeamless(int64_t display, const ActiveConfigCommand &config);
 #endif
 
     // Commands from extensions (QtiComposer3Client)

@@ -4,6 +4,7 @@ cc_library_shared {
     defaults: [
         "qtidisplay_defaults_headless",
         "qtidisplay_common_defaults",
+        "gralloc_common_version_defaults",
     ],
     vendor: true,
     sanitize: {
@@ -251,6 +252,7 @@ cc_library_shared {
     defaults: [
         "qtidisplay_common_defaults",
         "mapperext_defaults",
+        "gralloc_common_version_defaults",
     ],
     sanitize: {
         integer_overflow: true,
@@ -340,6 +342,38 @@ cc_binary {
     ],
     init_rc: ["vendor.qti.hardware.display.allocator-service.rc"],
     vintf_fragments: ["vendor.qti.hardware.display.allocator-service.xml"],
+}
+
+soong_config_module_type {
+    name: "qtigralloc_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "qtidisplay",
+    variables: [
+        "gralloc_version",
+    ],
+    properties: [
+        "shared_libs",
+        "cflags",
+    ],
+}
+
+soong_config_string_variable {
+    name: "gralloc_version",
+    values: ["lt_v7", "v7"],
+}
+
+qtigralloc_cc_defaults {
+    name: "gralloc_common_version_defaults",
+    soong_config_variables: {
+        gralloc_version: {
+            v7: {
+                shared_libs: [
+                    "android.hardware.graphics.common-V7-ndk",
+                ],
+                cflags: ["-DGRALLOC_COMMON_V7"],
+            }
+        },
+    },
 }
 
 cc_fuzz {
