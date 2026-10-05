@@ -304,9 +304,6 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
 
   auto meta_size = GetMetaDataSize(hnd->reserved_size, buf->custom_content_md_size);
 
-  if (hnd->ubwcp_format)
-    size = hnd->linear_size;
-
   if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base), size, hnd->offset, hnd->fd,
                              buf->ion_handle_main) != 0) {
     return Error::BAD_BUFFER;
@@ -394,6 +391,11 @@ Error BufferManager::ImportHandleLocked(private_handle_t *hnd) {
   hnd->base = 0;
   hnd->base_metadata = 0;
   hnd->gpuaddr = 0;
+  // These fields are transported in the native handle, but are not trusted
+  // after crossing a process boundary.  In particular, FreeBuffer() must
+  // never use an imported handle's linear_size for munmap().
+  hnd->linear_size = 0;
+  hnd->ubwcp_format = 0;
 
   if (ValidateAndMap(hnd)) {
     ALOGE("Failed to map metadata: hnd: %p, fd:%d, id:%" PRIu64, hnd, hnd->fd, hnd->id);
