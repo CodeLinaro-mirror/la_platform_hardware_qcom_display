@@ -28,8 +28,8 @@
 */
 
 /*
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1130,8 +1130,8 @@ void DisplayConfigAIDL::StitchLayers(uint64_t display, sdm::LayerStitchContext *
   std::vector<sdm::StitchParams> gl_params;
   for (auto p : ctx->stitch_params) {
     sdm::StitchParams param;
-    param.src_hnd = sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(p.src_hnd));
-    param.dst_hnd = sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(p.dst_hnd));
+    param.src_hnd = reinterpret_cast<SnapHandle *>(p.src_hnd);
+    param.dst_hnd = reinterpret_cast<SnapHandle *>(p.dst_hnd);
     param.src_rect = SdmRectToGlRect(p.src_rect);
     param.dst_rect = SdmRectToGlRect(p.dst_rect);
     param.scissor_rect = SdmRectToGlRect(p.scissor_rect);
@@ -1167,10 +1167,10 @@ void DisplayConfigAIDL::DestroyLayerStitch(uint64_t display) {
 
 void DisplayConfigAIDL::InitColorConvert(uint64_t display, bool secure) {
   if (color_convert_map_.find(display) == color_convert_map_.end()) {
+    ALOGI("Creating GLColorConvert instance for the display %d", display);
     color_convert_map_.insert({display, nullptr});
+    color_convert_map_.at(display) = GLColorConvert::GetInstance(sdm::kTargetYUV, secure);
   }
-
-  color_convert_map_.at(display) = GLColorConvert::GetInstance(sdm::kTargetYUV, secure);
 }
 
 void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlitContext *ctx) {
@@ -1183,14 +1183,12 @@ void DisplayConfigAIDL::ColorConvertBlit(uint64_t display, sdm::ColorConvertBlit
                      FLOAT(ctx->src_rect.right), FLOAT(ctx->src_rect.bottom)};
   GLRect dst_rect = {FLOAT(ctx->dst_rect.left), FLOAT(ctx->dst_rect.top),
                      FLOAT(ctx->dst_rect.right), FLOAT(ctx->dst_rect.bottom)};
-  native_handle_t *legacy_src_handle =
-      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->src_hnd));
-  native_handle_t *legacy_dst_handle =
-      sdm::SnapHandleToLegacyHandle(reinterpret_cast<SnapHandle *>(ctx->dst_hnd));
 
-  color_convert_map_.at(display)->Blit(legacy_src_handle, legacy_dst_handle, src_rect, dst_rect,
-                                       ctx->src_acquire_fence, ctx->dst_acquire_fence,
-                                       &(ctx->release_fence));
+  color_convert_map_.at(display)->Blit((const SnapHandle *)ctx->src_hnd,
+                                       (const SnapHandle *)ctx->dst_hnd,
+                                        src_rect, dst_rect, ctx->src_acquire_fence,
+                                        ctx->dst_acquire_fence,
+                                        &(ctx->release_fence));
 }
 
 void DisplayConfigAIDL::ResetColorConvert(uint64_t display) {
