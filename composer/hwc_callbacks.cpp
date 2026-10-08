@@ -28,9 +28,9 @@
  */
 
 /*
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  *
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -39,6 +39,8 @@
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/locker.h>
+#include <sys/resource.h>
+#include <hardware/gralloc.h>
 #include "hwc_callbacks.h"
 
 #define __CLASS__ "HWCCallbacks"
@@ -188,6 +190,9 @@ HWC3::Error HWCCallbacks::Register(CallbackCommand descriptor, void *callback_da
 }
 
 HWC3::Error HWCCallbacks::PerformHWCCallback() {
+  if (setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY) != 0) {
+    ALOGW("Couldn't PerformHWCCallback set setPrio: %d", errno);
+  }
   while (1) {
     callback_queue_.wait(&callback_running_);
 
