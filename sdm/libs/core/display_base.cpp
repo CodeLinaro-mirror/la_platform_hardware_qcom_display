@@ -421,14 +421,16 @@ DisplayError DisplayBase::SetupPanelFeatureFactory() {
 
   DynLib feature_impl_lib;
   GetPanelFeatureFactory get_factory_f_ptr = nullptr;
-  if (feature_impl_lib.Open(EXTENSION_LIBRARY_NAME)) {
+  if (feature_impl_lib.Open(EXTENSION_TE_LIBRARY_NAME) ||
+      feature_impl_lib.Open(EXTENSION_LIBRARY_NAME)) {
     if (!feature_impl_lib.Sym(GET_PANEL_FEATURE_FACTORY,
                               reinterpret_cast<void **>(&get_factory_f_ptr))) {
       DLOGE("Unable to load symbols, error = %s", feature_impl_lib.Error());
       return kErrorUndefined;
     }
   } else {
-    DLOGW("Unable to load = %s, error = %s", EXTENSION_LIBRARY_NAME, feature_impl_lib.Error());
+    DLOGW("Unable to load = %s or %s, error = %s", EXTENSION_TE_LIBRARY_NAME,
+          EXTENSION_LIBRARY_NAME, feature_impl_lib.Error());
     DLOGW("SDM Extension is not supported");
     return kErrorNone;
   }
