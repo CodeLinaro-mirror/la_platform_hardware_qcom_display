@@ -138,6 +138,8 @@ public:
       SET_BPP_MODE = 62,                       // Set Panel bpp to 24bpp or 30bpp
       PERFORM_CAC_CONFIG = 63,                 // Set CAC Configuration for the display
       SET_PANEL_FEATURE_CONFIG = 64,           // Common function, Set cfg for panel features
+      SET_PA_HIST_COLLECTION = 65,             // Start/stop PA histogram collection
+      GET_PA_HIST_BINS = 66,                   // Read last PA histogram bins (256 uint32_t)
       COMMAND_LIST_END = 400,
     };
 
