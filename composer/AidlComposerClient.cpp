@@ -263,7 +263,8 @@ ScopedAStatus AidlComposerClient::createVirtualDisplay(int32_t in_width, int32_t
 ScopedAStatus AidlComposerClient::destroyLayer(int64_t in_display, int64_t in_layer) {
   {
     std::lock_guard<std::mutex> lock(m_display_data_mutex_);
-    if (mDisplayData.find(in_display) == mDisplayData.end()) {
+    if (in_display < 0 || in_display >= sdm::kNumDisplays ||
+        mDisplayData.find(in_display) == mDisplayData.end()) {
       return TO_BINDER_STATUS(INT32(Error::BadDisplay));
     }
   }
