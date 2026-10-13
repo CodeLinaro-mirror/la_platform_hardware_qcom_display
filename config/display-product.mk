@@ -110,8 +110,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.enable_hdr10_gpu_target=1 \
     debug.sf.predict_hwc_composition_strategy=0 \
     debug.sf.treat_170m_as_sRGB=1 \
-    vendor.display.enable_display_extensions=1 \
-    debug.graphics.game_default_frame_rate.disabled=1
+    vendor.display.enable_display_extensions=1
 
 ifeq ($(PLATFORM_VERSION), 15)
 PRODUCT_PROPERTY_OVERRIDES +=  debug.sf.auto_latch_unsignaled=1
@@ -237,6 +236,12 @@ endif
 
 ifeq ($(filter $(TARGET_BOARD_PLATFORM), kalama niobe neo61 pitti), $(TARGET_BOARD_PLATFORM))
     SOONG_CONFIG_qtidisplay_ubwcp_headers := false
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM)$(TARGET_BOARD_SUFFIX), pitti_wear32)
+    PRODUCT_PROPERTY_OVERRIDES += debug.graphics.game_default_frame_rate.disabled=0
+else
+    PRODUCT_PROPERTY_OVERRIDES += debug.graphics.game_default_frame_rate.disabled=1
 endif
 
 # Techpack values
