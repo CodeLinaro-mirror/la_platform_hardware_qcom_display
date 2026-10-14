@@ -61,11 +61,12 @@ case "$target" in
     # SOC ID for Art H is 760
     # SOC ID for Pebble is 735
     # SOC ID for Pebble APQ is 741
-    # SOC ID for Coast is 761
     # SOC ID for Pebble CQS quadcore is 793
     # SOC ID for Pebble CQS hexacore is 794
+    # SOC ID for Coast is 761
+    # SOC ID for Coast APQ is 797
     case "$soc_hwid" in
-      707|708|755|760|735|741|761|793|794)
+      707|708|755|760|735|741|793|794)
         setprop vendor.display.target.version 6
         setprop vendor.display.enable_rotator_ui 1
         setprop vendor.display.thermal.version 1
@@ -85,10 +86,30 @@ case "$target" in
         setprop vendor.display.disable_fbt_for_cwb_fallback 1
         setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 1
         setprop vendor.display.disable_demura_opt_singlelm 1
-        #SOC ID 761 (coast.1.0) do not support UCSC
-        if [ "$soc_hwid" -eq 761 ] && [ "$revision" = "1.0" ]; then
-            setprop vendor.display.render_sysui_as_srgb 1
-            setprop vendor.display.disable_ucsc_tonemap 1
+        ;;
+      761|797)
+        setprop vendor.display.target.version 6
+        setprop vendor.display.enable_rotator_ui 1
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.force_gpu_composition 0
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_inline_writeback 1
+        setprop vendor.display.disable_noise_layer 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.composer_driven_hdcp 0
+        setprop vendor.display.enable_power_save_mode_for_video 1
+        setprop vendor.display.core_id_mask 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.disable_fbt_for_cwb_fallback 0
+        setprop vendor.gralloc.enable_ubwc_lossy_format_fbt 0
+        setprop vendor.display.disable_demura_opt_singlelm 1
+        if [ "$revision" = "1.0" ]; then
+           setprop vendor.display.render_sysui_as_srgb 1
+           setprop vendor.display.disable_ucsc_tonemap 1
         fi
         ;;
     esac
@@ -112,6 +133,24 @@ case "$target" in
     ;;
     "shikra")
     #SOC ID for shikra varaints
+    case "$soc_hwid" in
+      759 | 758 | 756)
+        setprop vendor.display.target.version 7
+        setprop vendor.display.enable_rotator_ui 0
+        setprop vendor.display.thermal.version 1
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.gralloc.disable_ubwc 1
+        setprop vendor.display.disable_get_screen_decorator_support 1
+        ;;
+    esac
+    ;;
+    "sa2390")
+    #SOC ID for sa2390 variants (same SoC family as shikra)
     case "$soc_hwid" in
       759 | 758 | 756)
         setprop vendor.display.target.version 7
@@ -205,7 +244,6 @@ case "$target" in
         fi
         # Enable null display for Hamoa QCB and set Hamoa-specific properties
         if [ "$soc_hwid" -eq 555 ]; then
-          setprop vendor.gralloc.camera_preview_uses_usb_hal 1
           if [ "$platform_subtype_id" -eq 43 ]; then
             setprop vendor.display.enable_null_display 1
           fi
@@ -261,6 +299,7 @@ case "$target" in
     #SOC ID for Sun APQ is 639
     #SOC ID for CQ8750S is 705
     #SOC ID for CQ8725S is 706
+    setprop vendor.display.perf.version 3
     case "$soc_hwid" in
       618|639|705|706)
         setprop vendor.display.enable_fb_scaling 0
@@ -405,22 +444,38 @@ case "$target" in
     "taro")
     #Set property to differentiate Waipio
     #SOC ID for Waipio is 457
+    #SOC ID for Waipio is 482
+    #SOC ID for Waipio is 552
     #SOC ID for Cape MSM is 530
     #SOC ID for Cape APQ is 531
     #SOC ID for Cape 4g is 540
+    setprop vendor.display.disable_query_luts 1
     case "$soc_hwid" in
-        457)
+        457|482|552)
         setprop vendor.gralloc.use_dma_buf_heaps 1
         setprop vendor.display.enable_posted_start_dyn 2
         setprop vendor.display.enable_allow_idle_fallback 1
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_rotator_ui 1
-        setprop vendor.display.enable_spec_fence 0
         setprop vendor.display.thermal.version 1
         setprop vendor.display.enable_rc_support 1
-        setprop vendor.display.target.version 3
         setprop vendor.display.enable_fb_scaling 0
         setprop vendor.display.disable_cwb_idle_fallback 1
+        setprop vendor.display.enable_spec_fence 1
+        setprop vendor.display.target.version 5
+        setprop vendor.display.supports_background_blur 0
+        setprop vendor.gralloc.enable_snapalloc 1
+        setprop vendor.display.disable_sdr_dimming 1
+        setprop vendor.display.perf.version 4
+        setprop vendor.display.enable_inline_writeback 0
+        setprop vendor.display.disable_gpu_color_convert 1
+        setprop vendor.display.cpu_cluster_boost_mask 6
+        setprop vendor.display.enable_optimal_refresh_rate 1
+        setprop vendor.display.refresh_rate_changeable 1
+        setprop vendor.display.enable_brightness_drm_prop 1
+        setprop vendor.display.enable_idle_content_fps_hint 1
+        setprop vendor.display.enable_privacy_layers 1
+        setprop vendor.display.disable_llcbc_support 1
         ;;
         530|531|540)
         setprop vendor.gralloc.use_dma_buf_heaps 1

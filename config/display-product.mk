@@ -110,10 +110,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
 ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.enable_advanced_sf_phase_offset=1 \
-    debug.sf.use_phase_offsets_as_durations=1 \
-    debug.sf.late.app.duration=13666666 \
-    debug.sf.early.app.duration=13666666 \
-    debug.sf.earlyGl.app.duration=13666666
+    debug.sf.use_phase_offsets_as_durations=1
 endif
 
 # Begin Android XR
@@ -133,14 +130,20 @@ endif
 ifneq ($(TARGET_DEFINES_AXR_CONFIGURATION), true)
 ifeq ($(filter vienna vienna64, $(TARGET_BOARD_PLATFORM)),$(TARGET_BOARD_PLATFORM))
 PRODUCT_PROPERTY_OVERRIDES += \
-    debug.sf.early.sf.duration=15555555 \
-    debug.sf.earlyGl.sf.duration=15555555 \
-    debug.sf.late.sf.duration=15555555
+    debug.sf.early.sf.duration=18000000 \
+    debug.sf.earlyGl.sf.duration=18000000 \
+    debug.sf.late.sf.duration=18000000 \
+    debug.sf.early.app.duration=18000000 \
+    debug.sf.earlyGl.app.duration=18000000 \
+    debug.sf.late.app.duration=18000000
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.early.sf.duration=10500000 \
     debug.sf.earlyGl.sf.duration=10500000 \
-    debug.sf.late.sf.duration=10500000
+    debug.sf.late.sf.duration=10500000 \
+    debug.sf.early.app.duration=13666666 \
+    debug.sf.earlyGl.app.duration=13666666 \
+    debug.sf.late.app.duration=13666666
 endif
 endif
 
@@ -269,7 +272,7 @@ $(call soong_config_set, qtidisplay, hy33, false )
 $(call soong_config_set, qtidisplay, llvmcov, false )
 $(call soong_config_set, qtidisplay, smmu_proxy, false )
 $(call soong_config_set, qtidisplay, ubwcp_headers, true )
-$(call soong_config_set, qtidisplay, composer_version, v3_5 )
+$(call soong_config_set, qtidisplay, composer_version, v3_6 )
 $(call soong_config_set, qtidisplay, gralloc_version, v7 )
 $(call soong_config_set, qtidisplay, mapper_ext, true )
 $(call soong_config_set, qtidisplay, hw_fence_disabled, false)
@@ -308,7 +311,7 @@ ifeq ($(PLATFORM_VERSION_CODENAME), $(PLATFORM_VERSION))
             $(call soong_config_set, qtidisplay, gralloc_version, v7 )
         endif
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), CinnamonBun DEV))
-      $(call soong_config_set, qtidisplay, composer_version, v3_5 )
+      $(call soong_config_set, qtidisplay, composer_version, v3_6 )
       $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 # AFTER FRC
@@ -332,6 +335,9 @@ else
     else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 17))
       $(call soong_config_set, qtidisplay, composer_version, v3_5 )
       $(call soong_config_set, qtidisplay, gralloc_version, v7 )
+    else ifeq ($(PLATFORM_VERSION), $(filter $(PLATFORM_VERSION), 18))
+      $(call soong_config_set, qtidisplay, composer_version, v3_6 )
+      $(call soong_config_set, qtidisplay, gralloc_version, v7 )
     endif
 endif
 
@@ -352,7 +358,7 @@ ifeq ($(filter $(TARGET_BOARD_PLATFORM), neo61), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, neo, true )
 endif
 
-ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar hamoa shikra), $(TARGET_BOARD_PLATFORM))
+ifeq ($(filter $(TARGET_BOARD_PLATFORM), monaco neo61 vienna malabar hamoa shikra sa2390), $(TARGET_BOARD_PLATFORM))
     $(call soong_config_set, qtidisplay, hw_fence_disabled, true )
 endif
 
