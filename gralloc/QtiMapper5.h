@@ -137,7 +137,6 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
                           uint64_t *_Nonnull outReservedSize) override;
 
  private:
-  void WaitFenceFd(int fence_fd);
   Error DumpBufferMetadata(buffer_handle_t _Nonnull buffer,
                            AIMapper_DumpBufferCallback _Nonnull dumpBufferCallback,
                            void *_Null_unspecified context);
@@ -210,6 +209,9 @@ class QtiMapper5 final : public ::vendor::mapper::IMapperV5Impl {
       {static_cast<uint64_t>(StandardMetadataType::CTA861_3), sizeof(SnapContentLightLevel)},
       {static_cast<uint64_t>(SnapMetadataType::DYNAMIC_METADATA), sizeof(SnapDynamicMetadata)},
       {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_40), sizeof(SnapDynamicMetadata)},
+#ifdef GRALLOC_COMMON_V7
+      {static_cast<uint64_t>(StandardMetadataType::SMPTE2094_50), sizeof(SnapSMPTE2094_50Metadata)},
+#endif
       {static_cast<uint64_t>(SnapMetadataType::COLOR_REMAPPING_INFO),
        sizeof(SnapColorRemappingInfo)},
       {static_cast<uint64_t>(SnapMetadataType::MATRIX_COEFFICIENTS),
