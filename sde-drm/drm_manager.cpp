@@ -27,6 +27,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #include <drm_logger.h>
 
 #include <string.h>
@@ -504,4 +511,8 @@ uint32_t DRMManager::GetCrtcCount() {
   return crtc_mgr_->GetCrtcCount();
 }
 
+int DRMManager::GetPossibleEncoders(uint32_t connector_id, std::set<uint32_t> *possible_encoders) {
+  int ret = conn_mgr_->GetPossibleEncoders(connector_id, possible_encoders);
+  return ret;
+}
 }  // namespace sde_drm

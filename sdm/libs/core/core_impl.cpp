@@ -23,11 +23,11 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <dlfcn.h>
 #include <signal.h>
@@ -71,7 +71,8 @@ DisplayError CoreImpl::Init() {
   DisplayError error = kErrorNone;
 
   // Try to load extension library & get handle to its interface.
-  if (extension_lib_.Open(EXTENSION_LIBRARY_NAME)) {
+  if (extension_lib_.Open(EXTENSION_TE_LIBRARY_NAME) ||
+      extension_lib_.Open(EXTENSION_LIBRARY_NAME)) {
     if (!extension_lib_.Sym(CREATE_EXTENSION_INTERFACE_NAME,
                             reinterpret_cast<void **>(&create_extension_intf_)) ||
         !extension_lib_.Sym(DESTROY_EXTENSION_INTERFACE_NAME,
@@ -89,9 +90,11 @@ DisplayError CoreImpl::Init() {
 #ifdef TRUSTED_VM
     // Any library linked to libsdmextension is not present for LE, LE wont be able to load the
     // libsdmextension library due to undefined reference. To avoid it mark it as fatal on LE
-    DLOGE("Unable to load = %s, error = %s", EXTENSION_LIBRARY_NAME, extension_lib_.Error());
+    DLOGE("Unable to load = %s or %s, error = %s", EXTENSION_TE_LIBRARY_NAME,
+          EXTENSION_LIBRARY_NAME, extension_lib_.Error());
 #else
-    DLOGW("Unable to load = %s, error = %s", EXTENSION_LIBRARY_NAME, extension_lib_.Error());
+    DLOGW("Unable to load = %s or %s, error = %s", EXTENSION_TE_LIBRARY_NAME,
+          EXTENSION_LIBRARY_NAME, extension_lib_.Error());
 #endif
   }
 
