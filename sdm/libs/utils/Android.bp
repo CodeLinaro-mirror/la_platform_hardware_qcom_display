@@ -2,14 +2,18 @@
 cc_library_shared {
 
     name: "libsdmutils",
-    defaults: ["display_defaults"],
+    defaults: ["display_defaults", "dlog_defaults", "qtidisplay_sdv_defaults"],
     sanitize: {
         integer_overflow: true,
     },
     vendor: true,
 
-    header_libs: ["display_headers"],
-    cflags: ["-DLOG_TAG=\"SDM\""],
+    header_libs: [
+        "display_headers",
+    ],
+    cflags: [
+        "-DLOG_TAG=\"SDM\"",
+    ],
     srcs: [
         "debug.cpp",
         "rect.cpp",
@@ -18,5 +22,7 @@ cc_library_shared {
         "utils.cpp",
     ],
 
-    shared_libs: ["libdisplaydebug"],
+    shared_libs: [
+        "libdisplaydebug",
+    ],
 }

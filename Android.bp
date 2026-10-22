@@ -12,6 +12,7 @@ soong_config_module_type {
         "llvmcov",
         "smmu_proxy",
         "ubwcp_headers",
+        "target_sdv_enabled",
     ],
     properties: [
         "cflags",
@@ -86,6 +87,18 @@ qtidisplay_cc_defaults {
             cflags: ["-DTARGET_USES_UBWCP"],
         },
         var3 : {
+            enabled: false,
+            conditions_default: {
+                enabled: true,
+            },
+        },
+    },
+}
+
+qtidisplay_cc_defaults {
+    name: "qtidisplay_sdv_defaults",
+    soong_config_variables: {
+        target_sdv_enabled: {
             enabled: false,
             conditions_default: {
                 enabled: true,

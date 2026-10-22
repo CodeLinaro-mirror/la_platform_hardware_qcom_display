@@ -137,7 +137,8 @@ cc_library_shared {
     name: "libgralloccore",
     defaults: [
         "qtidisplay_common_defaults",
-        "qtidisplay_smmu_header_defaults"
+        "qtidisplay_smmu_header_defaults",
+        "qtidisplay_sdv_defaults",
     ],
     sanitize: {
         integer_overflow: true,
@@ -224,7 +225,7 @@ cc_library_shared {
 //mapper5
 cc_library_shared {
     name: "mapper.qti",
-    defaults: ["qtidisplay_common_defaults"],
+    defaults: ["qtidisplay_common_defaults", "qtidisplay_sdv_defaults"],
     sanitize: {
         integer_overflow: true,
     },
@@ -336,6 +337,7 @@ cc_binary {
     name: "vendor.qti.hardware.display.allocator-service",
     defaults: [
         "disp_config_idl_allocator_defaults",
+        "qtidisplay_sdv_defaults",
     ],
     sanitize: {
         integer_overflow: true,

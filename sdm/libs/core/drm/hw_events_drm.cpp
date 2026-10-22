@@ -282,7 +282,7 @@ void HWEventsDRM::WakeUpEventThread() {
       uint64_t exit_value = 1;
       ssize_t write_size = Sys::write_(poll_fds_[i].fd, &exit_value, sizeof(uint64_t));
       if (write_size != sizeof(uint64_t)) {
-        DLOGW("Error triggering exit fd (%d). write size = %d, error = %s", poll_fds_[i].fd,
+        DLOGW("Error triggering exit fd (%d). write size = %zu, error = %s", poll_fds_[i].fd,
               write_size, strerror(errno));
       }
       break;
@@ -552,7 +552,7 @@ void HWEventsDRM::HandlePanelDead(char *data) {
   }
 
   if (size > kMaxStringLength) {
-    DLOGE("event size %d is greater than event buffer size %zd\n", size, kMaxStringLength);
+    DLOGE("event size %d is greater than event buffer size %d\n", size, kMaxStringLength);
     return;
   }
 
@@ -602,7 +602,7 @@ void HWEventsDRM::HandleIdleTimeout(char *data) {
   }
 
   if (size > kMaxStringLength) {
-    DLOGE("event size %d is greater than event buffer size %zd\n", size, kMaxStringLength);
+    DLOGE("event size %d is greater than event buffer size %d\n", size, kMaxStringLength);
     return;
   }
 
@@ -648,7 +648,7 @@ void HWEventsDRM::HandleIdlePowerCollapse(char *data) {
   }
 
   if (size > kMaxStringLength) {
-    DLOGE("event size %d is greater than event buffer size %zd\n", size, kMaxStringLength);
+    DLOGE("event size %d is greater than event buffer size %d\n", size, kMaxStringLength);
     return;
   }
 
@@ -693,7 +693,7 @@ void HWEventsDRM::HandleHwRecovery(char *data) {
   }
 
   if (size > kMaxStringLength) {
-    DLOGE("Hardware recovery event size %d is greater than event buffer size %zd\n", size,
+    DLOGE("Hardware recovery event size %d is greater than event buffer size %d\n", size,
           kMaxStringLength);
     return;
   }
@@ -713,7 +713,7 @@ void HWEventsDRM::HandleHwRecovery(char *data) {
                                    (sizeof(event_resp->base) + sizeof(event_resp->info));
         // expect up to uint32_t from driver
         if (size_of_data > sizeof(uint32_t)) {
-          DLOGE("Size of hardware recovery event data: %" PRIu32 " exceeds %zd", size_of_data,
+          DLOGE("Size of hardware recovery event data: %zu exceeds %zu", size_of_data,
                 sizeof(uint32_t));
           return;
         }

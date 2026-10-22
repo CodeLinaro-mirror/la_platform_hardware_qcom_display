@@ -1,4 +1,5 @@
 ifneq ($(TARGET_DISABLE_DISPLAY),true)
+ifneq ($(TARGET_SDV_ENABLED),true)
 sdm-libs := sdm/libs
 display-hals := include $(sdm-libs)/utils $(sdm-libs)/core libdebug
 
@@ -21,4 +22,5 @@ ifneq ($(filter msm% apq%,$(TARGET_BOARD_PLATFORM)),)
     include $(call all-named-subdir-makefiles,$(display-hals))
 endif
 endif
+endif # TARGET_SDV_ENABLED
 endif #TARGET_DISABLE_DISPLAY
