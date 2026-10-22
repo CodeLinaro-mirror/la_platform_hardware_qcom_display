@@ -106,21 +106,6 @@ Error QtiMapper5::freeBuffer(buffer_handle_t _Nonnull buffer) {
   return AIMAPPER_ERROR_NONE;
 }
 
-void QtiMapper5::WaitFenceFd(int fence_fd) {
-  if (fence_fd < 0) {
-    return;
-  }
-
-  const int timeout = 3000;
-  ATRACE_BEGIN("fence wait");
-  const int error = sync_wait(fence_fd, timeout);
-  ATRACE_END();
-  if (error < 0) {
-    ALOGE("QtiMapper5: lock fence %d didn't signal in %u ms -  error: %s", fence_fd, timeout,
-          strerror(errno));
-  }
-}
-
 Error QtiMapper5::getTransportSize(buffer_handle_t _Nonnull bufferHandle,
                                    uint32_t *_Nonnull outNumFds, uint32_t *_Nonnull outNumInts) {
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
@@ -133,10 +118,6 @@ Error QtiMapper5::getTransportSize(buffer_handle_t _Nonnull bufferHandle,
 
 Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage, ARect region,
                        int acquireFenceRawFd, void *_Nullable *_Nonnull outData) {
-  // We take ownership of the FD in all cases, even for errors
-  if (acquireFenceRawFd > 0) {
-    WaitFenceFd(acquireFenceRawFd);
-  }
   VALIDATE_DRIVER_AND_BUFFER_HANDLE(bufferHandle)
   if (cpuUsage == 0) {
     ALOGE("Failed to lock. Bad cpu usage: %" PRIu64 ".", cpuUsage);
@@ -148,10 +129,6 @@ Error QtiMapper5::lock(buffer_handle_t _Nonnull bufferHandle, uint64_t cpuUsage,
       .left = region.left, .top = region.top, .right = region.right, .bottom = region.bottom};
   int ret_val = snap_helper_->Lock(const_cast<native_handle_t *>(bufferHandle), cpuUsage,
                                    gr_access_region, acquireFenceRawFd, &snap_base);
-
-  if (acquireFenceRawFd > 0) {
-    close(acquireFenceRawFd);
-  }
 
   if (ret_val != 0) {
     ALOGE("Snap failed to lock buffer");
@@ -331,7 +308,7 @@ constexpr AIMapper_MetadataTypeDescription describeQTI(int64_t type, const char 
 Error QtiMapper5::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 64> sSupportedMetadaTypes{
+  static constexpr AIMapper_MetadataTypeDescription sSupportedMetadaTypes[]{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -356,6 +333,9 @@ Error QtiMapper5::listSupportedMetadataTypes(
       describeStandard(StandardMetadataType::SMPTE2094_40, true, true),
       // TODO: Investigate if this can be supported
       // describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
+#ifdef GRALLOC_COMMON_V7
+      describeStandard(StandardMetadataType::SMPTE2094_50, true, true),
+#endif
       describeStandard(StandardMetadataType::STRIDE, true, false),
       describeQTI(SnapMetadataType::VT_TIMESTAMP, "VT Timestamp", true, true),
       describeQTI(SnapMetadataType::MATRIX_COEFFICIENTS, "Color metadata - Matrix coefficients",
@@ -414,8 +394,8 @@ Error QtiMapper5::listSupportedMetadataTypes(
                   true, true),
       describeQTI(SnapMetadataType::ROI_RECT_METADATA, "ROI Rectangle metadata", true, true),
   };
-  *outDescriptionList = sSupportedMetadaTypes.data();
-  *outNumberOfDescriptions = sSupportedMetadaTypes.size();
+  *outDescriptionList = sSupportedMetadaTypes;
+  *outNumberOfDescriptions = std::size(sSupportedMetadaTypes);
   return AIMAPPER_ERROR_NONE;
 }
 
@@ -772,7 +752,7 @@ Error QtiMapper5Legacy::setStandardMetadata(buffer_handle_t _Nonnull bufferHandl
 Error QtiMapper5Legacy::listSupportedMetadataTypes(
     const AIMapper_MetadataTypeDescription *_Nullable *_Nonnull outDescriptionList,
     size_t *_Nonnull outNumberOfDescriptions) {
-  static constexpr std::array<AIMapper_MetadataTypeDescription, 62> sSupportedMetadaTypes{
+  static constexpr AIMapper_MetadataTypeDescription sSupportedMetadaTypes[]{
       describeStandard(StandardMetadataType::BUFFER_ID, true, false),
       describeStandard(StandardMetadataType::NAME, true, false),
       describeStandard(StandardMetadataType::WIDTH, true, false),
@@ -797,6 +777,9 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
       describeStandard(StandardMetadataType::SMPTE2094_40, true, true),
       // TODO: Investigate if this can be supported
       // describeStandard(StandardMetadataType::SMPTE2094_10, true, true),
+#ifdef GRALLOC_COMMON_V7
+      describeStandard(StandardMetadataType::SMPTE2094_50, true, true),
+#endif
       describeStandard(StandardMetadataType::STRIDE, true, false),
       describeQTI(SnapMetadataType::VT_TIMESTAMP, "VT Timestamp", true, true),
       describeQTI(SnapMetadataType::MATRIX_COEFFICIENTS, "Color metadata - Matrix coefficients",
@@ -851,8 +834,8 @@ Error QtiMapper5Legacy::listSupportedMetadataTypes(
       describeQTI(SnapMetadataType::BUFFER_DEQUEUE_DURATION, "Last buffer dequeue duration", true,
                   true),
   };
-  *outDescriptionList = sSupportedMetadaTypes.data();
-  *outNumberOfDescriptions = sSupportedMetadaTypes.size();
+  *outDescriptionList = sSupportedMetadaTypes;
+  *outNumberOfDescriptions = std::size(sSupportedMetadaTypes);
   return AIMAPPER_ERROR_NONE;
 }
 
