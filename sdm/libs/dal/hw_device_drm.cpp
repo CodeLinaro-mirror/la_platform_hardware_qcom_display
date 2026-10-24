@@ -1232,7 +1232,8 @@ DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, SyncPoints *sync_po
   // to pluggable displays. Check HWPeripheralDRM::PowerOn. For builtin first power call defered
   // and handled in commit(synchronous for first cycle).
   int ret = NullCommit(is_synchronous, true /* retain_planes */);
-
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_on");
+  sync_points->release_fence = Fence::Create(INT(release_fence_fd), "release_power_on");
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
@@ -1245,8 +1246,6 @@ DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, SyncPoints *sync_po
     reset_output_fence_offset_ = true;
   }
 
-  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_on");
-  sync_points->release_fence = Fence::Create(INT(release_fence_fd), "release_power_on");
   DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %d", INT(release_fence_fd));
   pending_power_state_ = kPowerStateNone;
 
@@ -1291,14 +1290,18 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
   }
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
-  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
+  if (disp_type_ != DRMDisplayType::VIRTUAL) {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
+  }
 
   if (cwb_config_.enabled) {
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
     DLOGI("Tearing down the CWB topology");
   }
 
-  int ret = NullCommit(false /* synchronous */, false /* retain_planes */);
+  bool is_synchronous = (disp_type_ == DRMDisplayType::VIRTUAL);
+  int ret = NullCommit(is_synchronous, false /* retain_planes */);
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_off");
   if (ret) {
     DLOGE(
         "Failed with error: %d, dynamic_fps=%d, seamless_mode_switch_=%d, vrefresh_=%d,"
@@ -1324,7 +1327,6 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown, SyncPoints *sync_points) {
     bpp_mode_changed_ = 0;
   }
 
-  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_off");
   pending_power_state_ = kPowerStateNone;
 
   last_power_mode_ = DRMPowerMode::OFF;
@@ -1361,15 +1363,16 @@ DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, SyncPoints *sync_point
   }
 
   int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze");
+  sync_points->release_fence = Fence::Create(release_fence_fd, "release_doze");
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
   }
 
-  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze");
-  sync_points->release_fence = Fence::Create(release_fence_fd, "release_doze");
   DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %d", INT(release_fence_fd));
 
+  pending_power_state_ = kPowerStateNone;
   last_power_mode_ = DRMPowerMode::DOZE;
 
   return kErrorNone;
@@ -1406,13 +1409,12 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, SyncPoints *syn
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_fd);
 
   int ret = NullCommit(false /* synchronous */, true /* retain_planes */);
+  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze_suspend");
+  sync_points->release_fence = Fence::Create(release_fence_fd, "release_doze_suspend");
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
   }
-
-  sync_points->retire_fence = Fence::Create(INT(retire_fence_fd), "retire_doze_suspend");
-  sync_points->release_fence = Fence::Create(release_fence_fd, "release_doze_suspend");
   DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %d", INT(release_fence_fd));
 
   pending_power_state_ = kPowerStateNone;
@@ -1838,6 +1840,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     }
   }
 
+  bool active_state_toggled = false;
   if (first_cycle_) {
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL, token_.conn_id,
                               topology_control_);
@@ -1854,15 +1857,21 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayersInfo *hw_lay
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
     if (GetDRMPowerMode(pending_power_state_, &power_mode) == kErrorNone) {
       drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, power_mode);
+      active_state_toggled =
+          ((last_power_mode_ == DRMPowerMode::OFF) && (power_mode != DRMPowerMode::OFF));
       last_power_mode_ = power_mode;
     }
   }
 
   // Set CRTC mode, only if display config changes
-  if (first_cycle_ || vrefresh_ || update_mode_) {
+  if (first_cycle_ || (!active_state_toggled && (vrefresh_ || update_mode_))) {
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &current_mode.mode);
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_DSC_MODE, token_.conn_id,
                               current_mode.curr_compression_mode);
+    // Only reset update_mode_ after real commit, not after validate
+    if (!validate) {
+      update_mode_ = false;
+    }
   }
 
   if (!validate && (hw_layers_info->set_idle_time_ms >= 0)) {
@@ -2139,7 +2148,6 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayersInfo *hw_layers_info) {
   panel_compression_changed_ = 0;
   reset_planes_luts_ = false;
   first_cycle_ = false;
-  update_mode_ = false;
   hw_layers_info->updates_mask = 0;
   pending_power_state_ = kPowerStateNone;
   pending_cwb_teardown_ = false;
@@ -3618,6 +3626,31 @@ DisplayError HWDeviceDRM::SetPPConfig(void *payload, size_t size) {
 
 DisplayError HWDeviceDRM::CancelDeferredPowerMode() {
   DLOGI("Pending state reset %d on CRTC: %u", pending_power_state_, token_.crtc_id);
+  const bool canceling_deferred_doze =
+      (pending_power_state_ == kPowerStateDoze ||
+       pending_power_state_ == kPowerStateDozeSuspend);
+
+  if (canceling_deferred_doze) {
+    DLOGI("clear doze switch - doze_poms_switch_done=%d "
+          "pending_poms_switch=%d", doze_poms_switch_done_, pending_poms_switch_);
+
+    // Drop stale CMD switch request.
+    if (panel_mode_changed_ & DRM_MODE_FLAG_CMD_MODE_PANEL) {
+      DLOGI("clear stale CMD panel_mode_changed=0x%x", panel_mode_changed_);
+      panel_mode_changed_ = 0;
+      // Reset mode index if it was changed by SetDisplayMode(kModeCommand)
+      if (switch_mode_valid_ && current_mode_index_ == cmd_mode_index_) {
+        current_mode_index_ = video_mode_index_;
+        connector_info_.modes[current_mode_index_].cur_panel_mode = DRM_MODE_FLAG_VID_MODE_PANEL;
+        PopulateHWPanelInfo();
+      }
+    }
+
+    // Clear DOZE panel-switch.
+    doze_poms_switch_done_ = false;
+    pending_poms_switch_ = false;
+  }
+
   pending_power_state_ = kPowerStateNone;
 
   return kErrorNone;
