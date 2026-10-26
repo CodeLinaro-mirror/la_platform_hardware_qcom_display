@@ -162,6 +162,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_virtual_display=1 \
     vendor.display.disable_color_transformation=1
 
+ifneq (,$(filter Baklava 16 CinnamonBun 17, $(PLATFORM_VERSION)))
+PRODUCT_PROPERTY_OVERRIDES += \
+    persist.sys.display.enable_on_connect.external=true
+endif
+
 ifeq ($(TARGET_USES_QMAA),true)
 ifeq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),true)
 PRODUCT_PROPERTY_OVERRIDES += \
