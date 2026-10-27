@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #ifndef __SDM_COMP_BUFFER_ALLOCATOR_H__
@@ -43,19 +43,20 @@
 #include <aidl/android/hardware/graphics/allocator/IAllocator.h>
 #include <android/binder_manager.h>
 #include <aidlcommonsupport/NativeHandle.h>
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
-#include <vendor/qti/hardware/display/mapper/4.0/IQtiMapper.h>
-#include <vendor/qti/hardware/display/mapperextensions/1.3/IQtiMapperExtensions.h>
 #include <QtiGrallocPriv.h>
 #include <core/buffer_allocator.h>
+#include <Dataspace.h>
+#include <MetadataType.h> 
+#include <android/hardware/graphics/mapper/IMapper.h>
+#include <vndksupport/linker.h>
+#include <android/hardware/graphics/mapper/utils/IMapperMetadataTypes.h>
 
 using aidl::android::hardware::graphics::allocator::AllocationResult;
+using aidl::android::hardware::graphics::allocator::BufferDescriptorInfo;
 using aidl::android::hardware::graphics::allocator::IAllocator;
-using android::hardware::graphics::common::V1_1::BufferUsage;
-using android::hardware::graphics::mapper::V4_0::IMapper;
-using vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
-using IQtiMapperExtensions_v1_3 =
-    vendor::qti::hardware::display::mapperextensions::V1_3::IQtiMapperExtensions;
+using QtiDataspace = vendor_qti_hardware_display_common_Dataspace;
+using Dataspace = vendor_qti_hardware_display_common_Dataspace;
+using aidl::android::hardware::graphics::common::ExtendableType;
 
 namespace sdm {
 
@@ -70,7 +71,7 @@ class SDMCompBufferAllocator : public BufferAllocator {
   int FreeBuffer(BufferInfo *buffer_info);
   uint32_t GetBufferSize(BufferInfo *buffer_info);
 
-  int GetCustomWidthAndHeight(const native_handle_t *handle, int *width, int *height);
+  int GetCustomWidthAndHeight(void *handle, int *width, int *height);
   int GetAlignedWidthAndHeight(int width, int height, int format, uint32_t alloc_type,
                                int *aligned_width, int *aligned_height);
   int GetAllocatedBufferInfo(const BufferConfig &buffer_config,
@@ -78,8 +79,8 @@ class SDMCompBufferAllocator : public BufferAllocator {
   int GetBufferLayout(const AllocatedBufferInfo &buf_info, uint32_t stride[4],
                                uint32_t offset[4], uint32_t *num_planes);
   int SetBufferInfo(LayerBufferFormat format, int *target, uint64_t *flags);
-  int MapBuffer(const native_handle_t *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
-  int UnmapBuffer(const native_handle_t *handle, int *release_fence);
+  int MapBuffer(void *handle, shared_ptr<Fence> acquire_fence, void **base_ptr);
+  int UnmapBuffer(void *handle, int *release_fence);
   int GetHeight(void *buf, uint32_t &height);
   int GetWidth(void *buf, uint32_t &width);
   int GetUnalignedHeight(void *buf, uint32_t &height);
@@ -93,14 +94,26 @@ class SDMCompBufferAllocator : public BufferAllocator {
   int GetBufferType(void *buf, uint32_t &buffer_type);
   int GetBufferGeometry(void *buf, int32_t &slice_width, int32_t &slice_height);
   int GetCustomContentMetadata(void *buf, CustomContentMetadata *dest);
+  int GetCompressionType(void *buf, int64_t &compression_type);
+
+  // callbacks from sdmclient
+  bool GetSDMColorSpace(const int int_dataspace, QtiDataspace *dataspace){return 0;}
+  LayerBufferFormat GetSDMFormat(const int32_t &source, const int32_t flags,
+                                 const int64_t compression_type) {
+    return kFormatInvalid;
+  }
+  DisplayError ColorMetadataToDataspace(Dataspace ds, uint32_t *int_dataspace) {return kErrorNone;}
+  int32_t TranslateFromLegacyDataspace(const int32_t &legacy_ds) {return 0;}
+  int GetMetadataValue(void *buf, vendor_qti_hardware_display_common_MetadataType type, void *dest,
+                       size_t dest_size);
 
  private:
   int GetGrallocInstance();
   void SetBufferAccessControlInfo(std::bitset<kBufferPermMax> perm, BufferPermission *buf_perm);
-  LayerBufferFormat GetFormatSDM(const int32_t &source, const int flags);
-  android::sp<IMapper> mapper_;
-  std::shared_ptr<IAllocator> allocator_;
-  android::sp<IQtiMapperExtensions_v1_3> mapper_ext_;
+  LayerBufferFormat GetFormatSDM(const int32_t &source, const int flags,
+                                 const int64_t compression_type);
+  std::shared_ptr<IAllocator> allocator_ = nullptr;
+  AIMapper *mapper_ = nullptr;
 };
 
 }  // namespace sdm
