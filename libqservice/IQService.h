@@ -55,11 +55,10 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2023, 2025-2026 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-*/
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #ifndef ANDROID_IQSERVICE_H
 #define ANDROID_IQSERVICE_H
@@ -146,6 +145,7 @@ public:
       SET_QRTC_FEATURE_CONFIG = 71,            // Set QRTC feature config
       SET_STC_FEATURE_CONFIG = 72,             // Set cfg for stc feature
       SET_SPR_STATE = 73,                      // Set SPR state
+      SET_PA_HIST_COLLECTION = 74,             // Enable/Disable PA histogram collection
       COMMAND_LIST_END = 400,
     };
 
