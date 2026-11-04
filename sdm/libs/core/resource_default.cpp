@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <math.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
@@ -38,17 +44,19 @@
 namespace sdm {
 
 DisplayError ResourceDefault::CreateResourceDefault(const HWResourceInfo &hw_resource_info,
-                                                    ResourceInterface **resource_intf) {
+                                                    ResourceInterface **resource_intf,
+                                                    bool is_spi_display) {
   DisplayError error = kErrorNone;
 
-  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info);
+  ResourceDefault *resource_default = new ResourceDefault(hw_resource_info, is_spi_display);
   if (!resource_default) {
-    return kErrorNone;
+    return kErrorMemory;
   }
 
   error = resource_default->Init();
   if (error != kErrorNone) {
     delete resource_default;
+    return error;
   }
 
   *resource_intf = resource_default;
@@ -65,8 +73,8 @@ DisplayError ResourceDefault::DestroyResourceDefault(ResourceInterface *resource
   return kErrorNone;
 }
 
-ResourceDefault::ResourceDefault(const HWResourceInfo &hw_res_info)
-  : hw_res_info_(hw_res_info) {
+ResourceDefault::ResourceDefault(const HWResourceInfo &hw_res_info, bool is_spi_display)
+  : hw_res_info_(hw_res_info), is_spi_display_(is_spi_display) {
 }
 
 DisplayError ResourceDefault::Init() {
@@ -240,6 +248,11 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, HWLayers *hw_layers) {
     return error;
   }
 
+  if (num_pipe_ == 0) {
+    DLOGV_IF(kTagResources, "No pipes available for hw_block_type = %d", hw_block_type);
+    return kErrorResources;
+  }
+
   for (uint32_t i = 0; i < num_pipe_; i++) {
     if (src_pipes_[i].hw_block_type == hw_block_type && src_pipes_[i].owner == kPipeOwnerUserMode) {
       src_pipes_[i].ResetState();
@@ -258,7 +271,11 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, HWLayers *hw_layers) {
   // left pipe is needed
   if (left_pipe->valid) {
     need_scale = IsScalingNeeded(left_pipe);
-    left_index = GetPipe(hw_block_type, need_scale);
+    if (!is_spi_display_) {
+      left_index = GetPipe(hw_block_type, need_scale);
+    } else {
+      left_index = 0;
+    }
     if (left_index >= num_pipe_) {
       DLOGV_IF(kTagResources, "Get left pipe failed: hw_block_type = %d, need_scale = %d",
                hw_block_type, need_scale);
@@ -267,12 +284,14 @@ DisplayError ResourceDefault::Prepare(Handle display_ctx, HWLayers *hw_layers) {
     }
   }
 
-  error = SetDecimationFactor(left_pipe);
-  if (error != kErrorNone) {
-    goto CleanupOnError;
+  if (!is_spi_display_) {
+    error = SetDecimationFactor(left_pipe);
+    if (error != kErrorNone) {
+      goto CleanupOnError;
+    }
   }
 
-  if (!right_pipe->valid) {
+  if (is_spi_display_ || !right_pipe->valid) {
     // assign single pipe
     if (left_index < num_pipe_) {
       left_pipe->pipe_id = src_pipes_[left_index].mdss_pipe_id;

@@ -27,10 +27,17 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/locker.h>
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <core/buffer_sync_handler.h>
+#include <bitset>
 
 #include "core_impl.h"
 
@@ -54,7 +61,8 @@ struct CoreSingleton {
 DisplayError CoreInterface::CreateCore(BufferAllocator *buffer_allocator,
                                        BufferSyncHandler *buffer_sync_handler,
                                        SocketHandler *socket_handler,
-                                       CoreInterface **interface, uint32_t client_version) {
+                                       CoreInterface **interface, std::bitset<8> core_ids,
+                                       uint32_t client_version) {
   SCOPE_LOCK(g_core.locker);
 
   if (!buffer_allocator || !interface) {
@@ -78,7 +86,7 @@ DisplayError CoreInterface::CreateCore(BufferAllocator *buffer_allocator,
 
   // Create appropriate CoreImpl object based on client version.
   if (GET_REVISION(client_version) == CoreImpl::kRevision) {
-    core_impl = new CoreImpl(buffer_allocator, socket_handler);
+    core_impl = new CoreImpl(buffer_allocator, socket_handler, core_ids);
   } else {
     return kErrorNotSupported;
   }
@@ -118,4 +126,3 @@ DisplayError CoreInterface::DestroyCore() {
 }
 
 }  // namespace sdm
-

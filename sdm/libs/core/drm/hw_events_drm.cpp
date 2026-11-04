@@ -28,35 +28,9 @@
 */
 
 /*
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted (subject to the limitations in the
-disclaimer below) provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-    * Neither the name of Qualcomm Innovation Center, Inc. nor the
-      names of its contributors may be used to endorse or promote
-      products derived from this software without specific prior
-      written permission.
-
-NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
-INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
-THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
-USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <drm_master.h>
@@ -83,6 +57,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include "hw_events_drm.h"
+#include <private/hw_info_types.h>
 
 #ifndef DRM_EVENT_SDE_HW_RECOVERY
 #define DRM_EVENT_SDE_HW_RECOVERY 0x80000007
@@ -104,6 +79,15 @@ namespace sdm {
 using drm_utils::DRMMaster;
 HWEventsDRM* HWEventsDRM::hw_events_drm_ = nullptr;
 
+void HWEventsDRM::HandleDRMOpen(int &fd) {
+  if (core_id_ == 0) {
+    fd = drmOpen("msm_drm", nullptr);
+    return;
+  }
+  snprintf(drm_path_, sizeof(drm_path_), "/dev/dri/card%d", core_id_);
+  fd = Sys::open_(drm_path_, O_RDWR | O_CLOEXEC, 0);
+}
+
 DisplayError HWEventsDRM::InitializePollFd() {
   for (uint32_t i = 0; i < event_data_list_.size(); i++) {
     char data[kMaxStringLength]{};
@@ -116,14 +100,14 @@ DisplayError HWEventsDRM::InitializePollFd() {
         poll_fds_[i].events = POLLIN | POLLPRI | POLLERR;
         if (is_primary_) {
           DRMMaster *master = nullptr;
-          int ret = DRMMaster::GetInstance(&master);
+          int ret = DRMMaster::GetInstance(&master, core_id_);
           if (ret < 0) {
             DLOGE("Failed to acquire DRMMaster instance");
             return kErrorNotSupported;
           }
           master->GetHandle(&poll_fds_[i].fd);
         } else {
-          poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+          HandleDRMOpen(poll_fds_[i].fd);
         }
         vsync_index_ = i;
       } break;
@@ -136,7 +120,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         Sys::pread_(poll_fds_[i].fd, data, kMaxStringLength, 0);
       } break;
       case HWEvent::IDLE_NOTIFY: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -145,7 +129,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         idle_notify_index_ = i;
       } break;
       case HWEvent::IDLE_POWER_COLLAPSE: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -154,7 +138,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         idle_pc_index_ = i;
       } break;
       case HWEvent::PANEL_DEAD: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -163,7 +147,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         panel_dead_index_ = i;
       } break;
       case HWEvent::HW_RECOVERY: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -172,7 +156,7 @@ DisplayError HWEventsDRM::InitializePollFd() {
         hw_recovery_index_ = i;
       } break;
       case HWEvent::HISTOGRAM: {
-        poll_fds_[i].fd = drmOpen("msm_drm", nullptr);
+        HandleDRMOpen(poll_fds_[i].fd);
         if (poll_fds_[i].fd < 0) {
           DLOGE("drmOpen failed with error %d", poll_fds_[i].fd);
           return kErrorResources;
@@ -251,6 +235,10 @@ DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
                                const HWInterface *hw_intf) {
   if (!event_handler)
     return kErrorParameters;
+
+  // InitializePollFd() (called below via PopulateHWEventData) uses core_id_ to open the
+  // DRMMaster instance for the correct /dev/dri/cardN, so it must be set first.
+  core_id_ = DisplayId(display_id).GetBaseCoreId();
 
   static_cast<const HWDeviceDRM *>(hw_intf)->GetDRMDisplayToken(&token_);
   is_primary_ = static_cast<const HWDeviceDRM *>(hw_intf)->IsPrimaryDisplay();
@@ -463,6 +451,7 @@ DisplayError HWEventsDRM::RegisterVSync() {
   vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT |
                                            (high_crtc & DRM_VBLANK_HIGH_CRTC_MASK));
   vblank.request.sequence = 1;
+  vblank.request.signal = reinterpret_cast<unsigned long>(this);
   int error = drmWaitVBlank(poll_fds_[vsync_index_].fd, &vblank);
   if (error < 0) {
     DLOGE("drmWaitVBlank failed with err %d", errno);
@@ -676,9 +665,10 @@ void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned i
                                        unsigned int tv_usec, void *data) {
   int64_t timestamp = (int64_t)(tv_sec)*1000000000 + (int64_t)(tv_usec)*1000;
   DTRACE_SCOPED();
-  if (hw_events_drm_) {
-    hw_events_drm_->vsync_handler_count_++;
-    hw_events_drm_->event_handler_->VSync(timestamp);
+  HWEventsDRM *instance = reinterpret_cast<HWEventsDRM *>(data);
+  if (instance) {
+    instance->vsync_handler_count_++;
+    instance->event_handler_->VSync(timestamp);
   }
 }
 

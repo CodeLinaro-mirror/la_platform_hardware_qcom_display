@@ -27,6 +27,12 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 /*! @file core_interface.h
   @brief Interface file for core of the display subsystem.
 
@@ -38,6 +44,7 @@
 #define __CORE_INTERFACE_H__
 
 #include <stdint.h>
+#include <bitset>
 #include <map>
 #include <vector>
 
@@ -147,6 +154,7 @@ class CoreInterface {
   static DisplayError CreateCore(BufferAllocator *buffer_allocator,
                                  BufferSyncHandler *buffer_sync_handler,
                                  SocketHandler *socket_handler, CoreInterface **interface,
+                                 std::bitset<8> core_ids = std::bitset<8>(0x1),
                                  uint32_t version = SDM_VERSION_TAG);
 
   /*! @brief Method to release handle to display core interface.

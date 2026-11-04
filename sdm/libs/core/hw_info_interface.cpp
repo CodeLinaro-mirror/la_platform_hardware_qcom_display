@@ -27,7 +27,15 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/utils.h>
+#include <bitset>
+#include <vector>
 
 #include "hw_info_interface.h"
 #ifndef TARGET_HEADLESS
@@ -38,26 +46,48 @@
 
 namespace sdm {
 
-DisplayError HWInfoInterface::Create(HWInfoInterface **intf) {
-#ifndef TARGET_HEADLESS
-
-  *intf = new HWInfoDRM();
-#else
-  *intf = nullptr;
-#endif
-
+DisplayError HWInfoInterface::Create(std::vector<HWInfoInterface*> *intfs,
+                                     std::bitset<8> core_ids) {
   DisplayError error = kErrorNone;
-  if (*intf) {
-    error = (*intf)->Init();
-    if (error != kErrorNone) {
-      delete *intf;
-      *intf = nullptr;
+
+  for (uint32_t i = 0; i < core_ids.size(); i++) {
+    if (!core_ids.test(i)) continue;
+
+    // DisplayId (hw_info_types.h) only encodes core_id 0 or 1 into the display id;
+    // higher core ids would silently alias core 0's ids if allowed through.
+    if (i > 1) {
+      DLOGE("core_id=%u exceeds max supported core_id (1); skipping. Check core_id_mask.", i);
+      continue;
     }
-  } else {
-    error = kErrorCriticalResource;
+
+#ifndef TARGET_HEADLESS
+    HWInfoInterface *hw_info = new HWInfoDRM(i);
+#else
+    HWInfoInterface *hw_info = nullptr;
+#endif
+    if (!hw_info) {
+      DLOGE("Failed allocating HWInfoDRM(%d)", i);
+      return kErrorCriticalResource;
+    }
+
+    error = hw_info->Init();
+    if (error != kErrorNone) {
+      delete hw_info;
+      // If this core failed, skip it and try the next one. if DSI (core0)
+      // failed first, SPI (core1) never even got a chance to init.
+      DLOGW("core_id=%u Init() failed with error=%d; skipping this core", i, error);
+      continue;
+    }
+
+    intfs->push_back(hw_info);
   }
 
-  return error;
+  if (intfs->empty() && core_ids.count()) {
+    DLOGE("Init() failed for all %zu requested core(s)", core_ids.count());
+    return kErrorCriticalResource;
+  }
+
+  return kErrorNone;
 }
 
 DisplayError HWInfoInterface::Destroy(HWInfoInterface *intf) {

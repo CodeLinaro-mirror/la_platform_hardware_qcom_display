@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <map>
@@ -38,13 +44,13 @@
 namespace sdm {
 
 DisplayPluggable::DisplayPluggable(DisplayEventHandler *event_handler,
-                                   HWInfoInterface *hw_info_intf,
+                                   std::vector<HWInfoInterface*> hw_info_intf,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(kPluggable, event_handler, kDevicePluggable, buffer_allocator,
                 comp_manager, hw_info_intf) {}
 
 DisplayPluggable::DisplayPluggable(int32_t display_id, DisplayEventHandler *event_handler,
-                                   HWInfoInterface *hw_info_intf,
+                                   std::vector<HWInfoInterface*> hw_info_intf,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(display_id, kPluggable, event_handler, kDevicePluggable,
                 buffer_allocator, comp_manager, hw_info_intf) {}
@@ -52,7 +58,19 @@ DisplayPluggable::DisplayPluggable(int32_t display_id, DisplayEventHandler *even
 DisplayError DisplayPluggable::Init() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kPluggable, hw_info_intf_,
+  if (hw_info_intf_.empty()) {
+    DLOGE("No HWInfoInterface available for pluggable display %d", display_id_);
+    return kErrorParameters;
+  }
+
+  // display_id_ holds encoded DisplayId. Decode to raw DRM connector ID
+  // before passing to HWInterface::Create and RegisterDisplay(by id).
+  int32_t conn_id = display_id_;
+  if (display_id_ != -1) {
+    DisplayId disp_id((uint32_t)display_id_);
+    conn_id = (int32_t)disp_id.GetConnId(disp_id.GetBaseCoreId());
+  }
+  DisplayError error = HWInterface::Create(conn_id, kPluggable, hw_info_intf_[0],
                                            buffer_allocator_, &hw_intf_);
   if (error != kErrorNone) {
     if (kErrorDeviceRemoved == error) {

@@ -27,11 +27,18 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_MANAGER_H__
 #define __DRM_MANAGER_H__
 
 #include <drm_interface.h>
 #include <mutex>
+#include <utils/multi_core_instantiator.h>
 #include "drm_dpps_mgr_intf.h"
 #include "drm_panel_feature_mgr_intf.h"
 
@@ -75,7 +82,7 @@ class DRMManager : public DRMManagerInterface {
   DRMPanelFeatureMgrIntf *GetPanelFeatureMgrIntf();
 
   static DRMManager *GetInstance(int fd);
-  static void Destroy();
+  static void Destroy(int fd);
 
  private:
   int Init(int drm_fd);
@@ -87,8 +94,9 @@ class DRMManager : public DRMManagerInterface {
   DRMCrtcManager *crtc_mgr_ = {};
   DRMDppsManagerIntf *dpps_mgr_intf_ = {};
   DRMPanelFeatureMgrIntf *panel_feature_mgr_intf_ = {};
+  bool has_dsi_connector_ = false;
 
-  static DRMManager *s_drm_instance;
+  static sdm::MultiCoreInstance<int, DRMManager*> s_drm_instance;
   static std::mutex s_lock;
 };
 

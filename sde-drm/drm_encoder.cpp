@@ -28,43 +28,14 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <cctype>
 #include <drm.h>
 #include <display/drm/sde_drm.h>
 #include <drm_logger.h>
@@ -148,6 +119,33 @@ void DRMEncoderManager::InsertSecondaryDSI() {
   } else {
     DRM_LOGI("Userspace did not need to insert secondary panel DSI encoder, it is present.");
   }
+
+  // Cache core_id_mask once. drmGetPrimaryDeviceNameFromFd is a syscall; avoid per-Reserve cost.
+  char *name = drmGetPrimaryDeviceNameFromFd(fd_);
+  if (name != NULL) {
+    std::string device_name(name);
+    free(name);
+    size_t card_pos = device_name.rfind("card");
+    // hw_port only reserves 2 bits (5:4) for core id, so only card0/card1 can be encoded;
+    // any other result (no "card" substring, e.g. a render-node path; "card" with no
+    // trailing digit; or card_num >= 2) leaves core_id_mask_ at its default of 0
+    // (bits omitted from hw_port) rather than risk misidentifying/aliasing the core.
+    if (card_pos != std::string::npos && card_pos + 4 < device_name.size() &&
+        isdigit(static_cast<unsigned char>(device_name[card_pos + 4]))) {
+      int card_num = std::atoi(device_name.c_str() + card_pos + 4);
+      if (card_num == 0) {
+        core_id_mask_ = (1 << 4);
+      } else if (card_num == 1) {
+        core_id_mask_ = (1 << 5);
+      } else {
+        DRM_LOGE("card_num=%d exceeds max supported core id (1); core_id bits omitted from "
+                 "hw_port for device %s", card_num, device_name.c_str());
+      }
+    } else {
+      DRM_LOGW("Could not parse card number from DRM device name '%s'; core_id bits omitted "
+               "from hw_port", device_name.c_str());
+    }
+  }
 }
 
 void DRMEncoderManager::DumpByID(uint32_t id) {
@@ -197,10 +195,17 @@ int DRMEncoderManager::Reserve(const std::set<uint32_t> &possible_encoders, DRMD
         // Bit 7   --> Display type 0: Pluggable 1: BuiltIn X:Virtual.
         // Bit 6   --> Pluggable: 0 for TMDS encoder, 1 for DPMST encoder.
         //             Builtin Or Virtual: X
-        // Bit 5-0 --> Encoder index.
+        // Bit 5-4 --> Core id, as a one-hot flag (bit 4 = core0, bit 5 = core1),
+        //             not a 2-bit value. See core_id_mask_ below.
+        // Bit 3-0 --> Encoder index.
         uint32_t encoder_type;
         encoder->second->GetType(&encoder_type);
         token->hw_port = GetDisplayTypeCode(encoder_type) | encoder_index;
+
+        // Apply cached core_id bits (computed once in Init()).
+        if (core_id_mask_) {
+          token->hw_port = token->hw_port | core_id_mask_;
+        }
         ret = 0;
         break;
       }

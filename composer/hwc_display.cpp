@@ -18,39 +18,9 @@
  */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <cutils/properties.h>
@@ -2030,12 +2000,22 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   int ubwc_disabled = 0;
   int flags = 0;
 
-  // By default UBWC is enabled and below property is global enable/disable for all
-  // buffers allocated through gralloc , including framebuffer targets.
-  HWCDebugHandler::Get()->GetProperty(DISABLE_UBWC_PROP, &ubwc_disabled);
-  if (!ubwc_disabled) {
-    usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
-    flags |= qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
+  DisplayPort port = kPortDefault;
+  display_intf_->GetDisplayPort(&port);
+  if (port == kPortSPI) {
+    // SurfaceFlinger requests HAL_PIXEL_FORMAT_RGB_565 for SPI client-target buffers.
+    // Match that format here so this initial alignment hint is consistent with the real
+    // buffer that arrives via SetLayerBuffer() every frame. No UBWC: the SPI simple-pipe
+    // plane has no decompression capability, unlike SDE hardware planes.
+    format = HAL_PIXEL_FORMAT_RGB_565;
+  } else {
+    // By default UBWC is enabled and below property is global enable/disable for all
+    // buffers allocated through gralloc , including framebuffer targets.
+    HWCDebugHandler::Get()->GetProperty(DISABLE_UBWC_PROP, &ubwc_disabled);
+    if (!ubwc_disabled) {
+      usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+      flags |= qtigralloc::PRIV_FLAGS_UBWC_ALIGNED;
+    }
   }
 
   buffer_allocator_->GetAlignedWidthAndHeight(INT(x_pixels), INT(y_pixels), format, usage,

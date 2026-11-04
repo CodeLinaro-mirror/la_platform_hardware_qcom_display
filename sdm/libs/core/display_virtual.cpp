@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <algorithm>
@@ -33,14 +39,15 @@
 
 namespace sdm {
 
-DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(kVirtual, event_handler, kDeviceVirtual, buffer_allocator,
                 comp_manager, hw_info_intf) {
 }
 
 DisplayVirtual::DisplayVirtual(int32_t display_id, DisplayEventHandler *event_handler,
-                               HWInfoInterface *hw_info_intf,
+                               std::vector<HWInfoInterface*> hw_info_intf,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
   : DisplayBase(display_id, kVirtual, event_handler, kDeviceVirtual,
                 buffer_allocator, comp_manager, hw_info_intf) {
@@ -49,7 +56,19 @@ DisplayVirtual::DisplayVirtual(int32_t display_id, DisplayEventHandler *event_ha
 DisplayError DisplayVirtual::Init() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
-  DisplayError error = HWInterface::Create(display_id_, kVirtual, hw_info_intf_,
+  if (hw_info_intf_.empty()) {
+    DLOGE("No HWInfoInterface available for virtual display %d", display_id_);
+    return kErrorParameters;
+  }
+
+  // display_id_ holds encoded DisplayId. Decode to raw DRM connector ID
+  // before passing to HWInterface::Create and RegisterDisplay(by id).
+  int32_t conn_id = display_id_;
+  if (display_id_ != -1) {
+    DisplayId disp_id((uint32_t)display_id_);
+    conn_id = (int32_t)disp_id.GetConnId(disp_id.GetBaseCoreId());
+  }
+  DisplayError error = HWInterface::Create(conn_id, kVirtual, hw_info_intf_[0],
                                            buffer_allocator_, &hw_intf_);
 
   if (error != kErrorNone) {
@@ -60,9 +79,9 @@ DisplayError DisplayVirtual::Init() {
     hw_intf_->GetDisplayId(&display_id_);
   }
 
-  if (hw_info_intf_) {
+  if (!hw_info_intf_.empty()) {
     HWResourceInfo hw_resource_info = HWResourceInfo();
-    hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+    hw_info_intf_[0]->GetHWResourceInfo(&hw_resource_info);
     auto max_mixer_stages = hw_resource_info.num_blending_stages;
     int property_value = Debug::GetMaxPipesPerMixer(display_type_);
     if (property_value >= 0) {
@@ -196,4 +215,3 @@ DisplayError DisplayVirtual::colorSamplingOff() {
 }
 
 }  // namespace sdm
-

@@ -27,6 +27,7 @@ cc_library_shared {
     srcs: [
         "core_interface.cpp",
         "core_impl.cpp",
+        "dpu_core_mux.cpp",
         "display_base.cpp",
         "display_builtin.cpp",
         "display_pluggable.cpp",

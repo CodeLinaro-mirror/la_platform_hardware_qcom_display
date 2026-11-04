@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __CORE_IMPL_H__
 #define __CORE_IMPL_H__
 
@@ -30,8 +36,11 @@
 #include <private/color_interface.h>
 #include <utils/locker.h>
 #include <utils/sys.h>
+#include <bitset>
+#include <vector>
 
 #include "hw_interface.h"
+#include "hw_info_interface.h"
 #include "comp_manager.h"
 
 #define SET_REVISION(major, minor) ((major << 8) | minor)
@@ -42,7 +51,8 @@ class CoreImpl : public CoreInterface {
  public:
   // This class implements display core interface revision 1.0.
   static const uint16_t kRevision = SET_REVISION(1, 0);
-  CoreImpl(BufferAllocator *buffer_allocator, SocketHandler *socket_handler);
+  CoreImpl(BufferAllocator *buffer_allocator, SocketHandler *socket_handler,
+           std::bitset<8> core_ids = std::bitset<8>(0x1));
   virtual ~CoreImpl() { }
 
   // This method returns the interface revision for the current display core object.
@@ -66,9 +76,10 @@ class CoreImpl : public CoreInterface {
  protected:
   Locker locker_;
   BufferAllocator *buffer_allocator_ = NULL;
-  HWResourceInfo hw_resource_;
+  std::vector<HWResourceInfo> hw_resource_;
   CompManager comp_mgr_;
-  HWInfoInterface *hw_info_intf_ = NULL;
+  std::vector<HWInfoInterface*> hw_info_intf_;
+  std::bitset<8> core_ids_;
   DynLib extension_lib_;
   ExtensionInterface *extension_intf_ = NULL;
   CreateExtensionInterface create_extension_intf_ = NULL;

@@ -23,39 +23,9 @@
 */
 
 /*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 
 #include <stdio.h>
@@ -102,7 +72,7 @@ static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
 // TODO(user): Have a single structure handle carries all the interface pointers and variables.
 DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
                          HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-                         CompManager *comp_manager, HWInfoInterface *hw_info_intf)
+                         CompManager *comp_manager, std::vector<HWInfoInterface*> hw_info_intf)
   : display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
     buffer_allocator_(buffer_allocator), comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
 }
@@ -110,7 +80,7 @@ DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_ha
 DisplayBase::DisplayBase(int32_t display_id, DisplayType display_type,
                          DisplayEventHandler *event_handler, HWDeviceType hw_device_type,
                          BufferAllocator *buffer_allocator, CompManager *comp_manager,
-                         HWInfoInterface *hw_info_intf)
+                         std::vector<HWInfoInterface*> hw_info_intf)
   : display_id_(display_id),
     display_type_(display_type),
     event_handler_(event_handler),
@@ -124,8 +94,9 @@ DisplayError DisplayBase::Init() {
   DisplayError error = kErrorNone;
   hw_panel_info_ = HWPanelInfo();
   hw_intf_->GetHWPanelInfo(&hw_panel_info_);
-  if (hw_info_intf_) {
-    hw_info_intf_->GetHWResourceInfo(&hw_resource_info_);
+  if (!hw_info_intf_.empty()) {
+    // hw_info_intf_[0] is the HWInfoInterface for this display's core.
+    hw_info_intf_[0]->GetHWResourceInfo(&hw_resource_info_);
   }
   auto max_mixer_stages = hw_resource_info_.num_blending_stages;
   int property_value = Debug::GetMaxPipesPerMixer(display_type_);
@@ -227,7 +198,7 @@ DisplayError DisplayBase::Deinit() {
     lock_guard<recursive_mutex> obj(recursive_mutex_);
     ClearColorInfo();
     comp_manager_->UnregisterDisplay(display_comp_ctx_);
-    if (IsPrimaryDisplay()) {
+    if (IsPrimaryDisplay() && hw_intf_) {
       hw_intf_->UnsetScaleLutConfig();
     }
   }
@@ -679,12 +650,13 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
 
+  // hw_info_intf_[0] is single display's HWInfoInterface
   HWResourceInfo hw_resource_info = HWResourceInfo();
-  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+  if (!hw_info_intf_.empty()) hw_info_intf_[0]->GetHWResourceInfo(&hw_resource_info);
   bool hdr_supported = hw_resource_info.has_hdr;
   bool hdr_plus_supported = false;
   HWDisplayInterfaceInfo hw_disp_info = {};
-  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
+  if (!hw_info_intf_.empty()) hw_info_intf_[0]->GetFirstDisplayInterfaceType(&hw_disp_info);
   if (hw_disp_info.type == kHDMI) {
     hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
   }

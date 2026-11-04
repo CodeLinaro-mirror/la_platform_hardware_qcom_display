@@ -22,6 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __COMP_MANAGER_H__
 #define __COMP_MANAGER_H__
 
@@ -29,6 +35,7 @@
 #include <private/extension_interface.h>
 #include <utils/locker.h>
 #include <bitset>
+#include <map>
 #include <set>
 #include <vector>
 #include <string>
@@ -36,12 +43,15 @@
 #include "strategy.h"
 #include "resource_default.h"
 #include "hw_interface.h"
+#include "hw_info_interface.h"
 
 namespace sdm {
 
 class CompManager {
  public:
-  DisplayError Init(const HWResourceInfo &hw_res_info_, ExtensionInterface *extension_intf,
+  DisplayError Init(const std::vector<HWResourceInfo> &hw_res_info,
+                    const std::vector<HWInfoInterface*> &hw_info_intf,
+                    ExtensionInterface *extension_intf,
                     BufferAllocator *buffer_allocator, SocketHandler *socket_handler);
   DisplayError Deinit();
   DisplayError RegisterDisplay(int32_t display_id, DisplayType type,
@@ -105,6 +115,9 @@ class CompManager {
     Strategy *strategy = NULL;
     StrategyConstraints constraints;
     Handle display_resource_ctx = NULL;
+    // For zero-pipe (SPI) displays the shared resource_intf_ points to ResourceExtn
+    // (proprietary). SPI needs its own ResourceDefault instance instead.
+    ResourceInterface *own_resource_intf = nullptr;
     int32_t display_id = -1;
     DisplayType display_type = kBuiltIn;
     uint32_t max_strategies = 0;
@@ -122,6 +135,21 @@ class CompManager {
 
   Locker locker_;
   ResourceInterface *resource_intf_ = NULL;
+
+  // Returns the correct ResourceInterface for a given display context.
+  // SPI (zero-pipe) displays own a dedicated ResourceDefault; all others share resource_intf_.
+  inline ResourceInterface *GetResourceIntf(const DisplayCompositionContext *ctx) const {
+    return (ctx && ctx->own_resource_intf) ? ctx->own_resource_intf : resource_intf_;
+  }
+
+  // SPI displays use their own ResourceDefault instance while DSI continues to
+  // use the shared ResourceExtn/ResourceDefault. Return the correct owner only
+  // after RegisterDisplay created a display_resource_ctx, so callers do not
+  // accidentally operate on the shared resource interface with a null or
+  // unregistered display context.
+  inline ResourceInterface *GetResourceIntfIfValid(const DisplayCompositionContext *ctx) const {
+    return (ctx && ctx->display_resource_ctx) ? GetResourceIntf(ctx) : nullptr;
+  }
   std::set<int32_t> registered_displays_;  // List of registered displays
   std::set<int32_t> configured_displays_;  // List of sucessfully configured displays
   std::set<int32_t> powered_on_displays_;  // List of powered on displays.
@@ -134,9 +162,13 @@ class CompManager {
   uint32_t max_sde_ext_layers_ = 0;
   uint32_t max_sde_builtin_layers_ = 2;
   DppsControlInterface *dpps_ctrl_intf_ = NULL;
+  uint32_t virtual_cores_mask_ = 0;    // bitmask of cores with zero pipes (SPI/virtual)
+  // Real per-core HWResourceInfo, keyed by actual core_id, so RegisterDisplay() can give
+  // an SPI (virtual) core's dedicated ResourceDefault its own core's reported pipes instead
+  // of an empty/zero-pipe struct.
+  std::map<uint32_t, HWResourceInfo> hw_res_info_by_core_;
 };
 
 }  // namespace sdm
 
 #endif  // __COMP_MANAGER_H__
-

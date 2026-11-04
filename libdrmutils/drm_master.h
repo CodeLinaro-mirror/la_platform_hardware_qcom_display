@@ -27,12 +27,21 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+* SPDX-License-Identifier: BSD-3-Clause-Clear
+*/
+
 #ifndef __DRM_MASTER_H__
 #define __DRM_MASTER_H__
 
 #include <mutex>
+#include <utils/multi_core_instantiator.h>
 
 #include "drm_logger.h"
+
+#define MAX_RETRY 10       // max retries opening DRM device node
 
 namespace drm_utils {
 
@@ -77,18 +86,22 @@ class DRMMaster {
   /* Creates an instance of DRMMaster if it doesn't exist and initializes it. Threadsafe.
    * Input:
    *   master: Pointer to store a pointer to the instance
+   *   core_id: DRM device core id (0=card0, 1=card1, ...)
    * Returns:
    *   -ENODEV if device cannot be opened or initilization fails
    */
-  static int GetInstance(DRMMaster **master);
-  static void DestroyInstance();
+  static int GetInstance(DRMMaster **master, uint32_t core_id = 0);
+  static void DestroyInstance(uint32_t core_id = 0);
 
  private:
   DRMMaster() {}
-  int Init();
+  int Init(uint32_t core_id = 0);
 
   int dev_fd_ = -1;              // Master fd for DRM
-  static DRMMaster *s_instance;  // Singleton instance
+  uint32_t core_id_ = 0;
+  char path_[64] = {};
+  std::mutex lock_;
+  static sdm::MultiCoreInstance<uint32_t, DRMMaster*> s_instance;
   static std::mutex s_lock;
 };
 
