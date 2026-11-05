@@ -832,6 +832,11 @@ Error BufferManager::ImportHandleLocked(private_handle_t *hnd) {
   hnd->base = 0;
   hnd->base_metadata = 0;
   hnd->gpuaddr = 0;
+  // These fields are transported in the native handle, but are not trusted
+  // after crossing a process boundary.  In particular, FreeBuffer() must
+  // never use an imported handle's linear_size for munmap().
+  hnd->linear_size = 0;
+  hnd->ubwcp_format = 0;
 
   if (validateAndMap(hnd)) {
     ALOGE("Failed to map metadata: hnd: %p, fd:%d, id:%" PRIu64, hnd, hnd->fd, hnd->id);
