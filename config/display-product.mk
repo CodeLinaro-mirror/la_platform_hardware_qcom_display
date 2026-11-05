@@ -159,6 +159,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
         debug.sf.enable_hwc_vds=1 \
         vendor.display.vds_allow_hwc=0
     endif
+    ifneq ($(TARGET_BOARD_PLATFORM),neo)
+    PRODUCT_PROPERTY_OVERRIDES += \
+        debug.sf.enable_hwc_vds=1 \
+        vendor.display.vds_allow_hwc=0
+    endif
 endif
 
 #Set WCG properties

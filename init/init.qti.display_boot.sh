@@ -63,6 +63,7 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 target=`getprop ro.board.platform`
+build_version=`getprop ro.build.version.release`
 if [ -f /sys/devices/soc0/soc_id ]; then
     soc_hwid=`cat /sys/devices/soc0/soc_id`
 else
@@ -230,6 +231,13 @@ case "$target" in
     esac
     ;;
     "neo")
+    if [ "$build_version" -gt 12 ] 2>/dev/null; then
+        setprop debug.sf.enable_hwc_vds 0
+        setprop vendor.display.vds_allow_hwc 1
+    else
+        setprop debug.sf.enable_hwc_vds 1
+        setprop vendor.display.vds_allow_hwc 0
+    fi
     case "$soc_hwid" in
         554)
             setprop vendor.display.enable_null_display 1
